@@ -37,7 +37,7 @@ func readEmbeddedImageXMP(path string) ([]byte, bool, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".jpg", ".jpeg":
 		return readEmbeddedJPEGXMP(path)
-	case ".tif", ".tiff", ".dng", ".cr2", ".rw2":
+	case ".tif", ".tiff", ".dng", ".cr2", ".rw2", ".nef", ".nrw", ".arw", ".sr2", ".pef", ".erf", ".orf":
 		return readEmbeddedTIFFXMP(path)
 	case ".cr3":
 		return readEmbeddedCR3XMP(path)
@@ -76,6 +76,8 @@ func readEmbeddedTIFFXMP(path string) ([]byte, bool, error) {
 	var firstIFD uint64
 	switch magic {
 	case 42, 85: // Classic TIFF or Panasonic RW2.
+		firstIFD = uint64(reader.order.Uint32(header[4:8]))
+	case 0x4f52, 0x5352: // Olympus ORF: IIRO, IIRS, or MMOR.
 		firstIFD = uint64(reader.order.Uint32(header[4:8]))
 	case 43:
 		if info.Size() < int64(len(header)) {
