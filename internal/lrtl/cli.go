@@ -1553,7 +1553,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 		if *reset {
 			fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))
 			if change.ExposureChanged {
-				fmt.Fprintf(stdout, " Exposure2012 %+.4f -> %+.4f EV", change.ExposureBefore, change.ExposureAfter)
+				fmt.Fprintf(stdout, " %s %+.4f -> %+.4f EV", holyGrailTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter)
 			}
 			if change.RestoreKeyframe {
 				fmt.Fprint(stdout, " restore HG rating")
@@ -1564,7 +1564,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 				filepath.Base(change.Frame.Image), change.Camera.ExposureTime,
 				change.Camera.FNumber, change.Camera.ISO)
 			if change.ExposureChanged {
-				fmt.Fprintf(stdout, " correction=%+.4f EV Exposure2012=%+.4f EV", change.Compensation, change.ExposureAfter)
+				fmt.Fprintf(stdout, " correction=%+.4f EV %s=%+.4f EV", change.Compensation, holyGrailTargetLabel(change.Target), change.ExposureAfter)
 			}
 			if change.KeyframeRating != 0 {
 				fmt.Fprintf(stdout, " HG keyframe=%d*", change.KeyframeRating)
