@@ -248,9 +248,53 @@ func readXMPToneCurve(packet *XMPPacket, name string) ([256]uint8, bool, error) 
 	if property.attribute == nil && property.element == nil {
 		return empty, false, nil
 	}
+	return readXMPToneCurveProperty(name, property.element, property.attribute)
+}
+
+func readXMPLocalToneCurve(correction *etree.Element, name string) ([256]uint8, bool, error) {
+	var property *etree.Element
+	var attribute *etree.Attr
+	for index := range correction.Attr {
+		if attributeMatches(&correction.Attr[index], crsNamespace, name) {
+			attribute = &correction.Attr[index]
+			break
+		}
+	}
+	if attribute == nil {
+		for _, token := range correction.Child {
+			child, ok := token.(*etree.Element)
+			if ok && child.NamespaceURI() == crsNamespace && child.Tag == name {
+				property = child
+				break
+			}
+		}
+	}
+	if property == nil && attribute == nil {
+		return [256]uint8{}, false, nil
+	}
+	return readXMPToneCurveProperty(name, property, attribute)
+}
+
+func hasLocalToneCurveProperty(correction *etree.Element, name string) bool {
+	for index := range correction.Attr {
+		if attributeMatches(&correction.Attr[index], crsNamespace, name) {
+			return true
+		}
+	}
+	for _, token := range correction.Child {
+		child, ok := token.(*etree.Element)
+		if ok && child.NamespaceURI() == crsNamespace && child.Tag == name {
+			return true
+		}
+	}
+	return false
+}
+
+func readXMPToneCurveProperty(name string, property *etree.Element, attribute *etree.Attr) ([256]uint8, bool, error) {
+	var empty [256]uint8
 	values := make([]string, 0, 32)
-	if property.attribute != nil {
-		values = append(values, property.attribute.Value)
+	if attribute != nil {
+		values = append(values, attribute.Value)
 	} else {
 		var collect func(*etree.Element)
 		collect = func(element *etree.Element) {
@@ -266,10 +310,10 @@ func readXMPToneCurve(packet *XMPPacket, name string) ([256]uint8, bool, error) 
 				}
 			}
 		}
-		if text, scalar := scalarElementText(property.element); scalar {
+		if text, scalar := scalarElementText(property); scalar {
 			values = append(values, text)
 		} else {
-			collect(property.element)
+			collect(property)
 		}
 	}
 	points, err := parseToneCurveValues(values)

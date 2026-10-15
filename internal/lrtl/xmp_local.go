@@ -35,6 +35,10 @@ type xmpLocalCorrection struct {
 	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
+	mainCurve                               [256]uint8
+	hasMainCurve                            bool
+	channelCurve                            [3][256]uint8
+	hasChannelCurve                         [3]bool
 	amount                                  float64
 	masks                                   []xmpLocalMask
 }
@@ -153,6 +157,23 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		correction.whiteBalance = approximateWhiteBalanceGains(6500+temperature*40, tint)
 		correction.hasWhiteBalance = true
 	}
+	correction.mainCurve, correction.hasMainCurve, err = readXMPLocalToneCurve(element, "MainCurve")
+	if err != nil {
+		return correction, false, err
+	}
+	for index, name := range []string{"RedCurve", "GreenCurve", "BlueCurve"} {
+		correction.channelCurve[index], correction.hasChannelCurve[index], err = readXMPLocalToneCurve(element, name)
+		if err != nil {
+			return correction, false, err
+		}
+	}
+	for _, name := range []string{"ExtendedMainCurve", "ExtendedRedCurve", "ExtendedGreenCurve", "ExtendedBlueCurve"} {
+		if hasLocalToneCurveProperty(element, name) {
+			// Extended point curves use an HDR-domain representation that the
+			// current 8-bit sRGB LUT cannot preserve.
+			return correction, false, nil
+		}
+	}
 	for _, token := range element.Child {
 		selector, ok := token.(*etree.Element)
 		if !ok || selector.NamespaceURI() != crsNamespace {
@@ -164,7 +185,8 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		}
 	}
 	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
-		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.toningSaturation == 0 && !correction.hasWhiteBalance {
+		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.toningSaturation == 0 &&
+		!correction.hasWhiteBalance && !correction.hasMainCurve && !correction.hasChannelCurve[0] && !correction.hasChannelCurve[1] && !correction.hasChannelCurve[2] {
 		return correction, false, nil
 	}
 
@@ -702,14 +724,34 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 				if correction.toningSaturation > 0 {
 					red, green, blue = applyLocalToningColor(red, green, blue, correction.toningHue, correction.toningSaturation, weight)
 				}
+				red8, green8, blue8 := encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
+				curveBlend := math.Max(0, math.Min(1, weight))
+				if correction.hasMainCurve {
+					red8 = blendLocalCurve(red8, correction.mainCurve, curveBlend)
+					green8 = blendLocalCurve(green8, correction.mainCurve, curveBlend)
+					blue8 = blendLocalCurve(blue8, correction.mainCurve, curveBlend)
+				}
+				if correction.hasChannelCurve[0] {
+					red8 = blendLocalCurve(red8, correction.channelCurve[0], curveBlend)
+				}
+				if correction.hasChannelCurve[1] {
+					green8 = blendLocalCurve(green8, correction.channelCurve[1], curveBlend)
+				}
+				if correction.hasChannelCurve[2] {
+					blue8 = blendLocalCurve(blue8, correction.channelCurve[2], curveBlend)
+				}
 				result.SetNRGBA(x, y, color.NRGBA{
-					R: encodeLinearSRGB(red), G: encodeLinearSRGB(green), B: encodeLinearSRGB(blue), A: pixel.A,
+					R: red8, G: green8, B: blue8, A: pixel.A,
 				})
 			}
 		}
 		current = result
 	}
 	return current
+}
+
+func blendLocalCurve(input uint8, curve [256]uint8, amount float64) uint8 {
+	return uint8(math.Round(float64(input)*(1-amount) + float64(curve[input])*amount))
 }
 
 func applyLocalToningColor(red, green, blue, hue, saturation, weight float64) (float64, float64, float64) {
