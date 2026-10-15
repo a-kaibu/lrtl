@@ -409,8 +409,7 @@ func ensureRDFArrayPosition(container *etree.Element, position int, template *et
 		if len(items)+1 == position && template != nil {
 			item = copyElementWithNamespaces(template)
 		} else {
-			prefix := ensurePrefix(container, "rdf", rdfNamespace)
-			item = container.CreateElement(prefix + ":li")
+			item = createRDFResourceArrayItem(container)
 		}
 		container.AddChild(item)
 		items = append(items, item)
@@ -423,6 +422,9 @@ func rdfArrayItemIsEmpty(item *etree.Element) bool {
 		return true
 	}
 	for _, attribute := range item.Attr {
+		if attributeMatches(&attribute, rdfNamespace, "parseType") && attribute.Value == "Resource" {
+			continue
+		}
 		if attribute.Space != "xmlns" && attribute.Key != "xmlns" {
 			return false
 		}
@@ -438,6 +440,13 @@ func rdfArrayItemIsEmpty(item *etree.Element) bool {
 		}
 	}
 	return true
+}
+
+func createRDFResourceArrayItem(container *etree.Element) *etree.Element {
+	rdfPrefix := ensurePrefix(container, "rdf", rdfNamespace)
+	item := container.CreateElement(rdfPrefix + ":li")
+	item.CreateAttr(rdfPrefix+":parseType", "Resource")
+	return item
 }
 
 func unwrapRDFArrayItem(item *etree.Element) *etree.Element {
