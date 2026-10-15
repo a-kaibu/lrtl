@@ -289,10 +289,30 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 			if series[target] == nil {
 				series[target] = make(map[string]float64)
 			}
-			series[target][name] = adjustTransitionValue(values[target], spec)
+			value := adjustTransitionValue(values[target], spec)
+			if name == "Angle" && lrtNormalizesMaskAngle(key.collection) {
+				value = normalizeLRTMaskAngle(value)
+			}
+			series[target][name] = value
 		}
 	}
 	return series
+}
+
+func lrtNormalizesMaskAngle(collection string) bool {
+	return collection == "CircularGradientBasedCorrections" || collection == "MaskGroupBasedCorrections"
+}
+
+// normalizeLRTMaskAngle mirrors the installed LRTimelapse post-transition
+// adjustment: add 90 below -45, then subtract 90 above 45.
+func normalizeLRTMaskAngle(angle float64) float64 {
+	if angle < -45 {
+		angle += 90
+	}
+	if angle > 45 {
+		angle -= 90
+	}
+	return angle
 }
 
 func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness ...int) ([][]maskTransitionChange, error) {
@@ -354,6 +374,17 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 				}
 			}
 			current := indexes[target][key].values
+			if lrtNormalizesMaskAngle(key.collection) {
+				if angle, found := current["Angle"]; found {
+					_, hasInterpolatedAngle := proposed["Angle"]
+					if keyframeSet[target] || !hasInterpolatedAngle {
+						normalized := normalizeLRTMaskAngle(angle)
+						if !closeEnough(angle, normalized) {
+							proposed["Angle"] = normalized
+						}
+					}
+				}
+			}
 			values := make(map[string]string)
 			propertyNames := make([]string, 0, len(proposed))
 			for property := range proposed {
