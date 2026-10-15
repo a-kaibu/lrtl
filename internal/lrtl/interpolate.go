@@ -211,6 +211,10 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		keyframeFlags[keyframe] = true
 	}
 	for _, name := range NumericCRSProperties {
+		spec, registered := globalTransitionSpecs[name]
+		if !registered {
+			continue
+		}
 		anchors := make([]lrtSplinePoint, 0, len(keyframes))
 		for _, keyframe := range keyframes {
 			if value, found := numericValues[keyframe][name]; found {
@@ -244,7 +248,8 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			if !filled[targetIndex] {
 				continue
 			}
-			if err := assign(targetIndex, map[string]float64{name: values[targetIndex]}); err != nil {
+			value := adjustTransitionValue(values[targetIndex], spec)
+			if err := assign(targetIndex, map[string]float64{name: value}); err != nil {
 				return nil, err
 			}
 		}

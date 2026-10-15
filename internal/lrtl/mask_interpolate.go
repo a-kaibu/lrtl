@@ -45,7 +45,11 @@ type maskTransitionChange struct {
 }
 
 func localCorrectionProperty(name string) bool {
-	return name == "CorrectionAmount" || strings.HasPrefix(name, "Local")
+	if name == "CorrectionAmount" {
+		return true
+	}
+	_, registered := maskTransitionSpecs[name]
+	return registered && strings.HasPrefix(name, "Local")
 }
 
 func crsElementValue(element *etree.Element, name string) (string, bool, error) {
@@ -97,6 +101,8 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 		allowed := localCorrectionProperty(name)
 		if mask {
 			_, allowed = maskGeometryProperties[name]
+			_, registered := maskTransitionSpecs[name]
+			allowed = allowed && registered
 		}
 		if !allowed {
 			return
@@ -256,6 +262,10 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 		}
 	}
 	for name := range properties {
+		spec, registered := maskTransitionSpecs[name]
+		if !registered {
+			continue
+		}
 		anchors := make([]lrtSplinePoint, 0, len(keyframes))
 		for _, keyframe := range keyframes {
 			if node, found := indexes[keyframe][key]; found {
@@ -279,7 +289,7 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 			if series[target] == nil {
 				series[target] = make(map[string]float64)
 			}
-			series[target][name] = values[target]
+			series[target][name] = adjustTransitionValue(values[target], spec)
 		}
 	}
 	return series
