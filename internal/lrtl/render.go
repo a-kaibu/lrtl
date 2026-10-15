@@ -152,7 +152,7 @@ const maxVideoDimension = int64(1<<31 - 1)
 
 // RenderSequence writes JPEG, PNG, TIFF, or explicitly selected embedded RAW previews
 // to MJPEG AVI or H.264 MP4. It can optionally apply the global XMP Exposure2012 slider
-// and axis-aligned XMP crop bounds, but does not implement full Camera Raw RAW rendering.
+// and rotated XMP crop bounds, but does not implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -366,7 +366,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 
 		applyXMP := xmpExposures != nil && xmpExposures[index] != 0
-		applyCrop := xmpCrops != nil && xmpCrops[index].Active && xmpCrops[index].Bounds != image.Rect(0, 0, width, height)
+		applyCrop := xmpCrops != nil && xmpCrops[index].Active && (xmpCrops[index].Bounds != image.Rect(0, 0, width, height) || math.Abs(xmpCrops[index].Angle) > 1e-9)
 		if outputExtension == ".mp4" {
 			img, format, err := image.Decode(bytes.NewReader(data))
 			if err != nil {

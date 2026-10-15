@@ -459,7 +459,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to raster frames")
-	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply axis-aligned crop rectangles from sidecar XMP")
+	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported TIFF-based RAW files")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
