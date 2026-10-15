@@ -22,7 +22,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF/XMP日時や露出情報の読込、XMP数値値の個別編集に対応。メタデータ一括操作や日時シフトUI、Lens Taggerは未対応 | 一部 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で許可した131項目を編集し、全体設定と共通Sync IDを持つローカル補正・基本マスク形状をキーフレーム間で補間。レンダー時にExposure2012と回転を含むクロップ矩形を任意適用。他の現像値の画素反映、Camera Raw相当RAW現像、ローカル値・マスクの画素現像は未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | 131個の全体数値項目を補間。初期化済みの共通Sync ID付きローカル補正・マスクの数値パラメーターと基本形状値も補間。ポイントトーンカーブとLook/Preset/PointColorsは先頭フレームから後続へコピー。Tone Curveのコピー元はLRTの説明で確認済み。範囲セレクター、ブラシ描線、ローカルカーブ、IDのないマスクは未対応 | 一部 |
-| スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | 操作前の個別XMPバックアップはあるが、シーケンスの状態保存/復元は未実装 | 未実装 |
+| スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。RAW内蔵プレビュー/DNGLab現像と、任意でXMP Exposure/cropを解析に適用。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--apply-xmp-exposure`/`--apply-xmp-crop`で既存現像設定を解析に含められる。独自の近似方式。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
@@ -68,6 +68,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 5. レンダー時に簡易Deflickerを画素へ適用するか、JPEG/PNG/TIFFまたは選択したRAW入力の解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。RAW解析時は内蔵プレビューまたはDNGLab現像を選び、必要に応じてXMP Exposure/cropを反映する。
+8. XMPサイドカーをZIPスナップショットに保存し、一覧表示とプレビュー後の復元を行う。
 
 動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。RAW連番を直接レンダーするには外部DNGLabを使う`--raw-develop`を指定します。DNGLabのRAW対応はカメラ形式ごとに異なり、DNGLabはalpha版です。`--raw-preview`は内蔵プレビューを使う別経路です。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`をレンダー入力画像に近似適用します。DNGLabの現像パラメーターはCamera Rawと一致せず、サイドカーにある他の現像値もRAW現像には使いません。Deflickerはレンダー時に出力画素へ適用できます。これらのレンダー操作は元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正をXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。MP4/MOV出力は外部FFmpegを必要とし、入力画像をGoで8-bit RGBへデコードしてから選択したエンコーダーへ渡します。`.mp4`の既定はH.264、`.mov`の既定はProRes 422です。`--codec h265`でH.265、`--codec prores-hq`でProRes 422 HQを選べます。FFmpegにそれぞれ`libx264`、`libx265`、`prores_ks`エンコーダーが必要です。
 
@@ -94,6 +95,14 @@ go build -o lrtl.exe ./cmd/lrtl
 ```powershell
 # 画像列、サイドカー、キーフレームを確認
 lrtl scan "D:\Timelapse\Sequence"
+
+# XMPサイドカーのスナップショットを作成・一覧表示
+lrtl snapshot create "D:\Timelapse\Sequence" --name before-edit
+lrtl snapshot list "D:\Timelapse\Sequence"
+
+# 復元内容を確認し、明示して適用（既存XMPは既定でバックアップ）
+lrtl snapshot restore "D:\Timelapse\Sequence" "D:\Timelapse\Sequence\.lrtl\snapshots\before-edit.zip"
+lrtl snapshot restore "D:\Timelapse\Sequence" "D:\Timelapse\Sequence\.lrtl\snapshots\before-edit.zip" --write
 
 # キーフレームの設定・解除（既存XMPは既定でバックアップ）
 lrtl mark "D:\Timelapse\Developed\IMG_0005.jpg" --kind default
@@ -217,6 +226,8 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 `keyframes`は追加する内側の候補数を指定できます。既定は5候補で、未マークの内側フレームが5未満ならその数まで減らします。通常モードはJPEG/PNG/TIFFの明るさ曲線を平滑化し、直線遷移から外れるフレームを優先します。対応RAWは`--raw-preview`で埋め込みプレビュー、または`--raw-develop`でDNGLab現像画像を解析します。`--apply-xmp-exposure`/`--apply-xmp-crop`を指定すると、候補解析へ既存設定を反映します。`--evenly-spaced`は輝度を見ずに等間隔の候補を選び、画像デコードを省略します。どちらのモードも最初と最後の画像は候補にしません。既存の4/5つ星キーフレームと2/3つ星のHoly Grailマーカーは固定アンカーとして扱い、候補から除外します。`--write`でも既存評価やマーカーを上書きしません。
 
 `unmark --force-rating`はlrtl以外が設定した4つ星/5つ星評価にも使えます。その評価を削除するため、評価がキーフレームマーカーとして使われている場合に限ってください。
+
+`snapshot create`は画像をコピーせず、連番に紐づくXMPサイドカーを`.lrtl/snapshots/<name>.zip`へ保存します。名前を省略するとUTC時刻から自動生成します。`snapshot list`はこのフォルダーのアーカイブを検証して一覧表示します。`snapshot restore`は既定で書き込み内容をプレビューし、`--write`を付けるとアーカイブ内のサイドカーだけを復元します。異なる場所へ移動した連番には`--allow-moved`が必要です。置き換える既存XMPは`.lrtl-snapshot-*.bak`としてバックアップします。スナップショット作成後に追加されたXMPサイドカーは削除しません。移動や削除を含むLRTのシーケンス状態スナップショットとは異なる、XMP限定の復元です。
 
 `holy-grail`は各フレームのEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す補正量として`crs:Exposure2012`に加えます。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。F値がない場合は`--ignore-aperture`を指定し、絞りが変化しなかったことを確認してください。`--stretch`はEXIF露出値を最小・最大で正規化した曲線のスケール（-1.5〜+1.5）、`--rotate`はシーケンスに加える直線傾き（-4〜+4）です。`--auto-shape`はLRTで確認したStretch/Rotateの探索刻み・L1評価と、インストール済みアプリから逆解析した三次カーネル重み付き局所線形回帰（LOWESS）を使って値を提案します。EXIF由来の入力曲線などHoly Grailの上流処理は独自の近似です。いずれも指定しない場合は従来のEXIF露出差補正を使います。EXIFが撮影モードをManualと報告する場合、設定変更位置に2*/3*評価のペアを提案します。撮影モードが不明または自動の場合はペアを作らず、`--mark-jumps`で強制できます。設定変更が連続して隣接ペアを作れない場合や、既存評価と衝突する場合は書き込み前にエラーにします。`--no-mark-jumps`でペア付けを無効化できます。補正の再実行では前回分を置き換え、lrtl管理下の元評価も記録するため`--reset --write`で復元できます。既定はプレビューで、書き込み時は既存サイドカーをバックアップします。
 

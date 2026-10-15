@@ -83,6 +83,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runKeyframes(arguments[1:], stdout, stderr)
 	case "holy-grail":
 		return runHolyGrail(arguments[1:], stdout, stderr)
+	case "snapshot":
+		return runSnapshot(arguments[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "lrtl: unknown command %q\n", arguments[0])
 		printUsage(stderr)
@@ -104,6 +106,9 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
+	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
+	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
+	fmt.Fprintln(writer, "  snapshot restore DIRECTORY FILE.zip [--write] [--no-backup] [--allow-moved]")
 }
 
 func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
@@ -160,6 +165,83 @@ func runScan(directory string, stdout, stderr io.Writer) int {
 			frame.Index+1, filepath.Base(frame.Image), state, marker, controls)
 	}
 	return 0
+}
+
+func runSnapshot(arguments []string, stdout, stderr io.Writer) int {
+	if len(arguments) == 0 || arguments[0] == "--help" || arguments[0] == "-h" {
+		fmt.Fprintln(stdout, "Usage:")
+		fmt.Fprintln(stdout, "  lrtl snapshot create DIRECTORY [--name NAME]")
+		fmt.Fprintln(stdout, "  lrtl snapshot list DIRECTORY")
+		fmt.Fprintln(stdout, "  lrtl snapshot restore DIRECTORY FILE.zip [--write] [--no-backup] [--allow-moved]")
+		return 0
+	}
+	switch arguments[0] {
+	case "create":
+		set := newFlagSet("snapshot create", stderr)
+		name := set.String("name", "", "snapshot name (letters, numbers, dot, dash, underscore)")
+		if err := set.Parse(flagFirst(arguments[1:], map[string]bool{"--name": true, "-name": true})); err != nil {
+			if done, code := finishFlagParse(set, err); done {
+				return code
+			}
+			return reportError(stderr, err)
+		}
+		if set.NArg() != 1 {
+			return reportError(stderr, fmt.Errorf("expected one sequence directory"))
+		}
+		path, count, err := createXMPSnapshot(set.Arg(0), *name)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		fmt.Fprintf(stdout, "Saved %d XMP sidecars: %s\n", count, path)
+		return 0
+	case "list":
+		set := newFlagSet("snapshot list", stderr)
+		if err := set.Parse(arguments[1:]); err != nil {
+			if done, code := finishFlagParse(set, err); done {
+				return code
+			}
+			return reportError(stderr, err)
+		}
+		if set.NArg() != 1 {
+			return reportError(stderr, fmt.Errorf("expected one sequence directory"))
+		}
+		listed, err := listXMPSnapshots(set.Arg(0))
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		if len(listed) == 0 {
+			fmt.Fprintf(stdout, "No snapshots in %s\n", snapshotDirectory(set.Arg(0)))
+			return 0
+		}
+		for _, snapshot := range listed {
+			fmt.Fprintf(stdout, "%s  %s  %d sidecars\n",
+				filepath.Base(snapshot.path), snapshot.manifest.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"), len(snapshot.manifest.Sidecars))
+		}
+		return 0
+	case "restore":
+		set := newFlagSet("snapshot restore", stderr)
+		write := set.Bool("write", false, "restore the XMP sidecars")
+		noBackup := set.Bool("no-backup", false, "replace existing sidecars without backup")
+		allowMoved := set.Bool("allow-moved", false, "restore a snapshot into a sequence at a different path")
+		if err := set.Parse(flagFirst(arguments[1:], nil)); err != nil {
+			if done, code := finishFlagParse(set, err); done {
+				return code
+			}
+			return reportError(stderr, err)
+		}
+		if set.NArg() != 2 {
+			return reportError(stderr, fmt.Errorf("expected sequence directory and snapshot ZIP file"))
+		}
+		if *noBackup && !*write {
+			return reportError(stderr, fmt.Errorf("--no-backup requires --write"))
+		}
+		if err := restoreXMPSnapshot(set.Arg(0), set.Arg(1), *write, !*noBackup, *allowMoved, stdout); err != nil {
+			return reportError(stderr, err)
+		}
+		return 0
+	default:
+		return reportError(stderr, fmt.Errorf("unknown snapshot action %q (use create, list, or restore)", arguments[0]))
+	}
 }
 
 func inputPaths(imageOrSidecar string) (image, sidecar string) {
