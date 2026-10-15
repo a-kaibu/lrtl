@@ -80,6 +80,7 @@ func newGUIHandler() http.Handler {
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
 	mux.HandleFunc("/api/preview", serveGUIPreview)
 	mux.HandleFunc("/api/xmp", serveGUIXMP)
+	mux.HandleFunc("/api/lens-tag", serveGUILensTag)
 	mux.HandleFunc("/api/crop", serveGUICrop)
 	mux.HandleFunc("/api/keyframe", serveGUIKeyframe)
 	mux.HandleFunc("/api/keyframes", serveGUIKeyframes)
@@ -882,6 +883,53 @@ type guiKeyframeRequest struct {
 	Name      string `json:"name"`
 	Kind      string `json:"kind"`
 	Remove    bool   `json:"remove"`
+}
+
+type guiLensTagRequest struct {
+	Directory string `json:"directory"`
+	Aperture  string `json:"aperture"`
+}
+
+func serveGUILensTag(w http.ResponseWriter, r *http.Request) {
+	if !requireGUIJSONPost(w, r) {
+		return
+	}
+	var request guiLensTagRequest
+	if !decodeGUIJSON(w, r, &request) {
+		return
+	}
+	directory, err := canonicalGUIDirectory(request.Directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	aperture, err := normalizeLensAperture(request.Aperture)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	changes, err := buildLensTagPlan(frames, aperture)
+	if err != nil {
+		writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	backups := make([]string, 0, len(changes))
+	for _, change := range changes {
+		backup, err := WritePacket(change.Frame.OutputSidecar(), change.Packet, true)
+		if err != nil {
+			writeGUIError(w, http.StatusInternalServerError, fmt.Sprintf("%s: %v", change.Frame.OutputSidecar(), err))
+			return
+		}
+		if backup != "" {
+			backups = append(backups, backup)
+		}
+	}
+	writeGUIJSON(w, http.StatusOK, map[string]any{"frames": len(changes), "aperture": aperture, "backups": backups})
 }
 
 func serveGUIKeyframe(w http.ResponseWriter, r *http.Request) {

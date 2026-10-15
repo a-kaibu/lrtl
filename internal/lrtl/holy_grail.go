@@ -233,8 +233,8 @@ type HolyGrailPlan struct {
 	AutoCurve    bool
 }
 
-func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error) {
-	file, err := os.Open(path)
+func readCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error) {
+	file, err := os.Open(frame.Image)
 	if err != nil {
 		return CameraExposure{}, err
 	}
@@ -252,6 +252,23 @@ func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error
 	if iso == 0 {
 		iso = float64(metadata.ISO)
 	}
+	if !ignoreAperture && (fNumber <= 0 || math.IsNaN(fNumber) || math.IsInf(fNumber, 0)) {
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			return CameraExposure{}, fmt.Errorf("read XMP aperture: %w", err)
+		}
+		apertureText, found, err := packet.GetScalar("lrt:Aperture")
+		if err != nil {
+			return CameraExposure{}, fmt.Errorf("read lrt:Aperture: %w", err)
+		}
+		if found {
+			aperture, valid := scalarNumber(apertureText)
+			if !valid || aperture <= 0 {
+				return CameraExposure{}, fmt.Errorf("lrt:Aperture is present but invalid")
+			}
+			fNumber = aperture
+		}
+	}
 	if exposureTime <= 0 || math.IsNaN(exposureTime) || math.IsInf(exposureTime, 0) {
 		return CameraExposure{}, fmt.Errorf("EXIF ExposureTime is missing or invalid")
 	}
@@ -259,7 +276,7 @@ func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error
 		return CameraExposure{}, fmt.Errorf("EXIF ISO speed is missing or invalid")
 	}
 	if !ignoreAperture && (fNumber <= 0 || math.IsNaN(fNumber) || math.IsInf(fNumber, 0)) {
-		return CameraExposure{}, fmt.Errorf("EXIF FNumber is missing or invalid; use --ignore-aperture if aperture stayed fixed")
+		return CameraExposure{}, fmt.Errorf("EXIF FNumber and XMP lrt:Aperture are missing or invalid; use lrtl lens-tag to set a manual aperture or --ignore-aperture if it stayed fixed")
 	}
 	setting := math.Log2(exposureTime * iso)
 	if !ignoreAperture {
@@ -647,7 +664,7 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 	var err error
 	if !reset {
 		for index, frame := range frames {
-			camera, err := readCameraExposure(frame.Image, ignoreAperture)
+			camera, err := readCameraExposure(frame, ignoreAperture)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
 			}

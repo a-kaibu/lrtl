@@ -71,6 +71,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runImportVideo(arguments[1:], stdout, stderr)
 	case "timeshift":
 		return runTimeShift(arguments[1:], stdout, stderr)
+	case "lens-tag":
+		return runLensTag(arguments[1:], stdout, stderr)
 	case "mark":
 		return runMark(arguments[1:], stdout, stderr)
 	case "set":
@@ -114,6 +116,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
+	fmt.Fprintln(writer, "  lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
@@ -248,6 +251,62 @@ func runTimeShift(arguments []string, stdout, stderr io.Writer) int {
 	if err := TimeShiftSequence(set.Arg(0), offset, *write, !*noBackup, stdout); err != nil {
 		return reportError(stderr, err)
 	}
+	return 0
+}
+
+func runLensTag(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("lens-tag", stderr)
+	aperture := set.String("aperture", "", "LRT Lens Tagger aperture stop, such as f/8")
+	write := set.Bool("write", false, "write lrt:Aperture to every frame's XMP sidecar")
+	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--aperture": true, "-aperture": true,
+	})); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 || strings.TrimSpace(*aperture) == "" {
+		return reportError(stderr, fmt.Errorf("Usage: lrtl lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]"))
+	}
+	if *noBackup && !*write {
+		return reportError(stderr, fmt.Errorf("--no-backup requires --write"))
+	}
+	canonical, err := normalizeLensAperture(*aperture)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	directory := set.Arg(0)
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	changes, err := buildLensTagPlan(frames, canonical)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Sequence: %s\nFrames: %d\nAperture: f/%s\n", directory, len(changes), canonical)
+	for _, change := range changes {
+		previous := "unset"
+		if change.HadPrevious {
+			previous = "f/" + change.Previous
+		}
+		fmt.Fprintf(stdout, "  %-42s %s -> f/%s\n", filepath.Base(change.Frame.Image), previous, canonical)
+	}
+	if !*write {
+		fmt.Fprintln(stdout, "Preview only. Pass --write to update XMP sidecars.")
+		return 0
+	}
+	for _, change := range changes {
+		backup, err := WritePacket(change.Frame.OutputSidecar(), change.Packet, !*noBackup)
+		if err != nil {
+			return reportError(stderr, fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err))
+		}
+		if backup != "" {
+			fmt.Fprintf(stdout, "  Backup: %s\n", backup)
+		}
+	}
+	fmt.Fprintf(stdout, "Wrote lrt:Aperture=f/%s to %d XMP sidecars.\n", canonical, len(changes))
 	return 0
 }
 

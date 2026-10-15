@@ -8,7 +8,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ## 実装状況
 
-下表はローカルにインストールされたLRTimelapse 7.5.5とlrtlの現行コードを照合したものです。LRT側の主要機能とライセンス別の提供範囲は[公式機能表](https://lrtimelapse.com/features/)、[基本チュートリアル](https://lrtimelapse.com/tutorial/basic/complete/)、[内部ワークフロー](https://lrtimelapse.com/workflow/internal-workflow/)と、インストール済みアプリの各メニューを2026-10-15に確認しました。「未実装」は今後の目標です。LRTimelapseのLightroom/Camera Raw連携は外部ソフトを使うワークフローです。
+下表はローカルにインストールされたLRTimelapse 7.5.5とlrtlの現行コードを照合したものです。LRT側の主要機能とライセンス別の提供範囲は[公式機能表](https://lrtimelapse.com/features/)、[基本チュートリアル](https://lrtimelapse.com/tutorial/basic/complete/)、[内部ワークフロー](https://lrtimelapse.com/workflow/internal-workflow/)と、インストール済みアプリの各メニューを2026-10-16に確認しました。「未実装」は今後の目標です。LRTimelapseのLightroom/Camera Raw連携は外部ソフトを使うワークフローです。
 
 状態の「一部」は該当機能の一部を実装済みですが、LRTと同等ではないことを示します。「未実装」は対応コマンドや処理がありません。「対象外」はLRTのライセンス区分にある制限をOSS版では再現しない項目です。
 
@@ -19,9 +19,9 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量は、全XMPに有効な数値があればLRT記録値`lrt:ExternalExposureDefault / 4` を使い、値が揃わない場合は画像輝度へフォールバックして、LRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式で算出。候補位置も同版の整数間隔・端点選択ルールに対応。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。既存マーカーは既定で保持し、選択中の評価だけ数量推定から差し引く。`--replace-existing`では同じ評価を連番から削除し、他の2〜5つ星との衝突を前方9枚以内の空きフレームへ移す。`--evenly-spaced`は輝度解析なしで利用可能。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。選択行のUI、LRT内部の現像輝度値との一致は未対応 | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、LRT同様に最大10件のフレーム差平均と2*/3*/4*隣接ペア補正を適用する近似経路も選択可能。`--lrt-reduce-deflicker`で0〜1の平滑化設定を指定できる。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の入力生成と平滑化の厳密な数値対応は未再現。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | GUIで元画像上をドラッグしてクロップ範囲を指定し、角度を調整してXMPへ保存できる。保存時は`HasCrop`とCropAngle/Top/Left/Bottom/Rightを書き、5つ星crop markと既存XMPバックアップも作成。`interpolate`は値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。Camera RawのGeometry/遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
-| レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
+| レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、キーフレーム候補の輝度分析に対応。`render --filename-contains TEXT`で名前の絞り込みに対応。反転選択、画像のコピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
-| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、XMP数値値の個別編集、`timeshift`によるXMP撮影日時の連番一括シフトに対応。日時シフトはXMPサイドカーのみ変更し、埋め込みEXIFは変更しない。メタデータ一括操作やLens Taggerは未対応 | 一部 |
+| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、XMP数値値の個別編集、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。これらはXMPサイドカーのみ変更し、埋め込みEXIF/XMPは変更しない。その他のメタデータ一括操作は未対応 | 一部 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`gui`と`set`で許可した131項目の数値値を選択フレーム単位で編集し、全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度でLUT出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を先頭フレームから均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。アスペクト比を使う円形グラデーションの専用形状補正、Camera Rawのマスク描画との一致は未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
@@ -142,7 +142,7 @@ AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必
 .\lrtl.exe gui
 ```
 
-フォルダー欄に連番のパスを入力するとサムネイルが表示されます。選択フレームの数値XMPプロパティを編集でき、「XMPプレビュー」は対応する補正を適用した静止画を表示します。フレームごとの4/5つ星設定、輝度からのキーフレーム候補作成、XMP補間、AVI/MP4/MOVレンダーを操作できます。RAWの輝度解析と静止画プレビューは内蔵プレビューまたはDNGLab現像を選べます。キーフレーム作成/解除、XMP値の保存、補間、レンダーは実行前に確認します。RAWセンサーデータの現像にはDNGLab、MP4/MOVにはFFmpegが必要です。
+フォルダー欄に連番のパスを入力するとサムネイルが表示されます。選択フレームの数値XMPプロパティを編集でき、「XMPプレビュー」は対応する補正を適用した静止画を表示します。フレームごとの4/5つ星設定、輝度からのキーフレーム候補作成、XMP補間、マニュアルレンズの絞り値設定、AVI/MP4/MOVレンダーを操作できます。RAWの輝度解析と静止画プレビューは内蔵プレビューまたはDNGLab現像を選べます。XMPを書き換える操作とレンダーは実行前に確認します。RAWセンサーデータの現像にはDNGLab、MP4/MOVにはFFmpegが必要です。
 
 ## 使い方
 
@@ -151,6 +151,8 @@ AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必
 `import-video`はFFmpegで動画をJPGまたはPNGの連番へデコードします。既定ではデコード可能な全フレームを保存し、`--fps N`を指定するとその間隔でフレームをサンプリングします。JPEGの圧縮品質は`--quality 1`（高画質）〜`31`（低画質）で指定できます。抽出先は新しいフォルダーでなければならず、既存フォルダーを置き換えません。LRTimelapseの動画取り込みもJPG連番を生成しますが、lrtlではプレビュー生成、シーンごとの自動分割、動画フレームのDNG変換は未実装です。
 
 `timeshift`は`--offset 2h30m`、`--offset=-45s`、`--offset 1d`のような固定時間差で連番の撮影日時をずらします。既定はプレビューで、`--write`を付けるとXMPサイドカーへ保存し、既存ファイルはバックアップします。対象は`DateTimeOriginal`、`DateTimeDigitized`、`CreateDate`で、`ModifyDate`と画像に埋め込まれたEXIF値は変更しません。サイドカーに撮影日時がなく、画像EXIFで読める場合は、ずらした`DateTimeOriginal`をサイドカーへ追加します。
+
+`lens-tag`はLRTimelapse 7.5.5のLens Taggerで確認したf/1〜f/90の候補から選び、連番の各XMPサイドカーへ`lrt:Aperture`として記録します。既定はプレビューで、`--write`で保存し、既存サイドカーはバックアップします。`--no-backup`は`--write`と併用できます。GUIにも同じ操作があります。これはマニュアルレンズ向けのLRT独自XMP値で、画像内EXIFや埋め込みXMPは変更しません。`holy-grail`はEXIFのFNumberが有効ならそちらを優先し、欠落時には`lrt:Aperture`を使います。
 
 ```powershell
 # 画像列、サイドカー、キーフレームを確認
@@ -171,6 +173,10 @@ lrtl import "E:\DCIM" --output "D:\Timelapse\SequenceByDate" --recursive --skip-
 # 撮影日時を1時間戻す（プレビュー後、--writeでXMPに保存）
 lrtl timeshift "D:\Timelapse\Sequence" --offset=-1h
 lrtl timeshift "D:\Timelapse\Sequence" --offset=-1h --write
+
+# マニュアルレンズの絞り値を連番全体に設定（確認後、--writeでサイドカーへ保存）
+lrtl lens-tag "D:\Timelapse\Sequence" --aperture f/8
+lrtl lens-tag "D:\Timelapse\Sequence" --aperture f/8 --write
 
 # 動画の全フレームをJPG連番へ展開（FFmpegが必要）
 lrtl import-video "D:\Clips\source.mp4" --output "D:\Timelapse\ExtractedFrames"
@@ -379,7 +385,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `snapshot create`は画像をコピーせず、連番に紐づくXMPサイドカーを`.lrtl/snapshots/<name>.zip`へ保存します。名前を省略するとUTC時刻から自動生成します。`snapshot list`はこのフォルダーのアーカイブを検証して一覧表示します。`snapshot restore`は既定で書き込み内容をプレビューし、`--write`を付けるとアーカイブ内のサイドカーだけを復元します。異なる場所へ移動した連番には`--allow-moved`が必要です。置き換える既存XMPは`.lrtl-snapshot-*.bak`としてバックアップします。スナップショット作成後に追加されたXMPサイドカーは削除しません。移動や削除を含むLRTのシーケンス状態スナップショットとは異なる、XMP限定の復元です。
 
-`holy-grail`の既定はEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す独自補正を計算します。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。F値がない場合は`--ignore-aperture`を指定し、絞りが変化しなかったことを確認してください。`--stretch`は露出値を最小・最大で正規化した曲線のスケール（-1.5〜+1.5）、`--rotate`はシーケンスに加える直線傾き（-4〜+4）です。`--auto-shape`はLRTで確認したStretch/Rotateの探索刻み・L1評価を使って値を提案します。
+`holy-grail`の既定はEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す独自補正を計算します。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。FNumberがない場合はXMPの`lrt:Aperture`を参照します。マニュアルレンズは先に`lens-tag --aperture f/8 --write`で絞り値を登録してください。EXIF値とXMP値の両方が使えないときは、絞りが固定であることを確認して`--ignore-aperture`を指定します。`--stretch`は露出値を最小・最大で正規化した曲線のスケール（-1.5〜+1.5）、`--rotate`はシーケンスに加える直線傾き（-4〜+4）です。`--auto-shape`はLRTで確認したStretch/Rotateの探索刻み・L1評価を使って値を提案します。
 
 `--lrt-input`は、各フレームのXMPにある数値`lrt:ExternalExposureDefault`を読み、LRTのフレーム内部値と同じく4で割ります。LRTの処理順に沿って、2*/3*/4*評価が隣り合う場所で直近最大10件のフレーム差を重み付き平均で補正し、他のフレームにも直前の補正オフセットを引き継ぎます。その後に`--lrt-reduce-deflicker`（0〜1、既定0）のLOWESS近似、中央寄せ/範囲制限、隣接HGキーフレーム間のカメラ設定差、Stretch/Rotateを適用します。全フレームに同プロパティと有効な撮影露出EXIFが必要です。星評価は新規作成・変更しません。LRTが`ExternalExposureDefault`を生成する測光処理とPiaスムーザーの全フォールバック/数値挙動はまだ再現していないため、LRT Wizardとの数値一致は保証しません。`--auto-shape`はこのモデル上で探索します。
 

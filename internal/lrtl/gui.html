@@ -116,6 +116,13 @@
           <p>選んだフレームのサイドカーだけを編集します。既存XMPはバックアップされます。</p>
         </section>
         <section class="panel">
+          <h2>マニュアルレンズの絞り</h2>
+          <label for="lens-aperture">連番へ設定する絞り値</label>
+          <select id="lens-aperture"></select>
+          <button id="lens-tag">全フレームへ設定</button>
+          <p>LRT Lens Taggerと同じ絞り候補をXMPの lrt:Aperture へ記録します。既存XMPはバックアップされます。</p>
+        </section>
+        <section class="panel">
           <h2>キーフレーム</h2>
           <label for="keyframe-count">追加するキーフレーム数</label>
           <input id="keyframe-count" type="number" min="1" max="1000" value="5">
@@ -202,6 +209,11 @@
     let previewObjectURL = '';
     let cropBounds = {left:0, top:0, right:1, bottom:1};
     let cropDragStart = null;
+    const lensApertures = ['1.0','1.1','1.2','1.4','1.6','1.8','2.0','2.2','2.5','2.8','3.2','3.5','4.0','4.5','5.0','5.6','6.3','7.1','8.0','9.0','10.0','11.0','13.0','14.0','16.0','18.0','20.0','22.0','25.0','29.0','32.0','36.0','40.0','45.0','51.0','57.0','64.0','72.0','80.0','90.0'];
+    for (const aperture of lensApertures) {
+      const option = document.createElement('option'); option.value = aperture; option.textContent = 'f/' + aperture; el('lens-aperture').append(option);
+    }
+    el('lens-aperture').value = '8.0';
     const setStatus = (message, error = false) => { el('status').textContent = message; el('status').className = error ? 'error' : ''; };
     async function api(url, options = {}) {
       const response = await fetch(url, options);
@@ -533,6 +545,14 @@
       invalidateLuminanceCurve();
       if (property === 'Exposure2012') await loadExposureCurve();
       setStatus(data.output || 'XMP値を保存しました。');
+    });
+    buttonAction(el('lens-tag'), async () => {
+      ensureActiveDirectory();
+      const aperture = el('lens-aperture').value;
+      if (!confirm('連番の全' + total + 'フレームに f/' + aperture + ' を設定しますか？既存XMPはバックアップされます。')) return;
+      setStatus('レンズ情報をXMPへ保存しています…');
+      const data = await api('/api/lens-tag', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, aperture})});
+      setStatus(data.frames + 'フレームに lrt:Aperture=f/' + data.aperture + ' を保存しました。');
     });
     buttonAction(el('suggest'), async () => {
       ensureActiveDirectory();
