@@ -103,7 +103,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov render frames; --codec selects H.265 or ProRes")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
-	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
@@ -561,6 +561,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
 	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
 	smoothRadius := set.Int("smooth", 5, "deflicker smoothing radius in frames")
+	deflickerSmoother := set.String("deflicker-smoother", "gaussian", "deflicker smoother: gaussian or lowess")
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to rendered frames")
@@ -581,6 +582,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--long-edge": true, "-long-edge": true,
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
+		"--deflicker-smoother": true, "-deflicker-smoother": true,
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true,
 		"--timestamp-format": true, "-timestamp-format": true,
@@ -608,7 +610,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	timestampOverlayEnabled := *timestampOverlay
 	set.Visit(func(parsed *flag.Flag) {
 		switch parsed.Name {
-		case "reference", "smooth", "passes", "constant":
+		case "reference", "smooth", "deflicker-smoother", "passes", "constant":
 			deflickerEnabled = true
 		case "timestamp-format":
 			timestampOverlayEnabled = true
@@ -620,26 +622,27 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	options := RenderOptions{
-		FPS:              *fps,
-		Quality:          *quality,
-		FFmpegPath:       *ffmpeg,
-		Codec:            strings.ToLower(strings.TrimSpace(*codec)),
-		CRF:              *crf,
-		Preset:           *preset,
-		LongEdge:         *longEdge,
-		Overwrite:        *overwrite,
-		Deflicker:        deflickerEnabled,
-		Reference:        reference,
-		SmoothRadius:     *smoothRadius,
-		DeflickerPasses:  *passes,
-		Constant:         *constant,
-		ApplyXMPExposure: *applyXMPExposure,
-		ApplyXMPCrop:     *applyXMPCrop,
-		TimestampOverlay: timestampOverlayEnabled,
-		TimestampFormat:  *timestampFormat,
-		RawPreview:       *rawPreview,
-		RawDevelop:       *rawDevelop,
-		DNGLabPath:       *dnglab,
+		FPS:               *fps,
+		Quality:           *quality,
+		FFmpegPath:        *ffmpeg,
+		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
+		CRF:               *crf,
+		Preset:            *preset,
+		LongEdge:          *longEdge,
+		Overwrite:         *overwrite,
+		Deflicker:         deflickerEnabled,
+		Reference:         reference,
+		SmoothRadius:      *smoothRadius,
+		DeflickerSmoother: *deflickerSmoother,
+		DeflickerPasses:   *passes,
+		Constant:          *constant,
+		ApplyXMPExposure:  *applyXMPExposure,
+		ApplyXMPCrop:      *applyXMPCrop,
+		TimestampOverlay:  timestampOverlayEnabled,
+		TimestampFormat:   *timestampFormat,
+		RawPreview:        *rawPreview,
+		RawDevelop:        *rawDevelop,
+		DNGLabPath:        *dnglab,
 	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
@@ -724,6 +727,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	reset := set.Bool("reset", false, "remove lrtl-managed deflicker exposure corrections")
 	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
 	smoothRadius := set.Int("smooth", 5, "deflicker smoothing radius in frames")
+	smoother := set.String("smoother", "gaussian", "deflicker smoother: gaussian or lowess")
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
@@ -734,6 +738,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
+		"--smoother": true, "-smoother": true,
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true,
 	})
@@ -755,7 +760,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "apply-xmp-exposure", "apply-xmp-crop":
+			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "apply-xmp-exposure", "apply-xmp-crop":
 				analysisOption = true
 			}
 		})
@@ -785,7 +790,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 			return reportError(stderr, err)
 		}
 	}
-	changes, err := buildDeflickerChanges(frames, luminances, *smoothRadius, *passes, *constant, *reset)
+	changes, err := buildDeflickerChangesWithSmoother(frames, luminances, *smoothRadius, *passes, *constant, *reset, *smoother)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -797,8 +802,8 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		if *constant {
 			target = "constant median luminance"
 		}
-		fmt.Fprintf(stdout, "Frames: %d; corrections: %d; target: %s; smooth radius: %d; passes: %d\n",
-			len(frames), len(changes), target, *smoothRadius, *passes)
+		fmt.Fprintf(stdout, "Frames: %d; corrections: %d; target: %s; smoother: %s; smooth radius: %d; passes: %d\n",
+			len(frames), len(changes), target, strings.ToLower(strings.TrimSpace(*smoother)), *smoothRadius, *passes)
 	}
 	for _, change := range changes {
 		fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))

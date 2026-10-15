@@ -24,7 +24,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | 131個の全体数値項目を補間。初期化済みの共通Sync ID付きローカル補正・マスクの数値パラメーターと基本形状値も補間。ポイントトーンカーブとLook/Preset/PointColorsは先頭フレームから後続へコピー。Tone Curveのコピー元はLRTの説明で確認済み。範囲セレクター、ブラシ描線、ローカルカーブ、IDのないマスクは未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。RAW内蔵プレビュー/DNGLab現像と、任意でXMP Exposure/cropを解析に適用。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
-| Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--apply-xmp-exposure`/`--apply-xmp-crop`で既存現像設定を解析に含められる。独自の近似方式。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
+| Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。固定サイズの画像列、整数1–240 fps、`--long-edge`によるアスペクト比維持の縮小 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`で外部DNGLabにより主要RAW形式を現像し、その16-bit sRGB TIFF出力からレンダー可能。`--raw-preview`によるカメラ内プレビュー経路も維持。DNGLabは別途インストールが必要。Camera Raw/Lightroom設定の完全な適用やDNG変換は未実装 | 一部 |
@@ -197,10 +197,11 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi" --fps 3
 
 # 指定領域で明るさを測り、近傍6フレームの変動を3パスで抑える
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\smooth.avi" `
-  --deflicker --reference 200,100,600,300 --smooth 6 --passes 3
+  --deflicker --reference 200,100,600,300 --smooth 6 --deflicker-smoother lowess --passes 3
 
 # 同じ解析を露出補正値としてXMPへプレビューし、書き込む
 lrtl deflicker "D:\Timelapse\Developed" --reference 200,100,600,300 --smooth 6 --passes 3
+lrtl deflicker "D:\Timelapse\Developed" --reference 200,100,600,300 --smooth 6 --smoother lowess --passes 3
 lrtl deflicker "D:\Timelapse\Developed" --reference 200,100,600,300 --smooth 6 --passes 3 --write
 
 # lrtlが記録したDeflicker補正だけをXMPから戻す
@@ -219,7 +220,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `--timestamp-overlay`は、各サイドカーの`exif:DateTimeOriginal`、`xmp:CreateDate`、`xmp:ModifyDate`の順で日時を探し、なければ画像内EXIFの撮影/作成/更新日時を使って右下に焼き込みます。全フレームの日時が必要です。指定がない場合は`2006-01-02 15:04:05`形式を使います。形式を変えるには`--timestamp-format`へGoの日時レイアウトを渡してください。埋め込みGoフォントを使うため、日時表示は外部フォント不要です。画像ごとの透かしテキストやSRT字幕ファイルは未実装です。
 
-`deflicker`はJPEG/PNG/TIFF、`--raw-preview`の内蔵画像、または`--raw-develop`でDNGLabが現像した画像の輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。`--apply-xmp-exposure`と`--apply-xmp-crop`を指定すると、解析前にサイドカーの値を画素へ近似適用します。既定はプレビューだけです。`--write`は求めた補正量を各フレームの`crs:Exposure2012`へ加算し、前回lrtlが加えた量を`ol:DeflickerCorrection2012`に記録します。再実行ではlrtl管理分を置き換え、`--reset --write`ではその分だけを戻します。Holy Grail補正やユーザーが後から加えたExposure値は差し引かずに残します。Camera Rawの現像パイプラインやLRTimelapseのVisual Deflickerと数値が一致する機能ではなく、画像列から露出差を推定する近似です。
+`deflicker`はJPEG/PNG/TIFF、`--raw-preview`の内蔵画像、または`--raw-develop`でDNGLabが現像した画像の輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。既定の`--smoother gaussian`はGaussian平滑化を使い、`--smoother lowess`はtricube重み付き局所線形回帰を使います。LOWESSの近傍数は`--smooth`の半径から`2×半径+1`へ換算します。LRT 7.5.5のVisual Deflickerも局所線形回帰型スムーザーを呼びますが、lrtlの測光、近傍数、補正パスは独自実装です。`--apply-xmp-exposure`と`--apply-xmp-crop`を指定すると、解析前にサイドカーの値を画素へ近似適用します。既定はプレビューだけです。`--write`は求めた補正量を各フレームの`crs:Exposure2012`へ加算し、前回lrtlが加えた量を`ol:DeflickerCorrection2012`に記録します。再実行ではlrtl管理分を置き換え、`--reset --write`ではその分だけを戻します。Holy Grail補正やユーザーが後から加えたExposure値は差し引かずに残します。Camera Rawの現像パイプラインやLRTimelapseのVisual Deflickerと数値が一致する機能ではなく、画像列から露出差を推定する近似です。
 
 `set`は`NumericCRSProperties`にある数値のCamera RawプロパティだけをXMPサイドカーに書き込みます。131個の値を明示的に許可し、HSL色別スライダー、旧式のClarity/Fill Light/Highlight Recovery/増分WB、HDR最大値、カラーグレーディング、色別色相境界、パラメトリックトーン、ノイズ低減、シャープ化、粒子、周辺光量、手動レンズ/パースペクティブ補正などを含みます。名前はAdobeの公開XMP資料、インストール済みのXMPテンプレート、LRT 7.5.5のプロパティ登録情報から選びました。これはLRTがAuto-Transitionで扱う全項目を確定するものではありません。HueAdjustmentの色別バンドシフトは線形値として、カラーグレーディング/SplitToningの色相角とDefringeの色相境界は0〜360度の最短回転として補間します。`interpolate`ではグローバルポイントトーンカーブの`ToneCurve`、`ToneCurveName`、`ToneCurveName2012`、`ToneCurvePV2012`とRGBチャンネル別カーブを先頭画像から全フレームへコピーします。LRT開発者の説明でもポイントカーブはアニメーションせず、先頭画像からコピーされます。LRT 7.1はLook/Preset/PointColorsも均等化するとしていますが、コピー元は明記していません。lrtlはこれらのトップレベルXMP値も先頭画像からコピーする互換判断を採り、LRTとの完全一致は未確認です。共通の`CorrectionSyncID`/`MaskSyncID`を持つ初期化済みマスクについてはローカル補正の数値値と基本形状パラメーターを補間し、`interpolate`のプレビューに変更項目を表示します。範囲セレクター、ブラシ描線、ローカルポイントカーブ、先頭マスクからのセレクター同期はまだ扱いません。LRT 7.5.5との数値一致は未確認です。プロパティ名には`crs:`を付けても省いても構いません。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --write`で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-exposure`でExposure2012を、`render --apply-xmp-crop`で回転を含むクロップを画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。これはLightroom/Camera Rawの現像エンジンを置き換える機能ではなく、XMPへ補間した値のうち現在レンダーに画素反映できるのはExposure2012とクロップだけです。`set`はCamera Rawスライダーごとの許容範囲を検証しません。
 

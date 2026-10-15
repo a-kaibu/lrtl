@@ -76,6 +76,11 @@ func frameLuminance(img image.Image, reference image.Rectangle) (float64, error)
 }
 
 func deflickerGains(luminances []float64, smoothingRadius, passes int, constant bool) ([]float64, error) {
+	return deflickerGainsWithSmoother(luminances, smoothingRadius, passes, constant, "gaussian")
+}
+
+func deflickerGainsWithSmoother(luminances []float64, smoothingRadius, passes int, constant bool, smoother string) ([]float64, error) {
+	smoother = strings.ToLower(strings.TrimSpace(smoother))
 	if len(luminances) == 0 {
 		return nil, fmt.Errorf("cannot deflicker an empty sequence")
 	}
@@ -84,6 +89,9 @@ func deflickerGains(luminances []float64, smoothingRadius, passes int, constant 
 	}
 	if passes < 1 || passes > 8 {
 		return nil, fmt.Errorf("deflicker passes must be between 1 and 8: %d", passes)
+	}
+	if smoother != "gaussian" && smoother != "lowess" {
+		return nil, fmt.Errorf("deflicker smoother must be gaussian or lowess: %q", smoother)
 	}
 	logs := make([]float64, len(luminances))
 	for index, luminance := range luminances {
@@ -107,7 +115,7 @@ func deflickerGains(luminances []float64, smoothingRadius, passes int, constant 
 				target[index] = median
 			}
 		} else {
-			target = smoothLogLuminance(logs, smoothingRadius)
+			target = smoothDeflickerLuminance(logs, smoothingRadius, smoother)
 		}
 		for index := range logs {
 			// Leave a residual so additional passes refine the result gradually.
@@ -121,6 +129,14 @@ func deflickerGains(luminances []float64, smoothingRadius, passes int, constant 
 		gains[index] = math.Exp2(stops)
 	}
 	return gains, nil
+}
+
+func smoothDeflickerLuminance(values []float64, radius int, smoother string) []float64 {
+	if smoother == "lowess" {
+		neighbors := min(len(values), 2*radius+1)
+		return lowessSmooth(values, neighbors)
+	}
+	return smoothLogLuminance(values, radius)
 }
 
 func medianFloat64(values []float64) float64 {

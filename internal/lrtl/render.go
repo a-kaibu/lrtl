@@ -21,26 +21,34 @@ import (
 )
 
 type RenderOptions struct {
-	FPS              int
-	Quality          int
-	FFmpegPath       string
-	Codec            string
-	CRF              int
-	Preset           string
-	LongEdge         int
-	Overwrite        bool
-	Deflicker        bool
-	Reference        image.Rectangle
-	SmoothRadius     int
-	DeflickerPasses  int
-	Constant         bool
-	ApplyXMPExposure bool
-	ApplyXMPCrop     bool
-	TimestampOverlay bool
-	TimestampFormat  string
-	RawPreview       bool
-	RawDevelop       bool
-	DNGLabPath       string
+	FPS               int
+	Quality           int
+	FFmpegPath        string
+	Codec             string
+	CRF               int
+	Preset            string
+	LongEdge          int
+	Overwrite         bool
+	Deflicker         bool
+	Reference         image.Rectangle
+	SmoothRadius      int
+	DeflickerPasses   int
+	DeflickerSmoother string
+	Constant          bool
+	ApplyXMPExposure  bool
+	ApplyXMPCrop      bool
+	TimestampOverlay  bool
+	TimestampFormat   string
+	RawPreview        bool
+	RawDevelop        bool
+	DNGLabPath        string
+}
+
+func (options RenderOptions) deflickerSmoother() string {
+	if options.DeflickerSmoother == "" {
+		return "gaussian"
+	}
+	return options.DeflickerSmoother
 }
 
 type renderFrameWriter interface {
@@ -349,7 +357,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				return fmt.Errorf("analyze %s: %w", frame.Image, err)
 			}
 		}
-		gains, err = deflickerGains(luminances, options.SmoothRadius, options.DeflickerPasses, options.Constant)
+		gains, err = deflickerGainsWithSmoother(luminances, options.SmoothRadius, options.DeflickerPasses, options.Constant, options.deflickerSmoother())
 		if err != nil {
 			return err
 		}

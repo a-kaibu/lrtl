@@ -73,6 +73,10 @@ func analyzeDeflickerSequenceWithOptions(frames []Frame, reference image.Rectang
 }
 
 func buildDeflickerChanges(frames []Frame, luminances []float64, smoothingRadius, passes int, constant, reset bool) ([]DeflickerChange, error) {
+	return buildDeflickerChangesWithSmoother(frames, luminances, smoothingRadius, passes, constant, reset, "gaussian")
+}
+
+func buildDeflickerChangesWithSmoother(frames []Frame, luminances []float64, smoothingRadius, passes int, constant, reset bool, smoother string) ([]DeflickerChange, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
 	}
@@ -81,7 +85,7 @@ func buildDeflickerChanges(frames []Frame, luminances []float64, smoothingRadius
 	}
 	corrections := make([]float64, len(frames))
 	if !reset {
-		gains, err := deflickerGains(luminances, smoothingRadius, passes, constant)
+		gains, err := deflickerGainsWithSmoother(luminances, smoothingRadius, passes, constant, smoother)
 		if err != nil {
 			return nil, err
 		}
