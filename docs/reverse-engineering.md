@@ -17,6 +17,7 @@ These notes record observed interfaces and public workflow behavior used to desi
 ## Public workflow behavior
 
 - The official workflow describes XMP files as the exchange layer between LRTimelapse and Lightroom. Users choose keyframes, edit those images, save metadata, then run Auto-Transition to calculate settings for intervening frames.
+- The official Keyframes Wizard describes its suggestions as an automatic analysis of the sequence luminance progression. The installed JAR scan exposed the global `initializationCreatesKeyframes` setting, but the exact wizard selection algorithm was not identified. `lrtl keyframes` therefore uses its own explicit luminance-curve heuristic and should not be treated as a behavioral clone.
 - Keyframes appear as four-star ratings in Lightroom. The current official guide also documents manually adding and removing keyframes with the `1` and `0` keys.
 - LRTimelapse 7.4 release notes state that first/last images are not automatically keyframes, a single keyframe is used as a reference for other frames, and a sequence without keyframes uses the first image as its reference.
 - LRTimelapse 7.4 also describes linear transitions at sequence ends. The implementation uses existing numeric settings on the first/last image as virtual edge anchors when present, while leaving those endpoint files unchanged. If an edge value is absent, it falls back to the nearest keyframe's value for that property.

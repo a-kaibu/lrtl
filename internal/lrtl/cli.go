@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-const version = "0.4.0"
+const version = "0.5.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
 	flags := make([]string, 0, len(arguments))
@@ -71,6 +72,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runInterpolate(arguments[1:], stdout, stderr)
 	case "render":
 		return runRender(arguments[1:], stdout, stderr)
+	case "keyframes":
+		return runKeyframes(arguments[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "lrtl: unknown command %q\n", arguments[0])
 		printUsage(stderr)
@@ -86,7 +89,8 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG frames to MJPEG AVI")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG/TIFF frames to MJPEG AVI")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N]        suggest luminance-based keyframes")
 }
 
 func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
@@ -343,7 +347,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
 	output := set.String("output", "", "output MJPEG AVI path")
 	fps := set.Int("fps", 24, "integer frame rate (1-240)")
-	quality := set.Int("quality", 90, "JPEG quality for PNG frames (1-100)")
+	quality := set.Int("quality", 90, "JPEG quality for PNG/TIFF and deflickered frames (1-100)")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
 	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
@@ -403,6 +407,77 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
+	return 0
+}
+
+func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("keyframes", stderr)
+	count := set.Int("count", 5, "number of suggested keyframes (default capped to frame count)")
+	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius in frames")
+	write := set.Bool("write", false, "mark the suggested frames in XMP sidecars")
+	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--count": true, "-count": true, "--smooth": true, "-smooth": true})); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 {
+		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
+	}
+	countSpecified := false
+	set.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "count" {
+			countSpecified = true
+		}
+	})
+	directory := set.Arg(0)
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	curve, err := analyzeLuminanceSequence(frames)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	maxSuggestions := len(curve) - 2
+	if maxSuggestions < 1 {
+		return reportError(stderr, fmt.Errorf("keyframe suggestions require at least one interior frame between the sequence endpoints"))
+	}
+	suggestionCount := *count
+	if !countSpecified {
+		suggestionCount = min(suggestionCount, maxSuggestions)
+	}
+	indices, err := selectKeyframeIndices(curve, suggestionCount, *smoothRadius)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
+	fmt.Fprintf(stdout, "Frames: %d; suggested keyframes: %d\n", len(frames), len(indices))
+	for _, index := range indices {
+		frame := frames[index]
+		fmt.Fprintf(stdout, "%4d %-42s luminance=%.6f\n", index+1, filepath.Base(frame.Image), math.Exp2(curve[index]))
+		if !*write {
+			continue
+		}
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+		}
+		if _, err := MarkKeyframe(packet, "default"); err != nil {
+			return reportError(stderr, err)
+		}
+		backup, err := WritePacket(frame.OutputSidecar(), packet, !*noBackup)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		if backup != "" {
+			fmt.Fprintf(stdout, "  Backup: %s\n", backup)
+		}
+		fmt.Fprintf(stdout, "  Marked: %s (4 stars)\n", frame.OutputSidecar())
+	}
+	if !*write {
+		fmt.Fprintln(stdout, "Preview only. Pass --write to mark these frames; other existing keyframes are left unchanged.")
+	}
 	return 0
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	_ "golang.org/x/image/tiff"
 	"image"
 	"image/jpeg"
 	_ "image/png"
@@ -25,9 +26,22 @@ type RenderOptions struct {
 	Constant        bool
 }
 
+func supportedRasterExtension(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg", ".png", ".tif", ".tiff":
+		return true
+	default:
+		return false
+	}
+}
+
+func supportedRasterFormat(format string) bool {
+	return format == "jpeg" || format == "png" || format == "tiff"
+}
+
 const maxAVIDimension = int64(1<<31 - 1)
 
-// RenderSequence writes a sequence of already-developed JPEG or PNG frames to
+// RenderSequence writes a sequence of already-developed JPEG, PNG, or TIFF frames to
 // an MJPEG AVI file. It does not apply Camera Raw XMP settings or decode RAWs.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
@@ -58,9 +72,8 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}
 
 	for _, frame := range frames {
-		ext := strings.ToLower(filepath.Ext(frame.Image))
-		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
-			return fmt.Errorf("render supports JPEG and PNG only; unsupported frame: %s", filepath.Base(frame.Image))
+		if !supportedRasterExtension(frame.Image) {
+			return fmt.Errorf("render supports JPEG, PNG, and TIFF only; unsupported frame: %s", filepath.Base(frame.Image))
 		}
 	}
 
@@ -101,8 +114,8 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if decodeErr != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
 			}
-			if format != "jpeg" && format != "png" {
-				return fmt.Errorf("render supports JPEG and PNG data only: %s", frame.Image)
+			if !supportedRasterFormat(format) {
+				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 			}
 			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
@@ -170,15 +183,15 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		if decodeErr != nil {
 			return fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
 		}
-		if format != "jpeg" && format != "png" {
-			return fmt.Errorf("render supports JPEG and PNG data only: %s", frame.Image)
+		if !supportedRasterFormat(format) {
+			return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 		}
 		if config.Width != width || config.Height != height {
 			return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
 
 		jpegData := data
-		if options.Deflicker || format == "png" {
+		if options.Deflicker || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)

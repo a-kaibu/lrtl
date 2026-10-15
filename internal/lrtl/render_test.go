@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/image/tiff"
 )
 
 func writeRenderFrame(t *testing.T, path, format string, width, height int) {
@@ -26,6 +28,8 @@ func writeRenderFrame(t *testing.T, path, format string, width, height int) {
 		err = jpeg.Encode(&encoded, img, &jpeg.Options{Quality: 85})
 	case "png":
 		err = png.Encode(&encoded, img)
+	case "tiff":
+		err = tiff.Encode(&encoded, img, nil)
 	default:
 		t.Fatalf("unsupported fixture format: %s", format)
 	}
@@ -41,6 +45,7 @@ func TestRenderSequenceWritesMJPEGAVIFromJPEGAndPNG(t *testing.T) {
 	directory := t.TempDir()
 	writeRenderFrame(t, filepath.Join(directory, "frame1.jpg"), "jpeg", 32, 24)
 	writeRenderFrame(t, filepath.Join(directory, "frame2.png"), "png", 32, 24)
+	writeRenderFrame(t, filepath.Join(directory, "frame3.tif"), "tiff", 32, 24)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		t.Fatal(err)
