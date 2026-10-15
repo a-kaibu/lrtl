@@ -8,13 +8,13 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ## 実装状況
 
-下表はLRTimelapse 7の公式機能・ワークフローを調査し、lrtlの現行コードと照合したものです。「未実装」は今後の目標を含みます。LRTimelapseではライセンスや外部のLightroom/Camera Raw構成により利用可能な機能が異なります。
+下表はローカルにインストールされたLRTimelapse 7.5.5とlrtlの現行コードを照合したものです。LRT側の機能とライセンス別の提供範囲は、公式のLRTimelapse 7機能表を2026-10-15に確認しました。「未実装」は今後の目標です。LRTimelapseのLightroom/Camera Raw連携は外部ソフトを使うワークフローです。
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。出力AVIは約4 GBまで | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
-| キーフレーム | 明るさを解析する自動Keyframes Wizard、手動キーフレーム、等間隔配置 | 手動マークに加え、JPEG/PNG/TIFFの輝度曲線から内側の候補を選ぶ`keyframes`と、画像をデコードせずRAWを含む列にも使える`--evenly-spaced`を実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。自動候補選定は独自ヒューリスティック | 一部 |
+| キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マークに加え、JPEG/PNG/TIFFの輝度曲線から内側の候補を選ぶ`keyframes`と、画像をデコードせずRAWを含む列にも使える`--evenly-spaced`を実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。候補選定は独自ヒューリスティック | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。RAW曲線の生成と独立補正レイヤーは未再現。補正を`crs:Exposure2012`へ書く方式 | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星のcrop keyframeマークのみ。構図作成とクロップ値の補間は未実装 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
@@ -34,6 +34,27 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | 未実装 | 未実装 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | CLIのみ | 未実装 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
+
+### LRTimelapse 7のライセンス別機能
+
+公式機能表にある主な差分です。評価版は400枚までで、Private/Proはシーケンス枚数に上限がありません。
+
+| 機能 | Evaluation | Private | Pro |
+|---|---|---|---|
+| Keyframes/Holy Grail/Composition/Lens Tagger | あり | あり | あり |
+| Visual Previews/Visual Deflicker/Multipass | あり（400枚まで） | あり | あり |
+| LRTImporter | あり（400枚まで） | あり | あり |
+| H.264 720p/1080p | あり | あり | あり |
+| 3K/4Kレンダー | なし | あり | あり |
+| 5K/6K/8K/Originalレンダー | なし | なし | あり |
+| 非圧縮TIFF中間画像 | なし | なし | あり |
+| ProRes/H.265/DNxHR/True HDR | なし | なし | あり |
+| 透かし/撮影時刻/SRT字幕 | なし | なし | あり |
+| Motion Blur Plus | なし | なし | あり |
+| 取り込み時のDNG変換 | なし | なし | あり |
+| 4スレッド超の並列処理 | なし | あり | あり |
+| プレビュー/Deflickerのバッチ操作 | なし | なし | あり |
+| 1ユーザーあたり同時インストール | ― | 2台 | 2台 |
 
 ### 今できること
 
@@ -148,6 +169,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 公式ページの機能・ワークフローを参考に、同等機能の範囲を整理しました。
 
 - [LRTimelapse 7の機能一覧](https://lrtimelapse.com/features/)
+- [LRTimelapse 7 Basic Tutorial: Keyframes Wizardと内部編集](https://lrtimelapse.com/tutorial/basic/complete/)
 - [Visual Workflow](https://lrtimelapse.com/workflow/visual-workflow/)
 - [Holy Grailの2*/3*内部キーフレームに関するLRT開発者の説明](https://forum.lrtimelapse.com/Thread-handling-different-exposure-times-with-keyframes)
 - [Lightroomを使わない内部ワークフロー](https://lrtimelapse.com/workflow/internal-workflow/)
