@@ -105,7 +105,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
-	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--dry-run]")
+	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
@@ -131,16 +131,21 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	skipJPEG := set.Bool("skip-jpeg", false, "omit JPEG and JPG images (keep RAW and other formats)")
 	renameByDate := set.Bool("rename-by-date", false, "rename images to capture time and sort by capture time")
 	dryRun := set.Bool("dry-run", false, "show planned copies without writing files")
+	convertDNG := set.Bool("convert-dng", false, "convert supported RAW files to DNG during import")
+	dngCompression := set.String("dng-compression", "", "DNG compression for --convert-dng: lossless or uncompressed (default lossless)")
+	dnglab := set.String("dnglab", "", "DNGLab executable for --convert-dng; defaults to PATH")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--sort": true, "-sort": true,
+		"--dng-compression": true, "-dng-compression": true,
+		"--dnglab": true, "-dnglab": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--dry-run]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dnglab PATH] [--dry-run]"))
 	}
 	sortValue := strings.ToLower(strings.TrimSpace(*sortBy))
 	sortWasSpecified := false
@@ -155,10 +160,23 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	if *renameByDate && sortWasSpecified && sortValue != "capture-time" {
 		return reportError(stderr, fmt.Errorf("--rename-by-date requires --sort capture-time"))
 	}
+	dnglabWasSpecified, dngCompressionWasSpecified := false, false
+	set.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "dnglab" {
+			dnglabWasSpecified = true
+		}
+		if parsed.Name == "dng-compression" {
+			dngCompressionWasSpecified = true
+		}
+	})
+	if !*convertDNG && (dnglabWasSpecified || dngCompressionWasSpecified) {
+		return reportError(stderr, fmt.Errorf("--dnglab and --dng-compression require --convert-dng"))
+	}
 	options := ImportOptions{
 		Recursive: *recursive, SkipJPEG: *skipJPEG,
 		SortByCapture: sortValue == "capture-time" || *renameByDate,
 		RenameByDate:  *renameByDate, DryRun: *dryRun,
+		ConvertToDNG: *convertDNG, DNGCompression: *dngCompression, DNGLabPath: *dnglab,
 	}
 	if err := ImportSequence(set.Arg(0), *output, options, stdout); err != nil {
 		return reportError(stderr, err)

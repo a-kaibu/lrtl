@@ -11,11 +11,14 @@ import (
 )
 
 type ImportOptions struct {
-	Recursive     bool
-	SkipJPEG      bool
-	SortByCapture bool
-	RenameByDate  bool
-	DryRun        bool
+	Recursive      bool
+	SkipJPEG       bool
+	SortByCapture  bool
+	RenameByDate   bool
+	DryRun         bool
+	ConvertToDNG   bool
+	DNGCompression string
+	DNGLabPath     string
 }
 
 type importItem struct {
@@ -23,6 +26,15 @@ type importItem struct {
 	sidecar     string
 	destination string
 	captureTime time.Time
+	convertDNG  bool
+}
+
+var dnglabRawExtensions = map[string]bool{
+	".3fr": true, ".ari": true, ".arw": true, ".cr2": true, ".cr3": true,
+	".crw": true, ".dcr": true, ".dcs": true, ".erf": true, ".fff": true,
+	".iiq": true, ".kdc": true, ".mef": true, ".mos": true, ".mrw": true,
+	".nef": true, ".nrw": true, ".orf": true, ".pef": true, ".raf": true,
+	".rw2": true, ".sr2": true, ".srf": true, ".srw": true,
 }
 
 func pathContains(parent, child string) bool {
@@ -114,6 +126,17 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 	if !sourceInfo.IsDir() {
 		return nil, fmt.Errorf("source must be a directory: %s", sourcePath)
 	}
+	compression := strings.ToLower(strings.TrimSpace(options.DNGCompression))
+	if options.ConvertToDNG {
+		if compression == "" {
+			compression = "lossless"
+		}
+		if compression != "lossless" && compression != "uncompressed" {
+			return nil, fmt.Errorf("DNG compression must be lossless or uncompressed: %q", options.DNGCompression)
+		}
+	} else if compression != "" {
+		return nil, fmt.Errorf("DNG compression can only be selected with --convert-dng")
+	}
 	sourceCanonical, err := filepath.EvalSymlinks(sourcePath)
 	if err != nil {
 		return nil, fmt.Errorf("resolve source path: %w", err)
@@ -136,6 +159,11 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 	for index, imagePath := range images {
 		items[index].source = imagePath
 		items[index].destination = filepath.Base(imagePath)
+		extension := strings.ToLower(filepath.Ext(imagePath))
+		if options.ConvertToDNG && dnglabRawExtensions[extension] {
+			items[index].convertDNG = true
+			items[index].destination = strings.TrimSuffix(items[index].destination, filepath.Ext(items[index].destination)) + ".dng"
+		}
 		if options.Recursive {
 			relativeDirectory, err := filepath.Rel(sourcePath, filepath.Dir(imagePath))
 			if err != nil {
@@ -176,7 +204,7 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 				name = fmt.Sprintf("%s_%03d", stamp, duplicate)
 			}
 			nameCounts[stamp]++
-			items[index].destination = name + filepath.Ext(items[index].source)
+			items[index].destination = name + filepath.Ext(items[index].destination)
 		}
 	} else if options.SortByCapture {
 		for index := range items {
@@ -214,14 +242,28 @@ func ImportSequence(source, destination string, options ImportOptions, stdout io
 		return err
 	}
 	for _, item := range items {
-		fmt.Fprintf(stdout, "%-42s <- %s\n", item.destination, filepath.Base(item.source))
+		fmt.Fprintf(stdout, "%-42s <- %s", item.destination, filepath.Base(item.source))
+		if item.convertDNG {
+			fmt.Fprint(stdout, " [convert to DNG]")
+		}
+		fmt.Fprintln(stdout)
 		if item.sidecar != "" {
 			fmt.Fprintf(stdout, "  XMP: %s\n", filepath.Base(item.sidecar))
 		}
 	}
 	if options.DryRun {
-		fmt.Fprintf(stdout, "Preview only. %d image(s) would be copied to %s.\n", len(items), destination)
+		fmt.Fprintf(stdout, "Preview only. %d image(s) would be imported to %s.\n", len(items), destination)
 		return nil
+	}
+	dnglabExecutable := ""
+	for _, item := range items {
+		if item.convertDNG {
+			dnglabExecutable, err = resolveDNGLab(options.DNGLabPath)
+			if err != nil {
+				return err
+			}
+			break
+		}
 	}
 	if err := os.MkdirAll(destination, 0755); err != nil {
 		return fmt.Errorf("create output directory: %w", err)
@@ -234,9 +276,23 @@ func ImportSequence(source, destination string, options ImportOptions, stdout io
 	}
 	for _, item := range items {
 		imageDestination := filepath.Join(destination, item.destination)
-		if err := copyFile(item.source, imageDestination); err != nil {
+		var imageErr error
+		if item.convertDNG {
+			fmt.Fprintf(stdout, "Converting %s to DNG\n", filepath.Base(item.source))
+			compression := options.DNGCompression
+			if strings.TrimSpace(compression) == "" {
+				compression = "lossless"
+			}
+			imageErr = convertRawToDNG(dnglabExecutable, item.source, imageDestination, compression)
+		} else {
+			imageErr = copyFile(item.source, imageDestination)
+		}
+		if imageErr != nil {
 			rollback()
-			return fmt.Errorf("copy %s: %w", filepath.Base(item.source), err)
+			if item.convertDNG {
+				return fmt.Errorf("convert %s to DNG: %w", filepath.Base(item.source), imageErr)
+			}
+			return fmt.Errorf("copy %s: %w", filepath.Base(item.source), imageErr)
 		}
 		created = append(created, imageDestination)
 		if item.sidecar != "" {

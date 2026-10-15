@@ -3,6 +3,8 @@ package lrtl
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,54 @@ type boundedBuffer struct {
 	bytes.Buffer
 	limit    int
 	exceeded bool
+}
+
+func convertRawToDNG(executable, source, destination, compression string) (returnErr error) {
+	parent := filepath.Dir(destination)
+	temporary, err := os.CreateTemp(parent, ".lrtl-dng-*.dng")
+	if err != nil {
+		return fmt.Errorf("create temporary DNG path: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(temporaryPath)
+		return fmt.Errorf("prepare temporary DNG path: %w", err)
+	}
+	if err := os.Remove(temporaryPath); err != nil {
+		return fmt.Errorf("prepare temporary DNG path: %w", err)
+	}
+	defer func() {
+		if returnErr != nil {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+
+	command := exec.Command(executable,
+		"convert", "--loglevel", "error", "--compression", compression, "--keep-mtime", "true",
+		source, temporaryPath,
+	)
+	command.Stdout = io.Discard
+	var stderr cappedBuffer
+	stderr.limit = ffmpegStderrLimit
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if detail != "" {
+			return fmt.Errorf("DNGLab failed: %w: %s", err, detail)
+		}
+		return fmt.Errorf("DNGLab failed: %w", err)
+	}
+	info, err := os.Stat(temporaryPath)
+	if err != nil {
+		return fmt.Errorf("DNGLab produced no DNG output: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		return fmt.Errorf("DNGLab produced an empty or invalid DNG output")
+	}
+	if err := os.Rename(temporaryPath, destination); err != nil {
+		return fmt.Errorf("publish DNG output: %w", err)
+	}
+	return nil
 }
 
 func (buffer *boundedBuffer) Write(data []byte) (int, error) {
