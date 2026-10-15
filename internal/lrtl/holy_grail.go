@@ -202,10 +202,11 @@ type CameraExposure struct {
 }
 
 type HolyGrailCurveOptions struct {
-	Stretch  float64
-	Rotate   float64
-	Auto     bool
-	LRTInput bool
+	Stretch         float64
+	Rotate          float64
+	ReduceDeflicker float64
+	Auto            bool
+	LRTInput        bool
 }
 
 type HolyGrailChange struct {
@@ -398,42 +399,39 @@ func readHolyGrailLRTInputs(frames []Frame) ([]float64, []int, error) {
 	return inputs, ratings, nil
 }
 
-func lrtHolyGrailAnchor(rating int) bool {
+func lrtHolyGrailPairEligible(rating int) bool {
 	return rating == 2 || rating == 3 || rating == 4
 }
 
-func interpolateHolyGrailAnchors(values []float64, ratings []int) ([]float64, error) {
-	if len(values) != len(ratings) {
-		return nil, fmt.Errorf("Holy Grail input and rating counts differ")
+func weightedHolyGrailRecentAverage(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
 	}
-	anchors := make([]int, 0, len(values))
-	for index, rating := range ratings {
-		if lrtHolyGrailAnchor(rating) {
-			anchors = append(anchors, index)
-		}
+	weightTotal := float64(len(values) * (len(values) + 1) / 2)
+	weightedTotal := 0.0
+	for index, value := range values {
+		weightedTotal += float64(index+1) * value
 	}
-	if len(anchors) == 0 {
-		return nil, fmt.Errorf("--lrt-input requires at least one existing 2*, 3*, or 4* XMP rating to anchor the Holy Grail curve")
+	return weightedTotal / weightTotal
+}
+
+func lrtHolyGrailLowess(values []float64, smoothing float64) []float64 {
+	result := append([]float64(nil), values...)
+	if len(values) < 3 || smoothing <= 0 {
+		return result
 	}
-	result := make([]float64, len(values))
-	rightAnchor := 1
-	for index := range result {
-		if index <= anchors[0] {
-			result[index] = values[anchors[0]]
-			continue
-		}
-		if index >= anchors[len(anchors)-1] {
-			result[index] = values[anchors[len(anchors)-1]]
-			continue
-		}
-		for anchors[rightAnchor] < index {
-			rightAnchor++
-		}
-		left, right := anchors[rightAnchor-1], anchors[rightAnchor]
-		fraction := float64(index-left) / float64(right-left)
-		result[index] = values[left] + fraction*(values[right]-values[left])
+	neighbors := int(smoothing * float64(len(values)))
+	if smoothing > 1 {
+		// eA's fallback for the observed 1.5 auto-shape call resolves to n-1.
+		neighbors = len(values) - 1
 	}
-	return result, nil
+	if neighbors < 2 {
+		return result
+	}
+	if neighbors > len(values) {
+		neighbors = len(values)
+	}
+	return lowessSmooth(values, neighbors)
 }
 
 func centerAndClipHolyGrailCurve(values []float64, limit float64) []float64 {
@@ -494,24 +492,37 @@ func normalizedHolyGrailInputCurve(values []float64) []float64 {
 }
 
 func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []CameraExposure, options HolyGrailCurveOptions, ignoreAperture bool) ([]float64, error) {
-	if len(inputs) != len(cameras) {
-		return nil, fmt.Errorf("Holy Grail input and camera frame counts differ")
+	if len(inputs) != len(cameras) || len(inputs) != len(ratings) {
+		return nil, fmt.Errorf("Holy Grail input, rating, and camera frame counts differ")
 	}
 	negated := make([]float64, len(inputs))
 	for index, value := range inputs {
 		negated[index] = -value
 	}
-	curve, err := interpolateHolyGrailAnchors(negated, ratings)
-	if err != nil {
-		return nil, err
+	curve := make([]float64, len(inputs))
+	recentDeltas := make([]float64, 0, 10)
+	cumulativeOffset := 0.0
+	for index, value := range negated {
+		if index > 0 && lrtHolyGrailPairEligible(ratings[index-1]) && lrtHolyGrailPairEligible(ratings[index]) {
+			delta := value - curve[index-1]
+			cumulativeOffset = -delta + weightedHolyGrailRecentAverage(recentDeltas)
+		}
+		curve[index] = value + cumulativeOffset
+		if index > 0 {
+			recentDeltas = append(recentDeltas, curve[index]-curve[index-1])
+			if len(recentDeltas) > 10 {
+				recentDeltas = recentDeltas[1:]
+			}
+		}
 	}
+	curve = lrtHolyGrailLowess(curve, options.ReduceDeflicker)
 	curve = centerAndClipHolyGrailCurve(curve, 10)
 	for index := range curve {
 		curve[index] *= 2
 	}
 	accumulatedPairDelta := 0.0
 	for index := range curve {
-		if index > 0 && lrtHolyGrailAnchor(ratings[index-1]) && lrtHolyGrailAnchor(ratings[index]) {
+		if index > 0 && lrtHolyGrailPairEligible(ratings[index-1]) && lrtHolyGrailPairEligible(ratings[index]) {
 			accumulatedPairDelta += holyGrailLRTPairDelta(cameras[index-1], cameras[index], ignoreAperture)
 		}
 		curve[index] += accumulatedPairDelta
@@ -523,35 +534,23 @@ func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []C
 		trend := float64(index)/float64(len(curve)) - 0.5
 		curve[index] += normalized[index]*options.Stretch + trend*options.Rotate
 	}
-	if len(curve) > 2 {
-		// The LRT helper uses a fixed 0.5 smoothing factor here. The local
-		// regression window is an approximation of its irregular-x Pia path.
-		neighbors := int(math.Round(0.5 * float64(len(curve)-1)))
-		if neighbors < 2 {
-			neighbors = 2
-		}
-		curve = lowessSmooth(curve, neighbors)
-	}
+	curve = lrtHolyGrailLowess(curve, 0.5)
 	return centerAndClipHolyGrailCurve(curve, 1), nil
 }
 
-func optimizeHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []CameraExposure, ignoreAperture bool) HolyGrailCurveOptions {
-	options := HolyGrailCurveOptions{LRTInput: true}
+func optimizeHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []CameraExposure, ignoreAperture bool, reduceDeflicker float64) HolyGrailCurveOptions {
+	options := HolyGrailCurveOptions{LRTInput: true, ReduceDeflicker: reduceDeflicker}
 	if len(inputs) < 2 {
 		return options
-	}
-	neighbors := int(math.Round(0.5 * float64(len(inputs)-1)))
-	if neighbors < 2 {
-		neighbors = 2
 	}
 	bestScore := math.Inf(1)
 	for step := 1; step <= 150; step++ {
 		candidate := float64(step)/50 - 1.5
-		curve, err := buildHolyGrailLRTCompensations(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: candidate, LRTInput: true}, ignoreAperture)
+		curve, err := buildHolyGrailLRTCompensations(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: candidate, ReduceDeflicker: reduceDeflicker, LRTInput: true}, ignoreAperture)
 		if err != nil {
 			return options
 		}
-		smoothed := lowessSmooth(curve, neighbors)
+		smoothed := lrtHolyGrailLowess(curve, 1.5)
 		score := 0.0
 		for index := range curve {
 			score += math.Abs(curve[index] - smoothed[index])
@@ -565,11 +564,11 @@ func optimizeHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []Camera
 	bestScore = math.Inf(1)
 	for step := 1; step <= 200; step++ {
 		candidate := float64(step)/25 - 4
-		curve, err := buildHolyGrailLRTCompensations(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: options.Stretch, Rotate: candidate, LRTInput: true}, ignoreAperture)
+		curve, err := buildHolyGrailLRTCompensations(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: options.Stretch, Rotate: candidate, ReduceDeflicker: reduceDeflicker, LRTInput: true}, ignoreAperture)
 		if err != nil {
 			return options
 		}
-		smoothed := lowessSmooth(curve, neighbors)
+		smoothed := lrtHolyGrailLowess(curve, 1.5)
 		score := 0.0
 		for _, value := range smoothed {
 			score += math.Abs(value)
@@ -674,7 +673,7 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 		resolvedOptions := *curveOptions
 		if resolvedOptions.Auto {
 			if lrtInputMode {
-				resolvedOptions = optimizeHolyGrailLRTCurve(lrtInputs, lrtRatings, cameras, ignoreAperture)
+				resolvedOptions = optimizeHolyGrailLRTCurve(lrtInputs, lrtRatings, cameras, ignoreAperture, resolvedOptions.ReduceDeflicker)
 			} else {
 				resolvedOptions = optimizeHolyGrailCurve(cameras)
 			}

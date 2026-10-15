@@ -17,7 +17,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量はLRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式。候補位置も同版の整数間隔・端点選択ルールに対応。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。既存マーカーは既定で保持し、選択中の評価だけ数量推定から差し引く。`--replace-existing`では同じ評価を連番から削除し、他の2〜5つ星との衝突を前方9枚以内の空きフレームへ移す。`--evenly-spaced`は輝度解析なしで利用可能。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。選択行のUI、LRT内部の現像輝度値との一致は未対応 | 一部 |
-| Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、2*/3*/4*評価をアンカーにするLRT処理経路の近似も選択可能。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の入力生成と正確なスプライン/スムーザーは未再現。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
+| Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、LRT同様に最大10件のフレーム差平均と2*/3*/4*隣接ペア補正を適用する近似経路も選択可能。`--lrt-reduce-deflicker`で0〜1の平滑化設定を指定できる。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の入力生成と平滑化の厳密な数値対応は未再現。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で回転を含む矩形を画素へ適用し、元と同じ解像度に再サンプル。プレビュー上の構図作成・編集UIとCamera RawのGeometry補正は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`で自然順に一覧表示し、キーフレーム評価を確認可能。`render --filename-contains TEXT`でファイル名の部分一致（大文字小文字を区別しない）による絞り込みに対応。選択UI、キーフレーム/Visual Preview選択、反転、コピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
@@ -204,6 +204,8 @@ lrtl holy-grail "D:\Timelapse\Sequence" --write
 # LRTimelapseがXMPへ保存した入力値からHG補正を計算する（既定はプレビュー）
 lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input
 lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --write
+# LRT WizardのReduce Deflickerスライダー値も指定する（0〜1）
+lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --lrt-reduce-deflicker 0.35
 
 # 補正曲線の伸縮・回転を調整
 lrtl holy-grail "D:\Timelapse\Sequence" --stretch 0.4 --rotate -0.2
@@ -371,13 +373,13 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `holy-grail`の既定はEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す独自補正を計算します。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。F値がない場合は`--ignore-aperture`を指定し、絞りが変化しなかったことを確認してください。`--stretch`は露出値を最小・最大で正規化した曲線のスケール（-1.5〜+1.5）、`--rotate`はシーケンスに加える直線傾き（-4〜+4）です。`--auto-shape`はLRTで確認したStretch/Rotateの探索刻み・L1評価を使って値を提案します。
 
-`--lrt-input`は、各フレームのXMPにある数値`lrt:ExternalExposureDefault`を読み、LRTのフレーム内部値と同じく4で割ります。既存の2*/3*/4*評価をアンカーとして使い、隣接アンカーのカメラ設定差、曲線の中央寄せ/範囲制限、Stretch/Rotateを適用してHG補正を作ります。このモードでは全フレームに同プロパティと有効な撮影露出EXIFが必要で、少なくとも1つの2*/3*/4*評価が必要です。評価は新規作成・変更しません。LRTが`ExternalExposureDefault`を生成する測光処理、アンカー間の正確な補間、`holyGrailReduceDeflicker`の値とスムーザーの数値対応はまだ再現していないため、LRT Wizardとの数値一致は保証しません。`--auto-shape`はこの近似モデル上で探索します。
+`--lrt-input`は、各フレームのXMPにある数値`lrt:ExternalExposureDefault`を読み、LRTのフレーム内部値と同じく4で割ります。LRTの処理順に沿って、2*/3*/4*評価が隣り合う場所で直近最大10件のフレーム差を重み付き平均で補正し、他のフレームにも直前の補正オフセットを引き継ぎます。その後に`--lrt-reduce-deflicker`（0〜1、既定0）のLOWESS近似、中央寄せ/範囲制限、隣接HGキーフレーム間のカメラ設定差、Stretch/Rotateを適用します。全フレームに同プロパティと有効な撮影露出EXIFが必要です。星評価は新規作成・変更しません。LRTが`ExternalExposureDefault`を生成する測光処理とPiaスムーザーの全フォールバック/数値挙動はまだ再現していないため、LRT Wizardとの数値一致は保証しません。`--auto-shape`はこのモデル上で探索します。
 
 両モードともHG専用のCamera Raw `LocalExposure2012`スロットがXMPにあればそこへ書き、見つからなければ全体`crs:Exposure2012`を使います。既定はプレビューで、書き込み時は既存サイドカーをバックアップします。EXIFモードでは撮影モードがManualの場合に設定変更位置へ2*/3*評価を提案します。`--lrt-input`では既存のLRT評価をアンカーとして使うため、新しい評価を付けません。補正の再実行では前回分を置き換え、lrtl管理下の元評価も記録するため`--reset --write`で復元できます。
 
-LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キーフレームとは別に扱われます。7.5.5のウィザード計算は2*/3*/4*マークを使ってフレームごとの曲線を作り、シーケンス内のフレーム状態へ値を格納します。保存処理も一部追跡できました。フレーム状態の3つの値は、MaskGroup形式では`CorrectionName`が`#LRT internal use (HG)`、`(Deflicker)`、`(Global)`の既存スロットへ対応付け、従来形式では`GradientBasedCorrections[5]`〜`[7]`の`crs:LocalExposure2012`へ書き戻します。インストール済みJARの`raw_m_1.xmp`では、従来形式の5〜7番目にある`CorrectionMasks`内の`crs:MaskName`要素が`LRT: don't alter!`という文字列を持ちます。`lrt:ExternalExposureDefault`を1/4にして内部値へ取り込み、`crs:Exposure2012`とは別に保つ経路も確認しました。lrtlは`CorrectionName`が`#LRT internal use (HG)`のMaskGroup、または従来形式の5〜7番目全てで`LRT: don't alter!`署名を確認できた場合に5番目の`LocalExposure2012`へ補正を書き、書き込み先を記録して`--reset`で戻します。いずれの識別条件も満たさないXMPでは`crs:Exposure2012`を使います。LRTのWizardにはRotate（-4〜+4）、Stretch（-1.5〜+1.5）、`holyGrailReduceDeflicker`を使う調整・探索があります。lrtlは`--lrt-input`で`ExternalExposureDefault`と既存評価を読み、確認した隣接フレーム式と曲線の中央寄せ・制限、Stretch/Rotate経路を近似実装しました。アンカー間補間とLOWESS幅は推定で、入力値をLRTと同じく生成する部分も未対応です。逆解析で確認した式と保存経路は[リバースエンジニアリングノート](docs/reverse-engineering.md)に記録しています。
+LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キーフレームとは別に扱われます。7.5.5のウィザード計算は2*/3*/4*マークを使い、最大10件のフレーム差の重み付き平均を隣接キーフレームで使いながら、フレームごとの曲線を作ります。シーケンス内のフレーム状態への保存処理も一部追跡できました。フレーム状態の3つの値は、MaskGroup形式では`CorrectionName`が`#LRT internal use (HG)`、`(Deflicker)`、`(Global)`の既存スロットへ対応付け、従来形式では`GradientBasedCorrections[5]`〜`[7]`の`crs:LocalExposure2012`へ書き戻します。インストール済みJARの`raw_m_1.xmp`では、従来形式の5〜7番目にある`CorrectionMasks`内の`crs:MaskName`要素が`LRT: don't alter!`という文字列を持ちます。`lrt:ExternalExposureDefault`を1/4にして内部値へ取り込み、`crs:Exposure2012`とは別に保つ経路も確認しました。lrtlは`CorrectionName`が`#LRT internal use (HG)`のMaskGroup、または従来形式の5〜7番目全てで`LRT: don't alter!`署名を確認できた場合に5番目の`LocalExposure2012`へ補正を書き、書き込み先を記録して`--reset`で戻します。いずれの識別条件も満たさないXMPでは`crs:Exposure2012`を使います。LRTのWizardにはRotate（-4〜+4）、Stretch（-1.5〜+1.5）、0〜1の`holyGrailReduceDeflicker`設定があります。lrtlは`--lrt-input`で入力値を読み、10件重み付き差分キュー、隣接フレーム式、曲線の中央寄せ・制限、Stretch/Rotate経路を実装しました。LOWESSの細部と入力値をLRTと同じく生成する部分は未対応です。逆解析で確認した式と保存経路は[リバースエンジニアリングノート](docs/reverse-engineering.md)に記録しています。
 
-EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用しますが、その生成処理、アンカー間の正確な補間、`holyGrailReduceDeflicker`の反映は未対応です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
+EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用しますが、その生成処理とPiaスムーザーの厳密な挙動は未対応です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
 
 ## 今後の実装順
 
@@ -386,7 +388,7 @@ EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一�
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264/H.265 MP4、ProResとDNxHR MOVに対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、回転を含むXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、Geometry補正、Add/Intersect以外の複合マスク、色/深度/旧形式の範囲マスク、ブラシ/AIの画素現像は未実装 |
-| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と他のXMP値のRAW画素への反映は未実装 |
+| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定とLRTの既存XMP入力を使う近似Holy Grail補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と他のXMP値のRAW画素への反映は未実装 |
 | 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProRes/DNxHR、日時オーバーレイ、写真フォルダーからの画像/XMP取り込み、対応RAWのlossless/uncompressed DNG変換、動画からJPG/PNGフレーム抽出、Goによる時間方向フレーム平均を実装。動画プレビュー・自動分割、ロッシーDNG・サイズ縮小、LRT互換のモーションブラー重み、GUIは未着手 |
 
 ## 機能調査の出典
