@@ -57,7 +57,27 @@ func parseXMP(data []byte) (*XMPPacket, error) {
 	}
 	packet := &XMPPacket{Document: document}
 	if len(packet.Descriptions()) == 0 {
-		return nil, xmpError("XMP packet has no rdf:Description element")
+		var rdf *etree.Element
+		root := document.Root()
+		if root.NamespaceURI() == rdfNamespace && root.Tag == "RDF" {
+			rdf = root
+		} else {
+			for _, token := range root.Child {
+				child, ok := token.(*etree.Element)
+				if ok && child.NamespaceURI() == rdfNamespace && child.Tag == "RDF" {
+					rdf = child
+					break
+				}
+			}
+		}
+		if rdf == nil {
+			return nil, xmpError("XMP packet has no rdf:Description element")
+		}
+		// Some camera RAW files contain a valid but empty rdf:RDF packet.
+		// Give subsequent edits a standard property container without discarding it.
+		description := rdf.CreateElement("rdf:Description")
+		description.CreateAttr("xmlns:rdf", rdfNamespace)
+		description.CreateAttr("rdf:about", "")
 	}
 	return packet, nil
 }
