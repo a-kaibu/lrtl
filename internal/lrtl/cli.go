@@ -115,7 +115,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
-	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dnglab PATH] [--dry-run]")
+	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]")
@@ -128,7 +128,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
-	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
+	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
@@ -148,19 +148,20 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	dryRun := set.Bool("dry-run", false, "show planned copies without writing files")
 	convertDNG := set.Bool("convert-dng", false, "convert supported RAW files to DNG during import")
 	dngCompression := set.String("dng-compression", "", "DNG compression for --convert-dng: lossless or uncompressed (default lossless)")
-	dnglab := set.String("dnglab", "", "DNGLab executable for --convert-dng; defaults to PATH")
+	dnglab := set.String("dnglab", "", "optional DNGLab executable for --convert-dng")
+	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--sort": true, "-sort": true,
 		"--dng-compression": true, "-dng-compression": true,
-		"--dnglab": true, "-dnglab": true,
+		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dnglab PATH] [--dry-run]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]"))
 	}
 	sortValue := strings.ToLower(strings.TrimSpace(*sortBy))
 	sortWasSpecified := false
@@ -191,7 +192,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		Recursive: *recursive, SkipJPEG: *skipJPEG,
 		SortByCapture: sortValue == "capture-time" || *renameByDate,
 		RenameByDate:  *renameByDate, DryRun: *dryRun,
-		ConvertToDNG: *convertDNG, DNGCompression: *dngCompression, DNGLabPath: *dnglab,
+		ConvertToDNG: *convertDNG, DNGCompression: *dngCompression, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 	}
 	if err := ImportSequence(set.Arg(0), *output, options, stdout); err != nil {
 		return reportError(stderr, err)
@@ -815,8 +816,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	watermarkPosition := set.String("watermark-position", "bottom-left", "watermark position: top-left, top-right, bottom-left, bottom-right, or center")
 	motionBlurFrames := set.Int("motion-blur", 0, "blend this many adjacent frames (0 off; 2, 3, 4, 5, 10, 15, 20)")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
-	rawDevelop := set.Bool("raw-develop", false, "develop supported RAW files with DNGLab")
-	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	rawDevelop := set.Bool("raw-develop", false, "develop RAW with installed Adobe DNG Converter (or explicit DNGLab)")
+	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
+	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--selection": true, "-selection": true,
@@ -835,7 +837,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--smooth": true, "-smooth": true,
 		"--deflicker-smoother": true, "-deflicker-smoother": true,
 		"--passes": true, "-passes": true,
-		"--dnglab": true, "-dnglab": true,
+		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 		"--timestamp-format": true, "-timestamp-format": true,
 		"--watermark": true, "-watermark": true,
 		"--watermark-position": true, "-watermark-position": true,
@@ -935,6 +937,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		RawPreview:        *rawPreview,
 		RawDevelop:        *rawDevelop,
 		DNGLabPath:        *dnglab,
+		DNGConverterPath:  *dngConverter,
 	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
@@ -974,7 +977,11 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		features = append(features, "embedded RAW previews")
 	}
 	if *rawDevelop {
-		features = append(features, "DNGLab RAW development")
+		backend := "Adobe DNG Converter RAW development"
+		if strings.TrimSpace(*dnglab) != "" {
+			backend = "DNGLab RAW development"
+		}
+		features = append(features, backend)
 	}
 	if *longEdge > 0 {
 		features = append(features, fmt.Sprintf("long-edge limit of %d pixels", *longEdge))
@@ -1009,28 +1016,29 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("preview", stderr)
 	output := set.String("output", "", "write an SVG brightness preview")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
-	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
-	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
+	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP during analysis")
 	applyXMPBasic := set.Bool("apply-xmp-basic", false, "apply supported global Camera Raw tone and color controls during analysis")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP during analysis")
 	overwrite := set.Bool("overwrite", false, "replace an existing SVG preview")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true, "--dnglab": true, "-dnglab": true})); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
 		help, code := finishFlagParse(set, err)
 		if help {
-			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
 		}
 		return code
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	inputOptions := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	if err := writeSequencePreviewWithOptions(frames, *output, inputOptions, *overwrite); err != nil {
@@ -1080,8 +1088,9 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	contrastRange := set.String("contrast-range", "", "keep frames with the selected profile's contrast in MIN,MAX")
 	hueRange := set.String("hue-range", "", "keep frames with the selected profile's mean hue in MIN,MAX degrees; MIN>MAX wraps at 360")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
-	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
-	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
+	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 in image analysis")
 	applyXMPBasic := set.Bool("apply-xmp-basic", false, "include supported global Camera Raw tone and color controls in image analysis")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "include XMP crop rectangles in image analysis")
@@ -1092,7 +1101,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 		"--luminance-range": true, "-luminance-range": true,
 		"--contrast-range": true, "-contrast-range": true,
 		"--hue-range": true, "-hue-range": true,
-		"--dnglab": true, "-dnglab": true,
+		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1132,7 +1141,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	inputOptions := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	manifest, err := analyzeLongTermSequence(frames, inputOptions, ranges, profile)
@@ -1164,8 +1173,9 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
-	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
-	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
+	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 from sidecar XMP in luminance analysis")
 	applyXMPBasic := set.Bool("apply-xmp-basic", false, "include supported global Camera Raw tone and color controls in luminance analysis")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "include XMP crop rectangles in luminance analysis")
@@ -1174,7 +1184,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		"--smooth": true, "-smooth": true,
 		"--smoother": true, "-smoother": true,
 		"--passes": true, "-passes": true,
-		"--dnglab": true, "-dnglab": true,
+		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1194,7 +1204,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop":
+			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop":
 				analysisOption = true
 			}
 		})
@@ -1215,7 +1225,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	}
 	var luminances []float64
 	inputOptions := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	if !*reset {
@@ -1288,8 +1298,9 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	evenlySpaced := set.Bool("evenly-spaced", false, "use the LRT helper's uniform frame positions without decoding images")
 	luminanceDeviation := set.Bool("luminance-deviation", false, "use lrtl's luminance-deviation frame selection instead of LRT spacing")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
-	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
-	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
+	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 from sidecar XMP in luminance analysis")
 	applyXMPBasic := set.Bool("apply-xmp-basic", false, "include supported global Camera Raw tone and color controls in luminance analysis")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "include XMP crop rectangles in luminance analysis")
@@ -1298,7 +1309,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--count": true, "-count": true, "--smooth": true, "-smooth": true,
 		"--rating": true, "-rating": true,
-		"--dnglab": true, "-dnglab": true,
+		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
@@ -1331,7 +1342,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, fmt.Errorf("smoothing radius must be between 0 and 1000 frames: %d", *smoothRadius))
 	}
 	inputOptions := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	if err := validateImageInputOptions(inputOptions); err != nil {

@@ -10,6 +10,7 @@ import (
 )
 
 var imageExtensions = map[string]bool{
+	".raw": true, ".rwl": true, ".gpr": true, ".x3f": true,
 	".3fr": true, ".ari": true, ".arw": true, ".cr2": true, ".cr3": true,
 	".crw": true, ".dcr": true, ".dcs": true, ".dng": true, ".erf": true,
 	".fff": true, ".iiq": true, ".jpeg": true, ".jpg": true, ".kdc": true,

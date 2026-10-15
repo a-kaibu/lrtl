@@ -146,9 +146,11 @@
           <label for="keyframe-rating">評価</label>
           <select id="keyframe-rating"><option value="4">4★ 編集</option><option value="5">5★ クロップ</option></select>
           <label for="analysis-raw-mode">RAW輝度解析</label>
-          <select id="analysis-raw-mode"><option value="">RAWなし</option><option value="preview">内蔵プレビュー</option><option value="develop">DNGLabで現像</option></select>
-          <label for="analysis-dnglab">DNGLab実行ファイル (現像時)</label>
-          <input id="analysis-dnglab" autocomplete="off" spellcheck="false" placeholder="PATHにあれば空欄">
+          <select id="analysis-raw-mode"><option value="">RAWなし</option><option value="preview">内蔵プレビュー</option><option value="develop">Adobe DNG Converterで現像</option></select>
+          <label for="analysis-dng-converter">Adobe DNG Converter実行ファイル（任意）</label>
+          <input id="analysis-dng-converter" autocomplete="off" spellcheck="false" placeholder="空欄でインストール先を自動検出">
+          <label for="analysis-dnglab">DNGLab実行ファイル（代替バックエンド・任意）</label>
+          <input id="analysis-dnglab" autocomplete="off" spellcheck="false" placeholder="DNGLabを使うときだけ指定">
           <label class="check"><input id="analysis-xmp-basic" type="checkbox">候補分析にXMP現像値を適用</label>
           <label class="check"><input id="analysis-xmp-crop" type="checkbox">候補分析にXMPクロップを適用</label>
           <button id="suggest" class="primary">候補を分析</button>
@@ -201,9 +203,11 @@
             <select id="preset"><option>ultrafast</option><option>superfast</option><option>veryfast</option><option>faster</option><option>fast</option><option selected>medium</option><option>slow</option><option>slower</option><option>veryslow</option></select>
           </details>
           <label for="raw-mode">RAW入力</label>
-          <select id="raw-mode"><option value="">RAWなし</option><option value="preview">内蔵プレビュー</option><option value="develop">DNGLabで現像</option></select>
-          <label for="dnglab">DNGLab実行ファイル (現像時)</label>
-          <input id="dnglab" autocomplete="off" spellcheck="false" placeholder="PATHにあれば空欄">
+          <select id="raw-mode"><option value="">RAWなし</option><option value="preview">内蔵プレビュー</option><option value="develop">Adobe DNG Converterで現像</option></select>
+          <label for="dng-converter">Adobe DNG Converter実行ファイル（任意）</label>
+          <input id="dng-converter" autocomplete="off" spellcheck="false" placeholder="空欄でインストール先を自動検出">
+          <label for="dnglab">DNGLab実行ファイル（代替バックエンド・任意）</label>
+          <input id="dnglab" autocomplete="off" spellcheck="false" placeholder="DNGLabを使うときだけ指定">
           <label for="ffmpeg">FFmpeg実行ファイル (任意)</label>
           <input id="ffmpeg" autocomplete="off" spellcheck="false" placeholder="PATHにあれば空欄">
           <label class="check"><input id="xmp-basic" type="checkbox">対応するXMP現像値を適用</label>
@@ -211,7 +215,7 @@
           <label class="check"><input id="deflicker" type="checkbox">全体輝度のちらつきを抑える</label>
           <label class="check"><input id="overwrite" type="checkbox">出力ファイルを上書き</label>
           <button id="render" class="primary">動画を生成</button>
-          <p>AVIは追加ソフト不要です。MP4/MOVにはFFmpegが必要です。RAWセンサー画像の現像にはDNGLabが必要です。</p>
+          <p>AVIは追加ソフト不要です。MP4/MOVにはFFmpegが必要です。RAWセンサー画像の現像にはインストール済みAdobe DNG Converterを使用します。</p>
         </section>
       </aside>
     </div>
@@ -624,6 +628,8 @@
       if (rawMode) query.set('raw', rawMode);
       const dnglab = el('dnglab').value.trim();
       if (dnglab) query.set('dnglab', dnglab);
+      const converter = el('dng-converter').value.trim();
+      if (converter) query.set('dngconverter', converter);
       setStatus('XMPプレビューを作成しています…');
       const response = await fetch('/api/preview?' + query.toString());
       if (!response.ok) throw new Error(await response.text() || response.statusText);
@@ -696,6 +702,8 @@
         const frameQuery = new URLSearchParams({directory, name:frame.name, basic:String(basic), crop:String(crop), 'max-side':'640', quality:'78'});
         if (rawMode) frameQuery.set('raw', rawMode);
         if (dnglab) frameQuery.set('dnglab', dnglab);
+        const converter = el('dng-converter').value.trim();
+        if (converter) frameQuery.set('dngconverter', converter);
         const started = performance.now();
         const loaded = await loadPlaybackImage('/api/preview?' + frameQuery.toString(), token);
         if (token !== playbackToken || !playbackRunning) return;
@@ -859,6 +867,8 @@
       if (rawMode) query.set('raw', rawMode);
       const dnglab = el('analysis-dnglab').value.trim();
       if (dnglab) query.set('dnglab', dnglab);
+      const converter = el('analysis-dng-converter').value.trim();
+      if (converter) query.set('dngconverter', converter);
       setStatus('全フレームの輝度を解析しています…');
       const data = await api('/api/luminance?' + query.toString());
       if (data.directory !== directory) return;
@@ -868,7 +878,7 @@
       el('curve-info').textContent = data.total + 'フレーム · 青:XMP Exposure2012 ΔEV · 橙:画像輝度 ΔEV' + sampleText + '。青い点は上下ドラッグでExposure2012を編集できます。輝度は先頭フレームとの差分です。';
       setStatus('画像輝度の解析が完了しました。');
     });
-    for (const id of ['analysis-raw-mode', 'analysis-dnglab', 'analysis-xmp-basic', 'analysis-xmp-crop']) {
+    for (const id of ['analysis-raw-mode', 'analysis-dnglab', 'analysis-dng-converter', 'analysis-xmp-basic', 'analysis-xmp-crop']) {
       el(id).addEventListener('change', () => invalidateLuminanceCurve());
     }
     el('xmp-property').addEventListener('change', updateXMPValueInput);
@@ -903,7 +913,7 @@
       setStatus('輝度を解析して候補を作成しています…');
       const data = await api('/api/keyframes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
         directory, count:Number(el('keyframe-count').value), rating:Number(el('keyframe-rating').value),
-        dngMode:el('analysis-raw-mode').value, dnglab:el('analysis-dnglab').value.trim(),
+        dngMode:el('analysis-raw-mode').value, dnglab:el('analysis-dnglab').value.trim(), dngConverter:el('analysis-dng-converter').value.trim(),
         xmpBasic:el('analysis-xmp-basic').checked, xmpCrop:el('analysis-xmp-crop').checked
       })});
       showKeyframeCandidates(data);
@@ -941,7 +951,7 @@
       try {
         const data = await api('/api/render', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
           directory, output, fps:Number(el('fps').value), codec:el('codec').value, ffmpeg:el('ffmpeg').value.trim(),
-          dngMode:el('raw-mode').value, dnglab:el('dnglab').value.trim(), xmpBasic:el('xmp-basic').checked,
+          dngMode:el('raw-mode').value, dnglab:el('dnglab').value.trim(), dngConverter:el('dng-converter').value.trim(), xmpBasic:el('xmp-basic').checked,
           xmpCrop:el('xmp-crop').checked, deflicker:el('deflicker').checked, overwrite:el('overwrite').checked,
           aspect:el('aspect').value.trim(), outputHeight:Number(el('output-height').value || '0'), longEdge:Number(el('long-edge').value || '0'),
           audio:el('audio').value.trim(), selection:el('selection').value.trim(), filenameContains:el('filename-contains').value.trim(),

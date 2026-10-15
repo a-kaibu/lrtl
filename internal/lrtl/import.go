@@ -11,14 +11,15 @@ import (
 )
 
 type ImportOptions struct {
-	Recursive      bool
-	SkipJPEG       bool
-	SortByCapture  bool
-	RenameByDate   bool
-	DryRun         bool
-	ConvertToDNG   bool
-	DNGCompression string
-	DNGLabPath     string
+	Recursive        bool
+	SkipJPEG         bool
+	SortByCapture    bool
+	RenameByDate     bool
+	DryRun           bool
+	ConvertToDNG     bool
+	DNGCompression   string
+	DNGLabPath       string
+	DNGConverterPath string
 }
 
 type importItem struct {
@@ -29,7 +30,8 @@ type importItem struct {
 	convertDNG  bool
 }
 
-var dnglabRawExtensions = map[string]bool{
+var dngImportRawExtensions = map[string]bool{
+	".raw": true, ".rwl": true, ".gpr": true, ".x3f": true,
 	".3fr": true, ".ari": true, ".arw": true, ".cr2": true, ".cr3": true,
 	".crw": true, ".dcr": true, ".dcs": true, ".erf": true, ".fff": true,
 	".iiq": true, ".kdc": true, ".mef": true, ".mos": true, ".mrw": true,
@@ -111,6 +113,12 @@ func collectImportImages(source string, recursive, skipJPEG bool) ([]string, err
 }
 
 func planImport(source, destination string, options ImportOptions) ([]importItem, error) {
+	if options.DNGConverterPath != "" && options.DNGLabPath != "" {
+		return nil, fmt.Errorf("--dng-converter and --dnglab cannot be combined")
+	}
+	if !options.ConvertToDNG && (options.DNGConverterPath != "" || options.DNGLabPath != "") {
+		return nil, fmt.Errorf("RAW converter paths require --convert-dng")
+	}
 	sourcePath, err := filepath.Abs(source)
 	if err != nil {
 		return nil, fmt.Errorf("resolve source: %w", err)
@@ -160,7 +168,7 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 		items[index].source = imagePath
 		items[index].destination = filepath.Base(imagePath)
 		extension := strings.ToLower(filepath.Ext(imagePath))
-		if options.ConvertToDNG && dnglabRawExtensions[extension] {
+		if options.ConvertToDNG && dngImportRawExtensions[extension] {
 			items[index].convertDNG = true
 			items[index].destination = strings.TrimSuffix(items[index].destination, filepath.Ext(items[index].destination)) + ".dng"
 		}
@@ -258,7 +266,11 @@ func ImportSequence(source, destination string, options ImportOptions, stdout io
 	dnglabExecutable := ""
 	for _, item := range items {
 		if item.convertDNG {
-			dnglabExecutable, err = resolveDNGLab(options.DNGLabPath)
+			if strings.TrimSpace(options.DNGLabPath) != "" {
+				dnglabExecutable, err = resolveDNGLab(options.DNGLabPath)
+			} else {
+				dnglabExecutable, err = resolveDNGConverter(options.DNGConverterPath)
+			}
 			if err != nil {
 				return err
 			}
@@ -279,11 +291,15 @@ func ImportSequence(source, destination string, options ImportOptions, stdout io
 		var imageErr error
 		if item.convertDNG {
 			fmt.Fprintf(stdout, "Converting %s to DNG\n", filepath.Base(item.source))
-			compression := options.DNGCompression
+			compression := strings.ToLower(strings.TrimSpace(options.DNGCompression))
 			if strings.TrimSpace(compression) == "" {
 				compression = "lossless"
 			}
-			imageErr = convertRawToDNG(dnglabExecutable, item.source, imageDestination, compression)
+			if strings.TrimSpace(options.DNGLabPath) != "" {
+				imageErr = convertRawToDNG(dnglabExecutable, item.source, imageDestination, compression)
+			} else {
+				imageErr = convertRawWithDNGConverter(dnglabExecutable, item.source, imageDestination, compression)
+			}
 		} else {
 			imageErr = copyFile(item.source, imageDestination)
 		}

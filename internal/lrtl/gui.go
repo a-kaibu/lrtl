@@ -596,6 +596,7 @@ func serveGUILuminanceCurve(w http.ResponseWriter, r *http.Request) {
 	options := imageInputOptions{RawPreview: rawMode == "preview", RawDevelop: rawMode == "develop", ApplyXMPBasic: applyBasic, ApplyXMPCrop: applyCrop}
 	if rawMode == "develop" {
 		options.DNGLabPath = r.URL.Query().Get("dnglab")
+		options.DNGConverterPath = r.URL.Query().Get("dngconverter")
 	}
 	luminance, err := analyzeLuminanceSequenceWithInputOptions(frames, options)
 	if err != nil {
@@ -768,6 +769,7 @@ func serveGUIPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	if rawMode == "develop" {
 		inputOptions.DNGLabPath = r.URL.Query().Get("dnglab")
+		inputOptions.DNGConverterPath = r.URL.Query().Get("dngconverter")
 	}
 	data, config, _, err := readRenderInputWithOptions(frame, inputOptions)
 	if err != nil {
@@ -1220,13 +1222,14 @@ func serveGUIKeyframe(w http.ResponseWriter, r *http.Request) {
 }
 
 type guiKeyframesRequest struct {
-	Directory string `json:"directory"`
-	Count     int    `json:"count"`
-	Rating    int    `json:"rating"`
-	DNGMode   string `json:"dngMode"`
-	DNGLab    string `json:"dnglab"`
-	XMPBasic  bool   `json:"xmpBasic"`
-	XMPCrop   bool   `json:"xmpCrop"`
+	Directory    string `json:"directory"`
+	Count        int    `json:"count"`
+	Rating       int    `json:"rating"`
+	DNGMode      string `json:"dngMode"`
+	DNGLab       string `json:"dnglab"`
+	DNGConverter string `json:"dngConverter"`
+	XMPBasic     bool   `json:"xmpBasic"`
+	XMPCrop      bool   `json:"xmpCrop"`
 }
 
 func serveGUIKeyframes(w http.ResponseWriter, r *http.Request) {
@@ -1258,11 +1261,13 @@ func serveGUIKeyframes(w http.ResponseWriter, r *http.Request) {
 		arguments = append(arguments, "--raw-preview")
 	}
 	if request.DNGMode == "develop" {
-		if strings.TrimSpace(request.DNGLab) == "" {
-			writeGUIError(w, http.StatusBadRequest, "DNGLab path is required for RAW development")
-			return
+		arguments = append(arguments, "--raw-develop")
+		if strings.TrimSpace(request.DNGLab) != "" {
+			arguments = append(arguments, "--dnglab", request.DNGLab)
 		}
-		arguments = append(arguments, "--raw-develop", "--dnglab", request.DNGLab)
+		if strings.TrimSpace(request.DNGConverter) != "" {
+			arguments = append(arguments, "--dng-converter", request.DNGConverter)
+		}
 	}
 	if request.XMPBasic {
 		arguments = append(arguments, "--apply-xmp-basic")
@@ -1271,7 +1276,7 @@ func serveGUIKeyframes(w http.ResponseWriter, r *http.Request) {
 		arguments = append(arguments, "--apply-xmp-crop")
 	}
 	var output, errorsBuffer bytes.Buffer
-	if code := runKeyframes(arguments, &output, &errorsBuffer); code != 0 {
+	if code := runKeyframes(arguments[1:], &output, &errorsBuffer); code != 0 {
 		message := strings.TrimSpace(output.String())
 		if message != "" {
 			message += "\n"
@@ -1431,6 +1436,7 @@ type guiRenderRequest struct {
 	FFmpeg            string `json:"ffmpeg"`
 	DNGMode           string `json:"dngMode"`
 	DNGLab            string `json:"dnglab"`
+	DNGConverter      string `json:"dngConverter"`
 	XMPBasic          bool   `json:"xmpBasic"`
 	XMPCrop           bool   `json:"xmpCrop"`
 	Deflicker         bool   `json:"deflicker"`
@@ -1547,11 +1553,13 @@ func serveGUIRender(w http.ResponseWriter, r *http.Request) {
 		arguments = append(arguments, "--raw-preview")
 	}
 	if request.DNGMode == "develop" {
-		if strings.TrimSpace(request.DNGLab) == "" {
-			writeGUIError(w, http.StatusBadRequest, "DNGLab path is required for RAW development")
-			return
+		arguments = append(arguments, "--raw-develop")
+		if strings.TrimSpace(request.DNGLab) != "" {
+			arguments = append(arguments, "--dnglab", request.DNGLab)
 		}
-		arguments = append(arguments, "--raw-develop", "--dnglab", request.DNGLab)
+		if strings.TrimSpace(request.DNGConverter) != "" {
+			arguments = append(arguments, "--dng-converter", request.DNGConverter)
+		}
 	}
 	if request.XMPBasic {
 		arguments = append(arguments, "--apply-xmp-basic")
@@ -1571,8 +1579,12 @@ func serveGUIRender(w http.ResponseWriter, r *http.Request) {
 type guiCommandRunner func([]string, io.Writer, io.Writer) int
 
 func writeGUICommandResult(w http.ResponseWriter, arguments []string, run guiCommandRunner) {
+	if len(arguments) == 0 {
+		writeGUIError(w, http.StatusInternalServerError, "missing command")
+		return
+	}
 	var output, errorsBuffer bytes.Buffer
-	code := run(arguments, &output, &errorsBuffer)
+	code := run(arguments[1:], &output, &errorsBuffer)
 	message := strings.TrimSpace(output.String())
 	if code != 0 {
 		if message != "" {

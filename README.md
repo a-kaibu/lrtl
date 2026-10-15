@@ -2,7 +2,7 @@
 
 LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。Lightroom互換XMPのキーフレーム編集やHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFとRAW連番からMJPEG AVI、H.264/H.265 MP4、ProRes MOVを生成できます。
 
-**現像済み画像は追加ソフトなしでレンダーできます。RAWをセンサー情報から現像するには、外部のDNGLabが必要です。** `render --raw-develop --dnglab PATH`はDNGLabの16-bit sRGB TIFF出力を動画にします。`--raw-preview`はカメラ内蔵プレビューを使う旧来の軽量経路です。DNGLabでRAW画像を現像して動画にできますが、Camera Raw/Lightroomの全設定やXMP現像値を再現する機能ではありません。
+**RAW連番は、インストール済みのAdobe DNG Converterでデモザイクし、Goで現像して動画にできます。** `render --raw-develop`はConverterを自動検出し、実画素のLinear DNGを16-bit sRGBへ変換します。JPEG/PNG/TIFF連番とMJPEG AVIの処理はPure Go、MP4/MOV出力にはFFmpegも必要です。`--dnglab PATH`で従来のDNGLabバックエンドも選べます。Camera Raw/Lightroomのプロファイル・全設定と画素一致する現像エンジンではありません。
 
 本プロジェクトはLRTimelapseおよびAdobeと無関係です。独自実装であり、それらのコード、画像、同梱ツールを含みません。
 
@@ -33,19 +33,19 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。JPEGは外部サイドカーがなければ画像内の標準/拡張XMP、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRはtag 700、RAFは埋め込みJPEG、CR3はISO BMFFのAdobe XMP UUIDから読み取る。編集結果はサイドカーへ保存し画像を変更しない。`gui`と`set`で許可した131項目とPreview EVを選択フレーム単位で編集し、`preview-ev`でRGBヒストグラムからPreview EVを算出してXMPへ書き込める。GUIではToneCurvePV2012のマスター/R/G/Bポイントを選択フレームごとに追加・移動・削除でき、属性/単純テキスト/RDF Seq表現のXMPをバックアップ付きで保存。全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度でLUT出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を先頭フレームから均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。アスペクト比を使う円形グラデーションの専用形状補正、Camera Rawのマスク描画との一致は未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
-| 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/DNGLab現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/DNGLab現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
+| 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/Adobe DNG Converterによる現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/Adobe DNG Converterによる現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
-| RAW・DNG | RAW処理、DNG変換 | `--raw-develop`で外部DNGLabにより主要RAW形式を現像し、その16-bit sRGB TIFF出力からレンダー可能。`import --convert-dng`で対応RAWを外部DNGLab経由のlossless/uncompressed DNGへ変換可能。`--raw-preview`によるカメラ内プレビュー経路も維持し、TIFF系プレビュー候補にSony SR2/SRF、Kodak DCR/DCS/KDC、Hasselblad 3FR/FFFを追加。DNGLabは別途インストールが必要。Camera Raw/Lightroom設定の完全な適用、ロッシーDNGとサイズ縮小は未実装 | 一部 |
+| RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed DNG取り込みに対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現、ロッシーDNGとサイズ縮小は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。LRTのプリセット/UIや非圧縮TIFF中間画像は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。入力画素はRGB 8-bitなのでProRes/DNxHR 10-bit出力も16-bit RAW精度を保持しない | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。8-bit RGB処理のためLRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。画像プレビュー、ロッシーDNG、DNGのサイズ縮小、動画の自動分割は未実装 | 一部 |
-| DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`でDNGLabが対応するRAWをlosslessまたはuncompressed DNGへ変換。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
+| DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed DNGと隣接XMPを取り込む。`--dnglab PATH`でDNGLabを明示選択可能。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。バッチプレビューとXMP一括補正は未実装 | 一部 |
-| GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/DNGLab現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
+| GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
 
 ### LRTimelapse 7のライセンス別機能
@@ -72,16 +72,16 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 ### 今できること
 
 1. `.xmp`サイドカーをスキャンし、キーフレームと数値設定を確認する。
-2. JPEG/PNG/TIFF連番、RAW内蔵プレビュー、またはDNGLabで現像したRAWからLRT互換の数量と等間隔キーフレーム位置を提案し、任意でXMPにマークする。
+2. JPEG/PNG/TIFF連番、RAW内蔵プレビュー、またはAdobe DNG ConverterでデモザイクしたRAWからLRT互換の数量と等間隔キーフレーム位置を提案し、任意でXMPにマークする。
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
-4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはDNGLabで現像したRAWをMJPEG AVI、H.264/H.265 MP4、ProRes MOVにまとめる。必要なら`--aspect 16:9 --output-height 1080`のように出力比率と高さを指定するか、`--long-edge`で縮小する。XMP値未焼き込みのsRGB入力には`--apply-xmp-basic`で基本8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、8色域のHSL補正、Temperature/Tintの簡易ホワイトバランス、ColorGrade近似、明示ポイントカーブを近似適用できる。
+4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはAdobe DNG ConverterでデモザイクしたRAWをMJPEG AVI、H.264/H.265 MP4、ProRes MOVにまとめる。必要なら`--aspect 16:9 --output-height 1080`のように出力比率と高さを指定するか、`--long-edge`で縮小する。XMP値未焼き込みのsRGB入力には`--apply-xmp-basic`で基本8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、8色域のHSL補正、Temperature/Tintの簡易ホワイトバランス、ColorGrade近似、明示ポイントカーブを近似適用できる。
 5. レンダー時に簡易Deflickerを画素へ適用するか、JPEG/PNG/TIFFまたは選択したRAW入力の解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
-7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。RAW解析時は内蔵プレビューまたはDNGLab現像を選び、必要に応じてXMP Exposure/cropを反映する。
+7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。RAW解析時は内蔵プレビューまたはAdobe DNG Converterによる現像を選び、必要に応じてXMP Exposure/cropを反映する。
 8. XMPサイドカーをZIPスナップショットに保存し、一覧表示とプレビュー後の復元を行う。
 9. フレームのEXIF/XMP撮影日時を動画タイミングに合わせたSRT字幕に出力する。
 10. 長期連番を輝度・コントラスト・色相で分析し、選択した画像だけを動画にする。
-11. カード/フォルダーから写真とXMPを取り込み、必要に応じて日時順へ並べたりJPEGを除外したりする。対応RAWは外部DNGLabでDNGに変換できる。
+11. カード/フォルダーから写真とXMPを取り込み、必要に応じて日時順へ並べたりJPEGを除外したりする。対応RAWはAdobe DNG ConverterでDNGに変換できる。
 12. 動画から全フレームまたは指定fpsのJPG/PNG連番を抽出し、通常の画像列としてレンダーする。
 13. XMPサイドカー上の連番撮影日時を一括で前後にずらす。
 14. 複数の連番フォルダーを並列に動画化し、レンダー失敗を連番ごとに報告する。
@@ -102,7 +102,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 `--apply-xmp-basic`は現行Camera Raw XMPの輝度範囲マスクも限定対応します。`Mask/RangeMask`コンポーネント内の`CorrectionRangeMask Type=2`と4要素の`LumRange`を読み、向き適用後・クロップ前の各画素で線形sRGB輝度に基づく滑らかな範囲選択を評価します。`MaskBlendMode`、`MaskInverted`、範囲側の`Invert`を合成します。選択とAdd/Intersectは独自近似で、Adobeとの画素一致は未確認です。Color Range Type=1はSampleType=0の`PointModels`内6値を読み、後半3値をsRGBサンプル色としてΔE76距離と`ColorAmount`から選択を推定します。座標と末尾識別値の意味、Adobeの選択演算は未解析のため近似です。Type=1以外、Depth範囲、旧形式の`CorrectionRangeMask`、ブラシ/AIマスクは未対応です。
 
-`preview`は画像列の線形sRGB輝度を測り、最初のフレームからのEV差、XMPの`Exposure2012`差、キーフレーム評価をSVGグラフに出します。JPEG/PNG/TIFFのほか、`--raw-preview`で対応RAW内のプレビュー、または`--raw-develop`でDNGLab現像画像を解析できます。`--apply-xmp-basic`（`--apply-xmp-exposure`とは排他的）と`--apply-xmp-crop`を指定すると、輝度解析にその値を適用します。これは静的な数値グラフで、Lightroom/Camera Rawの現像画像やLRTimelapseの操作可能なVisual Previewは表示しません。
+`preview`は画像列の線形sRGB輝度を測り、最初のフレームからのEV差、XMPの`Exposure2012`差、キーフレーム評価をSVGグラフに出します。JPEG/PNG/TIFFのほか、`--raw-preview`で対応RAW内のプレビュー、または`--raw-develop`でAdobe DNG Converter（または明示したDNGLab）の現像画像を解析できます。`--apply-xmp-basic`（`--apply-xmp-exposure`とは排他的）と`--apply-xmp-crop`を指定すると、輝度解析にその値を適用します。これは静的な数値グラフで、Lightroom/Camera Rawの現像画像やLRTimelapseの操作可能なVisual Previewは表示しません。
 
 `long-term`は画像を最大64×64点のグリッドでサンプリングし、線形sRGB輝度の中央値、輝度log2の90–10パーセンタイル差（EV）、彩度で重み付けした円形平均色相（0–360度）を記録します。`--luminance-range`、`--contrast-range`、`--hue-range`はそれぞれ`MIN,MAX`で指定し、指定した全範囲を満たすフレームをJSONマニフェストに含めます。色相は`MIN>MAX`で0度をまたぐ範囲を表せます。無彩色など平均色相が定まらない画像は色相範囲指定時に除外します。範囲を何も指定しなければ全画像を含めます。`render --selection`は元フォルダー、ファイル名、サイズ、更新時刻を照合してから含まれる画像をレンダーし、画像やXMPを変更しません。`render --filename-contains TEXT`はさらにファイル名の大文字小文字を無視した部分一致で絞り込みます。LRTimelapse 7にも「Select by Filename」がありますが、lrtlはCLI絞り込みのみで、ファイル一覧上の選択UIはありません。LRTimelapseも長期用にLuminance/Contrast/Hueフィルターを提供します。既定のlrtl指標は独自実装です。`--metric-profile lrt-7.5.5`を選ぶと、インストール済み7.5.5で確認した64×64 bilinear縮小、scale 4のGaussian blur、平均グレースケール輝度、グレースケール標準偏差、平均HSB色相による測定を使います。数値計算は別実装で、LRTの選択構図、時間方向のフィルター/定数補正、曲線UIは再現しません。
 
@@ -112,7 +112,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ## インストール
 
-ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264/H.265 MP4とProRes MOV出力、動画からのフレーム抽出には外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAW現像とDNG変換には外部DNGLabが必要です（PATHに置くか`--dnglab`で指定）。FFmpegとDNGLabはlrtlに同梱しません。RAWデコーダー候補の[raw-go](https://github.com/vegidio/raw-go)はLibRawをCGOで静的リンクするためCツールチェーンが必要で、現行のPure Goビルド条件に合わず採用していません。LibRaw自体はLGPL-2.1またはCDDL 1.0で提供されています（[ライセンス説明](https://github.com/LibRaw/LibRaw#licensing)）。
+ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264/H.265 MP4とProRes MOV出力、動画からのフレーム抽出には外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAW現像とDNG変換にはAdobe DNG Converter（または明示選択するDNGLab）が必要です。Adobeは自動検出または`--dng-converter PATH`、DNGLabは`--dnglab PATH`で指定します。FFmpeg、Adobe DNG Converter、DNGLabはlrtlに同梱しません。RAWデコーダー候補の[raw-go](https://github.com/vegidio/raw-go)はLibRawをCGOで静的リンクするためCツールチェーンが必要で、現行のPure Goビルド条件に合わず採用していません。LibRaw自体はLGPL-2.1またはCDDL 1.0で提供されています（[ライセンス説明](https://github.com/LibRaw/LibRaw#licensing)）。
 
 ```powershell
 go install github.com/a-kaibu/lrtl/cmd/lrtl@latest
@@ -142,7 +142,7 @@ H.264 MP4にする場合はFFmpegをPATHに追加し、出力先を`.mp4`にし�
 .\lrtl.exe render "D:\Timelapse\Sequence" --output "D:\Timelapse\Timelapse.mp4" --fps 24
 ```
 
-AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必要です。RAWを直接現像する場合は別途DNGLabも必要です。XMPの値を画像に焼き込む現像処理は、レンダー済み画像へ重ねて適用すると二重補正になるため、未適用の画像だけで`--apply-xmp-basic`を使ってください。
+AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必要です。RAWを直接現像する場合はインストール済みAdobe DNG Converterを使用します。XMPの値を画像に焼き込む現像処理は、レンダー済み画像へ重ねて適用すると二重補正になるため、未適用の画像だけで`--apply-xmp-basic`を使ってください。
 
 ブラウザー上で連番を見ながら操作する場合は、ローカルUIを起動し、表示されたURLをブラウザーで開きます。UIは`127.0.0.1`にだけ待ち受けます。
 
@@ -150,11 +150,11 @@ AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必
 .\lrtl.exe gui
 ```
 
-フォルダー欄に連番のパスを入力するとサムネイルが表示されます。選択フレームの数値XMPプロパティを編集でき、「XMPプレビュー」は対応する補正を適用した静止画を表示します。新しいトーンカーブ欄ではRGBマスターまたはRed/Green/Blueチャンネルを選び、点をドラッグして編集、空白をクリックして追加、右クリックで中間点を削除できます。カーブは選択中の1フレームに保存し、実行前に確認して既存XMPのバックアップを作成します。連番グラフの青いExposure2012点を上下にドラッグすると、そのフレームの露出値を編集できます。「連番を再生」は1〜30 fpsでループ再生し、対応XMP基本値・クロップ、RAW内蔵プレビューまたはDNGLab現像を選択できます。再生画像は最大640 pxに縮小します。フレームごとの4/5つ星設定、輝度からのキーフレーム候補作成、XMP補間、マニュアルレンズの絞り値設定、AVI/MP4/MOVレンダーも操作できます。RAWの輝度解析と静止画プレビューは内蔵プレビューまたはDNGLab現像を選べます。XMPを書き換える操作とレンダーは実行前に確認します。RAWセンサーデータの現像にはDNGLab、MP4/MOVにはFFmpegが必要です。
+フォルダー欄に連番のパスを入力するとサムネイルが表示されます。選択フレームの数値XMPプロパティを編集でき、「XMPプレビュー」は対応する補正を適用した静止画を表示します。新しいトーンカーブ欄ではRGBマスターまたはRed/Green/Blueチャンネルを選び、点をドラッグして編集、空白をクリックして追加、右クリックで中間点を削除できます。カーブは選択中の1フレームに保存し、実行前に確認して既存XMPのバックアップを作成します。連番グラフの青いExposure2012点を上下にドラッグすると、そのフレームの露出値を編集できます。「連番を再生」は1〜30 fpsでループ再生し、対応XMP基本値・クロップ、RAW内蔵プレビューまたはAdobe DNG Converterによる現像を選択できます。再生画像は最大640 pxに縮小します。フレームごとの4/5つ星設定、輝度からのキーフレーム候補作成、XMP補間、マニュアルレンズの絞り値設定、AVI/MP4/MOVレンダーも操作できます。RAWの輝度解析と静止画プレビューは内蔵プレビューまたはAdobe DNG Converterによる現像を選べます。XMPを書き換える操作とレンダーは実行前に確認します。RAWセンサーデータの現像にはAdobe DNG Converter、MP4/MOVにはFFmpegが必要です。
 
 ## 使い方
 
-`import`は指定フォルダーの対応画像と、見つかった同名XMPサイドカーを出力フォルダーへコピーします。`--recursive`でサブフォルダーも検索し、元フォルダー名を出力名に付けて衝突を避けます。`--sort capture-time`はXMP/EXIF撮影日時順に並ぶ連番を付け、`--rename-by-date`は日時をファイル名に使います。同じ秒の撮影には連番を追加します。`--skip-jpeg`はJPEG/JPGを除外し、`--dry-run`はコピー予定だけを表示します。撮影日時順・日時リネームには全画像の撮影日時が必要です。`--convert-dng`を指定するとDNGLabが対応するRAWファイルを`.dng`へ変換し、隣接XMPサイドカーも新しい画像名に合わせてコピーします。JPEG等と既存DNGはそのままコピーします。圧縮方式は`--dng-compression lossless|uncompressed`で指定でき、既定はlosslessです。ロッシー圧縮とサイズ縮小は未対応です。DNGLabはPATHまたは`--dnglab PATH`で指定してください。
+`import`は指定フォルダーの対応画像と、見つかった同名XMPサイドカーを出力フォルダーへコピーします。`--recursive`でサブフォルダーも検索し、元フォルダー名を出力名に付けて衝突を避けます。`--sort capture-time`はXMP/EXIF撮影日時順に並ぶ連番を付け、`--rename-by-date`は日時をファイル名に使います。同じ秒の撮影には連番を追加します。`--skip-jpeg`はJPEG/JPGを除外し、`--dry-run`はコピー予定だけを表示します。撮影日時順・日時リネームには全画像の撮影日時が必要です。`--convert-dng`を指定するとAdobe DNG Converterが対応するRAWファイルを`.dng`へ変換し、隣接XMPサイドカーも新しい画像名に合わせてコピーします。JPEG等と既存DNGはそのままコピーします。圧縮方式は`--dng-compression lossless|uncompressed`で指定でき、既定はlosslessです。ロッシー圧縮とサイズ縮小は未対応です。Adobe DNG Converterは自動検出し、必要なら`--dng-converter PATH`で指定します。`--dnglab PATH`を指定した場合はDNGLabを使います。
 
 `import-video`はFFmpegで動画をJPGまたはPNGの連番へデコードします。既定ではデコード可能な全フレームを保存し、`--fps N`を指定するとその間隔でフレームをサンプリングします。JPEGの圧縮品質は`--quality 1`（高画質）〜`31`（低画質）で指定できます。抽出先は新しいフォルダーでなければならず、既存フォルダーを置き換えません。LRTimelapseの動画取り込みもJPG連番を生成しますが、lrtlではプレビュー生成、シーンごとの自動分割、動画フレームのDNG変換は未実装です。
 
@@ -171,11 +171,11 @@ lrtl scan "D:\Timelapse\Sequence"
 # カメラカードからRAWだけを撮影日時順で取り込む
 lrtl import "E:\DCIM" --output "D:\Timelapse\Sequence" --recursive --sort capture-time --skip-jpeg
 
-# RAWをlossless DNGに変換し、XMPも一緒に取り込む（DNGLabが必要）
+# RAWをlossless DNGに変換し、XMPも一緒に取り込む（Adobe DNG Converterが必要）
 lrtl import "E:\DCIM" --output "D:\Timelapse\DNGSequence" --recursive --skip-jpeg --convert-dng
 
-# 非圧縮DNGに変換。DNGLabをPATHに置かない場合は場所を指定
-lrtl import "E:\DCIM" --output "D:\Timelapse\DNGUncompressed" --convert-dng --dng-compression uncompressed --dnglab "C:\Tools\dnglab.exe"
+# 非圧縮DNGに変換。Converterの場所を明示する場合
+lrtl import "E:\DCIM" --output "D:\Timelapse\DNGUncompressed" --convert-dng --dng-compression uncompressed --dng-converter "C:\Program Files\Adobe\Adobe DNG Converter\Adobe DNG Converter.exe"
 
 # 取り込み名も撮影日時へ変更し、実行前に内容を確認
 lrtl import "E:\DCIM" --output "D:\Timelapse\SequenceByDate" --recursive --skip-jpeg --rename-by-date --dry-run
@@ -264,8 +264,8 @@ lrtl keyframes "D:\Timelapse\RAW" --count 5 --evenly-spaced --write
 # 対応RAWの埋め込みプレビューの輝度曲線から候補を選ぶ
 lrtl keyframes "D:\Timelapse\RAW" --raw-preview --count 5
 
-# DNGLabでRAWを現像し、その輝度曲線から候補を選ぶ
-lrtl keyframes "D:\Timelapse\RAW" --raw-develop --dnglab "C:\Tools\dnglab.exe" --apply-xmp-basic --apply-xmp-crop --count 5
+# Adobe DNG ConverterとGoでRAWを現像し、その輝度曲線から候補を選ぶ
+lrtl keyframes "D:\Timelapse\RAW" --raw-develop --apply-xmp-basic --apply-xmp-crop --count 5
 
 # 長期連番を測定し、輝度・コントラスト・色相の範囲から選択する
 lrtl long-term "D:\Timelapse\Developed" --output "D:\Timelapse\selection.json" `
@@ -318,15 +318,15 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\oriented.mp4" --auto
 # 対応RAWの埋め込みプレビューからH.264 MP4を作成（FFmpegが必要、RAW現像ではない）
 lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-preview.mp4" --raw-preview
 
-# DNGLabでRAWを現像してH.264 MP4を作成（FFmpegとDNGLabが必要）
-lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-developed.mp4" --raw-develop --dnglab "C:\Tools\dnglab.exe"
+# Adobe DNG ConverterとGoでRAWを現像してH.264 MP4を作成（FFmpegとAdobe DNG Converterが必要）
+lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-developed.mp4" --raw-develop
 
-# DNGLabでRAWを現像してMJPEG AVIを作成（DNGLabが必要、FFmpeg不要）
-lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-developed.avi" --raw-develop --dnglab "C:\Tools\dnglab.exe"
+# Adobe DNG ConverterとGoでRAWを現像してMJPEG AVIを作成（Adobe DNG Converterが必要、FFmpeg不要）
+lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-developed.avi" --raw-develop
 
-# DNGLab現像画像から輝度グラフと簡易Deflicker補正を作成
-lrtl preview "D:\Timelapse\RAW" --output "D:\Timelapse\raw-brightness.svg" --raw-develop --dnglab "C:\Tools\dnglab.exe" --apply-xmp-basic --apply-xmp-crop
-lrtl deflicker "D:\Timelapse\RAW" --raw-develop --dnglab "C:\Tools\dnglab.exe" --apply-xmp-basic --apply-xmp-crop
+# RAW現像画像から輝度グラフと簡易Deflicker補正を作成
+lrtl preview "D:\Timelapse\RAW" --output "D:\Timelapse\raw-brightness.svg" --raw-develop --apply-xmp-basic --apply-xmp-crop
+lrtl deflicker "D:\Timelapse\RAW" --raw-develop --apply-xmp-basic --apply-xmp-crop
 
 # XMPサイドカーのExposure2012を適用してレンダー
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\adjusted.avi" --apply-xmp-exposure
@@ -385,7 +385,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `--timestamp-overlay`と`subtitles`は、各サイドカーの`exif:DateTimeOriginal`、`xmp:CreateDate`、`xmp:ModifyDate`の順で日時を探し、なければ画像内EXIFの撮影/作成/更新日時を使います。全フレームの日時が必要です。`subtitles`は各画像の撮影日時を、そのフレームが動画上に表示される区間のSRT字幕として書き出します。`--fps`は動画のフレームレートと合わせてください。既定の表示形式は`2006-01-02 15:04:05`で、`--timestamp-format`へGoの日時レイアウトを渡して変更できます。`render --timestamp-overlay`は日時を右下に焼き込みます。`render --watermark TEXT`は埋め込みGoフォントで固定テキストを重ね、`--watermark-position top-left|top-right|bottom-left|bottom-right|center`で配置を選べます（既定は左下）。両方を指定すると日時と透かしを同じフレームに表示します。
 
-`deflicker`はJPEG/PNG/TIFF、`--raw-preview`の内蔵画像、または`--raw-develop`でDNGLabが現像した画像の輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。既定の`--smoother gaussian`はGaussian平滑化を使い、`--smoother lowess`はtricube重み付き局所線形回帰を使います。LOWESSの近傍数は`--smooth`の半径から`2×半径+1`へ換算します。LRT 7.5.5のVisual Deflickerも局所線形回帰型スムーザーを呼びますが、lrtlの測光、近傍数、補正パスは独自実装です。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を指定すると、解析前にサイドカーの値を画素へ近似適用します。既定はプレビューだけです。`--write`は求めた補正量を各フレームの`crs:Exposure2012`へ加算し、前回lrtlが加えた量を`ol:DeflickerCorrection2012`に記録します。再実行ではlrtl管理分を置き換え、`--reset --write`ではその分だけを戻します。Holy Grail補正やユーザーが後から加えたExposure値は差し引かずに残します。Camera Rawの現像パイプラインやLRTimelapseのVisual Deflickerと数値が一致する機能ではなく、画像列から露出差を推定する近似です。
+`deflicker`はJPEG/PNG/TIFF、`--raw-preview`の内蔵画像、または`--raw-develop`でAdobe DNG ConverterとGoが現像した画像の輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。既定の`--smoother gaussian`はGaussian平滑化を使い、`--smoother lowess`はtricube重み付き局所線形回帰を使います。LOWESSの近傍数は`--smooth`の半径から`2×半径+1`へ換算します。LRT 7.5.5のVisual Deflickerも局所線形回帰型スムーザーを呼びますが、lrtlの測光、近傍数、補正パスは独自実装です。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を指定すると、解析前にサイドカーの値を画素へ近似適用します。既定はプレビューだけです。`--write`は求めた補正量を各フレームの`crs:Exposure2012`へ加算し、前回lrtlが加えた量を`ol:DeflickerCorrection2012`に記録します。再実行ではlrtl管理分を置き換え、`--reset --write`ではその分だけを戻します。Holy Grail補正やユーザーが後から加えたExposure値は差し引かずに残します。Camera Rawの現像パイプラインやLRTimelapseのVisual Deflickerと数値が一致する機能ではなく、画像列から露出差を推定する近似です。
 
 `set`は`NumericCRSProperties`にある数値のCamera Rawプロパティ131個を明示的に許可し、`set IMAGE PreviewEV VALUE`ではLRTのPreview EVをEV単位で編集でき、XMPの`lrt:ExternalExposureDefault`へ4倍して保存します。GUIの数値編集にもPreview EVを追加しました。HSL色別スライダー、旧式のClarity/Fill Light/Highlight Recovery/増分WB、HDR最大値、カラーグレーディング、色別色相境界、パラメトリックトーン、ノイズ低減、シャープ化、粒子、周辺光量、手動レンズ/パースペクティブ補正などを含みます。名前はAdobeの公開XMP資料、インストール済みXMPテンプレート、LRT 7.5.5の登録情報から選びましたが、LRTのAuto-Transition全項目を網羅すると確認したものではありません。`interpolate`は全体および登録済みローカル数値項目をLRT 7.5.5の3次ベジェスプラインで補間し、`--smoothness 0..100`でLRTの設定値を指定できます（既定50）。登録数値は各プロパティのLRT範囲でクランプし、Integer型はJava互換の四捨五入（.5はゼロから遠ざける）で出力します。先頭フレームのIsMergedHDRがtrueならExposure2012の範囲を-10..10へ広げ、通常は-5..5です。LRT登録外の旧式4項目とColorGradeBalance/ColorGradeHighlightHue/Sat/ColorGradeShadowHue/Satは補間しません。全体プロパティはXMP上の数値を補間し、色相の最短回転はしません。ローカル補正はRDF Seq内の固定位置で照合し、Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11を対象に各CorrectionMasks[1]の登録値を補間します。Angleは円形グラデーションとMaskGroup 8/9だけLRTの後処理どおり−45°未満なら90°加算、45°超なら90°減算し、キーフレームにも適用します。`LumRange`は登録上String型のため同じ配列位置の最初の非空値を全フレームへ均等化します。RDF配列がない独自XMPでは共通`CorrectionSyncID`/`MaskSyncID`にフォールバックします。色範囲Type=1ではColorAmountを数値補間し、`PointModels`はLRTの遷移登録に見つからないため各フレームの値を保持します。Depthの画像依存データ、ブラシ描線、登録位置外のマスクは未対応です。MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurveは先頭フレームから同じ位置の対象フレームへコピーしますが、曲線の数値補間は未対応です。非キーフレームで欠けた登録位置のMaskGroup構造は最寄りの実体を持つXMPから複製して作成しますが、キーフレームや登録位置外/Sync ID形式の欠損構造は生成しません。Look/Preset/PointColorsとグローバルポイントカーブは先頭フレームからコピーしますが、前者3項目のコピー元はLRT資料で確認できていません。数値一致はLRT 7.5.5との比較前です。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --smoothness 50 --write`（LRTの既定スムージング）で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-basic`で基本8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、8色域HSL、簡易Temperature/Tint、明示ポイントカーブを、`render --apply-xmp-crop`で回転を含むクロップを画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。Camera Rawの現像エンジンは含まず、レンダー処理は独自近似です。`set`はCamera Rawスライダーごとの許容範囲を検証しません。
 
@@ -410,9 +410,9 @@ EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一�
 | 段階 | 目標 | 状況 |
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | XMPの読み書き、4/5つ星キーフレーム操作、LRT 7.5.5由来の数量/配置規則、127個の全体数値項目と登録ローカル項目のスプライン補間、スナップショット、GUIのExposure2012グラフ、選択フレームのマスター/R/G/Bトーンカーブ点編集を実装。Lightroom/Camera Raw連携画面と連番全体でカーブを同時編集する機能は未実装 |
-| 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264/H.265 MP4、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWは埋め込みプレビューまたは外部DNGLab現像が必要 |
+| 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像・対応RAW）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264/H.265 MP4、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWはAdobe DNG ConverterとGoによる実画素現像、内蔵プレビュー、明示したDNGLabから選択可能 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVG輝度プレビュー、UIのXMP Exposure2012/解析画像輝度グラフ、選択フレームのRGBトーンカーブ編集、静止画プレビューと最大640 pxの連番ループ再生、長期撮影指標、XMP画素反映、回転クロップ、参照領域/全体露出Deflickerを実装。LRT Visual Previewと同等の再生速度/画素再現、Exposure2012の複数フレーム同時編集、フレーム間のトーンカーブ編集、XMPロスレス適用、Geometry補正、未対応マスク形式の画素現像は未実装 |
-| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定と既存LRT XMP入力を使う近似Holy Grail補正、現像済みラスターへの対応XMP値適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と同等のRAW画素処理は未実装 |
+| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定と既存LRT XMP入力を使う近似Holy Grail補正、現像済みラスターへの対応XMP値適用、一部RAW内蔵プレビュー、Adobe DNG ConverterとGoによるRAW現像（DNGLabも任意選択）を実装。Camera Raw現像の完全再現と同等のRAW画素処理は未実装 |
 | 5 | LRTのGUIワークフローと残りの取り込み機能 | Go標準`net/http`で動くループバック限定のローカルWeb UIで、サムネイル、キーフレーム、XMP補間、レンダー操作を実装。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed DNG変換、追加コーデックも実装。LRT相当の編集カーブ/現像プレビュー、フォルダーピッカー、動画プレビュー/自動分割、ロッシーDNG/サイズ縮小、同じ10-bit YUV画素処理は未対応 |
 
 ## 機能調査の出典
@@ -457,6 +457,32 @@ EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一�
 - [libopenraw's Olympus ORF format notes](https://libopenraw.freedesktop.org/formats/orf/)
 - [libopenraw's Fujifilm RAF header and JPEG offsets](https://libopenraw.freedesktop.org/formats/raf/)
 
+## Adobe DNG Converterを使うRAW処理
+
+NEF/NRW、CR2/CR3/CRW、ARW/SR2/SRF、RAF、ORF、RW2、DNGなどに加え、RAW/RWL/GPR/X3F拡張子も連番読み込み・現像・DNG取り込みの対象として認識します。実際の機種対応は[Adobeの対応カメラ一覧](https://helpx.adobe.com/camera-raw/desktop/dng-and-file-formats/camera-raw-plug-supported-cameras.html)とインストール済みConverterの版に依存します。
+
+`--raw-develop`の既定バックエンドはAdobe DNG Converterです。PATHと、Windows標準インストール先またはmacOSのアプリケーションを探します。場所が異なる場合は`--dng-converter PATH`で指定します。従来のDNGLabを使う場合は`--dnglab PATH`を明示してください。2つのバックエンド指定は同時に使えません。
+
+```powershell
+# RAWセンサー実画素からAVIを生成（DNG Converterが必要、FFmpeg不要）
+lrtl render "D:\Timelapse\RAW" --raw-develop --auto-orient --long-edge 1920 --output "D:\Timelapse\raw.avi"
+# MP4へ出力（FFmpegも必要）
+lrtl render "D:\Timelapse\RAW" --raw-develop --long-edge 1920 --output "D:\Timelapse\raw.mp4"
+# 解析コマンドでも同じ現像経路を使用
+lrtl keyframes "D:\Timelapse\RAW" --raw-develop
+lrtl preview-ev "D:\Timelapse\RAW" --raw-develop
+# AdobeによるDNG変換とXMP取り込み
+lrtl import "E:\DCIM" --output "D:\Timelapse\DNG" --convert-dng
+```
+
+Converterを`-u -l -p0 -dng1.4`で呼び、一時フォルダーにデモザイク済み・未圧縮Linear DNGを生成します。その実画素から黒/白レベル、AsShotホワイトバランス、CameraCalibration/AnalogBalance、ForwardMatrixまたはColorMatrix、BaselineExposureを使ってGoで16-bit sRGBを生成します。ストリップ/タイル、DefaultCrop/ActiveArea、DefaultScaleに対応します。`--raw-preview`は従来どおりカメラ内蔵プレビューを使う別の入力モードです。元RAWと隣接XMPは現像処理で変更しません。
+
+この現像はAdobeのデモザイクと独自の色変換を組み合わせたものです。デュアル光源の色温度推定、色域外のクリップ、画素端のクロップ丸めは近似です。AdobeプロファイルのHue/Sat/Lookテーブル、トーンカーブ、DNG Opcodeによる補正、Camera Rawの全現像工程は再現しません。追加XMPは`--apply-xmp-basic`/`--apply-xmp-crop`を指定した場合に既存のlrtl近似処理で適用します。対応カメラはインストール済みConverterに依存し、変換失敗時は内蔵JPEGへ自動フォールバックせずエラーを返します。Converterの出力と1枚分の復号画像にはそれぞれ1 GiBの上限を設け、Converter実行は5分でタイムアウトします。
+
+自動テストはAdobeを必要としない既知画素のLinear DNGと代替プロセスを使い、黒/白レベル、ガンマ、WB/色行列、タイル境界、異常データ、CLI/GUIの各経路と一時ファイルの後始末を確認します。実機ではAdobe DNG Converter 18.7でNikon D3S NEFとCanon 40D sRAW CR2を現像し、NEF連番のAVI、CR2のH.264 MP4、CR2→DNG取り込み→AVIを確認しました。完全なCamera Raw画素一致の検証ではありません。仕様は[AdobeのCLI資料](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section/download-1/dng_converter_commandline.pdf)と[DNG仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)を参照しました。
+
+追加の実機確認として、依存パッケージ`imagemeta v0.3.1`のテスト素材`Hero8.GPR`もAdobe DNG Converterで4000×3000の実画素から現像し、GUIプレビューを生成できることを確認しました。通常の自動テストはこれらの実RAWをダウンロードせず、合成データのみで動作します。
+
 ## Preview EVの生成
 
 `preview-ev DIRECTORY`は連番画像から各フレームのPreview EVを測定し、`lrt:ExternalExposureDefault`への保存値も表示します。復元したLRT 7.5.5の計算に合わせ、RGB各256段階のヒストグラムを作り、各ヒストグラムを半径2の移動平均で平滑化してから全チャンネルの平均強度を求めます。Preview EVは平均値を256で割った値で、XMP保存値はその4倍です。既定では表示のみで、`--write`を付けるとXMPサイドカーを更新します。既存ファイルはバックアップされます。`--raw-preview`と`--raw-develop --dnglab PATH`、`--apply-xmp-basic`、`--apply-xmp-crop`も指定できます。
@@ -472,7 +498,7 @@ lrtl preview-ev "D:\Timelapse\Developed" --write
 
 Goの機能追加・修正では、数値の期待値、境界条件、異常入力、既存XMPの保持とバックアップを回帰テストで確認します。数値テストは手計算や独立した参照値を使い、実装の計算をそのまま複製して期待値にはしません。変更後は以下のテスト・静的解析・ビルドを実行します。GitHub ActionsもWindows/Linuxで同じ3項目を実行します。
 
-現在の自動テストはXMP読み書き・補間、キーフレーム、Preview EV、Deflicker、MJPEG AVI生成などを対象としています。LRTが実際に出力したXMPとの数値比較、GUIの操作、外部FFmpeg/DNGLabを含む処理全体の検証は未整備です。ビルド成功だけでは動作確認済みとしません。
+現在の自動テストはXMP読み書き・補間、キーフレーム、Preview EV、Deflicker、MJPEG AVI生成などを対象としています。LRTが実際に出力したXMPとの数値比較、ブラウザーのGUI操作、外部FFmpeg/DNGLabを含む処理全体の検証は未整備です。ビルド成功だけでは動作確認済みとしません。
 
 ```powershell
 go test ./...

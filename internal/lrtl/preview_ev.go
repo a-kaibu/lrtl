@@ -99,21 +99,22 @@ func framePreviewEV(img image.Image) (float64, error) {
 func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("preview-ev", stderr)
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
-	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
-	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
+	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP during analysis")
 	applyXMPBasic := set.Bool("apply-xmp-basic", false, "apply supported Camera Raw tone and color controls during analysis")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP during analysis")
 	write := set.Bool("write", false, "write lrt:ExternalExposureDefault to XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--dnglab": true, "-dnglab": true})); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
-			fmt.Fprintln(stdout, "Usage: lrtl preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]")
+			fmt.Fprintln(stdout, "Usage: lrtl preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]")
 			return code
 		}
 	}
 	if set.NArg() != 1 {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]"))
 	}
 	if *noBackup && !*write {
 		return reportError(stderr, fmt.Errorf("--no-backup requires --write"))
@@ -123,7 +124,7 @@ func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	options := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic,
 		ApplyXMPCrop: *applyXMPCrop,
 	}

@@ -31,6 +31,7 @@ var embeddedRawPreviewExtensions = map[string]bool{
 }
 
 var rawDevelopmentExtensions = map[string]bool{
+	".raw": true, ".rwl": true, ".gpr": true, ".x3f": true,
 	".ari": true, ".cr2": true, ".cr3": true, ".crw": true, ".dcr": true,
 	".dcs": true, ".erf": true, ".fff": true, ".iiq": true, ".kdc": true,
 	".mef": true, ".mos": true, ".mrw": true, ".nef": true, ".nrw": true,
@@ -77,6 +78,7 @@ type imageInputOptions struct {
 	RawPreview       bool
 	RawDevelop       bool
 	DNGLabPath       string
+	DNGConverterPath string
 	ApplyXMPExposure bool
 	ApplyXMPBasic    bool
 	ApplyXMPCrop     bool
@@ -89,6 +91,12 @@ func validateImageInputOptions(options imageInputOptions) error {
 	if strings.TrimSpace(options.DNGLabPath) != "" && !options.RawDevelop {
 		return fmt.Errorf("--dnglab requires --raw-develop")
 	}
+	if strings.TrimSpace(options.DNGConverterPath) != "" && !options.RawDevelop {
+		return fmt.Errorf("--dng-converter requires --raw-develop")
+	}
+	if strings.TrimSpace(options.DNGConverterPath) != "" && strings.TrimSpace(options.DNGLabPath) != "" {
+		return fmt.Errorf("--dng-converter and --dnglab select different RAW backends and cannot be combined")
+	}
 	if options.ApplyXMPExposure && options.ApplyXMPBasic {
 		return fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012")
 	}
@@ -96,6 +104,9 @@ func validateImageInputOptions(options imageInputOptions) error {
 }
 
 func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte, image.Config, string, error) {
+	if err := validateImageInputOptions(options); err != nil {
+		return nil, image.Config{}, "", err
+	}
 	path := frame.Image
 	var data []byte
 	var err error
@@ -103,7 +114,11 @@ func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte,
 		data, err = os.ReadFile(path)
 	} else if supportsRawDevelopment(path) {
 		if options.RawDevelop {
-			data, err = developRawWithDNGLab(path, options.DNGLabPath)
+			if strings.TrimSpace(options.DNGLabPath) != "" {
+				data, err = developRawWithDNGLab(path, options.DNGLabPath)
+			} else {
+				data, err = developRawWithDNGConverter(path, options.DNGConverterPath)
+			}
 		} else if options.RawPreview && supportsEmbeddedRawPreview(path) {
 			raw, readErr := os.ReadFile(path)
 			if readErr != nil {
@@ -111,12 +126,12 @@ func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte,
 			}
 			data, err = extractRawPreview(path, raw)
 		} else if options.RawPreview {
-			return nil, image.Config{}, "", fmt.Errorf("RAW input %s does not have an embedded-preview reader; use --raw-develop with DNGLab", filepath.Base(path))
+			return nil, image.Config{}, "", fmt.Errorf("RAW input %s does not have an embedded-preview reader; use --raw-develop with Adobe DNG Converter (or --dnglab PATH)", filepath.Base(path))
 		} else {
-			return nil, image.Config{}, "", fmt.Errorf("RAW input %s requires --raw-preview or --raw-develop with DNGLab", filepath.Base(path))
+			return nil, image.Config{}, "", fmt.Errorf("RAW input %s requires --raw-preview or --raw-develop with Adobe DNG Converter (or --dnglab PATH)", filepath.Base(path))
 		}
 	} else {
-		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, TIFF, and selected DNGLab RAW formats; unsupported image type: %s", filepath.Base(path))
+		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, TIFF, and RAW formats supported by the selected converter; unsupported image type: %s", filepath.Base(path))
 	}
 	if err != nil {
 		return nil, image.Config{}, "", fmt.Errorf("read %s: %w", path, err)

@@ -50,6 +50,7 @@ type RenderOptions struct {
 	RawPreview        bool
 	RawDevelop        bool
 	DNGLabPath        string
+	DNGConverterPath  string
 }
 
 func (options RenderOptions) deflickerSmoother() string {
@@ -281,7 +282,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if options.MotionBlurFrames != 0 && !validMotionBlurFrames(options.MotionBlurFrames) {
 		return fmt.Errorf("motion blur window must be 0 (disabled) or one of 2, 3, 4, 5, 10, 15, or 20 frames: %d", options.MotionBlurFrames)
 	}
-	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath}
+	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath, DNGConverterPath: options.DNGConverterPath}
 	if err := validateImageInputOptions(inputOptions); err != nil {
 		return err
 	}
@@ -367,9 +368,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			continue
 		}
 		if options.RawPreview {
-			return fmt.Errorf("RAW input %s has no embedded-preview reader; use --raw-develop with DNGLab", filepath.Base(frame.Image))
+			return fmt.Errorf("RAW input %s has no embedded-preview reader; use --raw-develop with Adobe DNG Converter (or --dnglab PATH)", filepath.Base(frame.Image))
 		}
-		return fmt.Errorf("RAW input %s requires --raw-preview or --raw-develop with DNGLab", filepath.Base(frame.Image))
+		return fmt.Errorf("RAW input %s requires --raw-preview or --raw-develop with Adobe DNG Converter (or --dnglab PATH)", filepath.Base(frame.Image))
 	}
 	var xmpExposures []float64
 	if options.ApplyXMPExposure {
