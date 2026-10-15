@@ -10,6 +10,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 下表はローカルにインストールされたLRTimelapse 7.5.5とlrtlの現行コードを照合したものです。LRT側の主要機能とライセンス別の提供範囲は[公式機能表](https://lrtimelapse.com/features/)、[基本チュートリアル](https://lrtimelapse.com/tutorial/basic/complete/)、[内部ワークフロー](https://lrtimelapse.com/workflow/internal-workflow/)と、インストール済みアプリの各メニューを2026-10-15に確認しました。「未実装」は今後の目標です。LRTimelapseのLightroom/Camera Raw連携は外部ソフトを使うワークフローです。
 
+状態の「一部」は該当機能の一部を実装済みですが、LRTと同等ではないことを示します。「未実装」は対応コマンドや処理がありません。「対象外」はLRTのライセンス区分にある制限をOSS版では再現しない項目です。
+
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
@@ -101,6 +103,26 @@ go install github.com/a-kaibu/lrtl/cmd/lrtl@latest
 ```powershell
 go build -o lrtl.exe ./cmd/lrtl
 ```
+
+## クイックスタート: 画像列から動画を作る
+
+Lightroomなどで現像・書き出し済みのJPEG/PNG/TIFFを1つのフォルダーに置き、ファイル名がフレーム順になるようにします。画像サイズは全フレームで揃えてください。
+
+```powershell
+# 画像列と並び順を確認
+.\lrtl.exe scan "D:\Timelapse\Sequence"
+
+# 依存ソフト不要のMJPEG AVIを作成（既定は24 fps）
+.\lrtl.exe render "D:\Timelapse\Sequence" --output "D:\Timelapse\Timelapse.avi"
+```
+
+H.264 MP4にする場合はFFmpegをPATHに追加し、出力先を`.mp4`にします。
+
+```powershell
+.\lrtl.exe render "D:\Timelapse\Sequence" --output "D:\Timelapse\Timelapse.mp4" --fps 24
+```
+
+AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必要です。RAWを直接現像する場合は別途DNGLabも必要です。XMPの値を画像に焼き込む現像処理は、レンダー済み画像へ重ねて適用すると二重補正になるため、未適用の画像だけで`--apply-xmp-basic`を使ってください。
 
 ## 使い方
 
