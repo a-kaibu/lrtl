@@ -25,6 +25,7 @@ type xmpBasicAdjustments struct {
 	blacks          float64
 	texture         float64
 	clarity         float64
+	parametric      xmpParametricCurve
 	vibrance        float64
 	saturation      float64
 	masterCurve     [256]uint8
@@ -35,6 +36,15 @@ type xmpBasicAdjustments struct {
 	hasColorMix     bool
 	colorGrading    xmpColorGrading
 	local           []xmpLocalCorrection
+}
+
+type xmpParametricCurve struct {
+	shadows, darks, lights, highlights        float64
+	shadowSplit, midtoneSplit, highlightSplit float64
+}
+
+func (curve xmpParametricCurve) active() bool {
+	return curve.shadows != 0 || curve.darks != 0 || curve.lights != 0 || curve.highlights != 0
 }
 
 type xmpHSLColorAdjustment struct {
@@ -78,7 +88,7 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 	if err != nil {
 		return xmpBasicAdjustments{}, err
 	}
-	adjustments := xmpBasicAdjustments{}
+	adjustments := xmpBasicAdjustments{parametric: xmpParametricCurve{shadowSplit: 25, midtoneSplit: 50, highlightSplit: 75}}
 	properties := []struct {
 		name   string
 		target *float64
@@ -93,6 +103,13 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		{"Blacks2012", &adjustments.blacks, -100, 100},
 		{"Texture", &adjustments.texture, -100, 100},
 		{"Clarity2012", &adjustments.clarity, -100, 100},
+		{"ParametricShadows", &adjustments.parametric.shadows, -100, 100},
+		{"ParametricDarks", &adjustments.parametric.darks, -100, 100},
+		{"ParametricLights", &adjustments.parametric.lights, -100, 100},
+		{"ParametricHighlights", &adjustments.parametric.highlights, -100, 100},
+		{"ParametricShadowSplit", &adjustments.parametric.shadowSplit, 10, 70},
+		{"ParametricMidtoneSplit", &adjustments.parametric.midtoneSplit, 20, 80},
+		{"ParametricHighlightSplit", &adjustments.parametric.highlightSplit, 30, 90},
 		{"Vibrance", &adjustments.vibrance, -100, 100},
 		{"Saturation", &adjustments.saturation, -100, 100},
 	}
@@ -487,7 +504,7 @@ func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
 func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
-		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
+		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
 }
 
@@ -521,9 +538,40 @@ func basicAdjustedLuminance(luminance float64, adjustments xmpBasicAdjustments) 
 		mask := smoothstep((luminance - 0.55) / 0.45)
 		luminance += adjustments.whites / 100 * 0.12 * mask
 	}
+	if adjustments.parametric.active() {
+		luminance = applyParametricToneCurve(luminance, adjustments.parametric)
+	}
 	return math.Max(0, math.Min(1, luminance))
 }
 
+func applyParametricToneCurve(luminance float64, curve xmpParametricCurve) float64 {
+	shadowSplit := math.Max(0.10, math.Min(0.70, curve.shadowSplit/100))
+	midtoneSplit := math.Max(shadowSplit+0.05, math.Min(0.80, curve.midtoneSplit/100))
+	highlightSplit := math.Max(midtoneSplit+0.05, math.Min(0.90, curve.highlightSplit/100))
+	highlightPeak := (highlightSplit + 1) / 2
+	luminance = math.Max(0, math.Min(1, luminance))
+
+	shadowWeight, darkWeight, lightWeight, highlightWeight := 0.0, 0.0, 0.0, 0.0
+	switch {
+	case luminance < shadowSplit:
+		shadowWeight = smoothstep(luminance / shadowSplit)
+	case luminance < midtoneSplit:
+		t := smoothstep((luminance - shadowSplit) / (midtoneSplit - shadowSplit))
+		shadowWeight, darkWeight = 1-t, t
+	case luminance < highlightSplit:
+		t := smoothstep((luminance - midtoneSplit) / (highlightSplit - midtoneSplit))
+		darkWeight, lightWeight = 1-t, t
+	case luminance < highlightPeak:
+		t := smoothstep((luminance - highlightSplit) / (highlightPeak - highlightSplit))
+		lightWeight, highlightWeight = 1-t, t
+	default:
+		highlightWeight = 1 - smoothstep((luminance-highlightPeak)/(1-highlightPeak))
+	}
+
+	delta := 0.15 * (curve.shadows/100*shadowWeight + curve.darks/100*darkWeight +
+		curve.lights/100*lightWeight + curve.highlights/100*highlightWeight)
+	return math.Max(0, math.Min(1, luminance+delta))
+}
 func encodeLinearSRGB(value float64) uint8 {
 	value = math.Max(0, math.Min(1, value))
 	encoded := 12.92 * value
