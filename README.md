@@ -31,7 +31,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--long-edge`で長辺の上限を指定して縮小可能。拡大や16:9等のプリセット、非圧縮TIFF中間画像は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks経由のH.264/H.265 MP4、ProRes 422/422 HQ MOV。Rec.2020、HDR、音声なし。入力画素はRGB 8-bitなのでProRes 10-bit出力も16-bit RAW精度を保持しない | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --timestamp-overlay`で撮影日時を各動画フレームへ焼き込み、`subtitles`で同じ日時情報からSRT字幕を出力。フレームレートと表示形式を指定可能。任意テキストの透かしは未実装 | 一部 |
-| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`で2/3/4/5/10/15/20枚の隣接フレームを時間方向に平均合成。境界では存在するフレームだけを使う。LRTの内部重み付けとの数値一致は未確認 | 一部 |
+| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。8-bit RGB処理のためLRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。画像プレビュー、ロッシーDNG、DNGのサイズ縮小、動画の自動分割は未実装 | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`でDNGLabが対応するRAWをlosslessまたはuncompressed DNGへ変換。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | 未実装 | 未実装 |
@@ -204,7 +204,7 @@ lrtl render "D:\Timelapse\Developed" --selection "D:\Timelapse\selection.json" -
 # 外部FFmpeg/libx264で24 fpsのH.264 MP4を作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.mp4" --fps 24 --crf 18 --preset medium
 
-# 5枚の隣接フレームを平均合成し、動きを滑らかにした動画を作る（合成前に画素調整、後に日時文字を重ねる）
+# 5枚の隣接フレームをLRT互換の重みで合成し、動きを滑らかにする
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\smooth.mp4" --motion-blur 5
 
 # H.265 MP4またはProRes 422 / ProRes 422 HQ MOVを書き出す
@@ -282,7 +282,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `--auto-orient`は入力画像、RAW内蔵プレビュー、またはDNGLab出力のEXIF Orientationを読み、回転と鏡像を画素へ適用してからXMPクロップ、色調補正、Deflicker、リサイズを行います。向き情報がないフレームはそのままです。向きを適用した後の全フレームは同じ幅と高さである必要があります。この処理は入力ファイルとメタデータを変更しません。
 
-`--motion-blur N`は出力直前に各フレームと前後の隣接画像を均等平均します。選べる窓幅はLRTのRenderPresetで確認した2、3、4、5、10、15、20枚で、0は無効です。偶数窓は未来側へ1枚多く取り、先頭・末尾ではシーケンス内にある画像だけを平均します。XMP/露出補正、クロップ、リサイズを先に行い、指定時刻の文字焼き込みは合成後に行います。これはGoで行う8-bit RGBの時間方向ボックス平均で、LRTimelapseのLow/Medium/Highプリセットや内部重み付けとの数値一致は未確認です。一時フレームバッファーの推定量が768 MiBを超える場合は処理を開始しません。大きなフレームでは`--long-edge`または窓幅を下げてください。
+`--motion-blur N`は出力前に時間方向へ隣接フレームを合成します。選べる窓幅はLRTのRenderPresetで確認した2、3、4、5、10、15、20枚で、0は無効です。インストール済みLRTのレンダー引数生成処理から、`tmix=frames=N:weights='...'`と各重み`(i/N)^1.5`（`i=1..N`、小数3桁）を確認しました。重みは古いフレームから現在フレームへ向かって増え、FFmpegの既定スケールで合計1に正規化されます。各出力フレームは現在と過去N-1枚から作り、先頭では最初のフレームを複製して窓を満たします。XMP/露出補正、クロップ、リサイズを先に行い、指定時刻の文字焼き込みは合成後に行います。lrtlはPure Goの8-bit RGBで同じ重みと時間窓を計算します。LRTのレンダー経路は10-bit YUV444でフィルター処理するため、数値上の重みと窓の一致は確認済みですが、画素値の完全一致は未確認です。一時フレームバッファーの推定量が768 MiBを超える場合は処理を開始しません。大きなフレームでは`--long-edge`または窓幅を下げてください。
 
 `--timestamp-overlay`と`subtitles`は、各サイドカーの`exif:DateTimeOriginal`、`xmp:CreateDate`、`xmp:ModifyDate`の順で日時を探し、なければ画像内EXIFの撮影/作成/更新日時を使います。全フレームの日時が必要です。`subtitles`は各画像の撮影日時を、そのフレームが動画上に表示される区間のSRT字幕として書き出します。`--fps`は動画のフレームレートと合わせてください。既定の表示形式は`2006-01-02 15:04:05`で、`--timestamp-format`へGoの日時レイアウトを渡して変更できます。`render --timestamp-overlay`は日時を右下に焼き込み、埋め込みGoフォントを使うため外部フォントは不要です。任意テキストの透かしは未実装です。
 

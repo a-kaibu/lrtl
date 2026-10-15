@@ -157,9 +157,21 @@ func imageFromRGB24(rgb []byte, width, height int) *image.RGBA {
 	return img
 }
 
-func averageRGB24Frames(frames [][]byte) ([]byte, error) {
+func lrtMotionBlurWeights(frames int) []float32 {
+	weights := make([]float32, frames)
+	for i := range weights {
+		// LRT formats each weight to three decimals before passing it to FFmpeg's tmix filter.
+		weights[i] = float32(math.Round(math.Pow(float64(i+1)/float64(frames), 1.5)*1000) / 1000)
+	}
+	return weights
+}
+
+func weightedRGB24Frames(frames [][]byte, weights []float32) ([]byte, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("cannot blend an empty frame window")
+	}
+	if len(frames) != len(weights) {
+		return nil, fmt.Errorf("cannot blend %d frames with %d weights", len(frames), len(weights))
 	}
 	frameLength := len(frames[0])
 	for _, frame := range frames[1:] {
@@ -167,22 +179,21 @@ func averageRGB24Frames(frames [][]byte) ([]byte, error) {
 			return nil, fmt.Errorf("cannot blend frames with different RGB24 sizes")
 		}
 	}
-	if len(frames) == 1 {
-		return frames[0], nil
+	var weightSum float32
+	for _, weight := range weights {
+		weightSum += weight
+	}
+	if weightSum <= 0 {
+		return nil, fmt.Errorf("cannot blend with a non-positive weight sum")
 	}
 	result := make([]byte, frameLength)
-	sums := make([]uint16, frameLength/3)
-	window := uint32(len(frames))
-	for channel := 0; channel < 3; channel++ {
-		clear(sums)
-		for _, frame := range frames {
-			for pixel := range sums {
-				sums[pixel] += uint16(frame[pixel*3+channel])
-			}
+	inverseWeightSum := 1 / weightSum
+	for i := range result {
+		var sum float32
+		for frameIndex, frame := range frames {
+			sum += float32(frame[i]) * weights[frameIndex]
 		}
-		for pixel, sum := range sums {
-			result[pixel*3+channel] = byte((uint32(sum) + window/2) / window)
-		}
+		result[i] = byte(math.RoundToEven(float64(sum * inverseWeightSum)))
 	}
 	return result, nil
 }
@@ -577,31 +588,24 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 
 		windowFrames := options.MotionBlurFrames
-		leftRadius := (windowFrames - 1) / 2
-		rightRadius := windowFrames - 1 - leftRadius
+		weights := lrtMotionBlurWeights(windowFrames)
 		queuedFrames := make([][]byte, 0, windowFrames)
-		queuedStart, nextRead := 0, 0
 		for target := range frames {
-			start := max(0, target-leftRadius)
-			end := min(len(frames)-1, target+rightRadius)
-			if start > queuedStart {
-				drop := start - queuedStart
-				queuedFrames = queuedFrames[drop:]
-				queuedStart = start
+			rgb, prepareErr := prepareMotionBlurFrame(target)
+			if prepareErr != nil {
+				return fmt.Errorf("prepare %s: %w", filepath.Base(frames[target].Image), prepareErr)
 			}
-			for nextRead <= end {
-				rgb, prepareErr := prepareMotionBlurFrame(nextRead)
-				if prepareErr != nil {
-					return fmt.Errorf("prepare %s: %w", filepath.Base(frames[nextRead].Image), prepareErr)
-				}
-				queuedFrames = append(queuedFrames, rgb)
-				nextRead++
+			queuedFrames = append(queuedFrames, rgb)
+			if len(queuedFrames) > windowFrames {
+				queuedFrames = queuedFrames[1:]
 			}
-			windowCount := end - start + 1
-			if windowCount > len(queuedFrames) {
-				return fmt.Errorf("internal motion blur window is incomplete at frame %d", target+1)
+			blendWindow := make([][]byte, windowFrames)
+			padding := windowFrames - len(queuedFrames)
+			for i := 0; i < padding; i++ {
+				blendWindow[i] = queuedFrames[0]
 			}
-			rgb, blendErr := averageRGB24Frames(queuedFrames[:windowCount])
+			copy(blendWindow[padding:], queuedFrames)
+			rgb, blendErr := weightedRGB24Frames(blendWindow, weights)
 			if blendErr != nil {
 				return blendErr
 			}
