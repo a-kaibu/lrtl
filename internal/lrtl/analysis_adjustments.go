@@ -45,10 +45,13 @@ func readSequenceXMPAdjustments(frames []Frame, width, height int, options image
 }
 
 func (adjustments sequenceXMPAdjustments) apply(index int, img image.Image) image.Image {
+	if adjustments.basics != nil {
+		img = applyXMPLocalCorrections(img, adjustments.basics[index].local)
+	}
 	if adjustments.crops != nil && adjustments.crops[index].Active {
 		img = applyXMPCrop(img, adjustments.crops[index])
 	}
-	if adjustments.basics != nil && adjustments.basics[index].active() {
+	if adjustments.basics != nil && adjustments.basics[index].globalActive() {
 		img = applyXMPBasic(img, adjustments.basics[index])
 	} else if adjustments.exposures != nil && adjustments.exposures[index] != 0 {
 		img = applyExposureGain(img, math.Exp2(adjustments.exposures[index]))

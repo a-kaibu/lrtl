@@ -491,10 +491,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
 			}
+			if xmpBasics != nil {
+				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+			}
 			if xmpCrops != nil {
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
-			if xmpBasics != nil && xmpBasics[index].active() {
+			if xmpBasics != nil && xmpBasics[index].globalActive() {
 				img = applyXMPBasic(img, xmpBasics[index])
 			}
 			if xmpExposures != nil && xmpExposures[index] != 0 {
@@ -603,10 +606,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return nil, fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
 			}
+			if xmpBasics != nil {
+				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+			}
 			if xmpCrops != nil && xmpCrops[index].Active && (xmpCrops[index].Bounds != image.Rect(0, 0, width, height) || math.Abs(xmpCrops[index].Angle) > 1e-9) {
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
-			if xmpBasics != nil && xmpBasics[index].active() {
+			if xmpBasics != nil && xmpBasics[index].globalActive() {
 				img = applyXMPBasic(img, xmpBasics[index])
 			}
 			gain := 1.0
@@ -716,10 +722,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 			}
+			if xmpBasics != nil {
+				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+			}
 			if applyCrop {
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
-			if applyBasic {
+			if applyBasic && xmpBasics[index].globalActive() {
 				img = applyXMPBasic(img, xmpBasics[index])
 			}
 			gain := 1.0
@@ -762,10 +771,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
 			}
 			img = applyEXIFOrientation(img, orientation)
+			if xmpBasics != nil {
+				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+			}
 			if applyCrop {
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
-			if applyBasic {
+			if applyBasic && xmpBasics[index].globalActive() {
 				img = applyXMPBasic(img, xmpBasics[index])
 			}
 			var encoded bytes.Buffer

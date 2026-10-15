@@ -31,6 +31,7 @@ type xmpBasicAdjustments struct {
 	hasChannel      [3]bool
 	colorMix        [8]xmpHSLColorAdjustment
 	hasColorMix     bool
+	local           []xmpLocalCorrection
 }
 
 type xmpHSLColorAdjustment struct {
@@ -168,6 +169,10 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		if err != nil {
 			return xmpBasicAdjustments{}, err
 		}
+	}
+	adjustments.local, err = readXMPLocalCorrections(packet)
+	if err != nil {
+		return xmpBasicAdjustments{}, err
 	}
 	return adjustments, nil
 }
@@ -364,11 +369,15 @@ func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
 	return table
 }
 
-func (adjustments xmpBasicAdjustments) active() bool {
+func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix
+}
+
+func (adjustments xmpBasicAdjustments) active() bool {
+	return adjustments.globalActive() || len(adjustments.local) > 0
 }
 
 func smoothstep(value float64) float64 {
