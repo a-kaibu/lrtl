@@ -63,6 +63,7 @@ type ProposedFrame struct {
 	Packet               *XMPPacket
 	Values               map[string]string
 	StructuredProperties []string
+	MaskTransitions      []maskTransitionChange
 	CreatedSidecar       bool
 }
 
@@ -77,6 +78,9 @@ func (plan InterpolationPlan) PropertyCount() int {
 	total := 0
 	for _, change := range plan.Changes {
 		total += len(change.Values) + len(change.StructuredProperties)
+		for _, transition := range change.MaskTransitions {
+			total += len(transition.values)
+		}
 	}
 	return total
 }
@@ -274,10 +278,28 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 			}
 		}
 	}
+	maskTransitions, err := planMaskTransitions(packets, keyframes)
+	if err != nil {
+		return nil, err
+	}
+	for targetIndex, transitions := range maskTransitions {
+		if len(transitions) == 0 {
+			continue
+		}
+		target := proposed[targetIndex]
+		if target == nil {
+			target = &ProposedFrame{
+				Frame: frames[targetIndex], Packet: packets[targetIndex],
+				Values: make(map[string]string), CreatedSidecar: created[targetIndex],
+			}
+			proposed[targetIndex] = target
+		}
+		target.MaskTransitions = append(target.MaskTransitions, transitions...)
+	}
 
 	indices := make([]int, 0, len(proposed))
 	for index, change := range proposed {
-		if len(change.Values) > 0 || len(change.StructuredProperties) > 0 {
+		if len(change.Values) > 0 || len(change.StructuredProperties) > 0 || len(change.MaskTransitions) > 0 {
 			indices = append(indices, index)
 		}
 	}
@@ -325,6 +347,11 @@ func applyPlan(plan *InterpolationPlan) ([]packetOutput, error) {
 		}
 		for _, property := range change.StructuredProperties {
 			if _, err := change.Packet.CopyRootPropertyFrom(plan.StructuredSource, "crs:"+property); err != nil {
+				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
+			}
+		}
+		for _, transition := range change.MaskTransitions {
+			if err := applyMaskTransition(change.Packet, transition); err != nil {
 				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
 			}
 		}
