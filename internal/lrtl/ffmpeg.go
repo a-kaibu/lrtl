@@ -55,17 +55,35 @@ func validH264Preset(preset string) bool {
 	}
 }
 
-func newFFmpegFrameWriter(executable, output string, width, height, fps, frameCount, crf int, preset string) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height, fps, frameCount, crf int, preset string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb24",
 		"-video_size", fmt.Sprintf("%dx%d", width, height),
 		"-framerate", strconv.Itoa(fps), "-i", "pipe:0",
 		"-frames:v", strconv.Itoa(frameCount), "-an",
-		"-c:v", "libx264", "-preset", preset, "-crf", strconv.Itoa(crf),
-		"-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
-		"-tag:v", "avc1", "-movflags", "+faststart", "-f", "mp4", output,
 	}
+	switch codec {
+	case "h264":
+		arguments = append(arguments,
+			"-c:v", "libx264", "-preset", preset, "-crf", strconv.Itoa(crf),
+			"-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-tag:v", "avc1")
+	case "h265":
+		arguments = append(arguments,
+			"-c:v", "libx265", "-preset", preset, "-crf", strconv.Itoa(crf),
+			"-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-tag:v", "hvc1")
+	case "prores", "prores-hq":
+		profile := "2"
+		if codec == "prores-hq" {
+			profile = "3"
+		}
+		arguments = append(arguments,
+			"-c:v", "prores_ks", "-profile:v", profile,
+			"-pix_fmt", "yuv422p10le", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
+	default:
+		return nil, fmt.Errorf("unsupported FFmpeg video codec %q", codec)
+	}
+	arguments = append(arguments, "-movflags", "+faststart", "-f", container, output)
 	command := exec.Command(executable, arguments...)
 	input, err := command.StdinPipe()
 	if err != nil {
@@ -107,9 +125,9 @@ func (writer *ffmpegFrameWriter) Close() error {
 	if waitErr != nil {
 		detail := strings.TrimSpace(writer.stderr.String())
 		if detail != "" {
-			return fmt.Errorf("FFmpeg H.264 encoding failed: %w: %s", waitErr, detail)
+			return fmt.Errorf("FFmpeg encoding failed: %w: %s", waitErr, detail)
 		}
-		return fmt.Errorf("FFmpeg H.264 encoding failed: %w", waitErr)
+		return fmt.Errorf("FFmpeg encoding failed: %w", waitErr)
 	}
 	if closeErr != nil {
 		return fmt.Errorf("close FFmpeg input: %w", closeErr)

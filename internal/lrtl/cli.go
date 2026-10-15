@@ -99,7 +99,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --long-edge downsizes, --raw-develop uses DNGLab")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov render frames; --codec selects H.265 or ProRes")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -451,12 +451,13 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 
 func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
-	output := set.String("output", "", "output AVI or MP4 path")
+	output := set.String("output", "", "output AVI, MP4, or MOV path")
+	codec := set.String("codec", "", "MP4 codec h264|h265 or MOV codec prores|prores-hq; defaults by extension")
 	fps := set.Int("fps", 24, "integer frame rate (1-240)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
-	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for H.264 MP4 output; defaults to PATH")
-	crf := set.Int("crf", 18, "H.264 quality for MP4 output (0-51; lower is higher quality)")
-	preset := set.String("preset", "medium", "H.264 speed/size preset for MP4 output")
+	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
+	crf := set.Int("crf", 18, "H.264/H.265 quality (0-51; lower is higher quality)")
+	preset := set.String("preset", "medium", "H.264/H.265 speed/size preset")
 	longEdge := set.Int("long-edge", 0, "downscale so the longest side is at most this many pixels (0 keeps input size)")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
@@ -473,6 +474,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
+		"--codec": true, "-codec": true,
 		"--fps": true, "-fps": true,
 		"--quality": true, "-quality": true,
 		"--ffmpeg": true, "-ffmpeg": true,
@@ -523,6 +525,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		FPS:              *fps,
 		Quality:          *quality,
 		FFmpegPath:       *ffmpeg,
+		Codec:            strings.ToLower(strings.TrimSpace(*codec)),
 		CRF:              *crf,
 		Preset:           *preset,
 		LongEdge:         *longEdge,
@@ -543,7 +546,19 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
-	features := make([]string, 0, 6)
+	features := make([]string, 0, 7)
+	selectedCodec := options.Codec
+	if selectedCodec == "" {
+		switch strings.ToLower(filepath.Ext(*output)) {
+		case ".avi":
+			selectedCodec = "mjpeg"
+		case ".mp4":
+			selectedCodec = "h264"
+		case ".mov":
+			selectedCodec = "prores"
+		}
+	}
+	features = append(features, strings.ToUpper(selectedCodec)+" codec")
 	if *applyXMPExposure {
 		features = append(features, "XMP Exposure2012")
 	}

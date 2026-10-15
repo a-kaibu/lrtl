@@ -24,6 +24,7 @@ type RenderOptions struct {
 	FPS              int
 	Quality          int
 	FFmpegPath       string
+	Codec            string
 	CRF              int
 	Preset           string
 	LongEdge         int
@@ -157,7 +158,7 @@ func resizeFrame(img image.Image, width, height int) image.Image {
 const maxVideoDimension = int64(1<<31 - 1)
 
 // RenderSequence writes JPEG, PNG, TIFF, selected embedded RAW previews, or DNGLab-developed
-// RAW frames to MJPEG AVI or H.264 MP4. It can optionally apply the global XMP Exposure2012
+// RAW frames to MJPEG AVI, H.264/H.265 MP4, or ProRes MOV. It can optionally apply the global XMP Exposure2012
 // slider, rotated XMP crop bounds, and an optional metadata timestamp overlay, but does not
 // implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
@@ -178,19 +179,38 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		return err
 	}
 	outputExtension := strings.ToLower(filepath.Ext(output))
-	if outputExtension != ".avi" && outputExtension != ".mp4" {
-		return fmt.Errorf("output must use the .avi or .mp4 extension: %s", output)
+	if outputExtension != ".avi" && outputExtension != ".mp4" && outputExtension != ".mov" {
+		return fmt.Errorf("output must use the .avi, .mp4, or .mov extension: %s", output)
 	}
 	ffmpegPath := ""
-	if outputExtension == ".mp4" {
-		if options.CRF < 0 || options.CRF > 51 {
-			return fmt.Errorf("H.264 CRF must be between 0 and 51: %d", options.CRF)
+	if outputExtension == ".avi" {
+		if options.Codec != "" {
+			return fmt.Errorf("--codec is only available for MP4 or MOV output")
 		}
-		if options.Preset == "" {
-			options.Preset = "medium"
+	} else {
+		if options.Codec == "" {
+			if outputExtension == ".mov" {
+				options.Codec = "prores"
+			} else {
+				options.Codec = "h264"
+			}
 		}
-		if !validH264Preset(options.Preset) {
-			return fmt.Errorf("unsupported H.264 preset %q", options.Preset)
+		if outputExtension == ".mp4" && options.Codec != "h264" && options.Codec != "h265" {
+			return fmt.Errorf("MP4 codec must be h264 or h265: %q", options.Codec)
+		}
+		if outputExtension == ".mov" && options.Codec != "prores" && options.Codec != "prores-hq" {
+			return fmt.Errorf("MOV codec must be prores or prores-hq: %q", options.Codec)
+		}
+		if options.Codec == "h264" || options.Codec == "h265" {
+			if options.CRF < 0 || options.CRF > 51 {
+				return fmt.Errorf("H.264/H.265 CRF must be between 0 and 51: %d", options.CRF)
+			}
+			if options.Preset == "" {
+				options.Preset = "medium"
+			}
+			if !validH264Preset(options.Preset) {
+				return fmt.Errorf("unsupported H.264/H.265 preset %q", options.Preset)
+			}
 		}
 		resolvedPath, err := resolveFFmpeg(options.FFmpegPath)
 		if err != nil {
@@ -335,11 +355,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 
-	tempExtension := ".avi"
-	if outputExtension == ".mp4" {
-		tempExtension = ".mp4"
-	}
-	tempFile, err := os.CreateTemp(outputDir, ".lrtl-*"+tempExtension)
+	tempFile, err := os.CreateTemp(outputDir, ".lrtl-*"+outputExtension)
 	if err != nil {
 		return fmt.Errorf("create temporary video: %w", err)
 	}
@@ -370,7 +386,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			return fmt.Errorf("create MJPEG AVI: %w", err)
 		}
 	} else {
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, outputWidth, outputHeight, options.FPS, len(frames), options.CRF, options.Preset)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, options.FPS, len(frames), options.CRF, options.Preset)
 		if err != nil {
 			cleanup()
 			return err
@@ -405,7 +421,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 
 		applyXMP := xmpExposures != nil && xmpExposures[index] != 0
 		applyCrop := xmpCrops != nil && xmpCrops[index].Active && (xmpCrops[index].Bounds != image.Rect(0, 0, width, height) || math.Abs(xmpCrops[index].Angle) > 1e-9)
-		if outputExtension == ".mp4" {
+		if outputExtension != ".avi" {
 			img, format, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
@@ -494,7 +510,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		if outputExtension == ".avi" {
 			return fmt.Errorf("finalize AVI: %w", err)
 		}
-		return fmt.Errorf("finalize H.264 MP4: %w", err)
+		return fmt.Errorf("finalize %s: %w", strings.ToUpper(options.Codec), err)
 	}
 	writerClosed = true
 

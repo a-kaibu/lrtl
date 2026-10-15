@@ -1,6 +1,6 @@
 # LumaFrame (`lrtl`)
 
-LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。Lightroom互換XMPのキーフレーム編集やHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFとRAW連番からMJPEG AVIまたはH.264 MP4を生成できます。
+LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。Lightroom互換XMPのキーフレーム編集やHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFとRAW連番からMJPEG AVI、H.264/H.265 MP4、ProRes MOVを生成できます。
 
 **現像済み画像は追加ソフトなしでレンダーできます。RAWをセンサー情報から現像するには、外部のDNGLabが必要です。** `render --raw-develop --dnglab PATH`はDNGLabの16-bit sRGB TIFF出力を動画にします。`--raw-preview`はカメラ内蔵プレビューを使う旧来の軽量経路です。DNGLabでRAW画像を現像して動画にできますが、Camera Raw/Lightroomの全設定やXMP現像値を再現する機能ではありません。
 
@@ -23,10 +23,10 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。RAW内蔵プレビュー/DNGLab現像と、任意でXMP Exposure/cropを解析に適用。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--apply-xmp-exposure`/`--apply-xmp-crop`で既存現像設定を解析に含められる。独自の近似方式。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
-| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVIまたは外部FFmpegを使うH.264 MP4に出力。固定サイズの画像列、整数1–240 fps、`--long-edge`によるアスペクト比維持の縮小 | 一部 |
+| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。固定サイズの画像列、整数1–240 fps、`--long-edge`によるアスペクト比維持の縮小 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`で外部DNGLabにより主要RAW形式を現像し、その16-bit sRGB TIFF出力からレンダー可能。`--raw-preview`によるカメラ内プレビュー経路も維持。DNGLabは別途インストールが必要。Camera Raw/Lightroom設定の完全な適用やDNG変換は未実装 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--long-edge`で長辺の上限を指定して縮小可能。拡大や16:9等のプリセット、非圧縮TIFF中間画像は未対応 | 一部 |
-| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpeg/libx264経由のH.264 MP4。Rec.2020、HDR、音声なし | 一部 |
+| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks経由のH.264/H.265 MP4、ProRes 422/422 HQ MOV。Rec.2020、HDR、音声なし。入力画素はRGB 8-bitなのでProRes 10-bit出力も16-bit RAW精度を保持しない | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --timestamp-overlay`でEXIF/XMPの撮影日時を各動画フレームへ焼き込み。表示形式を指定可能。任意テキストの透かしとSRTファイル出力は未実装 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | 未実装 | 未実装 |
 | 取り込み | メモリーカードからのコピー、プレビュー、リネーム | 未実装 | 未実装 |
@@ -61,12 +61,12 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 1. `.xmp`サイドカーをスキャンし、キーフレームと数値設定を確認する。
 2. JPEG/PNG/TIFF連番、RAW内蔵プレビュー、またはDNGLabで現像したRAWの明るさ曲線からキーフレーム候補を表示し、任意でXMPにマークする。
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
-4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはDNGLabで現像したRAWをMJPEG AVIまたはH.264 MP4にまとめ、必要に応じて`--long-edge`で縮小する。
+4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはDNGLabで現像したRAWをMJPEG AVI、H.264/H.265 MP4、ProRes MOVにまとめ、必要に応じて`--long-edge`で縮小する。
 5. レンダー時に簡易Deflickerを画素へ適用するか、JPEG/PNG/TIFFまたは選択したRAW入力の解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。RAW解析時は内蔵プレビューまたはDNGLab現像を選び、必要に応じてXMP Exposure/cropを反映する。
 
-動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。RAW連番を直接レンダーするには外部DNGLabを使う`--raw-develop`を指定します。DNGLabのRAW対応はカメラ形式ごとに異なり、DNGLabはalpha版です。`--raw-preview`は内蔵プレビューを使う別経路です。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`をレンダー入力画像に近似適用します。DNGLabの現像パラメーターはCamera Rawと一致せず、サイドカーにある他の現像値もRAW現像には使いません。Deflickerはレンダー時に出力画素へ適用できます。これらのレンダー操作は元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正をXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。H.264 MP4出力は外部FFmpegと`libx264`を必要とし、入力画像をGoでデコードしてH.264へ変換します。
+動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。RAW連番を直接レンダーするには外部DNGLabを使う`--raw-develop`を指定します。DNGLabのRAW対応はカメラ形式ごとに異なり、DNGLabはalpha版です。`--raw-preview`は内蔵プレビューを使う別経路です。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`をレンダー入力画像に近似適用します。DNGLabの現像パラメーターはCamera Rawと一致せず、サイドカーにある他の現像値もRAW現像には使いません。Deflickerはレンダー時に出力画素へ適用できます。これらのレンダー操作は元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正をXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。MP4/MOV出力は外部FFmpegを必要とし、入力画像をGoで8-bit RGBへデコードしてから選択したエンコーダーへ渡します。`.mp4`の既定はH.264、`.mov`の既定はProRes 422です。`--codec h265`でH.265、`--codec prores-hq`でProRes 422 HQを選べます。FFmpegにそれぞれ`libx264`、`libx265`、`prores_ks`エンコーダーが必要です。
 
 `preview`は画像列の線形sRGB輝度を測り、最初のフレームからのEV差、XMPの`Exposure2012`差、キーフレーム評価をSVGグラフに出します。JPEG/PNG/TIFFのほか、`--raw-preview`で対応RAW内のプレビュー、または`--raw-develop`でDNGLab現像画像を解析できます。`--apply-xmp-exposure`と`--apply-xmp-crop`を指定すると、輝度解析にその値を適用します。これは静的な数値グラフで、Lightroom/Camera Rawの現像画像やLRTimelapseの操作可能なVisual Previewは表示しません。
 
@@ -74,7 +74,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ## インストール
 
-ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264 MP4出力には、`libx264`エンコーダーを含む外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAWの現像には外部DNGLabが必要です（PATHに置くか`--dnglab`で指定）。FFmpegとDNGLabはlrtlに同梱しません。
+ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264/H.265 MP4とProRes MOV出力には、対応エンコーダーを含む外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAWの現像には外部DNGLabが必要です（PATHに置くか`--dnglab`で指定）。FFmpegとDNGLabはlrtlに同梱しません。
 
 ```powershell
 go install github.com/a-kaibu/lrtl/cmd/lrtl@latest
@@ -143,6 +143,11 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
 
 # 外部FFmpeg/libx264で24 fpsのH.264 MP4を作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.mp4" --fps 24 --crf 18 --preset medium
+
+# H.265 MP4またはProRes 422 / ProRes 422 HQ MOVを書き出す
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview-h265.mp4" --codec h265 --crf 20 --preset medium
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\master.mov" --codec prores
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\master-hq.mov" --codec prores-hq
 
 # 4K相当の長辺3840px以下へ縮小してレンダー（アスペクト比維持、拡大なし）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview-4k.mp4" --long-edge 3840
@@ -221,10 +226,10 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 | 段階 | 目標 | 状況 |
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
-| 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264 MP4に対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
+| 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264/H.265 MP4とProRes MOVに対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、回転を含むXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、Geometry補正、マスク別補正は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と他のXMP値のRAW画素への反映は未実装 |
-| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.264 MP4は外部FFmpeg経由で実装。その他は未着手 |
+| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProResと日時オーバーレイを実装。DNxHR、モーションブラー、取り込み、GUIは未着手 |
 
 ## 機能調査の出典
 
