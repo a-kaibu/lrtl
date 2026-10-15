@@ -16,6 +16,10 @@ var maskTransitionCollections = []string{
 	"PaintBasedCorrections",
 }
 
+// LRT 7.5.5's post-transition XMP equalizer copies these curve trees from frame zero.
+var firstFrameEqualizedMaskGroupIndexes = []int{1, 2, 3, 4, 8, 9, 10, 11}
+var firstFrameEqualizedMaskGroupCurves = []string{"MainCurve", "RedCurve", "GreenCurve", "BlueCurve"}
+
 var maskTransitionCorrectionIndexes = map[string]map[int]struct{}{
 	"CircularGradientBasedCorrections": transitionIndexes(1, 2),
 	"GradientBasedCorrections":         transitionIndexes(1, 2, 3, 4),
@@ -50,6 +54,15 @@ type maskTransitionChange struct {
 	values            map[string]string
 	luminanceRange    string
 	hasLuminanceRange bool
+}
+
+type maskStructuredProperty struct {
+	correctionIndex int
+	property        string
+}
+
+func (property maskStructuredProperty) String() string {
+	return fmt.Sprintf("MaskGroupBasedCorrections[%d].%s", property.correctionIndex, property.property)
 }
 
 func localCorrectionProperty(name string) bool {
@@ -339,6 +352,119 @@ func correctionRangeMaskElement(element *etree.Element) *etree.Element {
 		}
 	}
 	return nil
+}
+
+func maskGroupCorrectionAt(packet *XMPPacket, correctionIndex int) *etree.Element {
+	if packet == nil || correctionIndex < 1 {
+		return nil
+	}
+	property := packet.findRootProperty(crsNamespace, "MaskGroupBasedCorrections")
+	items := rdfArrayItems(property.element)
+	if correctionIndex > len(items) {
+		return nil
+	}
+	return unwrapRDFArrayItem(items[correctionIndex-1])
+}
+
+func directCRSProperty(element *etree.Element, local string) topLevelXMPProperty {
+	if element == nil {
+		return topLevelXMPProperty{}
+	}
+	for index := range element.Attr {
+		if attributeMatches(&element.Attr[index], crsNamespace, local) {
+			return topLevelXMPProperty{description: element, attribute: &element.Attr[index]}
+		}
+	}
+	for _, token := range element.Child {
+		child, ok := token.(*etree.Element)
+		if ok && child.NamespaceURI() == crsNamespace && child.Tag == local {
+			return topLevelXMPProperty{description: element, element: child}
+		}
+	}
+	return topLevelXMPProperty{}
+}
+
+func (packet *XMPPacket) maskGroupStructuredPropertyDiffers(source *XMPPacket, correctionIndex int, local string) (bool, error) {
+	targetCorrection := maskGroupCorrectionAt(packet, correctionIndex)
+	if targetCorrection == nil {
+		return false, nil
+	}
+	sourceProperty := directCRSProperty(maskGroupCorrectionAt(source, correctionIndex), local)
+	targetProperty := directCRSProperty(targetCorrection, local)
+	same, err := sameRootProperty(targetProperty, sourceProperty)
+	return !same, err
+}
+
+func copyElementWithNamespaces(source *etree.Element) *etree.Element {
+	copy := source.Copy()
+	prefixes := make(map[string]struct{})
+	var collect func(*etree.Element)
+	collect = func(element *etree.Element) {
+		if element.Space != "" {
+			prefixes[element.Space] = struct{}{}
+		}
+		for _, attribute := range element.Attr {
+			if attribute.Space != "" && attribute.Space != "xmlns" {
+				prefixes[attribute.Space] = struct{}{}
+			}
+		}
+		for _, token := range element.Child {
+			if child, ok := token.(*etree.Element); ok {
+				collect(child)
+			}
+		}
+	}
+	collect(copy)
+	for prefix := range prefixes {
+		if _, exists := prefixBinding(copy, prefix); exists {
+			continue
+		}
+		if namespace, found := prefixBinding(source, prefix); found {
+			copy.CreateAttr("xmlns:"+prefix, namespace)
+		}
+	}
+	return copy
+}
+
+func copyScopedCRSPropertyFrom(source, target *etree.Element, local string) (bool, error) {
+	sourceProperty := directCRSProperty(source, local)
+	targetProperty := directCRSProperty(target, local)
+	same, err := sameRootProperty(targetProperty, sourceProperty)
+	if err != nil || same {
+		return false, err
+	}
+	attributes := target.Attr[:0]
+	for _, attribute := range target.Attr {
+		if !attributeMatches(&attribute, crsNamespace, local) {
+			attributes = append(attributes, attribute)
+		}
+	}
+	target.Attr = attributes
+	for _, token := range append([]etree.Token(nil), target.Child...) {
+		child, ok := token.(*etree.Element)
+		if ok && child.NamespaceURI() == crsNamespace && child.Tag == local {
+			child.Remove()
+		}
+	}
+	if sourceProperty.element != nil {
+		target.AddChild(copyElementWithNamespaces(sourceProperty.element))
+	} else if sourceProperty.attribute != nil {
+		prefix := sourceProperty.attribute.Space
+		if prefix == "" {
+			return false, xmpError("cannot copy unprefixed namespaced attribute crs:%s", local)
+		}
+		prefix = ensurePrefix(target, prefix, crsNamespace)
+		target.CreateAttr(prefix+":"+local, sourceProperty.attribute.Value)
+	}
+	return true, nil
+}
+
+func (packet *XMPPacket) copyMaskGroupStructuredPropertyFrom(source *XMPPacket, correctionIndex int, local string) (bool, error) {
+	targetCorrection := maskGroupCorrectionAt(packet, correctionIndex)
+	if targetCorrection == nil {
+		return false, nil
+	}
+	return copyScopedCRSPropertyFrom(maskGroupCorrectionAt(source, correctionIndex), targetCorrection, local)
 }
 
 func parseXMPRangeMaskLumRange(element *etree.Element) (string, bool, error) {

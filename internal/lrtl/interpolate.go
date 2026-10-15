@@ -52,12 +52,13 @@ var firstFrameEqualizedProperties = []string{
 }
 
 type ProposedFrame struct {
-	Frame                Frame
-	Packet               *XMPPacket
-	Values               map[string]string
-	StructuredProperties []string
-	MaskTransitions      []maskTransitionChange
-	CreatedSidecar       bool
+	Frame                    Frame
+	Packet                   *XMPPacket
+	Values                   map[string]string
+	StructuredProperties     []string
+	MaskStructuredProperties []maskStructuredProperty
+	MaskTransitions          []maskTransitionChange
+	CreatedSidecar           bool
 }
 
 type InterpolationPlan struct {
@@ -70,7 +71,7 @@ type InterpolationPlan struct {
 func (plan InterpolationPlan) PropertyCount() int {
 	total := 0
 	for _, change := range plan.Changes {
-		total += len(change.Values) + len(change.StructuredProperties)
+		total += len(change.Values) + len(change.StructuredProperties) + len(change.MaskStructuredProperties)
 		for _, transition := range change.MaskTransitions {
 			total += len(transition.values)
 			if transition.hasLuminanceRange {
@@ -162,6 +163,30 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 					proposed[targetIndex] = change
 				}
 				change.StructuredProperties = append(change.StructuredProperties, property)
+			}
+		}
+		for targetIndex := 1; targetIndex < len(packets); targetIndex++ {
+			for _, correctionIndex := range firstFrameEqualizedMaskGroupIndexes {
+				for _, property := range firstFrameEqualizedMaskGroupCurves {
+					differs, err := packets[targetIndex].maskGroupStructuredPropertyDiffers(packets[0], correctionIndex, property)
+					if err != nil {
+						return nil, fmt.Errorf("%s: %w", frames[targetIndex].Image, err)
+					}
+					if !differs {
+						continue
+					}
+					change := proposed[targetIndex]
+					if change == nil {
+						change = &ProposedFrame{
+							Frame: frames[targetIndex], Packet: packets[targetIndex],
+							Values: make(map[string]string), CreatedSidecar: created[targetIndex],
+						}
+						proposed[targetIndex] = change
+					}
+					change.MaskStructuredProperties = append(change.MaskStructuredProperties, maskStructuredProperty{
+						correctionIndex: correctionIndex, property: property,
+					})
+				}
 			}
 		}
 	}
@@ -284,7 +309,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 
 	indices := make([]int, 0, len(proposed))
 	for index, change := range proposed {
-		if len(change.Values) > 0 || len(change.StructuredProperties) > 0 || len(change.MaskTransitions) > 0 {
+		if len(change.Values) > 0 || len(change.StructuredProperties) > 0 || len(change.MaskStructuredProperties) > 0 || len(change.MaskTransitions) > 0 {
 			indices = append(indices, index)
 		}
 	}
@@ -324,6 +349,11 @@ func applyPlan(plan *InterpolationPlan) ([]packetOutput, error) {
 		}
 		for _, property := range change.StructuredProperties {
 			if _, err := change.Packet.CopyRootPropertyFrom(plan.StructuredSource, "crs:"+property); err != nil {
+				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
+			}
+		}
+		for _, property := range change.MaskStructuredProperties {
+			if _, err := change.Packet.copyMaskGroupStructuredPropertyFrom(plan.StructuredSource, property.correctionIndex, property.property); err != nil {
 				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
 			}
 		}
