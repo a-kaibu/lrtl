@@ -14,7 +14,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 |---|---|---|---|
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
-| キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`の内蔵プレビュー、または`--raw-develop`で現像したRAWの輝度曲線から候補を選ぶ`keyframes`を実装。`--apply-xmp-basic`（または露出のみの`--apply-xmp-exposure`）と`--apply-xmp-crop`で候補解析へ現在のXMP設定を反映できる。デコード不要の`--evenly-spaced`も可能。LRT互換の2*/3* HGマーカーを`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。候補選定は独自ヒューリスティック | 一部 |
+| キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`の内蔵プレビュー、または`--raw-develop`で現像したRAWの輝度曲線から候補を選ぶ`keyframes`を実装。既定の候補数にはLRT 7.5.5から確認した輝度レンジ・連番長・2*/3*マーカーによる数量式を使い、既存4*/5*マーク分を差し引く。`--apply-xmp-basic`（または露出のみの`--apply-xmp-exposure`）と`--apply-xmp-crop`で現在のXMP設定を解析へ反映できる。デコード不要の`--evenly-spaced`も可能。候補フレームの選び方、UIスライダー、等間隔配置時の数量調整は独自実装 | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。RAW曲線の生成と独立補正レイヤーは未再現。補正を`crs:Exposure2012`へ書く方式 | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で回転を含む矩形を画素へ適用し、元と同じ解像度に再サンプル。プレビュー上の構図作成・編集UIとCamera RawのGeometry補正は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
@@ -180,7 +180,9 @@ lrtl holy-grail "D:\Timelapse\Sequence" --mark-jumps
 # lrtlが最後に書き込んだHoly Grail補正と2*/3*マーカーを取り消す
 lrtl holy-grail "D:\Timelapse\Sequence" --reset --write
 
-# JPEG/PNG/TIFFの輝度曲線から5つの候補を提案（既定はプレビューのみ）
+# LRTから確認した数量式で候補数を推定し、輝度曲線から提案（既定はプレビューのみ）
+lrtl keyframes "D:\Timelapse\Developed"
+# 候補数を5つに固定
 lrtl keyframes "D:\Timelapse\Developed" --count 5
 lrtl keyframes "D:\Timelapse\Developed" --count 5 --write
 lrtl keyframes "D:\Timelapse\RAW" --count 5 --evenly-spaced --write

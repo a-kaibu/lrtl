@@ -1146,7 +1146,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 
 func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("keyframes", stderr)
-	count := set.Int("count", 5, "number of suggested keyframes (default capped to frame count)")
+	count := set.Int("count", 0, "number of new suggestions (default estimated from luminance; 5 for --evenly-spaced)")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius in frames")
 	evenlySpaced := set.Bool("evenly-spaced", false, "suggest uniformly spaced interior keyframes without decoding images")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
@@ -1206,12 +1206,17 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	packets := make([]*XMPPacket, frameCount)
 	existingKeyframes := make([]int, 0)
 	selectionAnchors := make([]int, 0)
+	holyGrailMarkers := make([]bool, frameCount)
 	for index, frame := range frames {
 		packet, err := PacketForSidecar(frame.OutputSidecar())
 		if err != nil {
 			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 		}
 		packets[index] = packet
+		rating, hasRating := packet.Rating()
+		if hasRating && (rating == 2 || rating == 3) {
+			holyGrailMarkers[index] = true
+		}
 		if packet.IsKeyframe() {
 			existingKeyframes = append(existingKeyframes, index)
 			selectionAnchors = append(selectionAnchors, index)
@@ -1223,7 +1228,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 			selectionAnchors = append(selectionAnchors, index)
 			continue
 		}
-		if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
+		if hasRating && (rating == 2 || rating == 3) {
 			selectionAnchors = append(selectionAnchors, index)
 		}
 	}
@@ -1237,8 +1242,18 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		availableSuggestions = 0
 	}
 	suggestionCount := *count
+	autoTargetCount := 0
 	if !countSpecified {
-		suggestionCount = min(suggestionCount, availableSuggestions)
+		if *evenlySpaced {
+			suggestionCount = min(5, availableSuggestions)
+		} else {
+			autoTargetCount = estimateAutoKeyframeCount(curve, holyGrailMarkers)
+			suggestionCount = max(0, autoTargetCount-len(existingKeyframes))
+			suggestionCount = min(suggestionCount, availableSuggestions)
+		}
+	}
+	if !countSpecified && !*evenlySpaced {
+		fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing keyframe(s), suggesting %d new\n", autoTargetCount, len(existingKeyframes), suggestionCount)
 	}
 	if suggestionCount == 0 {
 		if countSpecified {

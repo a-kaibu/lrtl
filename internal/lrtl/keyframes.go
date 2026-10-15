@@ -188,6 +188,52 @@ func selectKeyframeIndicesWithAnchors(logLuminance []float64, count, smoothRadiu
 	return selected, nil
 }
 
+// estimateAutoKeyframeCount follows the quantity heuristic recovered from
+// LRTimelapse 7.5.5's keyframe helper. Holy Grail 2*/3* pairs compensate the
+// measured curve before its range is converted to a keyframe count. Candidate
+// frame selection remains independent and uses selectKeyframeIndicesWithAnchors.
+func estimateAutoKeyframeCount(logLuminance []float64, holyGrailMarkers []bool) int {
+	if len(logLuminance) == 0 {
+		return 0
+	}
+	if len(holyGrailMarkers) != len(logLuminance) {
+		holyGrailMarkers = make([]bool, len(logLuminance))
+	}
+
+	minimum, maximum := math.Inf(1), math.Inf(-1)
+	correction := 0.0
+	hasHolyGrailMarker := false
+	for index, value := range logLuminance {
+		hasHolyGrailMarker = hasHolyGrailMarker || holyGrailMarkers[index]
+		if index > 0 && holyGrailMarkers[index] && holyGrailMarkers[index-1] {
+			correction += logLuminance[index-1] - value
+		}
+		value += correction
+		minimum = math.Min(minimum, value)
+		maximum = math.Max(maximum, value)
+	}
+
+	frameCount := len(logLuminance)
+	span := frameCount - 1
+	// LRT calculates in float32 here after dividing the luminance range by 0.1.
+	// Keep that rounding step so values near an integer boundary match its UI.
+	frameFactor := float32(1) + float32(1000)/float32(frameCount)/float32(10)
+	count := int((maximum - minimum) / 0.1 * float64(frameFactor))
+	if minimumSpacingCount := span / 250; count < minimumSpacingCount {
+		count = minimumSpacingCount
+	}
+	if count > 1 && span/(count+1) < 50 {
+		count = span / 50
+	}
+	if count == 0 {
+		count = 1
+	}
+	if hasHolyGrailMarker && count < 2 {
+		count = 2
+	}
+	return count
+}
+
 func selectEvenlySpacedKeyframeIndices(frameCount, count int) ([]int, error) {
 	return selectEvenlySpacedKeyframeIndicesWithAnchors(frameCount, count, nil)
 }
