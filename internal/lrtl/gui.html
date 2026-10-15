@@ -122,7 +122,7 @@
         </section>
         <section class="panel">
           <h2>選択フレームのXMP値</h2>
-          <label for="xmp-property">Camera Raw数値プロパティ</label>
+          <label for="xmp-property">XMP数値プロパティ</label>
           <select id="xmp-property"></select>
           <label for="xmp-value">値</label>
           <input id="xmp-value" type="number" step="any" value="0">
@@ -334,7 +334,7 @@
       const previous = propertySelect.value;
       propertySelect.replaceChildren();
       for (const property of data.properties || []) {
-        const option = document.createElement('option'); option.value = property; option.textContent = 'crs:' + property; propertySelect.append(option);
+        const option = document.createElement('option'); option.value = property; option.textContent = property === 'PreviewEV' ? 'LRT: Preview EV' : 'crs:' + property; propertySelect.append(option);
       }
       if ((data.properties || []).includes(previous)) propertySelect.value = previous;
       else if ((data.properties || []).includes('Exposure2012')) propertySelect.value = 'Exposure2012';
@@ -855,7 +855,8 @@
       const property = el('xmp-property').value;
       const value = el('xmp-value').value.trim();
       if (!property || value === '' || !Number.isFinite(Number(value))) throw new Error('有限の数値を入力してください。');
-      if (!confirm(selected.name + ' の crs:' + property + ' を ' + value + ' に変更し、XMPバックアップを保存しますか？')) return;
+      const propertyLabel = property === 'PreviewEV' ? 'LRT Preview EV' : 'crs:' + property;
+      if (!confirm(selected.name + ' の ' + propertyLabel + ' を ' + value + ' に変更し、XMPバックアップを保存しますか？')) return;
       const data = await api('/api/xmp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:selected.name, property, value})});
       const frame = selected;
       await loadSelectedXMP(frame);

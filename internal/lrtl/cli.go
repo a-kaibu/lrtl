@@ -118,7 +118,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
-	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
+	fmt.Fprintln(writer, "  set IMAGE PROPERTY VALUE              set a Camera Raw value or LRT Preview EV")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--filename-contains TEXT] [--watermark TEXT] [--watermark-position POS] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
@@ -529,7 +529,8 @@ func runMark(arguments []string, stdout, stderr io.Writer) int {
 
 func runSet(arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 1 && (arguments[0] == "--help" || arguments[0] == "-h") {
-		fmt.Fprintln(stdout, "Usage: lrtl set IMAGE_OR_XMP CRS_PROPERTY VALUE [--dry-run] [--no-backup]")
+		fmt.Fprintln(stdout, "Usage: lrtl set IMAGE_OR_XMP CRS_PROPERTY|PreviewEV VALUE [--dry-run] [--no-backup]")
+		fmt.Fprintln(stdout, "  PreviewEV is in EV and is stored as lrt:ExternalExposureDefault multiplied by 4.")
 		return 0
 	}
 	dryRun, noBackup := false, false
@@ -555,7 +556,7 @@ func runSet(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if len(operands) != 3 {
-		return reportError(stderr, fmt.Errorf("expected IMAGE_OR_XMP, CRS_PROPERTY, and VALUE"))
+		return reportError(stderr, fmt.Errorf("expected IMAGE_OR_XMP, PROPERTY, and VALUE"))
 	}
 	image, sidecar := inputPaths(operands[0])
 	imageExists, imageErr := osStat(image)
@@ -567,32 +568,48 @@ func runSet(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, fmt.Errorf("image and XMP sidecar do not exist: %s", image))
 	}
 	property := strings.TrimPrefix(operands[1], "crs:")
-	if strings.Contains(property, ":") {
-		return reportError(stderr, fmt.Errorf("property must be a numeric Camera Raw control, with optional crs: prefix: %s", operands[1]))
-	}
-	allowed := false
-	for _, candidate := range NumericCRSProperties {
-		if property == candidate {
-			allowed = true
-			break
+	storedProperty := "crs:" + property
+	previewEV := property == "PreviewEV" || property == "lrt:PreviewEV"
+	if previewEV {
+		storedProperty = "lrt:ExternalExposureDefault"
+	} else {
+		if strings.Contains(property, ":") {
+			return reportError(stderr, fmt.Errorf("property must be a numeric Camera Raw control or PreviewEV: %s", operands[1]))
 		}
-	}
-	if !allowed {
-		return reportError(stderr, fmt.Errorf("unsupported numeric Camera Raw property: %s", operands[1]))
+		allowed := false
+		for _, candidate := range NumericCRSProperties {
+			if property == candidate {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return reportError(stderr, fmt.Errorf("unsupported numeric Camera Raw property: %s", operands[1]))
+		}
 	}
 	value, err := strconv.ParseFloat(operands[2], 64)
 	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
 		return reportError(stderr, fmt.Errorf("value must be a finite number: %s", operands[2]))
 	}
+	storedValue := value
+	if previewEV {
+		storedValue *= 4
+		if math.IsInf(storedValue, 0) {
+			return reportError(stderr, fmt.Errorf("PreviewEV is outside the supported numeric range: %s", operands[2]))
+		}
+	}
 	packet, err := PacketForImage(image, sidecar)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	property = "crs:" + property
-	if err := packet.SetScalar(property, formatNumber(value)); err != nil {
+	if err := packet.SetScalar(storedProperty, formatNumber(storedValue)); err != nil {
 		return reportError(stderr, err)
 	}
-	fmt.Fprintf(stdout, "%s: set %s=%s\n", filepath.Base(image), property, formatNumber(value))
+	if previewEV {
+		fmt.Fprintf(stdout, "%s: set PreviewEV=%s (%s=%s)\n", filepath.Base(image), formatNumber(value), storedProperty, formatNumber(storedValue))
+	} else {
+		fmt.Fprintf(stdout, "%s: set %s=%s\n", filepath.Base(image), storedProperty, formatNumber(storedValue))
+	}
 	if dryRun {
 		fmt.Fprintf(stdout, "Dry run. Would write %s\n", sidecar)
 		return 0

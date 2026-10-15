@@ -905,7 +905,16 @@ func serveGUIXMPRead(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeGUIJSON(w, http.StatusOK, guiXMPResponse{Name: filepath.Base(frame.Image), Properties: NumericCRSProperties, Values: values})
+	if text, found, getErr := packet.GetScalar("lrt:ExternalExposureDefault"); getErr != nil {
+		writeGUIError(w, http.StatusUnprocessableEntity, getErr.Error())
+		return
+	} else if found {
+		if value, valid := scalarNumber(text); valid {
+			values["PreviewEV"] = formatNumber(value / 4)
+		}
+	}
+	properties := append(append([]string(nil), NumericCRSProperties...), "PreviewEV")
+	writeGUIJSON(w, http.StatusOK, guiXMPResponse{Name: filepath.Base(frame.Image), Properties: properties, Values: values})
 }
 
 type guiXMPWriteRequest struct {
@@ -940,8 +949,9 @@ func serveGUIXMPWrite(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
+	allowed = allowed || request.Property == "PreviewEV"
 	if !allowed {
-		writeGUIError(w, http.StatusBadRequest, "property is not an editable numeric Camera Raw control")
+		writeGUIError(w, http.StatusBadRequest, "property is not an editable numeric Camera Raw or LRT control")
 		return
 	}
 	value, err := strconv.ParseFloat(strings.TrimSpace(request.Value), 64)
