@@ -30,6 +30,7 @@ type RenderOptions struct {
 	LongEdge          int
 	OutputHeight      int
 	AspectRatio       float64
+	AudioPath         string
 	Overwrite         bool
 	Deflicker         bool
 	Reference         image.Rectangle
@@ -289,6 +290,14 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if outputExtension != ".avi" && outputExtension != ".mp4" && outputExtension != ".mov" {
 		return fmt.Errorf("output must use the .avi, .mp4, or .mov extension: %s", output)
 	}
+	if strings.TrimSpace(options.AudioPath) != "" {
+		if outputExtension == ".avi" {
+			return fmt.Errorf("--audio requires MP4 or MOV output; MJPEG AVI audio muxing is not supported")
+		}
+		if _, err := os.Stat(options.AudioPath); err != nil {
+			return fmt.Errorf("audio track %s: %w", options.AudioPath, err)
+		}
+	}
 	ffmpegPath := ""
 	if outputExtension == ".avi" {
 		if options.Codec != "" {
@@ -539,7 +548,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			return fmt.Errorf("create MJPEG AVI: %w", err)
 		}
 	} else {
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, options.FPS, len(frames), options.CRF, options.Preset)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, options.FPS, len(frames), options.CRF, options.Preset, options.AudioPath)
 		if err != nil {
 			cleanup()
 			return err

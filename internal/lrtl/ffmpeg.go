@@ -55,13 +55,19 @@ func validH264Preset(preset string) bool {
 	}
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height, fps, frameCount, crf int, preset string) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height, fps, frameCount, crf int, preset, audioPath string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb24",
 		"-video_size", fmt.Sprintf("%dx%d", width, height),
 		"-framerate", strconv.Itoa(fps), "-i", "pipe:0",
-		"-frames:v", strconv.Itoa(frameCount), "-an",
+	}
+	if audioPath != "" {
+		arguments = append(arguments, "-i", audioPath, "-map", "0:v:0", "-map", "1:a:0")
+	}
+	arguments = append(arguments, "-frames:v", strconv.Itoa(frameCount))
+	if audioPath == "" {
+		arguments = append(arguments, "-an")
 	}
 	switch codec {
 	case "h264":
@@ -82,6 +88,14 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			"-pix_fmt", "yuv422p10le", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
 	default:
 		return nil, fmt.Errorf("unsupported FFmpeg video codec %q", codec)
+	}
+	if audioPath != "" {
+		duration := strconv.FormatFloat(float64(frameCount)/float64(fps), 'f', 9, 64)
+		arguments = append(arguments,
+			"-c:a", "aac", "-b:a", "192k",
+			"-af", "asetpts=PTS-STARTPTS,apad,atrim=duration="+duration,
+			"-t", duration, "-shortest",
+		)
 	}
 	arguments = append(arguments, "-movflags", "+faststart", "-f", container, output)
 	command := exec.Command(executable, arguments...)

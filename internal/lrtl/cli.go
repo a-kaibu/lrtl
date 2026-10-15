@@ -114,7 +114,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--aspect W:H] [--output-height N|--long-edge N] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -694,6 +694,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	longEdge := set.Int("long-edge", 0, "downscale so the longest side is at most this many pixels (0 keeps input size)")
 	outputHeight := set.Int("output-height", 0, "set the output height and preserve aspect ratio (0 keeps input size)")
 	aspectValue := set.String("aspect", "", "center-crop to WIDTH:HEIGHT aspect ratio (for example 16:9)")
+	audioPath := set.String("audio", "", "add an audio file to MP4/MOV output and fit it to video duration")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
 	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
@@ -723,6 +724,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--long-edge": true, "-long-edge": true,
 		"--output-height": true, "-output-height": true,
 		"--aspect": true, "-aspect": true,
+		"--audio": true, "-audio": true,
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--deflicker-smoother": true, "-deflicker-smoother": true,
@@ -792,6 +794,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		LongEdge:          *longEdge,
 		OutputHeight:      *outputHeight,
 		AspectRatio:       aspectRatio,
+		AudioPath:         *audioPath,
 		Overwrite:         *overwrite,
 		Deflicker:         deflickerEnabled,
 		Reference:         reference,
@@ -813,7 +816,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
-	features := make([]string, 0, 7)
+	features := make([]string, 0, 8)
 	selectedCodec := options.Codec
 	if selectedCodec == "" {
 		switch strings.ToLower(filepath.Ext(*output)) {
@@ -858,6 +861,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if aspectRatio > 0 {
 		features = append(features, fmt.Sprintf("%s aspect crop", strings.TrimSpace(*aspectValue)))
+	}
+	if strings.TrimSpace(*audioPath) != "" {
+		features = append(features, "AAC audio track")
 	}
 	if *selectionPath != "" {
 		features = append(features, "long-term selection")

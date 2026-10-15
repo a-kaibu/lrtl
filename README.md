@@ -29,7 +29,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMP基本8項目/ポイントカーブ/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`で外部DNGLabにより主要RAW形式を現像し、その16-bit sRGB TIFF出力からレンダー可能。`import --convert-dng`で対応RAWを外部DNGLab経由のlossless/uncompressed DNGへ変換可能。`--raw-preview`によるカメラ内プレビュー経路も維持。DNGLabは別途インストールが必要。Camera Raw/Lightroom設定の完全な適用、ロッシーDNGとサイズ縮小は未実装 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。LRTのプリセット/UIや非圧縮TIFF中間画像は未対応 | 一部 |
-| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks経由のH.264/H.265 MP4、ProRes 422/422 HQ MOV。Rec.2020、HDR、音声なし。入力画素はRGB 8-bitなのでProRes 10-bit出力も16-bit RAW精度を保持しない | 一部 |
+| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks経由のH.264/H.265 MP4、ProRes 422/422 HQ MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。入力画素はRGB 8-bitなのでProRes 10-bit出力も16-bit RAW精度を保持しない | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --timestamp-overlay`で撮影日時を各動画フレームへ焼き込み、`subtitles`で同じ日時情報からSRT字幕を出力。フレームレートと表示形式を指定可能。任意テキストの透かしは未実装 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。8-bit RGB処理のためLRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。画像プレビュー、ロッシーDNG、DNGのサイズ縮小、動画の自動分割は未実装 | 一部 |
@@ -218,6 +218,9 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview-4k.mp4" --lo
 # 16:9に中央クロップし、1920x1080でレンダー
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview-1080p.mp4" --aspect 16:9 --output-height 1080
 
+# MP4へ音声ファイルを追加し、動画の長さに合わせて切り詰め/無音で補う
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview-music.mp4" --audio "D:\Audio\music.wav"
+
 # 輝度・XMP露出・キーフレームをSVGグラフで確認
 lrtl preview "D:\Timelapse\Developed" --output "D:\Timelapse\brightness.svg"
 
@@ -275,7 +278,7 @@ lrtl deflicker "D:\Timelapse\Developed" --reset --write
 lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constant
 ```
 
-`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。`--aspect W:H`はXMPクロップの後に画像中央を切り出し、指定比率に近い整数画素の画像を作ります。受け付ける比率は1:16〜16:1です。これはlrtl独自の中央クロップで、LRTのCompositionやクロップ選択UIとの数値一致は確認していません。`--output-height H`は縦横比を維持したまま出力高をHピクセルに設定し、拡大も行います。`--long-edge N`は元の長辺がNより大きいときだけ縮小し、縦横比を保って長辺をNピクセル以下にします。`--output-height`と`--long-edge`は同時に指定できません。両方とも16〜32768ピクセルを受け付けます。AVIでは画素処理なしのJPEG入力を再圧縮せず格納し、それ以外の入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bit出力時に失われます。MP4ではJPEG/PNG/TIFFをGoでデコードし、H.264エンコーダーにRGBフレームとして渡すため中間JPEG圧縮をしません。`--crf`はH.264品質（0–51、低いほど高品質）、`--preset`は速度と圧縮率の選択です。MP4の画素は8-bit YUV 4:2:0に変換され、奇数幅/高さは右端/下端をパディングします。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
+`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。`--aspect W:H`はXMPクロップの後に画像中央を切り出し、指定比率に近い整数画素の画像を作ります。受け付ける比率は1:16〜16:1です。これはlrtl独自の中央クロップで、LRTのCompositionやクロップ選択UIとの数値一致は確認していません。`--output-height H`は縦横比を維持したまま出力高をHピクセルに設定し、拡大も行います。`--long-edge N`は元の長辺がNより大きいときだけ縮小し、縦横比を保って長辺をNピクセル以下にします。`--output-height`と`--long-edge`は同時に指定できません。両方とも16〜32768ピクセルを受け付けます。`--audio FILE`はMP4/MOVへ音声ファイルの最初の音声トラックをAAC 192 kbit/sで追加します。FFmpegが必要です。音声の開始時刻を0にし、動画より短い場合は末尾を無音で補い、長い場合は動画の長さで切ります。MJPEG AVIへの音声追加、複数トラック選択、音量調整は未対応です。AVIでは画素処理なしのJPEG入力を再圧縮せず格納し、それ以外の入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bit出力時に失われます。MP4ではJPEG/PNG/TIFFをGoでデコードし、H.264エンコーダーにRGBフレームとして渡すため中間JPEG圧縮をしません。`--crf`はH.264品質（0–51、低いほど高品質）、`--preset`は速度と圧縮率の選択です。MP4の画素は8-bit YUV 4:2:0に変換され、奇数幅/高さは右端/下端をパディングします。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
 
 `--apply-xmp-exposure`は各画像に対応する外部XMPサイドカーから数値の`crs:Exposure2012`を読み、線形sRGB画素に露出倍率を適用します。±32 stopsを超える値や不正な数値はエラーにします。Camera Rawの全現像パイプラインと一致する機能ではなく、露出スライダーだけの近似適用です。JPEGはこの指定で再エンコードされます。
 
