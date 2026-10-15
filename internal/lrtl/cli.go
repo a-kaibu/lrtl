@@ -114,7 +114,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--output-height N|--long-edge N] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--aspect W:H] [--output-height N|--long-edge N] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -693,6 +693,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	preset := set.String("preset", "medium", "H.264/H.265 speed/size preset")
 	longEdge := set.Int("long-edge", 0, "downscale so the longest side is at most this many pixels (0 keeps input size)")
 	outputHeight := set.Int("output-height", 0, "set the output height and preserve aspect ratio (0 keeps input size)")
+	aspectValue := set.String("aspect", "", "center-crop to WIDTH:HEIGHT aspect ratio (for example 16:9)")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
 	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
@@ -721,6 +722,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--preset": true, "-preset": true,
 		"--long-edge": true, "-long-edge": true,
 		"--output-height": true, "-output-height": true,
+		"--aspect": true, "-aspect": true,
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--deflicker-smoother": true, "-deflicker-smoother": true,
@@ -742,6 +744,14 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *applyXMPExposure && *applyXMPBasic {
 		return reportError(stderr, fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012"))
+	}
+	var aspectRatio float64
+	if strings.TrimSpace(*aspectValue) != "" {
+		var err error
+		aspectRatio, err = parseAspectRatio(*aspectValue)
+		if err != nil {
+			return reportError(stderr, err)
+		}
 	}
 	var reference image.Rectangle
 	if *referenceValue != "" {
@@ -781,6 +791,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		Preset:            *preset,
 		LongEdge:          *longEdge,
 		OutputHeight:      *outputHeight,
+		AspectRatio:       aspectRatio,
 		Overwrite:         *overwrite,
 		Deflicker:         deflickerEnabled,
 		Reference:         reference,
@@ -844,6 +855,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *outputHeight > 0 {
 		features = append(features, fmt.Sprintf("%d-pixel output height", *outputHeight))
+	}
+	if aspectRatio > 0 {
+		features = append(features, fmt.Sprintf("%s aspect crop", strings.TrimSpace(*aspectValue)))
 	}
 	if *selectionPath != "" {
 		features = append(features, "long-term selection")

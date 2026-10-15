@@ -29,6 +29,7 @@ type RenderOptions struct {
 	Preset            string
 	LongEdge          int
 	OutputHeight      int
+	AspectRatio       float64
 	Overwrite         bool
 	Deflicker         bool
 	Reference         image.Rectangle
@@ -206,7 +207,7 @@ func validateLongEdge(longEdge int) error {
 	return nil
 }
 
-func validateRenderDimensions(longEdge, outputHeight int) error {
+func validateRenderDimensions(longEdge, outputHeight int, aspectRatio float64) error {
 	if err := validateLongEdge(longEdge); err != nil {
 		return err
 	}
@@ -216,12 +217,19 @@ func validateRenderDimensions(longEdge, outputHeight int) error {
 	if longEdge > 0 && outputHeight > 0 {
 		return fmt.Errorf("--long-edge and --output-height cannot be used together")
 	}
+	if math.IsNaN(aspectRatio) || math.IsInf(aspectRatio, 0) || (aspectRatio != 0 && (aspectRatio < 1.0/16 || aspectRatio > 16)) {
+		return fmt.Errorf("aspect ratio must be 0 (source ratio) or between 1:16 and 16:1: %g", aspectRatio)
+	}
 	return nil
 }
 
-func outputDimensions(width, height, longEdge, outputHeight int) (int, int, error) {
-	if err := validateRenderDimensions(longEdge, outputHeight); err != nil {
+func outputDimensions(width, height, longEdge, outputHeight int, aspectRatio float64) (int, int, error) {
+	if err := validateRenderDimensions(longEdge, outputHeight, aspectRatio); err != nil {
 		return 0, 0, err
+	}
+	if aspectRatio > 0 {
+		cropBounds := aspectCropBounds(image.Rect(0, 0, width, height), aspectRatio)
+		width, height = cropBounds.Dx(), cropBounds.Dy()
 	}
 	if outputHeight > 0 {
 		scaledWidth := math.Round(float64(width) * float64(outputHeight) / float64(height))
@@ -264,7 +272,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
-	if err := validateRenderDimensions(options.LongEdge, options.OutputHeight); err != nil {
+	if err := validateRenderDimensions(options.LongEdge, options.OutputHeight, options.AspectRatio); err != nil {
 		return err
 	}
 	if options.MotionBlurFrames != 0 && !validMotionBlurFrames(options.MotionBlurFrames) {
@@ -393,7 +401,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 	width, height := orientedDimensions(config.Width, config.Height, firstOrientation)
-	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge, options.OutputHeight)
+	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge, options.OutputHeight, options.AspectRatio)
 	if err != nil {
 		return err
 	}
@@ -602,6 +610,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if gain != 1 {
 				img = applyExposureGain(img, gain)
 			}
+			if options.AspectRatio > 0 {
+				img = cropImageToAspect(img, options.AspectRatio)
+			}
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
 			}
@@ -712,6 +723,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if applyXMP || options.Deflicker {
 				img = applyExposureGain(img, gain)
 			}
+			if options.AspectRatio > 0 {
+				img = cropImageToAspect(img, options.AspectRatio)
+			}
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
 			}
@@ -755,6 +769,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			if applyXMP || options.Deflicker {
 				img = applyExposureGain(img, gain)
+			}
+			if options.AspectRatio > 0 {
+				img = cropImageToAspect(img, options.AspectRatio)
 			}
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
