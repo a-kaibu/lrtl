@@ -191,7 +191,8 @@ func selectKeyframeIndicesWithAnchors(logLuminance []float64, count, smoothRadiu
 // estimateAutoKeyframeCount follows the quantity heuristic recovered from
 // LRTimelapse 7.5.5's keyframe helper. Holy Grail 2*/3* pairs compensate the
 // measured curve before its range is converted to a keyframe count. Candidate
-// frame selection remains independent and uses selectKeyframeIndicesWithAnchors.
+// placement is handled separately by the wizard spacing helper or the optional
+// luminance-deviation selector.
 func estimateAutoKeyframeCount(logLuminance []float64, holyGrailMarkers []bool) int {
 	if len(logLuminance) == 0 {
 		return 0

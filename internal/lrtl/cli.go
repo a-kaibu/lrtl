@@ -119,7 +119,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
@@ -1147,6 +1147,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("keyframes", stderr)
 	count := set.Int("count", 0, "number of new keyframe suggestions (default estimated from luminance; 5 for --evenly-spaced; maximum 20)")
+	ratingOption := set.Int("rating", 4, "keyframe star rating to mark: 4 (LRT default) or 5")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius for --luminance-deviation")
 	evenlySpaced := set.Bool("evenly-spaced", false, "use the LRT helper's uniform frame positions without decoding images")
 	luminanceDeviation := set.Bool("luminance-deviation", false, "use lrtl's luminance-deviation frame selection instead of LRT spacing")
@@ -1160,6 +1161,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--count": true, "-count": true, "--smooth": true, "-smooth": true,
+		"--rating": true, "-rating": true,
 		"--dnglab": true, "-dnglab": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1177,6 +1179,9 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	})
 	if countSpecified && (*count < 1 || *count > 20) {
 		return reportError(stderr, fmt.Errorf("keyframe count must be between 1 and 20: %d", *count))
+	}
+	if *ratingOption != 4 && *ratingOption != 5 {
+		return reportError(stderr, fmt.Errorf("keyframe rating must be 4 or 5: %d", *ratingOption))
 	}
 	if *evenlySpaced && *luminanceDeviation {
 		return reportError(stderr, fmt.Errorf("--evenly-spaced and --luminance-deviation select different placement methods"))
@@ -1212,6 +1217,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	}
 	packets := make([]*XMPPacket, frameCount)
 	existingKeyframes := make([]int, 0)
+	existingTargetRating := 0
 	selectionAnchors := make([]int, 0)
 	holyGrailMarkers := make([]bool, frameCount)
 	for index, frame := range frames {
@@ -1227,6 +1233,9 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		if packet.IsKeyframe() {
 			existingKeyframes = append(existingKeyframes, index)
 			selectionAnchors = append(selectionAnchors, index)
+			if hasRating && rating == *ratingOption {
+				existingTargetRating++
+			}
 			continue
 		}
 		if _, found, err := packet.GetScalar(holyGrailKeyframeProperty); err != nil {
@@ -1255,14 +1264,14 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 			suggestionCount = 5
 		} else {
 			autoTargetCount = min(20, estimateAutoKeyframeCount(curve, holyGrailMarkers))
-			suggestionCount = max(0, autoTargetCount-len(existingKeyframes))
+			suggestionCount = max(0, autoTargetCount-existingTargetRating)
 			if *luminanceDeviation {
 				suggestionCount = min(suggestionCount, max(0, availableSuggestions))
 			}
 		}
 	}
 	if !countSpecified && !*evenlySpaced {
-		fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing keyframe(s), suggesting up to %d new\n", autoTargetCount, len(existingKeyframes), suggestionCount)
+		fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing %d-star keyframe(s), suggesting up to %d new\n", autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
 	}
 	if suggestionCount == 0 {
 		if countSpecified {
@@ -1303,7 +1312,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		for _, index := range indices {
 			frame := frames[index]
 			packet := packets[index]
-			if _, err := MarkKeyframe(packet, "default"); err != nil {
+			if _, err := MarkKeyframeWithRating(packet, "default", *ratingOption); err != nil {
 				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 			}
 			markedPackets[index] = packet
@@ -1328,7 +1337,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		if backup != "" {
 			fmt.Fprintf(stdout, "  Backup: %s\n", backup)
 		}
-		fmt.Fprintf(stdout, "  Marked: %s (4 stars)\n", frame.OutputSidecar())
+		fmt.Fprintf(stdout, "  Marked: %s (%d stars)\n", frame.OutputSidecar(), *ratingOption)
 	}
 	if !*write {
 		fmt.Fprintln(stdout, "Preview only. Pass --write to mark these frames; other existing keyframes are left unchanged.")

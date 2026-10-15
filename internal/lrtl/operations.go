@@ -26,6 +26,20 @@ func MarkKeyframe(packet *XMPPacket, kind string) (int, error) {
 	if kind != "default" && kind != "crop" {
 		return 0, fmt.Errorf("unsupported keyframe kind: %s", kind)
 	}
+	rating := 4
+	if kind == "crop" {
+		rating = 5
+	}
+	return MarkKeyframeWithRating(packet, kind, rating)
+}
+
+func MarkKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, error) {
+	if kind != "default" && kind != "crop" {
+		return 0, fmt.Errorf("unsupported keyframe kind: %s", kind)
+	}
+	if rating != 4 && rating != 5 {
+		return 0, fmt.Errorf("keyframe rating must be 4 or 5: %d", rating)
+	}
 	if _, hgMarked, err := packet.GetScalar(holyGrailKeyframeProperty); err != nil {
 		return 0, err
 	} else if hgMarked {
@@ -49,10 +63,6 @@ func MarkKeyframe(packet *XMPPacket, kind string) (int, error) {
 		if err := packet.SetScalar("ol:PreviousRating", previousRating); err != nil {
 			return 0, err
 		}
-	}
-	rating := 4
-	if kind == "crop" {
-		rating = 5
 	}
 	if err := packet.SetScalar("xmp:Rating", strconv.Itoa(rating)); err != nil {
 		return 0, err

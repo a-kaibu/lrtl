@@ -14,7 +14,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 |---|---|---|---|
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
-| キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量はLRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式。候補位置も同版の整数間隔・端点選択ルールに対応し、`--evenly-spaced`は輝度解析なしで利用できる。既存4*/5*/2*/3*マーカーはlrtlでは保持して重複候補から除外。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。LRTの画面操作、行選択、現像輝度値との一致は未対応 | 一部 |
+| キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量はLRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式。候補位置も同版の整数間隔・端点選択ルールに対応。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。`--evenly-spaced`は輝度解析なしで利用できる。既存4*/5*/2*/3*マーカーはlrtlでは保持して重複候補から除外し、数量推定からは選択中の4/5つ星だけを差し引く。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。LRTの画面操作、行選択、既存マーカーの一括置換、現像輝度値との一致は未対応 | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。RAW曲線の生成と独立補正レイヤーは未再現。補正を`crs:Exposure2012`へ書く方式 | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で回転を含む矩形を画素へ適用し、元と同じ解像度に再サンプル。プレビュー上の構図作成・編集UIとCamera RawのGeometry補正は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
@@ -185,6 +185,8 @@ lrtl keyframes "D:\Timelapse\Developed"
 # 数量を5に固定（最大20、端点を含む）
 lrtl keyframes "D:\Timelapse\Developed" --count 5
 lrtl keyframes "D:\Timelapse\Developed" --count 5 --write
+# LRT Wizardと同じ5つ星キーフレームを提案
+lrtl keyframes "D:\Timelapse\Developed" --rating 5 --count 5 --write
 # RAW画像をデコードせず、数量5でLRT互換配置を使う
 lrtl keyframes "D:\Timelapse\RAW" --count 5 --evenly-spaced --write
 
@@ -299,7 +301,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `set`は`NumericCRSProperties`にある数値のCamera RawプロパティだけをXMPサイドカーに書き込みます。131個の値を明示的に許可し、HSL色別スライダー、旧式のClarity/Fill Light/Highlight Recovery/増分WB、HDR最大値、カラーグレーディング、色別色相境界、パラメトリックトーン、ノイズ低減、シャープ化、粒子、周辺光量、手動レンズ/パースペクティブ補正などを含みます。名前はAdobeの公開XMP資料、インストール済みのXMPテンプレート、LRT 7.5.5のプロパティ登録情報から選びました。これはLRTがAuto-Transitionで扱う全項目を確定するものではありません。HueAdjustmentの色別バンドシフトは線形値として、カラーグレーディング/SplitToningの色相角とDefringeの色相境界は0〜360度の最短回転として補間します。`interpolate`ではグローバルポイントトーンカーブの`ToneCurve`、`ToneCurveName`、`ToneCurveName2012`、`ToneCurvePV2012`とRGBチャンネル別カーブを先頭画像から全フレームへコピーします。LRT開発者の説明でもポイントカーブはアニメーションせず、先頭画像からコピーされます。LRT 7.1はLook/Preset/PointColorsも均等化するとしていますが、コピー元は明記していません。lrtlはこれらのトップレベルXMP値も先頭画像からコピーする互換判断を採り、LRTとの完全一致は未確認です。共通の`CorrectionSyncID`/`MaskSyncID`を持つ初期化済みマスクについてはローカル補正の数値値と基本形状パラメーターを補間し、`interpolate`のプレビューに変更項目を表示します。範囲セレクター、ブラシ描線、ローカルポイントカーブ、先頭マスクからのセレクター同期はまだ扱いません。LRT 7.5.5との数値一致は未確認です。プロパティ名には`crs:`を付けても省いても構いません。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --write`で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-basic`で対応する基本8項目、簡易Temperature/Tint、明示ポイントカーブを、`render --apply-xmp-crop`で回転を含むクロップを画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。これはLightroom/Camera Rawの現像エンジンを置き換える機能ではなく、XMPへ補間した値のうち現在レンダーに画素反映できるのは基本8項目、Temperature/Tintの簡易ホワイトバランス、XMPに明示されたポイントカーブ、クロップだけです。画素処理はCamera Rawとの一致を確認していない独自近似です。`set`はCamera Rawスライダーごとの許容範囲を検証しません。
 
-`keyframes`はJPEG/PNG/TIFFの測定輝度レンジからLRT 7.5.5で観察した数量式を既定数量（最大20）に使い、同版の整数間隔で候補位置を選びます。数量は最大20で、LRTのヘルパーと同じく1個なら先頭、2個以上なら先頭と末尾を含む配置です。JPEG/PNG/TIFF、対応RAWの`--raw-preview`、または`--raw-develop`の現像画像から数量を求めます。`--apply-xmp-basic`（`--apply-xmp-exposure`と排他的）/`--apply-xmp-crop`は測定輝度へ反映します。`--evenly-spaced`は既定数量5で測定と画像デコードを省略し、同じ配置ルールを使います。候補に既存4*/5*/2*/3*マークが重なる場合、そのマークを残して候補から外します。明るさの曲がりが大きい位置を優先する以前のlrtl独自方式は`--luminance-deviation`で選べます。`--write`は新しい候補のみをXMPへ記録し、既存評価とマーカーは保持します。LRTはシーケンス行選択と確認後の既存キーフレーム削除を持つため、既存マークがある場合の提案数は一致しないことがあります。LRT内部の輝度値とlrtlの線形sRGB測定値にも差があり得ます。
+`keyframes`はJPEG/PNG/TIFFの測定輝度レンジからLRT 7.5.5で観察した数量式を既定数量（最大20）に使い、同版の整数間隔で候補位置を選びます。数量は最大20で、LRTのヘルパーと同じく1個なら先頭、2個以上なら先頭と末尾を含む配置です。JPEG/PNG/TIFF、対応RAWの`--raw-preview`、または`--raw-develop`の現像画像から数量を求めます。`--rating 4|5`で書き込む星評価を指定でき、既定はLRT Wizardと同じ4つ星です。既定数量からは既存の選択中と同じ評価だけを差し引きます。`--apply-xmp-basic`（`--apply-xmp-exposure`と排他的）/`--apply-xmp-crop`は測定輝度へ反映します。`--evenly-spaced`は既定数量5で測定と画像デコードを省略し、同じ配置ルールを使います。候補に既存4*/5*/2*/3*マークが重なる場合、そのマークを残して候補から外します。明るさの曲がりが大きい位置を優先する以前のlrtl独自方式は`--luminance-deviation`で選べます。`--write`は新しい候補のみをXMPへ記録し、既存評価とマーカーは保持します。LRTはシーケンス行選択と確認後の同種評価一括削除を持つため、既存マークがある場合の提案数は一致しないことがあります。LRT内部の輝度値とlrtlの線形sRGB測定値にも差があり得ます。
 
 `unmark --force-rating`はlrtl以外が設定した4つ星/5つ星評価にも使えます。その評価を削除するため、評価がキーフレームマーカーとして使われている場合に限ってください。
 
