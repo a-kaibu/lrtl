@@ -37,7 +37,7 @@ func readEmbeddedImageXMP(path string) ([]byte, bool, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".jpg", ".jpeg":
 		return readEmbeddedJPEGXMP(path)
-	case ".tif", ".tiff", ".dng":
+	case ".tif", ".tiff", ".dng", ".cr2", ".rw2":
 		return readEmbeddedTIFFXMP(path)
 	default:
 		return nil, false, nil
@@ -73,7 +73,7 @@ func readEmbeddedTIFFXMP(path string) ([]byte, bool, error) {
 	magic := reader.order.Uint16(header[2:4])
 	var firstIFD uint64
 	switch magic {
-	case 42:
+	case 42, 85: // Classic TIFF or Panasonic RW2.
 		firstIFD = uint64(reader.order.Uint32(header[4:8]))
 	case 43:
 		if info.Size() < int64(len(header)) {
