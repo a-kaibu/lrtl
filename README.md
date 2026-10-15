@@ -2,7 +2,7 @@
 
 LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。現在はLightroom互換XMPのキーフレーム編集とHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFや一部RAWの埋め込みプレビューからMJPEG AVIを生成できます。
 
-**現状は初期開発版です。RAW現像やCamera Raw設定全体の適用には対応していません。** `render --raw-preview`を指定すると、対応するTIFF系RAWに埋め込まれた最大サイズのJPEG/PNG/TIFFプレビューを使って動画を生成できます。これはカメラ内プレビューを使う近似で、RAW現像ではありません。RAW連番をキーフレーム設定どおりに現像して完成動画を書き出す一連の処理は未対応です。
+**現状は初期開発版です。RAW現像やCamera Raw設定全体の適用には対応していません。** `render --raw-preview`を指定すると、対応するTIFF系RAWおよびCanon CR3から埋め込みプレビューを使って動画を生成できます。これはカメラ内プレビューを使う近似で、RAW現像ではありません。RAW連番をキーフレーム設定どおりに現像して完成動画を書き出す一連の処理は未対応です。
 
 本プロジェクトはLRTimelapseおよびAdobeと無関係です。独自実装であり、それらのコード、画像、同梱ツールを含みません。
 
@@ -14,7 +14,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 |---|---|---|---|
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。出力AVIは約4 GBまで | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
-| キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFFおよび`--raw-preview`で取り出すRAW内蔵プレビューの輝度曲線から候補を選ぶ`keyframes`、デコード不要の`--evenly-spaced`を実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。候補選定は独自ヒューリスティック | 一部 |
+| キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFFおよび`--raw-preview`で取り出す対応RAW内蔵プレビューの輝度曲線から候補を選ぶ`keyframes`、デコード不要の`--evenly-spaced`を実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。候補選定は独自ヒューリスティック | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。RAW曲線の生成と独立補正レイヤーは未再現。補正を`crs:Exposure2012`へ書く方式 | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で軸に平行な矩形を画素へ適用し、元と同じ解像度に再サンプル。非ゼロCropAngle、プレビュー上の構図作成・編集UIは未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
@@ -24,7 +24,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`の輝度解析結果を`crs:Exposure2012`へ記録可能。両者とも独自の近似方式。LRTのVisual Preview、RAW現像連携、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFをMJPEG AVIに変換。固定サイズの画像列、整数1–240 fps。JPEGは画素処理なしなら入力データを格納し、画素処理時とPNG/TIFFはJPEGに変換 | 一部 |
-| RAW・DNG | RAW処理、DNG変換 | `--raw-preview`でTIFF系RAWの埋め込みプレビューを抽出してレンダー。CR2/DNG/NEF/NRW/ARW/PEF/SRWに限定し、RAWのデモザイクやCamera Raw現像は未実装。CR3/RAF/ORF/RW2は未対応 | 一部 |
+| RAW・DNG | RAW処理、DNG変換 | `--raw-preview`でCR2/DNG/NEF/NRW/ARW/PEF/SRWのTIFF内画像とCanon CR3のUUIDプレビューを抽出してレンダー。CR3は既知UUIDのプレビューを含む素材が対象。RAWのデモザイクやCamera Raw現像は未実装。RAF/ORF/RW2は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | 入力と同じ解像度のみ。中間画像の書き出し工程なし | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | MJPEG AVIのみ。Rec.2020、HDR、音声なし | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | 未実装 | 未実装 |
@@ -65,7 +65,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 5. レンダー時に簡易Deflickerを画素へ適用するか、解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 
-動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--raw-preview`を指定すれば一部TIFF系RAWに保存された最大サイズの埋め込み画像を入力に使えますが、RAWセンサー情報やCamera Raw設定を現像する機能ではありません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
+動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--raw-preview`を指定すれば一部TIFF系RAWまたはCanon CR3に保存された埋め込み画像を入力に使えますが、RAWセンサー情報やCamera Raw設定を現像する機能ではありません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
 
 ## インストール
 
@@ -127,7 +127,7 @@ lrtl keyframes "D:\Timelapse\Developed" --count 5
 lrtl keyframes "D:\Timelapse\Developed" --count 5 --write
 lrtl keyframes "D:\Timelapse\RAW" --count 5 --evenly-spaced --write
 
-# TIFF系RAWの埋め込みプレビューの輝度曲線から候補を選ぶ
+# 対応RAWの埋め込みプレビューの輝度曲線から候補を選ぶ
 lrtl keyframes "D:\Timelapse\RAW" --raw-preview --count 5
 
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成
@@ -171,7 +171,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `set`は`NumericCRSProperties`にある数値のCamera RawプロパティだけをXMPサイドカーに書き込みます。プロパティ名には`crs:`を付けても省いても構いません。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --write`で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-exposure`でExposure2012を、`render --apply-xmp-crop`で軸に平行なクロップを画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。これはLightroom/Camera Rawの現像エンジンを置き換える機能ではなく、上記以外のCamera Raw値はXMPに記録・補間しても現在のレンダー画素には反映されません。数値が各Camera Rawスライダーの範囲内かは`set`では検証しません。
 
-`keyframes`は追加する内側の候補数を指定できます。既定は5候補で、未マークの内側フレームが5未満ならその数まで減らします。通常モードはJPEG/PNG/TIFFの明るさ曲線を平滑化し、直線遷移から外れるフレームを優先します。TIFF系RAWは`--raw-preview`を指定すると埋め込みプレビューを解析します。`--evenly-spaced`は輝度を見ずに等間隔の候補を選び、対応画像列にも使えます。どちらのモードも最初と最後の画像は候補にしません。既存の4/5つ星キーフレームと2/3つ星のHoly Grailマーカーは固定アンカーとして扱い、候補から除外します。`--write`でも既存評価やマーカーを上書きしません。
+`keyframes`は追加する内側の候補数を指定できます。既定は5候補で、未マークの内側フレームが5未満ならその数まで減らします。通常モードはJPEG/PNG/TIFFの明るさ曲線を平滑化し、直線遷移から外れるフレームを優先します。対応RAWは`--raw-preview`を指定すると埋め込みプレビューを解析します。CR3は既知UUIDのプレビュー領域を持つ素材が対象です。`--evenly-spaced`は輝度を見ずに等間隔の候補を選び、対応画像列にも使えます。どちらのモードも最初と最後の画像は候補にしません。既存の4/5つ星キーフレームと2/3つ星のHoly Grailマーカーは固定アンカーとして扱い、候補から除外します。`--write`でも既存評価やマーカーを上書きしません。
 
 `unmark --force-rating`はlrtl以外が設定した4つ星/5つ星評価にも使えます。その評価を削除するため、評価がキーフレームマーカーとして使われている場合に限ってください。
 
@@ -207,6 +207,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 - [AVI/MJPEG writer for Go](https://github.com/icza/mjpeg)
 - [Pure-Go TIFF decoder/encoder used by lrtl](https://pkg.go.dev/golang.org/x/image@v0.29.0/tiff)
 - [Pure-Go EXIF reader used for Holy Grail exposure analysis](https://github.com/evanoberholster/imagemeta)
+- [ExifTool's public CR3 UUID preview layout notes](https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/QuickTime.pm#L761)
 
 ## 開発
 

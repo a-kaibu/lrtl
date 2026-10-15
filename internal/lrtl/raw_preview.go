@@ -23,9 +23,14 @@ const (
 	maxPreviewBytes      = 512 << 20
 )
 
-var tiffRawPreviewExtensions = map[string]bool{
-	".arw": true, ".cr2": true, ".dng": true, ".nef": true,
+var embeddedRawPreviewExtensions = map[string]bool{
+	".arw": true, ".cr2": true, ".cr3": true, ".dng": true, ".nef": true,
 	".nrw": true, ".pef": true, ".srw": true,
+}
+
+var cr3PreviewUUID = []byte{
+	0xea, 0xf4, 0x2b, 0x5e, 0x1c, 0x98, 0x4b, 0x88,
+	0xb9, 0xfb, 0xb7, 0xdc, 0x40, 0x6e, 0x4d, 0x16,
 }
 
 type tiffPreviewDirectory struct {
@@ -47,7 +52,7 @@ type tiffPreviewScanner struct {
 }
 
 func supportsEmbeddedRawPreview(path string) bool {
-	return tiffRawPreviewExtensions[strings.ToLower(filepath.Ext(path))]
+	return embeddedRawPreviewExtensions[strings.ToLower(filepath.Ext(path))]
 }
 
 func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, string, error) {
@@ -64,9 +69,9 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 		if readErr != nil {
 			return nil, image.Config{}, "", fmt.Errorf("read %s: %w", path, readErr)
 		}
-		data, err = extractTIFFPreview(raw)
+		data, err = extractRawPreview(path, raw)
 	} else {
-		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, and TIFF; embedded previews from TIFF-based RAW files require --raw-preview: %s", filepath.Base(path))
+		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, TIFF, and selected RAW previews; unsupported image type: %s", filepath.Base(path))
 	}
 	if err != nil {
 		return nil, image.Config{}, "", fmt.Errorf("read %s: %w", path, err)
@@ -79,6 +84,58 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", path)
 	}
 	return data, config, format, nil
+}
+
+func extractRawPreview(path string, data []byte) ([]byte, error) {
+	if strings.EqualFold(filepath.Ext(path), ".cr3") {
+		return extractCR3Preview(data)
+	}
+	return extractTIFFPreview(data)
+}
+
+func extractCR3Preview(data []byte) ([]byte, error) {
+	var best []byte
+	bestArea := uint64(0)
+	searchFrom := 0
+	for searchFrom < len(data) {
+		relative := bytes.Index(data[searchFrom:], cr3PreviewUUID)
+		if relative < 0 {
+			break
+		}
+		uuidStart := searchFrom + relative
+		searchFrom = uuidStart + len(cr3PreviewUUID)
+		if !tiffRange(uint64(uuidStart), 0x40, uint64(len(data))) {
+			continue
+		}
+		previewLength := uint64(binary.BigEndian.Uint32(data[uuidStart+0x3c : uuidStart+0x40]))
+		if previewLength == 0 || previewLength > maxPreviewBytes ||
+			!tiffRange(uint64(uuidStart)+0x40, previewLength, uint64(len(data))) {
+			continue
+		}
+		previewEnd := uuidStart + 0x40 + int(previewLength)
+		previewRegion := data[uuidStart+0x30 : previewEnd]
+		jpegStart := bytes.Index(previewRegion, []byte{0xff, 0xd8, 0xff})
+		if jpegStart < 0 {
+			continue
+		}
+		preview := previewRegion[jpegStart:]
+		if jpegEnd := bytes.Index(preview, []byte{0xff, 0xd9}); jpegEnd >= 0 {
+			preview = preview[:jpegEnd+2]
+		}
+		config, format, err := image.DecodeConfig(bytes.NewReader(preview))
+		if err != nil || format != "jpeg" || config.Width < 1 || config.Height < 1 {
+			continue
+		}
+		area := uint64(config.Width) * uint64(config.Height)
+		if area > bestArea {
+			bestArea = area
+			best = append(best[:0], preview...)
+		}
+	}
+	if len(best) == 0 {
+		return nil, fmt.Errorf("no decodable Canon CR3 UUID preview was found")
+	}
+	return best, nil
 }
 
 func extractTIFFPreview(data []byte) ([]byte, error) {
