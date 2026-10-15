@@ -205,8 +205,10 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		numericValues[index] = numericCRSValues(packet)
 	}
 	keyframeSet := make(map[int]bool, len(keyframes))
+	keyframeFlags := make([]bool, len(frames))
 	for _, keyframe := range keyframes {
 		keyframeSet[keyframe] = true
+		keyframeFlags[keyframe] = true
 	}
 	for _, name := range NumericCRSProperties {
 		anchors := make([]lrtSplinePoint, 0, len(keyframes))
@@ -234,15 +236,15 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		if err != nil {
 			return nil, err
 		}
+		values, filled := spline.sampleFrames(len(frames), keyframeFlags)
 		for targetIndex := range frames {
 			if keyframeSet[targetIndex] {
 				continue
 			}
-			value, found := spline.valueAt(float32(targetIndex))
-			if !found {
+			if !filled[targetIndex] {
 				continue
 			}
-			if err := assign(targetIndex, map[string]float64{name: value}); err != nil {
+			if err := assign(targetIndex, map[string]float64{name: values[targetIndex]}); err != nil {
 				return nil, err
 			}
 		}

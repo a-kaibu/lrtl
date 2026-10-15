@@ -241,6 +241,12 @@ func maskTransitionSourceWithSmoothness(keyframes []int, indexes []map[maskTrans
 
 func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, key maskTransitionKey, frameCount, smoothness int) []map[string]float64 {
 	series := make([]map[string]float64, frameCount)
+	keyframeFlags := make([]bool, frameCount)
+	for _, keyframe := range keyframes {
+		if keyframe >= 0 && keyframe < frameCount {
+			keyframeFlags[keyframe] = true
+		}
+	}
 	properties := make(map[string]bool)
 	for _, keyframe := range keyframes {
 		if node, found := indexes[keyframe][key]; found {
@@ -265,15 +271,15 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 		if err != nil {
 			continue
 		}
+		values, filled := spline.sampleFrames(frameCount, keyframeFlags)
 		for target := 0; target < frameCount; target++ {
-			value, found := spline.valueAt(float32(target))
-			if !found {
+			if keyframeFlags[target] || !filled[target] {
 				continue
 			}
 			if series[target] == nil {
 				series[target] = make(map[string]float64)
 			}
-			series[target][name] = value
+			series[target][name] = values[target]
 		}
 	}
 	return series

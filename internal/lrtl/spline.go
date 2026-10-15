@@ -58,60 +58,57 @@ func newLRTTransitionSpline(points []lrtSplinePoint, smoothness int) (*lrtTransi
 	return spline, nil
 }
 
-func (spline *lrtTransitionSpline) valueAt(x float32) (float64, bool) {
-	if spline == nil || len(spline.points) < 2 || x < spline.points[0].x || x > spline.points[len(spline.points)-1].x {
-		return 0, false
+// sampleFrames mirrors LRT's Auto-Transition discretization: each spline
+// segment is sampled at 2*frameCount uniformly spaced parameters, each sample
+// is assigned to int(x), and the first sample for each non-keyframe wins.
+func (spline *lrtTransitionSpline) sampleFrames(frameCount int, keyframe []bool) ([]float64, []bool) {
+	values := make([]float64, frameCount)
+	filled := make([]bool, frameCount)
+	if frameCount == 0 || spline == nil || len(spline.points) < 2 {
+		return values, filled
 	}
-	segment := sort.Search(len(spline.points)-1, func(index int) bool {
-		return spline.points[index+1].x >= x
-	})
-	if segment >= len(spline.points)-1 {
-		return float64(spline.points[len(spline.points)-1].y), true
-	}
-	start, end := spline.points[segment], spline.points[segment+1]
-	control1 := splineAdd(start, spline.tangents[segment])
-	control2 := splineSubtract(end, spline.tangents[segment+1])
-	if control1.x < start.x || control1.x > control2.x || control2.x > end.x {
-		return spline.firstSampleInFrameBin(start, control1, control2, end, x)
-	}
-
-	low, high := float32(0), float32(1)
-	for iteration := 0; iteration < 32; iteration++ {
-		parameter := (low + high) / 2
-		point := cubicBezier(start, control1, control2, end, parameter)
-		if point.x < x {
-			low = parameter
-		} else {
-			high = parameter
+	for index := range filled {
+		if index < len(keyframe) {
+			filled[index] = keyframe[index]
 		}
 	}
-	point := cubicBezier(start, control1, control2, end, (low+high)/2)
-	return float64(point.y), true
-}
-
-func (spline *lrtTransitionSpline) firstSampleInFrameBin(start, control1, control2, end lrtSplinePoint, x float32) (float64, bool) {
-	frameCount := int(spline.points[len(spline.points)-1].x) + 1
 	steps := frameCount * 2
 	if steps < 1 {
 		steps = 1
 	}
-	targetBin := int(x)
-	closest, closestDistance := start.y, float32(1e30)
-	for sample := 0; sample <= steps; sample++ {
-		parameter := float32(sample) / float32(steps)
-		point := cubicBezier(start, control1, control2, end, parameter)
-		distance := point.x - x
-		if distance < 0 {
-			distance = -distance
-		}
-		if distance < closestDistance {
-			closest, closestDistance = point.y, distance
-		}
-		if int(point.x) == targetBin {
-			return float64(point.y), true
+	parameterStep := float32(1) / float32(steps)
+	for segment := 0; segment < len(spline.points)-1; segment++ {
+		start, end := spline.points[segment], spline.points[segment+1]
+		control1 := splineAdd(start, spline.tangents[segment])
+		control2 := splineSubtract(end, spline.tangents[segment+1])
+		parameter := float32(0)
+		for sample := 0; sample < steps; sample++ {
+			point := cubicBezier(start, control1, control2, end, parameter)
+			frame := int(point.x)
+			if frame < 0 {
+				frame = 0
+			} else if frame >= frameCount {
+				frame = frameCount - 1
+			}
+			if !filled[frame] {
+				values[frame] = float64(point.y)
+				filled[frame] = true
+			}
+			parameter += parameterStep
 		}
 	}
-	return float64(closest), true
+	last := spline.points[len(spline.points)-1]
+	frame := int(last.x)
+	if frame < 0 {
+		frame = 0
+	} else if frame >= frameCount {
+		frame = frameCount - 1
+	}
+	if !filled[frame] {
+		values[frame] = float64(last.y)
+		filled[frame] = true
+	}
+	return values, filled
 }
 
 func transitionSplinePoints(samples []lrtSplinePoint, frameCount int) []lrtSplinePoint {
