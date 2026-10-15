@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const version = "0.6.0"
+const version = "0.7.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
 	flags := make([]string, 0, len(arguments))
@@ -357,6 +357,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	smoothRadius := set.Int("smooth", 5, "deflicker smoothing radius in frames")
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
+	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to raster frames")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
@@ -397,19 +398,24 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	options := RenderOptions{
-		FPS:             *fps,
-		Quality:         *quality,
-		Overwrite:       *overwrite,
-		Deflicker:       deflickerEnabled,
-		Reference:       reference,
-		SmoothRadius:    *smoothRadius,
-		DeflickerPasses: *passes,
-		Constant:        *constant,
+		FPS:              *fps,
+		Quality:          *quality,
+		Overwrite:        *overwrite,
+		Deflicker:        deflickerEnabled,
+		Reference:        reference,
+		SmoothRadius:     *smoothRadius,
+		DeflickerPasses:  *passes,
+		Constant:         *constant,
+		ApplyXMPExposure: *applyXMPExposure,
 	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
-	fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
+	if *applyXMPExposure {
+		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with XMP Exposure2012: %s\n", len(frames), *fps, *output)
+	} else {
+		fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
+	}
 	return 0
 }
 

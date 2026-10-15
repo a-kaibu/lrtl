@@ -2,7 +2,7 @@
 
 LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。現在はLightroom互換XMPのキーフレーム編集とHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFF連番からMJPEG AVIを生成できます。
 
-**現状は初期開発版です。RAW現像やXMPに保存されたCamera Raw設定の適用には対応していません。** RAW連番を読み込んでキーフレームから現像し、完成動画を書き出す一連の処理はまだできません。現像済みのJPEG/PNG/TIFFをAVIにまとめます。
+**現状は初期開発版です。RAW現像やCamera Raw設定全体の適用には対応していません。** `render --apply-xmp-exposure`で現像済みJPEG/PNG/TIFFに`Exposure2012`だけを近似適用できます。RAW連番を読み込んでキーフレームから現像し、完成動画を書き出す一連の処理はまだできません。
 
 本プロジェクトはLRTimelapseおよびAdobeと無関係です。独自実装であり、それらのコード、画像、同梱ツールを含みません。
 
@@ -15,7 +15,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | シーケンス | 画像列の読み込み、撮影順の扱い、プレビュー | 対応拡張子の画像を1フォルダーから列挙し、ファイル名を自然順で並べる。画像プレビューなし | 一部 |
 | キーフレーム | 明るさを解析する自動Keyframes Wizard、手動キーフレーム | 手動マークに加え、JPEG/PNG/TIFFの明るさ曲線から内側の候補を選ぶ`keyframes`コマンドを実装。両端は解析上の基準点に使う。候補選定は独自ヒューリスティック | 一部 |
 | Holy Grail | 露出変化やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出値から補正を計算し、`crs:Exposure2012`をプレビューまたはサイドカーに書き込む。先頭フレームを基準にした露出設定の逆補正。LRTの調整曲線UIや回転/伸縮操作、プレビュー画像を使った再補正は未実装 | 一部 |
-| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。明示的に許可した数値のグローバル設定を線形補間。XMP値を画素に適用する現像機能なし | 一部 |
+| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。明示的に許可した数値のグローバル設定を線形補間。レンダー時に`Exposure2012`のみ任意適用。他のCamera Raw値、RAW現像、ローカルマスクは未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間 | 数値のグローバルCamera Raw項目を補間。ローカル補正、カーブ、マスク、色相環などの補間なし | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | 未実装 | 未実装 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス | `render --deflicker`がJPEG/PNG/TIFFを解析し、任意の参照矩形内の中央値から全画面への露出補正を計算。平滑化幅・パス数・一定輝度モードを指定可能。独自の近似方式で、LRTのVisual PreviewやXMPへのロスレス記録は未対応 | 一部 |
@@ -37,7 +37,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 5. レンダー時に、参照領域と平滑化曲線を使った簡易Deflickerを適用する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 
-動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`lrtl render`はXMPを読まず、画像の現像もしません。Deflickerは出力時に全体露出を画素へ適用する近似処理で、元画像やXMPは変更しません。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
+動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。既定ではXMPを読まず、画像の現像もしません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。ほかの現像設定やRAWデータには対応しません。DeflickerとXMP露出補正は出力画素に適用するため、元画像やXMPは変更しません。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
 
 ## インストール
 
@@ -85,6 +85,9 @@ lrtl keyframes "D:\Timelapse\Developed" --count 5 --write
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
 
+# XMPサイドカーのExposure2012を適用してレンダー
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\adjusted.avi" --apply-xmp-exposure
+
 # FPSと変換時のJPEG品質を指定
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi" --fps 30 --quality 95
 
@@ -97,6 +100,8 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 ```
 
 `render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。DeflickerなしのJPEG入力は再圧縮せずAVIに入れます。PNG/TIFF入力とDeflickerを使う入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bitのMJPEG出力時に失われます。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
+
+`--apply-xmp-exposure`は各画像に対応する外部XMPサイドカーから数値の`crs:Exposure2012`を読み、線形sRGB画素に露出倍率を適用します。±32 stopsを超える値や不正な数値はエラーにします。Camera Rawの全現像パイプラインと一致する機能ではなく、露出スライダーだけの近似適用です。JPEGはこの指定で再エンコードされます。
 
 `keyframes`は全フレームの明るさを解析し、内側の候補数を指定できます。両端の画像は曲線を測る基準点として使い、キーフレームにはしません。既定は5候補で、内側のフレームが5未満ならその数まで減らします。明るさ曲線を平滑化したうえで、線形遷移から外れる度合いが大きいフレームを優先します。既存の手動キーフレームを自動で解除しません。`--write`を付けた場合も候補だけをマークし、ほかの評価やマーカーは保持します。入力はJPEG/PNG/TIFFに対応します。
 
@@ -113,7 +118,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFからMJPEG AVIに対応 |
 | 3 | 画像解析、プレビュー、Deflicker | レンダー時の単一参照領域・全体露出補正を実装。LRT形式のVisual Preview、曲線UI、XMPロスレス適用、マスク別補正は未実装 |
-| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正を実装。RAW現像とXMP現像値の画素への反映は未着手 |
+| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正と、現像済みラスターへのExposure2012近似適用を実装。RAW現像とCamera Raw現像の完全再現は未着手 |
 | 5 | H.264等の追加出力、クロップ/オーバーレイ、取り込み、GUI | 未着手 |
 
 ## 機能調査の出典

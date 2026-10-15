@@ -10,6 +10,7 @@ import (
 )
 
 const holyGrailCorrectionProperty = "ol:HolyGrailCorrection2012"
+const maxRenderXMPExposureStops = 32
 
 type CameraExposure struct {
 	ExposureTime float64
@@ -143,4 +144,23 @@ func applyHolyGrailPlan(changes []HolyGrailChange) error {
 		}
 	}
 	return nil
+}
+
+func readXMPExposure(frame Frame) (float64, error) {
+	packet, err := PacketForSidecar(frame.OutputSidecar())
+	if err != nil {
+		return 0, err
+	}
+	value, found, err := packet.GetScalar("crs:Exposure2012")
+	if err != nil {
+		return 0, err
+	}
+	if !found {
+		return 0, nil
+	}
+	exposure, valid := scalarNumber(value)
+	if !valid || math.Abs(exposure) > maxRenderXMPExposureStops {
+		return 0, fmt.Errorf("crs:Exposure2012 must be a finite number between -%d and +%d stops", maxRenderXMPExposureStops, maxRenderXMPExposureStops)
+	}
+	return exposure, nil
 }

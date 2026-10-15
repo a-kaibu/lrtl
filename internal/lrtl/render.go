@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/jpeg"
 	_ "image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,14 +17,15 @@ import (
 )
 
 type RenderOptions struct {
-	FPS             int
-	Quality         int
-	Overwrite       bool
-	Deflicker       bool
-	Reference       image.Rectangle
-	SmoothRadius    int
-	DeflickerPasses int
-	Constant        bool
+	FPS              int
+	Quality          int
+	Overwrite        bool
+	Deflicker        bool
+	Reference        image.Rectangle
+	SmoothRadius     int
+	DeflickerPasses  int
+	Constant         bool
+	ApplyXMPExposure bool
 }
 
 func supportedRasterExtension(path string) bool {
@@ -41,8 +43,9 @@ func supportedRasterFormat(format string) bool {
 
 const maxAVIDimension = int64(1<<31 - 1)
 
-// RenderSequence writes a sequence of already-developed JPEG, PNG, or TIFF frames to
-// an MJPEG AVI file. It does not apply Camera Raw XMP settings or decode RAWs.
+// RenderSequence writes already-developed JPEG, PNG, or TIFF frames to an MJPEG AVI
+// file. It can optionally apply the global XMP Exposure2012 slider, but does not
+// implement full Camera Raw rendering or decode RAWs.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -74,6 +77,18 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	for _, frame := range frames {
 		if !supportedRasterExtension(frame.Image) {
 			return fmt.Errorf("render supports JPEG, PNG, and TIFF only; unsupported frame: %s", filepath.Base(frame.Image))
+		}
+	}
+
+	var xmpExposures []float64
+	if options.ApplyXMPExposure {
+		xmpExposures = make([]float64, len(frames))
+		for index, frame := range frames {
+			exposure, err := readXMPExposure(frame)
+			if err != nil {
+				return fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
+			}
+			xmpExposures[index] = exposure
 		}
 	}
 
@@ -119,6 +134,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+			}
+			if xmpExposures != nil && xmpExposures[index] != 0 {
+				img = applyExposureGain(img, math.Exp2(xmpExposures[index]))
 			}
 			reference := options.Reference
 			if reference.Empty() {
@@ -190,15 +208,23 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
 
+		applyXMP := xmpExposures != nil && xmpExposures[index] != 0
 		jpegData := data
-		if options.Deflicker || format != "jpeg" {
+		if options.Deflicker || applyXMP || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
 			}
 			var encoded bytes.Buffer
+			gain := 1.0
+			if applyXMP {
+				gain *= math.Exp2(xmpExposures[index])
+			}
 			if options.Deflicker {
-				img = applyExposureGain(img, gains[index])
+				gain *= gains[index]
+			}
+			if applyXMP || options.Deflicker {
+				img = applyExposureGain(img, gain)
 			}
 			if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
 				return fmt.Errorf("encode %s as JPEG: %w", frame.Image, err)
