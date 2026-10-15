@@ -265,6 +265,61 @@ func selectLRTWizardKeyframeIndices(frameCount, count int) ([]int, error) {
 	return indices, nil
 }
 
+// placeLRTWizardKeyframeIndices applies the installed wizard's rating
+// replacement and collision-shift behavior to its nominal spacing positions.
+func placeLRTWizardKeyframeIndices(indices []int, packets []*XMPPacket, reserved []bool, rating int) []int {
+	if len(packets) == 0 || len(reserved) != len(packets) || (rating != 4 && rating != 5) {
+		return nil
+	}
+
+	workingRatings := make([]int, len(packets))
+	for index, packet := range packets {
+		if packet == nil {
+			continue
+		}
+		if current, ok := packet.Rating(); ok && current != rating {
+			workingRatings[index] = current
+		}
+	}
+
+	selected := make([]int, 0, len(indices))
+	for _, index := range indices {
+		if index < 0 || index >= len(packets) || reserved[index] {
+			continue
+		}
+		current := workingRatings[index]
+		if index > 0 && index < len(packets)-1 && current >= 2 && current <= 5 && current != rating {
+			shifted := false
+			for distance := 1; distance < 10; distance++ {
+				previous := index - distance
+				if previous <= 0 {
+					break
+				}
+				if workingRatings[previous] != 0 || reserved[previous] {
+					continue
+				}
+				workingRatings[previous] = rating
+				selected = append(selected, previous)
+				shifted = true
+				break
+			}
+			if !shifted {
+				continue
+			}
+			continue
+		}
+		if current == 2 || current == 3 {
+			// MarkKeyframe protects Holy Grail ratings, including endpoint rows
+			// that the LRT helper itself would otherwise overwrite.
+			continue
+		}
+		workingRatings[index] = rating
+		selected = append(selected, index)
+	}
+	sort.Ints(selected)
+	return selected
+}
+
 func selectEvenlySpacedKeyframeIndices(frameCount, count int) ([]int, error) {
 	return selectEvenlySpacedKeyframeIndicesWithAnchors(frameCount, count, nil)
 }

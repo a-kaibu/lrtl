@@ -119,7 +119,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
@@ -1148,6 +1148,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("keyframes", stderr)
 	count := set.Int("count", 0, "number of new keyframe suggestions (default estimated from luminance; 5 for --evenly-spaced; maximum 20)")
 	ratingOption := set.Int("rating", 4, "keyframe star rating to mark: 4 (LRT default) or 5")
+	replaceExisting := set.Bool("replace-existing", false, "clear existing keyframes of the selected rating and shift star conflicts backward where possible")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius for --luminance-deviation")
 	evenlySpaced := set.Bool("evenly-spaced", false, "use the LRT helper's uniform frame positions without decoding images")
 	luminanceDeviation := set.Bool("luminance-deviation", false, "use lrtl's luminance-deviation frame selection instead of LRT spacing")
@@ -1219,6 +1220,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	existingKeyframes := make([]int, 0)
 	existingTargetRating := 0
 	selectionAnchors := make([]int, 0)
+	reservedRows := make([]bool, frameCount)
 	holyGrailMarkers := make([]bool, frameCount)
 	for index, frame := range frames {
 		packet, err := PacketForSidecar(frame.OutputSidecar())
@@ -1230,17 +1232,24 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		if hasRating && (rating == 2 || rating == 3) {
 			holyGrailMarkers[index] = true
 		}
+		hasHolyGrailProperty, err := packet.HasProperty(holyGrailKeyframeProperty)
+		if err != nil {
+			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+		}
+		reservedRows[index] = hasHolyGrailProperty
 		if packet.IsKeyframe() {
 			existingKeyframes = append(existingKeyframes, index)
-			selectionAnchors = append(selectionAnchors, index)
 			if hasRating && rating == *ratingOption {
 				existingTargetRating++
+				if !*replaceExisting {
+					selectionAnchors = append(selectionAnchors, index)
+				}
+			} else {
+				selectionAnchors = append(selectionAnchors, index)
 			}
 			continue
 		}
-		if _, found, err := packet.GetScalar(holyGrailKeyframeProperty); err != nil {
-			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
-		} else if found {
+		if hasHolyGrailProperty {
 			selectionAnchors = append(selectionAnchors, index)
 			continue
 		}
@@ -1264,14 +1273,21 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 			suggestionCount = 5
 		} else {
 			autoTargetCount = min(20, estimateAutoKeyframeCount(curve, holyGrailMarkers))
-			suggestionCount = max(0, autoTargetCount-existingTargetRating)
+			suggestionCount = autoTargetCount
+			if !*replaceExisting {
+				suggestionCount = max(0, suggestionCount-existingTargetRating)
+			}
 			if *luminanceDeviation {
 				suggestionCount = min(suggestionCount, max(0, availableSuggestions))
 			}
 		}
 	}
 	if !countSpecified && !*evenlySpaced {
-		fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing %d-star keyframe(s), suggesting up to %d new\n", autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
+		if *replaceExisting {
+			fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; replacing %d existing %d-star keyframe(s), suggesting up to %d\n", autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
+		} else {
+			fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing %d-star keyframe(s), suggesting up to %d new\n", autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
+		}
 	}
 	if suggestionCount == 0 {
 		if countSpecified {
@@ -1289,7 +1305,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		indices, err = selectKeyframeIndicesWithAnchors(curve, suggestionCount, *smoothRadius, selectionAnchors)
 	} else {
 		indices, err = selectLRTWizardKeyframeIndices(frameCount, suggestionCount)
-		if err == nil && len(selectionAnchors) > 0 {
+		if err == nil && !*replaceExisting && len(selectionAnchors) > 0 {
 			blocked := make(map[int]struct{}, len(selectionAnchors))
 			for _, index := range selectionAnchors {
 				blocked[index] = struct{}{}
@@ -1307,19 +1323,61 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	markedPackets := make(map[int]*XMPPacket)
+	if *replaceExisting {
+		indices = placeLRTWizardKeyframeIndices(indices, packets, reservedRows, *ratingOption)
+	}
+	modifiedPackets := make(map[int]*XMPPacket)
 	if *write {
+		if *replaceExisting {
+			for index, packet := range packets {
+				currentRating, hasRating := packet.Rating()
+				if !hasRating || currentRating != *ratingOption {
+					continue
+				}
+				frame := frames[index]
+				if err := UnmarkKeyframe(packet, true); err != nil {
+					return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+				}
+				if restoredRating, found := packet.Rating(); found && restoredRating == *ratingOption {
+					if err := packet.RemoveProperty("xmp:Rating"); err != nil {
+						return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+					}
+				}
+				modifiedPackets[index] = packet
+			}
+		}
 		for _, index := range indices {
 			frame := frames[index]
 			packet := packets[index]
 			if _, err := MarkKeyframeWithRating(packet, "default", *ratingOption); err != nil {
 				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 			}
-			markedPackets[index] = packet
+			modifiedPackets[index] = packet
+		}
+	}
+	backups := make(map[int]string, len(modifiedPackets))
+	markedIndices := make(map[int]struct{}, len(indices))
+	for _, index := range indices {
+		markedIndices[index] = struct{}{}
+	}
+	if *write {
+		for index, frame := range frames {
+			packet, modified := modifiedPackets[index]
+			if !modified {
+				continue
+			}
+			backup, err := WritePacket(frame.OutputSidecar(), packet, !*noBackup)
+			if err != nil {
+				return reportError(stderr, err)
+			}
+			backups[index] = backup
 		}
 	}
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
 	fmt.Fprintf(stdout, "Frames: %d; existing keyframes: %d; new suggestions: %d\n", len(frames), len(existingKeyframes), len(indices))
+	if *replaceExisting {
+		fmt.Fprintf(stdout, "Selected rating: %d stars; existing marks to replace: %d\n", *ratingOption, existingTargetRating)
+	}
 	for _, index := range indices {
 		frame := frames[index]
 		if !*luminanceDeviation {
@@ -1330,17 +1388,33 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		if !*write {
 			continue
 		}
-		backup, err := WritePacket(frame.OutputSidecar(), markedPackets[index], !*noBackup)
-		if err != nil {
-			return reportError(stderr, err)
-		}
+		backup := backups[index]
 		if backup != "" {
 			fmt.Fprintf(stdout, "  Backup: %s\n", backup)
 		}
 		fmt.Fprintf(stdout, "  Marked: %s (%d stars)\n", frame.OutputSidecar(), *ratingOption)
 	}
+	if *replaceExisting && *write {
+		for index, frame := range frames {
+			if _, marked := markedIndices[index]; marked {
+				continue
+			}
+			if _, changed := modifiedPackets[index]; !changed {
+				continue
+			}
+			backup := backups[index]
+			if backup != "" {
+				fmt.Fprintf(stdout, "  Backup: %s\n", backup)
+			}
+			fmt.Fprintf(stdout, "  Cleared: %s (%d-star marker replaced)\n", filepath.Base(frame.OutputSidecar()), *ratingOption)
+		}
+	}
 	if !*write {
-		fmt.Fprintln(stdout, "Preview only. Pass --write to mark these frames; other existing keyframes are left unchanged.")
+		if *replaceExisting {
+			fmt.Fprintf(stdout, "Preview only. Pass --write to replace %d existing %d-star marker(s) and mark these frames.\n", existingTargetRating, *ratingOption)
+		} else {
+			fmt.Fprintln(stdout, "Preview only. Pass --write to mark these frames; other existing keyframes are left unchanged.")
+		}
 	}
 	return 0
 }
