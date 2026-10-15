@@ -264,7 +264,7 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 	xmpErrors := 0
 	for index, frame := range frames {
 		point := guiExposurePoint{Index: index}
-		packet, packetErr := PacketForSidecar(frame.OutputSidecar())
+		packet, packetErr := PacketForFrame(frame)
 		if packetErr != nil {
 			xmpErrors++
 			allPoints[index] = point
@@ -660,7 +660,7 @@ func serveGUIXMPRead(w http.ResponseWriter, r *http.Request) {
 		writeGUIError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	packet, err := PacketForSidecar(frame.OutputSidecar())
+	packet, err := PacketForFrame(frame)
 	if err != nil {
 		writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -790,7 +790,7 @@ func serveGUICrop(w http.ResponseWriter, r *http.Request) {
 			writeGUIError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
 			return
@@ -839,7 +839,7 @@ func serveGUICrop(w http.ResponseWriter, r *http.Request) {
 			writeGUIError(w, http.StatusNotFound, err.Error())
 			return
 		}
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
 			return
@@ -950,7 +950,7 @@ func serveGUIKeyframe(w http.ResponseWriter, r *http.Request) {
 		writeGUIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	packet, err := PacketForSidecar(frame.OutputSidecar())
+	packet, err := PacketForFrame(frame)
 	if err != nil {
 		writeGUIError(w, http.StatusBadRequest, err.Error())
 		return

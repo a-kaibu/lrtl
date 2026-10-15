@@ -57,7 +57,7 @@ func writeSequencePreviewWithOptions(frames []Frame, output string, options imag
 	exposure := make([]float64, len(frames))
 	hasExposure := false
 	for index, frame := range frames {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return fmt.Errorf("read preview metadata for %s: %w", frame.Image, err)
 		}

@@ -99,7 +99,7 @@ func buildDeflickerChangesWithSmoother(frames []Frame, luminances []float64, smo
 
 	changes := make([]DeflickerChange, 0, len(frames))
 	for index, frame := range frames {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}

@@ -22,6 +22,33 @@ func PacketForSidecar(path string) (*XMPPacket, error) {
 	return parseXMP(data)
 }
 
+func PacketForFrame(frame Frame) (*XMPPacket, error) {
+	packet, found, err := loadFramePacket(frame)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		return packet, nil
+	}
+	return EmptyXMPPacket(), nil
+}
+
+func PacketForImage(imagePath, sidecarPath string) (*XMPPacket, error) {
+	if _, err := os.Stat(sidecarPath); err == nil {
+		return PacketForSidecar(sidecarPath)
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	data, found, err := readEmbeddedJPEGXMP(imagePath)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		return parseXMP(data)
+	}
+	return EmptyXMPPacket(), nil
+}
+
 func MarkKeyframe(packet *XMPPacket, kind string) (int, error) {
 	if kind != "default" && kind != "crop" {
 		return 0, fmt.Errorf("unsupported keyframe kind: %s", kind)

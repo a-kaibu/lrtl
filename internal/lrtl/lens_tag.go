@@ -50,7 +50,7 @@ func buildLensTagPlan(frames []Frame, aperture string) ([]lensTagChange, error) 
 	}
 	changes := make([]lensTagChange, 0, len(frames))
 	for _, frame := range frames {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}

@@ -500,7 +500,7 @@ func runMark(arguments []string, stdout, stderr io.Writer) int {
 	if !imageExists && !sidecarExists {
 		return reportError(stderr, fmt.Errorf("image and XMP sidecar do not exist: %s", image))
 	}
-	packet, err := PacketForSidecar(sidecar)
+	packet, err := PacketForImage(image, sidecar)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -584,7 +584,7 @@ func runSet(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
 		return reportError(stderr, fmt.Errorf("value must be a finite number: %s", operands[2]))
 	}
-	packet, err := PacketForSidecar(sidecar)
+	packet, err := PacketForImage(image, sidecar)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -621,10 +621,15 @@ func runUnmark(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	image, sidecar := inputPaths(path)
-	if _, err := osStat(sidecar); err != nil {
-		return reportError(stderr, fmt.Errorf("XMP sidecar does not exist: %s", sidecar))
+	imageExists, imageErr := osStat(image)
+	sidecarExists, sidecarErr := osStat(sidecar)
+	if imageErr != nil && sidecarErr != nil {
+		return reportError(stderr, imageErr)
 	}
-	packet, err := PacketForSidecar(sidecar)
+	if !imageExists && !sidecarExists {
+		return reportError(stderr, fmt.Errorf("image and XMP sidecar do not exist: %s", image))
+	}
+	packet, err := PacketForImage(image, sidecar)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -1326,7 +1331,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	reservedRows := make([]bool, frameCount)
 	holyGrailMarkers := make([]bool, frameCount)
 	for index, frame := range frames {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 		}

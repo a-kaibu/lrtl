@@ -23,6 +23,7 @@ var namespacePrefixes = map[string]string{
 	"x":         "adobe:ns:meta/",
 	"rdf":       rdfNamespace,
 	"xmp":       xmpNamespace,
+	"xmpNote":   "http://ns.adobe.com/xmp/note/",
 	"crs":       crsNamespace,
 	"lrt":       "http://lrtimelapse.com/",
 	"ol":        openLRTLNamespace,

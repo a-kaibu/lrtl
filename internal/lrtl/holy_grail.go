@@ -253,7 +253,7 @@ func readCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error
 		iso = float64(metadata.ISO)
 	}
 	if !ignoreAperture && (fNumber <= 0 || math.IsNaN(fNumber) || math.IsInf(fNumber, 0)) {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return CameraExposure{}, fmt.Errorf("read XMP aperture: %w", err)
 		}
@@ -391,7 +391,7 @@ func readHolyGrailLRTInputs(frames []Frame) ([]float64, []int, error) {
 	inputs := make([]float64, len(frames))
 	ratings := make([]int, len(frames))
 	for index, frame := range frames {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
@@ -737,7 +737,7 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 
 	changes := make([]HolyGrailChange, 0, len(frames))
 	for index, frame := range frames {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
@@ -877,7 +877,7 @@ func applyHolyGrailPlan(changes []HolyGrailChange) error {
 }
 
 func readXMPExposure(frame Frame) (float64, error) {
-	packet, err := PacketForSidecar(frame.OutputSidecar())
+	packet, err := PacketForFrame(frame)
 	if err != nil {
 		return 0, err
 	}

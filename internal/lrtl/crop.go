@@ -23,7 +23,7 @@ func readXMPCrops(frames []Frame, width, height int) ([]cropSpec, error) {
 	crops := make([]cropSpec, len(frames))
 	full := image.Rect(0, 0, width, height)
 	for index, frame := range frames {
-		packet, err := PacketForSidecar(frame.OutputSidecar())
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return nil, fmt.Errorf("read crop settings for %s: %w", frame.Image, err)
 		}

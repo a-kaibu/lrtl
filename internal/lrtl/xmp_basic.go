@@ -100,7 +100,7 @@ type toneCurvePoint struct {
 }
 
 func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
-	packet, err := PacketForSidecar(frame.OutputSidecar())
+	packet, err := PacketForFrame(frame)
 	if err != nil {
 		return xmpBasicAdjustments{}, err
 	}

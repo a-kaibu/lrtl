@@ -149,16 +149,49 @@ func DiscoverSequence(directory string) ([]Frame, error) {
 }
 
 func loadPacket(frame Frame) (*XMPPacket, error) {
-	if frame.Sidecar == "" {
-		return nil, nil
-	}
-	data, err := os.ReadFile(frame.Sidecar)
+	packet, found, err := loadFramePacket(frame)
 	if err != nil {
 		return nil, err
 	}
-	packet, err := parseXMP(data)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", frame.Sidecar, err)
+	if !found {
+		return nil, nil
 	}
 	return packet, nil
+}
+
+func loadFramePacket(frame Frame) (*XMPPacket, bool, error) {
+	sidecar := frame.Sidecar
+	if sidecar == "" {
+		candidate := frame.OutputSidecar()
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+			sidecar = candidate
+		} else if err != nil && !os.IsNotExist(err) {
+			return nil, false, err
+		}
+	}
+	if sidecar != "" {
+		data, err := os.ReadFile(sidecar)
+		if err == nil {
+			packet, parseErr := parseXMP(data)
+			if parseErr != nil {
+				return nil, false, fmt.Errorf("%s: %w", sidecar, parseErr)
+			}
+			return packet, true, nil
+		}
+		if !os.IsNotExist(err) {
+			return nil, false, err
+		}
+	}
+	data, found, err := readEmbeddedJPEGXMP(frame.Image)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, nil
+	}
+	packet, err := parseXMP(data)
+	if err != nil {
+		return nil, false, err
+	}
+	return packet, true, nil
 }
