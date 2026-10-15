@@ -601,6 +601,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("interpolate", stderr)
 	write := set.Bool("write", false, "write interpolated sidecar values")
 	noBackup := set.Bool("no-backup", false, "do not create a backup")
+	smoothness := set.Int("smoothness", 50, "LRT-compatible spline smoothness (0-100; default 50)")
 	if err := set.Parse(flagFirst(arguments, nil)); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
@@ -609,12 +610,15 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	if set.NArg() != 1 {
 		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
 	}
+	if *smoothness < 0 || *smoothness > 100 {
+		return reportError(stderr, fmt.Errorf("--smoothness must be between 0 and 100"))
+	}
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	plan, err := buildPlan(frames)
+	plan, err := buildPlanWithSmoothness(frames, *smoothness)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -623,7 +627,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		keyframeNames = append(keyframeNames, filepath.Base(frames[index].Image))
 	}
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
-	fmt.Fprintf(stdout, "Frames: %d; effective keyframes: %d\n", plan.FrameCount, len(keyframeNames))
+	fmt.Fprintf(stdout, "Frames: %d; effective keyframes: %d; spline smoothness: %d\n", plan.FrameCount, len(keyframeNames), *smoothness)
 	anchors := strings.Join(keyframeNames, ", ")
 	if anchors == "" {
 		anchors = "none"
@@ -635,7 +639,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		structuredCount += len(change.StructuredProperties)
 		for _, transition := range change.MaskTransitions {
 			maskCount += len(transition.values)
-			if transition.colorSamples != nil {
+			if transition.hasLuminanceRange {
 				maskCount++
 			}
 		}
@@ -647,7 +651,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 			capacity := len(change.Values) + len(change.StructuredProperties)
 			for _, transition := range change.MaskTransitions {
 				capacity += len(transition.values)
-				if transition.colorSamples != nil {
+				if transition.hasLuminanceRange {
 					capacity++
 				}
 			}
@@ -664,10 +668,10 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 					}
 					names = append(names, label)
 				}
-				if transition.colorSamples != nil {
-					label := "crs:" + transition.key.collection + "/" + transition.key.correctionID + ".ColorRangePointModels"
+				if transition.hasLuminanceRange {
+					label := "crs:" + transition.key.collection + "/" + transition.key.correctionID + ".RangeMaskLumRange"
 					if transition.key.maskID != "" {
-						label = "crs:" + transition.key.collection + "/" + transition.key.correctionID + "/" + transition.key.maskID + ".ColorRangePointModels"
+						label = "crs:" + transition.key.collection + "/" + transition.key.correctionID + "/" + transition.key.maskID + ".RangeMaskLumRange"
 					}
 					names = append(names, label)
 				}

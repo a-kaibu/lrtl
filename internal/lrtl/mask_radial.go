@@ -1,47 +1,13 @@
 package lrtl
 
 import (
-	"image"
 	"math"
-	"os"
-
-	"github.com/evanoberholster/imagemeta"
 )
 
 type radialGradientGeometry struct {
 	centerX, centerY float64
 	major, minor     float64
 	orientation      float64
-}
-
-func sequenceImageAspect(frame Frame) float64 {
-	file, err := os.Open(frame.Image)
-	if err != nil {
-		return 0
-	}
-	defer file.Close()
-
-	config, _, configErr := image.DecodeConfig(file)
-	width, height := 0, 0
-	if configErr == nil {
-		width, height = config.Width, config.Height
-	}
-	if _, err := file.Seek(0, 0); err == nil {
-		metadata, metadataErr := imagemeta.Decode(file)
-		if metadataErr == nil {
-			if metadata.ImageWidth > 0 && metadata.ImageHeight > 0 {
-				width, height = int(metadata.ImageWidth), int(metadata.ImageHeight)
-			}
-			orientation := uint16(metadata.Orientation)
-			if orientation >= 5 && orientation <= 8 {
-				width, height = height, width
-			}
-		}
-	}
-	if width <= 0 || height <= 0 {
-		return 0
-	}
-	return float64(width) / float64(height)
 }
 
 func radialGradientFromValues(values map[string]float64, aspect float64) (radialGradientGeometry, bool) {
@@ -136,33 +102,6 @@ func encodeRadialGradient(centerX, centerY, root, beta, orientation, aspect floa
 		"Top": centerY - deltaY/2, "Bottom": centerY + deltaY/2,
 		"Angle": angle,
 	}
-}
-
-func interpolateRadialGradient(startValues, endValues map[string]float64, fraction, aspect float64) (map[string]float64, bool) {
-	start, startOK := radialGradientFromValues(startValues, aspect)
-	end, endOK := radialGradientFromValues(endValues, aspect)
-	if !startOK || !endOK || fraction < 0 || fraction > 1 {
-		return nil, false
-	}
-	orientationSpan := math.Mod(end.orientation-start.orientation, 180)
-	if orientationSpan > 90 {
-		orientationSpan -= 180
-	} else if orientationSpan <= -90 {
-		orientationSpan += 180
-	}
-	geometry := radialGradientGeometry{
-		centerX:     start.centerX + (end.centerX-start.centerX)*fraction,
-		centerY:     start.centerY + (end.centerY-start.centerY)*fraction,
-		major:       start.major + (end.major-start.major)*fraction,
-		minor:       start.minor + (end.minor-start.minor)*fraction,
-		orientation: start.orientation + orientationSpan*fraction,
-	}
-	if geometry.major <= 1e-12 || geometry.minor <= 1e-12 {
-		return nil, false
-	}
-	root := math.Hypot(geometry.major, geometry.minor)
-	beta := math.Atan2(geometry.minor, geometry.major) * 180 / math.Pi
-	return encodeRadialGradient(geometry.centerX, geometry.centerY, root, beta, geometry.orientation, aspect), true
 }
 
 func radialMaskWeight(left, top, right, bottom, angle float64, x, y, width, height int) (float64, bool) {

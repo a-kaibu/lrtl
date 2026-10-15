@@ -32,30 +32,20 @@ type maskTransitionKey struct {
 }
 
 type maskTransitionNode struct {
-	element      *etree.Element
-	values       map[string]float64
-	colorSamples *etree.Element
+	values            map[string]float64
+	luminanceRange    string
+	hasLuminanceRange bool
 }
 
 type maskTransitionChange struct {
-	key          maskTransitionKey
-	values       map[string]string
-	colorSamples *etree.Element
-}
-
-var luminanceRangeTransitionProperties = [4]string{
-	"LumRange0", "LumRange1", "LumRange2", "LumRange3",
+	key               maskTransitionKey
+	values            map[string]string
+	luminanceRange    string
+	hasLuminanceRange bool
 }
 
 func localCorrectionProperty(name string) bool {
 	return name == "CorrectionAmount" || strings.HasPrefix(name, "Local")
-}
-
-func maskTransitionCircularProperty(name string) bool {
-	if name == "Angle" || name == "LocalToningHue" {
-		return true
-	}
-	return strings.HasPrefix(name, "LocalColorGrade") && strings.HasSuffix(name, "Hue")
 }
 
 func crsElementValue(element *etree.Element, name string) (string, bool, error) {
@@ -130,35 +120,25 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 			add(child.Tag, value)
 		}
 	}
-	if mask {
-		luminanceRange, supported, err := parseXMPLuminanceRange(element)
-		if err != nil {
-			return nil, err
-		}
-		if supported {
-			for index, value := range []float64{
-				luminanceRange.lowOuter, luminanceRange.lowInner,
-				luminanceRange.highInner, luminanceRange.highOuter,
-			} {
-				values[luminanceRangeTransitionProperties[index]] = value
+	if rangeElement := correctionRangeMaskElement(element); rangeElement != nil {
+		for _, property := range []string{"Type", "ColorAmount", "LumMin", "LumMax", "LumFeather"} {
+			text, found, err := crsElementValue(rangeElement, property)
+			if err != nil {
+				return nil, err
 			}
-		}
-		colorAmount, supported, err := parseXMPColorRangeAmount(element)
-		if err != nil {
-			return nil, err
-		}
-		if supported {
-			values["RangeMaskColorAmount"] = colorAmount
-		}
-	} else {
-		// Lightroom Classic 7.x serialized range-mask data directly on the
-		// correction, before it moved the selector into CorrectionMasks.
-		colorAmount, supported, err := parseXMPColorRangeAmount(element)
-		if err != nil {
-			return nil, err
-		}
-		if supported {
-			values["RangeMaskColorAmount"] = colorAmount
+			if !found {
+				continue
+			}
+			number, valid := scalarNumber(text)
+			if !valid {
+				return nil, xmpError("crs:CorrectionRangeMask %s must be numeric", property)
+			}
+			if property == "ColorAmount" || property == "LumMin" || property == "LumMax" || property == "LumFeather" {
+				if number < 0 || number > 1 {
+					return nil, xmpError("crs:CorrectionRangeMask %s must be between 0 and 1", property)
+				}
+			}
+			values["RangeMask"+property] = number
 		}
 	}
 	return values, nil
@@ -185,11 +165,11 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 				if err != nil {
 					return fmt.Errorf("correction %q: %w", correctionID, err)
 				}
-				indexed[key] = maskTransitionNode{
-					element:      element,
-					values:       values,
-					colorSamples: parseXMPColorRangePointModels(element),
+				luminanceRange, hasLuminanceRange, err := parseXMPRangeMaskLumRange(element)
+				if err != nil {
+					return fmt.Errorf("correction %q: %w", correctionID, err)
 				}
+				indexed[key] = maskTransitionNode{values: values, luminanceRange: luminanceRange, hasLuminanceRange: hasLuminanceRange}
 			}
 			if maskID, found, err := crsElementValue(element, "MaskSyncID"); err != nil {
 				return err
@@ -203,7 +183,11 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 				if err != nil {
 					return fmt.Errorf("mask %q: %w", maskID, err)
 				}
-				indexed[key] = maskTransitionNode{element: element, values: values, colorSamples: parseXMPColorRangePointModels(element)}
+				luminanceRange, hasLuminanceRange, err := parseXMPRangeMaskLumRange(element)
+				if err != nil {
+					return fmt.Errorf("mask %q: %w", maskID, err)
+				}
+				indexed[key] = maskTransitionNode{values: values, luminanceRange: luminanceRange, hasLuminanceRange: hasLuminanceRange}
 			}
 			for _, token := range element.Child {
 				child, ok := token.(*etree.Element)
@@ -232,255 +216,74 @@ func correctionRangeMaskElement(element *etree.Element) *etree.Element {
 	return nil
 }
 
-func parseXMPColorRangeAmount(element *etree.Element) (float64, bool, error) {
+func parseXMPRangeMaskLumRange(element *etree.Element) (string, bool, error) {
 	rangeElement := correctionRangeMaskElement(element)
 	if rangeElement == nil {
-		return 0, false, nil
+		return "", false, nil
 	}
-	typeValue, hasType, err := correctionRangeMaskType(rangeElement)
-	if err != nil {
-		return 0, false, err
+	text, found, err := crsElementValue(rangeElement, "LumRange")
+	if err != nil || !found || strings.TrimSpace(text) == "" {
+		return "", false, err
 	}
-	if !hasType || typeValue != 1 {
-		return 0, false, nil
-	}
-	text, found, err := crsElementValue(rangeElement, "ColorAmount")
-	if err != nil || !found {
-		return 0, false, err
-	}
-	amount, valid := scalarNumber(text)
-	if !valid || amount < 0 || amount > 1 {
-		return 0, false, xmpError("crs:CorrectionRangeMask ColorAmount must be between 0 and 1")
-	}
-	return amount, true, nil
-}
-
-func correctionRangeMaskType(rangeElement *etree.Element) (float64, bool, error) {
-	typeText, found, err := crsElementValue(rangeElement, "Type")
-	if err != nil || !found {
-		return 0, found, err
-	}
-	typeValue, valid := scalarNumber(typeText)
-	if !valid || math.Trunc(typeValue) != typeValue {
-		return 0, false, xmpError("crs:CorrectionRangeMask Type must be an integer")
-	}
-	return typeValue, true, nil
-}
-
-func isXMPColorRangeMask(element *etree.Element) bool {
-	rangeElement := correctionRangeMaskElement(element)
-	if rangeElement == nil {
-		return false
-	}
-	typeValue, found, err := correctionRangeMaskType(rangeElement)
-	return err == nil && found && typeValue == 1
-}
-
-func parseXMPColorRangePointModels(element *etree.Element) *etree.Element {
-	rangeElement := correctionRangeMaskElement(element)
-	if rangeElement == nil {
-		return nil
-	}
-	typeValue, found, err := correctionRangeMaskType(rangeElement)
-	if err != nil || !found {
-		return nil
-	}
-	if typeValue != 1 {
-		return nil
-	}
-	return findColorRangePointModels(rangeElement)
-}
-
-func findColorRangePointModels(element *etree.Element) *etree.Element {
-	for _, token := range element.Child {
-		child, ok := token.(*etree.Element)
-		if !ok {
-			continue
-		}
-		if child.NamespaceURI() == crsNamespace && child.Tag == "PointModels" {
-			return child
-		}
-		if pointModels := findColorRangePointModels(child); pointModels != nil {
-			return pointModels
-		}
-	}
-	return nil
-}
-
-func colorRangePointModelValues(element *etree.Element) []string {
-	if element == nil {
-		return nil
-	}
-	values := make([]string, 0)
-	var walk func(*etree.Element)
-	walk = func(current *etree.Element) {
-		if current.NamespaceURI() == rdfNamespace && current.Tag == "li" {
-			if value, scalar := scalarElementText(current); scalar {
-				values = append(values, strings.TrimSpace(value))
-			}
-			return
-		}
-		for _, token := range current.Child {
-			child, ok := token.(*etree.Element)
-			if ok {
-				walk(child)
-			}
-		}
-	}
-	walk(element)
-	return values
-}
-
-func equalColorRangePointModels(left, right *etree.Element) bool {
-	if left == nil || right == nil {
-		return left == right
-	}
-	leftValues, rightValues := colorRangePointModelValues(left), colorRangePointModelValues(right)
-	if len(leftValues) != len(rightValues) {
-		return false
-	}
-	for index := range leftValues {
-		if leftValues[index] != rightValues[index] {
-			return false
-		}
-	}
-	return true
-}
-
-func colorRangePointModelsSource(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, target int, key maskTransitionKey) *etree.Element {
-	if len(keyframes) == 0 {
-		return nil
-	}
-	sourceFrame := keyframes[0]
-	for _, keyframe := range keyframes {
-		if keyframe > target {
-			break
-		}
-		sourceFrame = keyframe
-	}
-	if node, found := indexes[sourceFrame][key]; found {
-		return node.colorSamples
-	}
-	return nil
-}
-
-func cloneFloatMap(values map[string]float64) map[string]float64 {
-	cloned := make(map[string]float64, len(values))
-	for name, value := range values {
-		cloned[name] = value
-	}
-	return cloned
+	return text, true, nil
 }
 
 func maskTransitionSource(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, target int, key maskTransitionKey) map[string]float64 {
-	if len(keyframes) == 0 {
-		return nil
-	}
-	if len(keyframes) == 1 {
-		if node, found := indexes[keyframes[0]][key]; found {
-			return cloneFloatMap(node.values)
-		}
-		return nil
-	}
+	return maskTransitionSourceWithSmoothness(keyframes, indexes, target, key, 50)
+}
 
-	left, right := 0, 0
-	if target < keyframes[0] {
-		left, right = 0, keyframes[0]
-		base, found := indexes[right][key]
-		if !found {
-			return nil
+func maskTransitionSourceWithSmoothness(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, target int, key maskTransitionKey, smoothness int) map[string]float64 {
+	if target < 0 || target >= len(indexes) {
+		return nil
+	}
+	return maskTransitionSeries(keyframes, indexes, key, len(indexes), smoothness)[target]
+}
+
+func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, key maskTransitionKey, frameCount, smoothness int) []map[string]float64 {
+	series := make([]map[string]float64, frameCount)
+	properties := make(map[string]bool)
+	for _, keyframe := range keyframes {
+		if node, found := indexes[keyframe][key]; found {
+			for name := range node.values {
+				properties[name] = true
+			}
 		}
-		values := cloneFloatMap(base.values)
-		if edge, exists := indexes[left][key]; exists {
-			for name, edgeValue := range edge.values {
-				endValue, ok := base.values[name]
-				if ok {
-					values[name] = interpolateMaskNumber(name, edgeValue, endValue, float64(target-left)/float64(right-left))
+	}
+	for name := range properties {
+		anchors := make([]lrtSplinePoint, 0, len(keyframes))
+		for _, keyframe := range keyframes {
+			if node, found := indexes[keyframe][key]; found {
+				if value, present := node.values[name]; present {
+					anchors = append(anchors, lrtSplinePoint{x: float32(keyframe), y: float32(value)})
 				}
 			}
 		}
-		return values
-	}
-	if target > keyframes[len(keyframes)-1] {
-		left, right = keyframes[len(keyframes)-1], len(indexes)-1
-		base, found := indexes[left][key]
-		if !found {
-			return nil
+		if len(anchors) == 0 {
+			continue
 		}
-		values := cloneFloatMap(base.values)
-		if edge, exists := indexes[right][key]; exists {
-			for name, startValue := range base.values {
-				endValue, ok := edge.values[name]
-				if ok {
-					values[name] = interpolateMaskNumber(name, startValue, endValue, float64(target-left)/float64(right-left))
-				}
+		spline, err := newLRTTransitionSpline(transitionSplinePoints(anchors, frameCount), smoothness)
+		if err != nil {
+			continue
+		}
+		for target := 0; target < frameCount; target++ {
+			value, found := spline.valueAt(float32(target))
+			if !found {
+				continue
 			}
-		}
-		return values
-	}
-	for frame := 0; frame < len(keyframes)-1; frame++ {
-		left, right = keyframes[frame], keyframes[frame+1]
-		if target <= right {
-			break
-		}
-	}
-	start, startFound := indexes[left][key]
-	end, endFound := indexes[right][key]
-	if !startFound || !endFound || right <= left {
-		return nil
-	}
-	fraction := float64(target-left) / float64(right-left)
-	values := make(map[string]float64)
-	for name, startValue := range start.values {
-		if endValue, found := end.values[name]; found {
-			values[name] = interpolateMaskNumber(name, startValue, endValue, fraction)
-		}
-	}
-	return values
-}
-
-func interpolateMaskNumber(name string, start, end, fraction float64) float64 {
-	if !maskTransitionCircularProperty(name) {
-		return start + (end-start)*fraction
-	}
-	span := math.Mod(end-start, 360)
-	if span >= 180 {
-		span -= 360
-	} else if span < -180 {
-		span += 360
-	}
-	value := math.Mod(start+span*fraction, 360)
-	if value < 0 {
-		value += 360
-	}
-	return value
-}
-
-func isCircularGradientNode(node maskTransitionNode) bool {
-	what, found, err := crsElementValue(node.element, "What")
-	return err == nil && found && strings.TrimSpace(what) == "Mask/CircularGradient"
-}
-
-func radialTransitionForTarget(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, target int, key maskTransitionKey, aspect float64) (map[string]float64, bool) {
-	if len(keyframes) < 2 || key.maskID == "" || aspect <= 0 || target <= keyframes[0] || target >= keyframes[len(keyframes)-1] {
-		return nil, false
-	}
-	for segment := 0; segment < len(keyframes)-1; segment++ {
-		left, right := keyframes[segment], keyframes[segment+1]
-		if target <= right {
-			start, startFound := indexes[left][key]
-			end, endFound := indexes[right][key]
-			if !startFound || !endFound || !isCircularGradientNode(start) || !isCircularGradientNode(end) {
-				return nil, false
+			if series[target] == nil {
+				series[target] = make(map[string]float64)
 			}
-			fraction := float64(target-left) / float64(right-left)
-			return interpolateRadialGradient(start.values, end.values, fraction, aspect)
+			series[target][name] = value
 		}
 	}
-	return nil, false
+	return series
 }
 
-func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, aspect float64) ([][]maskTransitionChange, error) {
+func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness ...int) ([][]maskTransitionChange, error) {
+	transitionSmoothness := 50
+	if len(smoothness) > 0 {
+		transitionSmoothness = smoothness[0]
+	}
 	changes := make([][]maskTransitionChange, len(packets))
 	indexes := make([]map[maskTransitionKey]maskTransitionNode, len(packets))
 	for index, packet := range packets {
@@ -495,14 +298,23 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, aspect flo
 		keyframeSet[index] = true
 	}
 	keysByTarget := make([]map[maskTransitionKey]bool, len(packets))
+	allKeys := make(map[maskTransitionKey]bool)
 	for index := range packets {
 		keysByTarget[index] = make(map[maskTransitionKey]bool)
 		for key := range indexes[index] {
 			keysByTarget[index][key] = true
+			allKeys[key] = true
 		}
 	}
+	seriesByKey := make(map[maskTransitionKey][]map[string]float64, len(allKeys))
+	luminanceRangeByKey := make(map[maskTransitionKey]string, len(allKeys))
+	hasLuminanceRangeByKey := make(map[maskTransitionKey]bool, len(allKeys))
+	for key := range allKeys {
+		seriesByKey[key] = maskTransitionSeries(keyframeIndices, indexes, key, len(packets), transitionSmoothness)
+		luminanceRangeByKey[key], hasLuminanceRangeByKey[key] = firstMaskLuminanceRange(indexes, key)
+	}
 	for target := range packets {
-		if keyframeSet[target] || len(indexes[target]) == 0 {
+		if len(indexes[target]) == 0 {
 			continue
 		}
 		keys := make([]maskTransitionKey, 0, len(keysByTarget[target]))
@@ -519,60 +331,56 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, aspect flo
 			return keys[i].maskID < keys[j].maskID
 		})
 		for _, key := range keys {
-			proposed := maskTransitionSource(keyframeIndices, indexes, target, key)
-			if len(proposed) == 0 && colorRangePointModelsSource(keyframeIndices, indexes, target, key) == nil {
-				continue
-			}
-			if radial, ok := radialTransitionForTarget(keyframeIndices, indexes, target, key, aspect); ok {
-				for name, value := range radial {
-					proposed[name] = value
+			proposed := make(map[string]float64)
+			if !keyframeSet[target] {
+				if target < len(seriesByKey[key]) && seriesByKey[key][target] != nil {
+					proposed = seriesByKey[key][target]
 				}
 			}
 			current := indexes[target][key].values
 			values := make(map[string]string)
-			luminanceRangeChanged := false
 			propertyNames := make([]string, 0, len(proposed))
 			for property := range proposed {
 				propertyNames = append(propertyNames, property)
 			}
 			sort.Strings(propertyNames)
 			for _, property := range propertyNames {
-				value := proposed[property]
-				if property == "RangeMaskColorAmount" {
-					if _, found := current[property]; !found {
-						continue
-					}
-				}
+				value := clampMaskTransitionNumber(property, proposed[property])
 				if old, found := current[property]; found && closeEnough(old, value) {
 					continue
 				}
 				values[property] = formatNumber(value)
-				if luminanceRangeTransitionIndex(property) >= 0 {
-					luminanceRangeChanged = true
-				}
 			}
-			if luminanceRangeChanged {
-				for _, property := range luminanceRangeTransitionProperties {
-					if value, found := proposed[property]; found {
-						values[property] = formatNumber(value)
-					}
-				}
-			}
-			colorSamples := colorRangePointModelsSource(keyframeIndices, indexes, target, key)
-			if !isXMPColorRangeMask(indexes[target][key].element) {
-				colorSamples = nil
-			}
-			if colorSamples != nil && !equalColorRangePointModels(indexes[target][key].colorSamples, colorSamples) {
-				colorSamples = colorSamples.Copy()
-			} else {
-				colorSamples = nil
-			}
-			if len(values) > 0 || colorSamples != nil {
-				changes[target] = append(changes[target], maskTransitionChange{key: key, values: values, colorSamples: colorSamples})
+			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
+			hasLuminanceRangeChange := hasLuminanceRange && (!indexes[target][key].hasLuminanceRange || indexes[target][key].luminanceRange != luminanceRange)
+			if len(values) > 0 || hasLuminanceRangeChange {
+				changes[target] = append(changes[target], maskTransitionChange{
+					key: key, values: values, luminanceRange: luminanceRange,
+					hasLuminanceRange: hasLuminanceRangeChange,
+				})
 			}
 		}
 	}
 	return changes, nil
+}
+
+func clampMaskTransitionNumber(name string, value float64) float64 {
+	if name == "RangeMaskType" {
+		return math.Max(0, math.Min(5, value))
+	}
+	if name == "RangeMaskColorAmount" || name == "RangeMaskLumMin" || name == "RangeMaskLumMax" || name == "RangeMaskLumFeather" {
+		return math.Max(0, math.Min(1, value))
+	}
+	return value
+}
+
+func firstMaskLuminanceRange(indexes []map[maskTransitionKey]maskTransitionNode, key maskTransitionKey) (string, bool) {
+	for _, frame := range indexes {
+		if node, found := frame[key]; found && node.hasLuminanceRange {
+			return node.luminanceRange, true
+		}
+	}
+	return "", false
 }
 
 func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
@@ -625,28 +433,13 @@ func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 	if target == nil {
 		return xmpError("missing synchronized correction/mask %q in crs:%s", change.key.correctionID, change.key.collection)
 	}
-	var luminanceRange [4]float64
-	var hasLuminanceRange [4]bool
 	for name, value := range change.values {
-		if index := luminanceRangeTransitionIndex(name); index >= 0 {
-			number, valid := scalarNumber(value)
-			if !valid || number < 0 || number > 1 {
-				return xmpError("interpolated crs:%s must be between 0 and 1", name)
-			}
-			luminanceRange[index] = number
-			hasLuminanceRange[index] = true
-			continue
-		}
-		if name == "RangeMaskColorAmount" {
-			number, valid := scalarNumber(value)
-			if !valid || number < 0 || number > 1 {
-				return xmpError("interpolated crs:CorrectionRangeMask ColorAmount must be between 0 and 1")
-			}
+		if strings.HasPrefix(name, "RangeMask") {
 			rangeElement := correctionRangeMaskElement(target)
 			if rangeElement == nil {
-				return xmpError("missing crs:CorrectionRangeMask for color range transition")
+				return xmpError("missing crs:CorrectionRangeMask for range-mask transition")
 			}
-			if err := setCRSElementValue(rangeElement, "ColorAmount", value); err != nil {
+			if err := setCRSElementValue(rangeElement, strings.TrimPrefix(name, "RangeMask"), value); err != nil {
 				return err
 			}
 			continue
@@ -655,83 +448,14 @@ func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 			return err
 		}
 	}
-	for _, found := range hasLuminanceRange {
-		if found {
-			if err := setMaskLuminanceRange(target, luminanceRange, hasLuminanceRange); err != nil {
-				return err
-			}
-			break
-		}
-	}
-	if change.colorSamples != nil {
+	if change.hasLuminanceRange {
 		rangeElement := correctionRangeMaskElement(target)
 		if rangeElement == nil {
-			return xmpError("missing crs:CorrectionRangeMask for color selector transition")
+			return xmpError("missing crs:CorrectionRangeMask for luminance-range transition")
 		}
-		parent := rangeElement
-		if current := findColorRangePointModels(rangeElement); current != nil {
-			if currentParent := current.Parent(); currentParent != nil {
-				parent = currentParent
-			}
-			current.Remove()
-		}
-		parent.AddChild(change.colorSamples.Copy())
-	}
-	return nil
-}
-
-func luminanceRangeTransitionIndex(name string) int {
-	for index, property := range luminanceRangeTransitionProperties {
-		if name == property {
-			return index
+		if err := setCRSElementValue(rangeElement, "LumRange", change.luminanceRange); err != nil {
+			return err
 		}
 	}
-	return -1
-}
-
-func setMaskLuminanceRange(element *etree.Element, values [4]float64, present [4]bool) error {
-	for index, found := range present {
-		if !found {
-			return xmpError("incomplete interpolated crs:CorrectionRangeMask LumRange")
-		}
-		if index > 0 && values[index-1] > values[index] {
-			return xmpError("interpolated crs:CorrectionRangeMask LumRange values must be ordered")
-		}
-	}
-	var rangeElement *etree.Element
-	for _, token := range element.Child {
-		child, ok := token.(*etree.Element)
-		if ok && child.NamespaceURI() == crsNamespace && child.Tag == "CorrectionRangeMask" {
-			rangeElement = child
-			break
-		}
-	}
-	if rangeElement == nil {
-		return xmpError("missing crs:CorrectionRangeMask for luminance range transition")
-	}
-	parts := make([]string, len(values))
-	for index, value := range values {
-		parts[index] = formatNumber(value)
-	}
-	serialized := strings.Join(parts, " ")
-	for index := range rangeElement.Attr {
-		if attributeMatches(&rangeElement.Attr[index], crsNamespace, "LumRange") {
-			rangeElement.Attr[index].Value = serialized
-			return nil
-		}
-	}
-	for _, token := range rangeElement.Child {
-		child, ok := token.(*etree.Element)
-		if !ok || child.NamespaceURI() != crsNamespace || child.Tag != "LumRange" {
-			continue
-		}
-		if _, scalar := scalarElementText(child); !scalar {
-			return xmpError("cannot replace structured crs:CorrectionRangeMask LumRange")
-		}
-		child.SetText(serialized)
-		return nil
-	}
-	prefix := ensurePrefix(rangeElement, "crs", crsNamespace)
-	rangeElement.CreateAttr(prefix+":LumRange", serialized)
 	return nil
 }

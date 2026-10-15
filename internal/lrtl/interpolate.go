@@ -46,13 +46,6 @@ var NumericCRSProperties = []string{
 	"VignetteAmount", "VignetteMidpoint", "Whites2012",
 }
 
-var circularCRSProperties = map[string]struct{}{
-	"ColorGradeGlobalHue": {}, "ColorGradeMidtoneHue": {},
-	"DefringeGreenHueHi": {}, "DefringeGreenHueLo": {},
-	"DefringePurpleHueHi": {}, "DefringePurpleHueLo": {},
-	"SplitToningHighlightHue": {}, "SplitToningShadowHue": {},
-}
-
 var firstFrameEqualizedProperties = []string{
 	"Look", "PointColors", "Preset", "ToneCurve", "ToneCurveName", "ToneCurveName2012", "ToneCurvePV2012",
 	"ToneCurvePV2012Blue", "ToneCurvePV2012Green", "ToneCurvePV2012Red",
@@ -80,7 +73,7 @@ func (plan InterpolationPlan) PropertyCount() int {
 		total += len(change.Values) + len(change.StructuredProperties)
 		for _, transition := range change.MaskTransitions {
 			total += len(transition.values)
-			if transition.colorSamples != nil {
+			if transition.hasLuminanceRange {
 				total++
 			}
 		}
@@ -117,41 +110,14 @@ func formatNumber(value float64) string {
 	return strconv.FormatFloat(value, 'g', 12, 64)
 }
 
-func linearValues(targetIndex, startIndex, endIndex int, startValues, endValues map[string]float64) map[string]float64 {
-	span := endIndex - startIndex
-	if span <= 0 {
-		return nil
-	}
-	fraction := float64(targetIndex-startIndex) / float64(span)
-	values := make(map[string]float64)
-	for _, name := range NumericCRSProperties {
-		start, startOK := startValues[name]
-		end, endOK := endValues[name]
-		if startOK && endOK {
-			values[name] = interpolateCRSValue(name, start, end, fraction)
-		}
-	}
-	return values
-}
-
-func interpolateCRSValue(name string, start, end, fraction float64) float64 {
-	if _, circular := circularCRSProperties[name]; !circular {
-		return start + (end-start)*fraction
-	}
-	span := math.Mod(end-start, 360)
-	if span >= 180 {
-		span -= 360
-	} else if span < -180 {
-		span += 360
-	}
-	value := math.Mod(start+span*fraction, 360)
-	if value < 0 {
-		value += 360
-	}
-	return value
-}
-
 func buildPlan(frames []Frame) (*InterpolationPlan, error) {
+	return buildPlanWithSmoothness(frames, 50)
+}
+
+func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan, error) {
+	if smoothness < 0 || smoothness > 100 {
+		return nil, fmt.Errorf("smoothness must be between 0 and 100")
+	}
 	packets := make([]*XMPPacket, len(frames))
 	created := make([]bool, len(frames))
 	for index, frame := range frames {
@@ -234,58 +200,54 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 		return nil
 	}
 
-	if len(keyframes) == 1 {
-		anchor := numericCRSValues(packets[keyframes[0]])
+	numericValues := make([]map[string]float64, len(packets))
+	for index, packet := range packets {
+		numericValues[index] = numericCRSValues(packet)
+	}
+	keyframeSet := make(map[int]bool, len(keyframes))
+	for _, keyframe := range keyframes {
+		keyframeSet[keyframe] = true
+	}
+	for _, name := range NumericCRSProperties {
+		anchors := make([]lrtSplinePoint, 0, len(keyframes))
+		for _, keyframe := range keyframes {
+			if value, found := numericValues[keyframe][name]; found {
+				anchors = append(anchors, lrtSplinePoint{x: float32(keyframe), y: float32(value)})
+			}
+		}
+		if len(anchors) == 0 {
+			continue
+		}
+		if len(anchors) == 1 {
+			for targetIndex := range frames {
+				if keyframeSet[targetIndex] {
+					continue
+				}
+				if err := assign(targetIndex, map[string]float64{name: float64(anchors[0].y)}); err != nil {
+					return nil, err
+				}
+			}
+			continue
+		}
+		splinePoints := transitionSplinePoints(anchors, len(frames))
+		spline, err := newLRTTransitionSpline(splinePoints, smoothness)
+		if err != nil {
+			return nil, err
+		}
 		for targetIndex := range frames {
-			if err := assign(targetIndex, anchor); err != nil {
+			if keyframeSet[targetIndex] {
+				continue
+			}
+			value, found := spline.valueAt(float32(targetIndex))
+			if !found {
+				continue
+			}
+			if err := assign(targetIndex, map[string]float64{name: value}); err != nil {
 				return nil, err
 			}
 		}
-	} else if len(keyframes) > 1 {
-		first, last := keyframes[0], keyframes[len(keyframes)-1]
-		firstValues := numericCRSValues(packets[first])
-		lastValues := numericCRSValues(packets[last])
-		if first > 0 {
-			edgeValues := numericCRSValues(packets[0])
-			for targetIndex := 1; targetIndex < first; targetIndex++ {
-				values := copyNumericValues(firstValues)
-				for name, value := range linearValues(targetIndex, 0, first, edgeValues, firstValues) {
-					values[name] = value
-				}
-				if err := assign(targetIndex, values); err != nil {
-					return nil, err
-				}
-			}
-		}
-		if last < len(frames)-1 {
-			edgeIndex := len(frames) - 1
-			edgeValues := numericCRSValues(packets[edgeIndex])
-			for targetIndex := last + 1; targetIndex < edgeIndex; targetIndex++ {
-				values := copyNumericValues(lastValues)
-				for name, value := range linearValues(targetIndex, last, edgeIndex, lastValues, edgeValues) {
-					values[name] = value
-				}
-				if err := assign(targetIndex, values); err != nil {
-					return nil, err
-				}
-			}
-		}
-		for keyframeIndex := 0; keyframeIndex < len(keyframes)-1; keyframeIndex++ {
-			left, right := keyframes[keyframeIndex], keyframes[keyframeIndex+1]
-			leftValues := numericCRSValues(packets[left])
-			rightValues := numericCRSValues(packets[right])
-			for targetIndex := left + 1; targetIndex < right; targetIndex++ {
-				if err := assign(targetIndex, linearValues(targetIndex, left, right, leftValues, rightValues)); err != nil {
-					return nil, err
-				}
-			}
-		}
 	}
-	aspect := 0.0
-	if len(frames) > 0 {
-		aspect = sequenceImageAspect(frames[0])
-	}
-	maskTransitions, err := planMaskTransitions(packets, keyframes, aspect)
+	maskTransitions, err := planMaskTransitions(packets, keyframes, smoothness)
 	if err != nil {
 		return nil, err
 	}
@@ -323,14 +285,6 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 		FrameCount: len(frames), KeyframeIndices: keyframes, Changes: changes,
 		StructuredSource: structuredSource,
 	}, nil
-}
-
-func copyNumericValues(values map[string]float64) map[string]float64 {
-	copy := make(map[string]float64, len(values))
-	for name, value := range values {
-		copy[name] = value
-	}
-	return copy
 }
 
 func closeEnough(left, right float64) bool {
