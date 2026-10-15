@@ -129,6 +129,14 @@ func newTimestampOverlayFace(width, height int) (font.Face, error) {
 }
 
 func applyTimestampOverlay(source image.Image, label string, face font.Face) *image.NRGBA {
+	return applyTextOverlay(source, label, face, "bottom-right")
+}
+
+func applyWatermarkOverlay(source image.Image, label, position string, face font.Face) *image.NRGBA {
+	return applyTextOverlay(source, label, face, position)
+}
+
+func applyTextOverlay(source image.Image, label string, face font.Face, position string) *image.NRGBA {
 	bounds := source.Bounds()
 	result := image.NewNRGBA(bounds)
 	draw.Draw(result, bounds, source, bounds.Min, draw.Src)
@@ -140,11 +148,33 @@ func applyTimestampOverlay(source image.Image, label string, face font.Face) *im
 	outline := max(1, metrics.Height.Ceil()/12)
 	drawer := font.Drawer{Dst: result, Face: face}
 	stringWidth := drawer.MeasureString(label).Ceil()
-	x := bounds.Max.X - margin - stringWidth
-	if x < bounds.Min.X+margin {
-		x = bounds.Min.X + margin
+	textHeight := metrics.Ascent.Ceil() + metrics.Descent.Ceil()
+	x := bounds.Min.X + margin
+	y := bounds.Min.Y + margin + metrics.Ascent.Ceil()
+	switch position {
+	case "top-right":
+		x = bounds.Max.X - margin - stringWidth
+	case "bottom-left":
+		y = bounds.Max.Y - margin - metrics.Descent.Ceil()
+	case "bottom-right", "":
+		x = bounds.Max.X - margin - stringWidth
+		y = bounds.Max.Y - margin - metrics.Descent.Ceil()
+	case "center":
+		x = bounds.Min.X + (bounds.Dx()-stringWidth)/2
+		y = bounds.Min.Y + (bounds.Dy()-textHeight)/2 + metrics.Ascent.Ceil()
 	}
-	y := bounds.Max.Y - margin
+	minX, maxX := bounds.Min.X+margin, bounds.Max.X-margin-stringWidth
+	if maxX < minX {
+		x = minX
+	} else {
+		x = max(minX, min(maxX, x))
+	}
+	minY, maxY := bounds.Min.Y+metrics.Ascent.Ceil()+margin, bounds.Max.Y-margin-metrics.Descent.Ceil()
+	if maxY < minY {
+		y = bounds.Min.Y + (bounds.Dy()-textHeight)/2 + metrics.Ascent.Ceil()
+	} else {
+		y = max(minY, min(maxY, y))
+	}
 	drawer.Src = image.NewUniform(color.NRGBA{R: 0, G: 0, B: 0, A: 210})
 	for dy := -outline; dy <= outline; dy++ {
 		for dx := -outline; dx <= outline; dx++ {

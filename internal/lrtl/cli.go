@@ -116,7 +116,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--filename-contains TEXT] [--watermark TEXT] [--watermark-position POS] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  batch-render ROOT --output DIRECTORY [--format avi|mp4|mov] [--workers N] [--recursive] [-- RENDER_OPTIONS...]")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
@@ -688,6 +688,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
 	output := set.String("output", "", "output AVI, MP4, or MOV path")
 	selectionPath := set.String("selection", "", "use included frames from a long-term selection manifest")
+	filenameContains := set.String("filename-contains", "", "render only frames whose filename contains this text (case-insensitive)")
 	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores|prores-hq|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
 	fps := set.Int("fps", 24, "integer frame rate (1-240)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
@@ -711,6 +712,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	autoOrient := set.Bool("auto-orient", false, "apply EXIF orientation before crop, analysis, and rendering")
 	timestampOverlay := set.Bool("timestamp-overlay", false, "burn each frame's EXIF/XMP capture time into the video")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
+	watermark := set.String("watermark", "", "burn fixed text into every frame")
+	watermarkPosition := set.String("watermark-position", "bottom-left", "watermark position: top-left, top-right, bottom-left, bottom-right, or center")
 	motionBlurFrames := set.Int("motion-blur", 0, "blend this many adjacent frames (0 off; 2, 3, 4, 5, 10, 15, 20)")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop supported RAW files with DNGLab")
@@ -718,6 +721,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--selection": true, "-selection": true,
+		"--filename-contains": true, "-filename-contains": true,
 		"--codec": true, "-codec": true,
 		"--fps": true, "-fps": true,
 		"--quality": true, "-quality": true,
@@ -734,6 +738,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true,
 		"--timestamp-format": true, "-timestamp-format": true,
+		"--watermark": true, "-watermark": true,
+		"--watermark-position": true, "-watermark-position": true,
 		"--motion-blur": true, "-motion-blur": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
@@ -787,6 +793,19 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 			return reportError(stderr, err)
 		}
 	}
+	if *filenameContains != "" {
+		needle := strings.ToLower(*filenameContains)
+		matched := make([]Frame, 0, len(frames))
+		for _, frame := range frames {
+			if strings.Contains(strings.ToLower(filepath.Base(frame.Image)), needle) {
+				matched = append(matched, frame)
+			}
+		}
+		if len(matched) == 0 {
+			return reportError(stderr, fmt.Errorf("--filename-contains %q matched no frames in %s", *filenameContains, directory))
+		}
+		frames = matched
+	}
 	options := RenderOptions{
 		FPS:               *fps,
 		Quality:           *quality,
@@ -811,6 +830,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		AutoOrient:        *autoOrient,
 		TimestampOverlay:  timestampOverlayEnabled,
 		TimestampFormat:   *timestampFormat,
+		Watermark:         *watermark,
+		WatermarkPosition: strings.ToLower(strings.TrimSpace(*watermarkPosition)),
 		MotionBlurFrames:  *motionBlurFrames,
 		RawPreview:        *rawPreview,
 		RawDevelop:        *rawDevelop,
@@ -870,6 +891,12 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *selectionPath != "" {
 		features = append(features, "long-term selection")
+	}
+	if *filenameContains != "" {
+		features = append(features, fmt.Sprintf("filename contains %q", *filenameContains))
+	}
+	if *watermark != "" {
+		features = append(features, "text watermark")
 	}
 	if len(features) > 0 {
 		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)

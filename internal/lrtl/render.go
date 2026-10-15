@@ -44,6 +44,8 @@ type RenderOptions struct {
 	AutoOrient        bool
 	TimestampOverlay  bool
 	TimestampFormat   string
+	Watermark         string
+	WatermarkPosition string
 	MotionBlurFrames  int
 	RawPreview        bool
 	RawDevelop        bool
@@ -261,8 +263,8 @@ const maxVideoDimension = int64(1<<31 - 1)
 
 // RenderSequence writes JPEG, PNG, TIFF, selected embedded RAW previews, or DNGLab-developed
 // RAW frames to MJPEG AVI, H.264/H.265 MP4, or ProRes MOV. It can optionally apply selected
-// global XMP tone controls, EXIF orientation, rotated XMP crop bounds, and a metadata timestamp
-// overlay, but does not implement full Camera Raw RAW rendering.
+// global XMP tone controls, EXIF orientation, rotated XMP crop bounds, metadata timestamps,
+// and fixed-text watermarks, but does not implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -392,7 +394,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 	var captureTimes []time.Time
-	var timestampFace font.Face
+	var overlayFace font.Face
 
 	first, config, firstFormat, err := readRenderInputWithOptions(frames[0], inputOptions)
 	if err != nil {
@@ -430,18 +432,34 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 	resizeFrames := outputWidth != width || outputHeight != height
+	if options.TimestampOverlay || options.Watermark != "" {
+		if options.Watermark != "" {
+			if options.WatermarkPosition == "" {
+				options.WatermarkPosition = "bottom-left"
+			}
+			switch options.WatermarkPosition {
+			case "top-left", "top-right", "bottom-left", "bottom-right", "center":
+			default:
+				return fmt.Errorf("unsupported watermark position %q (use top-left, top-right, bottom-left, bottom-right, or center)", options.WatermarkPosition)
+			}
+		}
+	}
 	if options.TimestampOverlay {
 		captureTimes, err = readFrameCaptureTimes(frames)
 		if err != nil {
 			return fmt.Errorf("timestamp overlay: %w", err)
 		}
-		timestampFace, err = newTimestampOverlayFace(outputWidth, outputHeight)
+	}
+	if options.TimestampOverlay || options.Watermark != "" {
+		overlayFace, err = newTimestampOverlayFace(outputWidth, outputHeight)
 		if err != nil {
 			return err
 		}
-		if closer, ok := timestampFace.(interface{ Close() error }); ok {
+		if closer, ok := overlayFace.(interface{ Close() error }); ok {
 			defer closer.Close()
 		}
+	}
+	if options.TimestampOverlay {
 		if options.TimestampFormat == "" {
 			options.TimestampFormat = defaultTimestampFormat
 		}
@@ -659,10 +677,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				return blendErr
 			}
 			var img image.Image
-			if timestampFace != nil || outputExtension == ".avi" {
+			if overlayFace != nil || outputExtension == ".avi" {
 				img = imageFromRGB24(rgb, outputWidth, outputHeight)
-				if timestampFace != nil {
-					img = applyTimestampOverlay(img, captureTimes[target].Format(options.TimestampFormat), timestampFace)
+				if options.TimestampOverlay {
+					img = applyTimestampOverlay(img, captureTimes[target].Format(options.TimestampFormat), overlayFace)
+				}
+				if options.Watermark != "" {
+					img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 				}
 			}
 			if outputExtension == ".avi" {
@@ -671,10 +692,10 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 					return fmt.Errorf("encode %s as JPEG: %w", frames[target].Image, err)
 				}
 				rgb = encoded.Bytes()
-			} else if timestampFace != nil {
+			} else if overlayFace != nil {
 				rgb, err = imageRGB24(img)
 				if err != nil {
-					return fmt.Errorf("convert timestamped %s to RGB24: %w", frames[target].Image, err)
+					return fmt.Errorf("convert overlaid %s to RGB24: %w", frames[target].Image, err)
 				}
 			}
 			if err := writer.AddFrame(rgb); err != nil {
@@ -749,8 +770,11 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
 			}
-			if timestampFace != nil {
-				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), timestampFace)
+			if options.TimestampOverlay {
+				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), overlayFace)
+			}
+			if options.Watermark != "" {
+				img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 			}
 			rgb, err := imageRGB24(img)
 			if err != nil {
@@ -767,7 +791,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || timestampFace != nil || format != "jpeg" {
+		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
@@ -799,8 +823,11 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
 			}
-			if timestampFace != nil {
-				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), timestampFace)
+			if options.TimestampOverlay {
+				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), overlayFace)
+			}
+			if options.Watermark != "" {
+				img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 			}
 			if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
 				return fmt.Errorf("encode %s as JPEG: %w", frame.Image, err)

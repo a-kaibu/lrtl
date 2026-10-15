@@ -24,6 +24,7 @@ These notes record observed interfaces and public workflow behavior used to desi
 
 - The official workflow describes XMP files as the exchange layer between LRTimelapse and Lightroom. Users choose keyframes, edit those images, save metadata, then run Auto-Transition to calculate settings for intervening frames.
 - The official Long-Term / Construction workflow describes filtering sequences by Luminance, Contrast, and Hue, then applying Deflicker and Motion Blur to the more consistent subset. The workflow page describes paired low/high filter limits but does not publish the underlying metric equations.
+- LRTimelapse 7 release notes list “Select by Filename” for separating images such as left/right camera captures. `render --filename-contains TEXT` supplies a case-insensitive CLI subset filter; it does not implement the table-selection UI or the other sequence management actions.
 - The official Visual Workflow enables the Holy Grail wizard for manual-mode sequences where exposure time and/or ISO changed during capture, and describes its orange curve as compensation for those camera adjustments. LRTimelapse offers rotate/stretch controls for shaping that curve.
 - The current official Visual Workflow also gates the wizard on a manual-mode sequence. lrtl only creates automatic 2*/3* markers when EXIF explicitly reports Manual on every frame; `--mark-jumps` is an override for sequences whose camera omitted mode metadata.
 - LRTimelapse's developer describes 2-star/3-star ratings as internal Holy Grail keyframes that mark camera-setting jumps and must not be overwritten by ordinary 4-star keyframes. This supports the separate marker model; it does not establish the exact correction values stored by the wizard.
@@ -81,3 +82,4 @@ These notes record observed interfaces and public workflow behavior used to desi
 - [LRT developer guidance on animating initialized masks between keyframes](https://forum.lrtimelapse.com/Thread-masks-on-keyframes-tip-on-adjusting-exposure-of-the-moon)
 - [LRTimelapse discussion with an XMP example of intersected masks](https://forum.lrtimelapse.com/Thread-issue-with-luminance-range-mask-intersected-with-linear-gradient-mask?pid=57463)
 - [LRTimelapse 7.4 release notes](https://lrtimelapse.com/updates/lrtimelapse-7-4/)
+- [LRTimelapse 7 release notes: Select by Filename](https://lrtimelapse.com/news/lrtimelapse-7/)
