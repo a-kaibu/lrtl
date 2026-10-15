@@ -460,6 +460,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to rendered frames")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP")
+	timestampOverlay := set.Bool("timestamp-overlay", false, "burn each frame's EXIF/XMP capture time into the video")
+	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop supported RAW files with DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
@@ -475,6 +477,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--smooth": true, "-smooth": true,
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true,
+		"--timestamp-format": true, "-timestamp-format": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -496,10 +499,13 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	deflickerEnabled := *deflicker
+	timestampOverlayEnabled := *timestampOverlay
 	set.Visit(func(parsed *flag.Flag) {
 		switch parsed.Name {
 		case "reference", "smooth", "passes", "constant":
 			deflickerEnabled = true
+		case "timestamp-format":
+			timestampOverlayEnabled = true
 		}
 	})
 	directory := set.Arg(0)
@@ -522,6 +528,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		Constant:         *constant,
 		ApplyXMPExposure: *applyXMPExposure,
 		ApplyXMPCrop:     *applyXMPCrop,
+		TimestampOverlay: timestampOverlayEnabled,
+		TimestampFormat:  *timestampFormat,
 		RawPreview:       *rawPreview,
 		RawDevelop:       *rawDevelop,
 		DNGLabPath:       *dnglab,
@@ -529,12 +537,15 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
-	features := make([]string, 0, 5)
+	features := make([]string, 0, 6)
 	if *applyXMPExposure {
 		features = append(features, "XMP Exposure2012")
 	}
 	if *applyXMPCrop {
 		features = append(features, "XMP crop")
+	}
+	if timestampOverlayEnabled {
+		features = append(features, "EXIF/XMP timestamp overlay")
 	}
 	if *rawPreview {
 		features = append(features, "embedded RAW previews")

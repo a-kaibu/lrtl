@@ -12,9 +12,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/icza/mjpeg"
 	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/font"
 	_ "golang.org/x/image/tiff"
 )
 
@@ -33,6 +35,8 @@ type RenderOptions struct {
 	Constant         bool
 	ApplyXMPExposure bool
 	ApplyXMPCrop     bool
+	TimestampOverlay bool
+	TimestampFormat  string
 	RawPreview       bool
 	RawDevelop       bool
 	DNGLabPath       string
@@ -154,7 +158,8 @@ const maxVideoDimension = int64(1<<31 - 1)
 
 // RenderSequence writes JPEG, PNG, TIFF, selected embedded RAW previews, or DNGLab-developed
 // RAW frames to MJPEG AVI or H.264 MP4. It can optionally apply the global XMP Exposure2012
-// slider and rotated XMP crop bounds, but does not implement full Camera Raw RAW rendering.
+// slider, rotated XMP crop bounds, and an optional metadata timestamp overlay, but does not
+// implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -237,6 +242,8 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			xmpExposures[index] = exposure
 		}
 	}
+	var captureTimes []time.Time
+	var timestampFace font.Face
 
 	first, config, firstFormat, err := readRenderInputWithOptions(frames[0], inputOptions)
 	if err != nil {
@@ -254,6 +261,22 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		return err
 	}
 	resizeFrames := outputWidth != width || outputHeight != height
+	if options.TimestampOverlay {
+		captureTimes, err = readFrameCaptureTimes(frames)
+		if err != nil {
+			return fmt.Errorf("timestamp overlay: %w", err)
+		}
+		timestampFace, err = newTimestampOverlayFace(outputWidth, outputHeight)
+		if err != nil {
+			return err
+		}
+		if closer, ok := timestampFace.(interface{ Close() error }); ok {
+			defer closer.Close()
+		}
+		if options.TimestampFormat == "" {
+			options.TimestampFormat = defaultTimestampFormat
+		}
+	}
 	var xmpCrops []cropSpec
 	if options.ApplyXMPCrop {
 		xmpCrops, err = readXMPCrops(frames, width, height)
@@ -409,6 +432,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
 			}
+			if timestampFace != nil {
+				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), timestampFace)
+			}
 			rgb, err := imageRGB24(img)
 			if err != nil {
 				return fmt.Errorf("convert %s to RGB24: %w", frame.Image, err)
@@ -424,7 +450,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyCrop || resizeFrames || format != "jpeg" {
+		if options.Deflicker || applyXMP || applyCrop || resizeFrames || timestampFace != nil || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
@@ -445,6 +471,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
+			}
+			if timestampFace != nil {
+				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), timestampFace)
 			}
 			if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
 				return fmt.Errorf("encode %s as JPEG: %w", frame.Image, err)
