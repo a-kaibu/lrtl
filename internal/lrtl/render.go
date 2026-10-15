@@ -27,6 +27,7 @@ type RenderOptions struct {
 	Constant         bool
 	ApplyXMPExposure bool
 	ApplyXMPCrop     bool
+	RawPreview       bool
 }
 
 func supportedRasterExtension(path string) bool {
@@ -44,9 +45,9 @@ func supportedRasterFormat(format string) bool {
 
 const maxAVIDimension = int64(1<<31 - 1)
 
-// RenderSequence writes already-developed JPEG, PNG, or TIFF frames to an MJPEG AVI
-// file. It can optionally apply the global XMP Exposure2012 slider and axis-aligned
-// XMP crop bounds, but does not implement full Camera Raw rendering or decode RAWs.
+// RenderSequence writes JPEG, PNG, TIFF, or explicitly selected embedded RAW previews
+// to an MJPEG AVI file. It can optionally apply the global XMP Exposure2012 slider and
+// axis-aligned XMP crop bounds, but does not implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -76,8 +77,11 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}
 
 	for _, frame := range frames {
-		if !supportedRasterExtension(frame.Image) {
-			return fmt.Errorf("render supports JPEG, PNG, and TIFF only; unsupported frame: %s", filepath.Base(frame.Image))
+		if !supportedRasterExtension(frame.Image) && !supportsEmbeddedRawPreview(frame.Image) {
+			return fmt.Errorf("render does not support this image type: %s", filepath.Base(frame.Image))
+		}
+		if supportsEmbeddedRawPreview(frame.Image) && !options.RawPreview {
+			return fmt.Errorf("RAW input %s requires --raw-preview; this uses the camera's embedded preview, not RAW development", filepath.Base(frame.Image))
 		}
 	}
 
@@ -93,13 +97,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 
-	first, err := os.ReadFile(frames[0].Image)
+	first, config, firstFormat, err := readRenderInput(frames[0], options.RawPreview)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", frames[0].Image, err)
-	}
-	config, _, err := image.DecodeConfig(bytes.NewReader(first))
-	if err != nil {
-		return fmt.Errorf("decode %s: %w", frames[0].Image, err)
+		return err
 	}
 	if config.Width <= 0 || config.Height <= 0 {
 		return fmt.Errorf("invalid dimensions in %s: %dx%d", frames[0].Image, config.Width, config.Height)
@@ -126,11 +126,11 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 		luminances := make([]float64, len(frames))
 		for index, frame := range frames {
-			data := first
+			data, frameConfig, format := first, config, firstFormat
 			if index > 0 {
-				data, err = os.ReadFile(frame.Image)
+				data, frameConfig, format, err = readRenderInput(frame, options.RawPreview)
 				if err != nil {
-					return fmt.Errorf("read %s: %w", frame.Image, err)
+					return err
 				}
 			}
 			img, format, decodeErr := image.Decode(bytes.NewReader(data))
@@ -140,7 +140,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if !supportedRasterFormat(format) {
 				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 			}
-			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+			if frameConfig.Width != width || frameConfig.Height != height || img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 			}
 			if xmpCrops != nil {
@@ -201,19 +201,12 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}()
 
 	for index, frame := range frames {
-		data := first
+		data, config, format := first, config, firstFormat
 		if index > 0 {
-			data, err = os.ReadFile(frame.Image)
+			data, config, format, err = readRenderInput(frame, options.RawPreview)
 			if err != nil {
-				return fmt.Errorf("read %s: %w", frame.Image, err)
+				return err
 			}
-		}
-		config, format, decodeErr := image.DecodeConfig(bytes.NewReader(data))
-		if decodeErr != nil {
-			return fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
-		}
-		if !supportedRasterFormat(format) {
-			return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 		}
 		if config.Width != width || config.Height != height {
 			return fmt.Errorf("inconsistent dimensions in %s", frame.Image)

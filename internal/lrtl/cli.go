@@ -97,9 +97,9 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG/TIFF frames to MJPEG AVI")
-	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write]           analyze luminance and update XMP exposure")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced]  suggest keyframes")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render frames; --raw-preview uses embedded RAW images")
+	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-preview]  analyze and update XMP exposure")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-preview]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 }
 
@@ -453,6 +453,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to raster frames")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply axis-aligned crop rectangles from sidecar XMP")
+	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported TIFF-based RAW files")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
@@ -503,6 +504,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		Constant:         *constant,
 		ApplyXMPExposure: *applyXMPExposure,
 		ApplyXMPCrop:     *applyXMPCrop,
+		RawPreview:       *rawPreview,
 	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
@@ -513,6 +515,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *applyXMPCrop {
 		features = append(features, "XMP crop")
+	}
+	if *rawPreview {
+		features = append(features, "embedded RAW previews")
 	}
 	if len(features) > 0 {
 		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)
@@ -531,6 +536,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	smoothRadius := set.Int("smooth", 5, "deflicker smoothing radius in frames")
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
+	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
@@ -554,12 +560,12 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "passes", "constant":
+			case "reference", "smooth", "passes", "constant", "raw-preview":
 				analysisOption = true
 			}
 		})
 		if analysisOption {
-			return reportError(stderr, fmt.Errorf("--reset cannot be combined with --reference, --smooth, --passes, or --constant"))
+			return reportError(stderr, fmt.Errorf("--reset cannot be combined with analysis options"))
 		}
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
@@ -575,7 +581,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	}
 	var luminances []float64
 	if !*reset {
-		luminances, err = analyzeDeflickerSequence(frames, reference)
+		luminances, err = analyzeDeflickerSequence(frames, reference, *rawPreview)
 		if err != nil {
 			return reportError(stderr, err)
 		}
@@ -640,6 +646,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	count := set.Int("count", 5, "number of suggested keyframes (default capped to frame count)")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius in frames")
 	evenlySpaced := set.Bool("evenly-spaced", false, "suggest uniformly spaced interior keyframes without decoding images")
+	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
 	write := set.Bool("write", false, "mark the suggested frames in XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{"--count": true, "-count": true, "--smooth": true, "-smooth": true})); err != nil {
@@ -666,7 +673,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	}
 	var curve []float64
 	if !*evenlySpaced {
-		curve, err = analyzeLuminanceSequence(frames)
+		curve, err = analyzeLuminanceSequenceWithRawPreview(frames, *rawPreview)
 		if err != nil {
 			return reportError(stderr, err)
 		}
