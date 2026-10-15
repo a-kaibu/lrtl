@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `init DIRECTORY --write`で新しい連番の補正スロットを準備できます。ModernはMaskGroup 1〜9、LegacyはGradient 1〜7＋Circular 1〜2を生成し、5/6/7番目をHG/Deflicker/Global用として分離します。既存の編集値・キーフレーム・未知のメタデータを保持し、予約位置に別の補正がある場合は全フレームの書き込み前に競合を報告します。
+
 - Auto-Transitionのスプライン部品を実LRT 7.5.5へ入力した27ケース（5/17/101フレーム、3/4アンカー、smoothness 0/50/100）と比較し、単精度の演算順序を修正しました。整数11ケースと4桁丸め13ケースも実LRTのヘルパーと比較しています。全ワークフローやXMP出力全体の一致を示すものではありません。
 - LRTの数値ワーカーで確認した後処理を追加しました。アンカー間隔が`max(2, floor(連番長×4%))`未満なら直線にし、同じ値の区間（小数値は4桁のHALF_EVEN丸めで比較）は平坦にします。全体値と登録マスク値に適用し、キーフレームを保持します。
 - `interpolate`がサイドカーなしの画像内XMPを読み落とす不具合と、`--smoothness 50 --write`の引数解析を修正しました。画像内キーフレームから補間し、未知のRDF値を保ったサイドカーを作成できます。元画像は変更しません。
@@ -46,7 +48,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | GUIで元画像上をドラッグしてクロップ範囲を指定し、角度を調整してXMPへ保存できる。保存時は`HasCrop`とCropAngle/Top/Left/Bottom/Rightを書き、5つ星crop markと既存XMPバックアップも作成。`interpolate`は値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。Camera RawのGeometry/遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。反転選択、画像のコピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
-| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。画像内XMPを読むのは外部サイドカーがない場合で、編集結果はXMPサイドカーへ保存し画像本体は変更しない。その他のRAWコンテナー内XMPやメタデータ一括操作は未対応 | 一部 |
+| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`init`による不足マスク/内部補正スロットの初期化、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。画像内XMPを読むのは外部サイドカーがない場合で、編集結果はXMPサイドカーへ保存し画像本体は変更しない。その他のRAWコンテナー内XMP、メタデータ全消去/リセットや全設定のコピー/貼付は未対応 | 一部 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。JPEGは外部サイドカーがなければ画像内の標準/拡張XMP、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRはtag 700、RAFは埋め込みJPEG、CR3はISO BMFFのAdobe XMP UUIDから読み取る。編集結果はサイドカーへ保存し画像を変更しない。`gui`と`set`で許可した131項目とPreview EVを選択フレーム単位で編集し、`preview-ev`でRGBヒストグラムからPreview EVを算出してXMPへ書き込める。GUIではToneCurvePV2012のマスター/R/G/Bポイントを選択フレームごとに追加・移動・削除でき、属性/単純テキスト/RDF Seq表現のXMPをバックアップ付きで保存。全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度で16-bit PCHIPカーブ出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を先頭フレームから均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入、近接アンカーの直線化・等値区間の平坦化を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。アスペクト比を使う円形グラデーションの専用形状補正、Camera Rawのマスク描画との一致は未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
@@ -510,6 +512,27 @@ lrtl preview-ev "D:\Timelapse\Developed" --write
 ```
 
 この測光式は復元したものですが、LRTが利用するネイティブのプレビュー縮小・色処理と選択ROIは再現していません。lrtlは入力ラスター全体を測定します。そのため保存値はLRTの表示プレビューから得る値と異なることがあります。XMP値がない連番では、先に`preview-ev --write`を実行すると、`keyframes`の既定数量計算で使える値を生成できます。
+
+## 連番の初期化
+
+```powershell
+# 既定では予定を表示するだけ
+lrtl init "D:\Timelapse\RAW"
+# 補正スロットをXMPサイドカーへ保存
+lrtl init "D:\Timelapse\RAW" --write
+# 旧形式を明示して作成
+lrtl init "D:\Timelapse\RAW" --mask-format legacy --write
+```
+
+既定の`--mask-format auto`は既存のマスク形式を保ち、マスクがないフレームでは連番内で最初に確認できた形式（連番全体にマスクがなければmodern）を使います。`modern`/`legacy`を明示することもできます。形式の変換は行いません。
+
+Modernは`MaskGroupBasedCorrections[1..9]`に4つの編集用線形マスク、HG/Deflicker/Globalの3つの全画面補正、2つの編集用円形マスクを準備します。Legacyは同じ役割を`GradientBasedCorrections[1..7]`と`CircularGradientBasedCorrections[1..2]`に分けます。追加する補正値は中立です。内部レイヤーはLRTの識別名/旧形式の署名に対応し、`holy-grail`と`deflicker`がそれぞれの専用スロットを使えます。既存のSync IDは保持し、追加するスロットのIDは連番で共有します。
+
+既存の編集用マスクは変更せず、内部スロットも既存の露出・Active/Amount・形状を保持して不足項目を補います。予約位置5〜7に無関係なマスクがある場合、内部ロールが別位置にある場合、または既存内部レイヤーと異なる形式を強制した場合は中断し、移動や上書きをしません。全フレームを確認してから書き込みを始めます。書き込み時の既存サイドカーは既定でバックアップし、再実行で変更がなければ書き込みません。サイドカーのない画像の埋め込みXMPも読み、未知の値を引き継いでサイドカーへ保存します。
+
+Camera RawのVersion/ProcessVersion/HasSettingsがない場合に限り、観測した互換初期値14/11/Trueを補います。既存の現像設定の消去、全スライダーのリセット、キーフレームの自動作成、LRTのシーケンス状態ファイルの生成は行いません。製品テンプレートは同梱せず、配列構造をGoで生成します。LRT/Camera Rawでの読み込み往復や全初期化機能の同等性は未検証です。
+
+初期化→キーフレーム→編集→補間→Deflicker→AVI出力をCLIの回帰テストで実行しています。実NEFでも初期化→キーフレーム→Holy Grail→補間→DNG Converter現像→10-bit ProRes出力（640×426、2フレーム）を確認しました。
 
 ## XMP現像の精度
 

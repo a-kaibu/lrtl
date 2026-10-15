@@ -206,10 +206,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 			return correction, false, nil
 		}
 	}
-	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
-		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.texture == 0 && correction.clarity == 0 && correction.dehaze == 0 && correction.sharpness == 0 && correction.toningSaturation == 0 &&
-		!correction.hasWhiteBalance && !correction.colorGrading.active && !correction.hasMainCurve &&
-		!correction.hasChannelCurve[0] && !correction.hasChannelCurve[1] && !correction.hasChannelCurve[2] {
+	if !correction.active() {
 		return correction, false, nil
 	}
 
@@ -701,6 +698,9 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 	}
 	current := img
 	for _, correction := range corrections {
+		if !correction.active() {
+			continue
+		}
 		var textureDetail, clarityDetail, dehazeDetail, sharpnessDetail []float32
 		if correction.dehaze != 0 {
 			dehazeDetail = xmpLuminanceDetail(current, xmpDehazeRadius(width, height))
@@ -828,6 +828,10 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 		current = result
 	}
 	return current
+}
+
+func (correction xmpLocalCorrection) active() bool {
+	return correction.amount != 0 && (correction.exposure != 0 || correction.contrast != 0 || correction.highlights != 0 || correction.shadows != 0 || correction.whites != 0 || correction.blacks != 0 || correction.saturation != 0 || correction.texture != 0 || correction.clarity != 0 || correction.dehaze != 0 || correction.sharpness != 0 || correction.toningSaturation != 0 || correction.hasWhiteBalance || correction.colorGrading.active || correction.hasMainCurve || correction.hasChannelCurve[0] || correction.hasChannelCurve[1] || correction.hasChannelCurve[2])
 }
 
 func blendLocalCurve(input uint16, curve toneCurveTable, amount float64) uint16 {
