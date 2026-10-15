@@ -107,6 +107,51 @@ class InterpolationTests(unittest.TestCase):
             {"Exposure2012": "1", "Brightness": "20"},
         )
 
+    def test_local_corrections_and_mask_fields_are_preserved_unmodified(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            frames = self.make_frames(folder, 3)
+            write_xmp(
+                frames[0].image,
+                {
+                    "xmp:Rating": "4",
+                    "crs:Exposure2012": "0",
+                    "crs:LocalExposure2012": "-1",
+                },
+            )
+            middle = write_xmp(
+                frames[1].image,
+                {
+                    "crs:LocalExposure2012": "17",
+                    "crs:CorrectionAmount": "0.75",
+                },
+            )
+            write_xmp(
+                frames[2].image,
+                {
+                    "xmp:Rating": "4",
+                    "crs:Exposure2012": "2",
+                    "crs:LocalExposure2012": "1",
+                },
+            )
+
+            plan = build_plan(discover_sequence(folder))
+            changes = apply_plan(plan)
+            written_packet = XmpPacket.parse(changes[0][1].serialize())
+
+            self.assertEqual(plan.changes[0].values, {"Exposure2012": "1"})
+            self.assertEqual(written_packet.get_scalar("crs:Exposure2012"), "1")
+            self.assertEqual(
+                written_packet.get_scalar("crs:LocalExposure2012"), "17"
+            )
+            self.assertEqual(
+                written_packet.get_scalar("crs:CorrectionAmount"), "0.75"
+            )
+            original_packet = XmpPacket.parse(middle.read_bytes())
+            self.assertEqual(
+                original_packet.get_scalar("crs:LocalExposure2012"), "17"
+            )
+
     def test_one_keyframe_is_used_as_reference_for_all_other_frames(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

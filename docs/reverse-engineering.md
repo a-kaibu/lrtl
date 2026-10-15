@@ -9,6 +9,7 @@ These notes record observed interfaces and public workflow behavior used to desi
 - The installation includes separate `exiftool.exe`, `ffmpeg.exe`, and `dnglab.exe` programs. These indicate separate metadata, video, and RAW-processing components for future interoperability work.
 - The installed locale resources expose actions for keyframe toggling, XMP metadata initialization/reload/save, and transitions. Their helper labels identify four stars as a default keyframe and five stars as a crop keyframe.
 - A limited scan of app-class string constants found Adobe's Camera Raw XMP namespace URI and workflow names for keyframes, Auto-Transition, Holy Grail, and visual deflicker. No product code or class output is part of this repository.
+- A follow-up scan of class-file string constants found local-correction names such as `crs:LocalExposure2012`, `crs:LocalContrast2012`, and `crs:LocalColorGradeShadowSat`, alongside mask fields such as `crs:CorrectionMasks` and `crs:CorrectionAmount`. This confirms the installed program recognizes a richer local-adjustment XMP vocabulary; constants alone do not establish its serialization or interpolation behavior. The OSS CLI therefore preserves these fields without editing them.
 
 ## Public workflow behavior
 
@@ -24,6 +25,7 @@ These notes record observed interfaces and public workflow behavior used to desi
 - Transitions operate only on an explicit list of scalar numeric Camera Raw properties. It includes selected legacy controls listed with integer/real types in Adobe's Camera Raw namespace reference and common newer Develop controls such as `Exposure2012`, `Contrast2012`, and `Highlights2012`. Boolean flags, categorical values such as `CropUnits`, circular color-hue angles, profiles, masks, arrays, and tone curves are left untouched because a numeric encoding alone does not make linear interpolation meaningful.
 - Every write is atomic and makes a timestamped sidecar backup unless `--no-backup` is provided. Interpolation is preview-only unless `--write` is provided.
 - This milestone reads external sidecars only. It does not inspect or update XMP embedded in JPEG, TIFF, or DNG files, nor compare embedded and sidecar timestamps.
+- Local correction masks and their per-mask settings remain out of scope until representative XMP packets and transition behavior can be compared safely.
 
 ## References
 
