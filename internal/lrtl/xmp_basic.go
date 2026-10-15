@@ -160,6 +160,14 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		}
 		*property.target = number
 	}
+	holyGrailCorrection, _, err := readHolyGrailRenderCorrection(packet)
+	if err != nil {
+		return xmpBasicAdjustments{}, err
+	}
+	adjustments.exposure += holyGrailCorrection
+	if math.Abs(adjustments.exposure) > maxRenderXMPExposureStops {
+		return xmpBasicAdjustments{}, fmt.Errorf("combined XMP exposure must be between -%d and +%d stops", maxRenderXMPExposureStops, maxRenderXMPExposureStops)
+	}
 	adjustments.sharpenRadius = 1
 	adjustments.sharpenDetail = 25
 	for _, property := range []struct {

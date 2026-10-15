@@ -142,6 +142,39 @@ func getHolyGrailTargetValue(packet *XMPPacket, target holyGrailXMPTarget) (floa
 	return value, true, nil
 }
 
+func readHolyGrailRenderCorrection(packet *XMPPacket) (float64, *etree.Element, error) {
+	correctionText, hasCorrection, err := packet.GetScalar(holyGrailCorrectionProperty)
+	if err != nil {
+		return 0, nil, err
+	}
+	targetText, hasTarget, err := packet.GetScalar(holyGrailTargetProperty)
+	if err != nil {
+		return 0, nil, err
+	}
+	if hasTarget && !hasCorrection {
+		return 0, nil, fmt.Errorf("orphaned lrtl property %s", holyGrailTargetProperty)
+	}
+	if !hasCorrection || !hasTarget {
+		return 0, nil, nil
+	}
+	target, err := parseHolyGrailXMPTarget(targetText)
+	if err != nil {
+		return 0, nil, err
+	}
+	if target.Collection == "" {
+		return 0, nil, nil
+	}
+	correction, valid := scalarNumber(correctionText)
+	if !valid || math.Abs(correction) > maxRenderXMPExposureStops {
+		return 0, nil, fmt.Errorf("%s must be a finite number between -%d and +%d stops", holyGrailCorrectionProperty, maxRenderXMPExposureStops, maxRenderXMPExposureStops)
+	}
+	element, err := holyGrailTargetElement(packet, target)
+	if err != nil {
+		return 0, nil, err
+	}
+	return correction, element, nil
+}
+
 func setHolyGrailTargetValue(packet *XMPPacket, target holyGrailXMPTarget, value float64) error {
 	if target.Collection == "" {
 		return packet.SetScalar("crs:Exposure2012", formatNumber(value))
@@ -599,12 +632,21 @@ func readXMPExposure(frame Frame) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if !found {
-		return 0, nil
+	exposure := 0.0
+	if found {
+		var valid bool
+		exposure, valid = scalarNumber(value)
+		if !valid || math.Abs(exposure) > maxRenderXMPExposureStops {
+			return 0, fmt.Errorf("crs:Exposure2012 must be a finite number between -%d and +%d stops", maxRenderXMPExposureStops, maxRenderXMPExposureStops)
+		}
 	}
-	exposure, valid := scalarNumber(value)
-	if !valid || math.Abs(exposure) > maxRenderXMPExposureStops {
-		return 0, fmt.Errorf("crs:Exposure2012 must be a finite number between -%d and +%d stops", maxRenderXMPExposureStops, maxRenderXMPExposureStops)
+	holyGrailCorrection, _, err := readHolyGrailRenderCorrection(packet)
+	if err != nil {
+		return 0, err
+	}
+	exposure += holyGrailCorrection
+	if math.Abs(exposure) > maxRenderXMPExposureStops {
+		return 0, fmt.Errorf("combined XMP exposure must be between -%d and +%d stops", maxRenderXMPExposureStops, maxRenderXMPExposureStops)
 	}
 	return exposure, nil
 }

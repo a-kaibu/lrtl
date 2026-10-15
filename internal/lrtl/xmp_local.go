@@ -73,6 +73,10 @@ type xmpLocalMask struct {
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
 	corrections := make([]xmpLocalCorrection, 0)
+	_, managedHolyGrailElement, err := readHolyGrailRenderCorrection(packet)
+	if err != nil {
+		return nil, err
+	}
 	for _, collection := range []string{"MaskGroupBasedCorrections", "GradientBasedCorrections", "CircularGradientBasedCorrections"} {
 		property := packet.findRootProperty(crsNamespace, collection)
 		if property.element == nil {
@@ -80,6 +84,9 @@ func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
 		}
 		var walk func(*etree.Element) error
 		walk = func(element *etree.Element) error {
+			if element == managedHolyGrailElement {
+				return nil
+			}
 			what, found, err := crsElementValue(element, "What")
 			if err != nil {
 				return err
