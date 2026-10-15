@@ -39,7 +39,7 @@ func readEmbeddedImageXMP(path string) ([]byte, bool, error) {
 		return readEmbeddedJPEGXMP(path)
 	case ".raf":
 		return readEmbeddedRAFXMP(path)
-	case ".tif", ".tiff", ".dng", ".cr2", ".rw2", ".nef", ".nrw", ".arw", ".sr2", ".pef", ".erf", ".orf":
+	case ".tif", ".tiff", ".dng", ".cr2", ".rw2", ".nef", ".nrw", ".arw", ".sr2", ".pef", ".erf", ".orf", ".dcr":
 		return readEmbeddedTIFFXMP(path)
 	case ".cr3":
 		return readEmbeddedCR3XMP(path)
