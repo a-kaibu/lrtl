@@ -77,6 +77,7 @@ func newGUIHandler() http.Handler {
 	mux.HandleFunc("/api/sequence", serveGUISequence)
 	mux.HandleFunc("/api/playback", serveGUIPlayback)
 	mux.HandleFunc("/api/curve", serveGUICurve)
+	mux.HandleFunc("/api/tone-curve", serveGUIToneCurve)
 	mux.HandleFunc("/api/luminance", serveGUILuminanceCurve)
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
 	mux.HandleFunc("/api/preview", serveGUIPreview)
@@ -377,6 +378,180 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 		Directory: directory, Total: len(frames), Step: step, XMPErrors: xmpErrors,
 		Baseline: baseline, ExposureLimit: exposureLimit, Points: points,
 	})
+}
+
+type guiToneCurvePoint struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+type guiToneCurveResponse struct {
+	Name     string              `json:"name"`
+	Channel  string              `json:"channel"`
+	Property string              `json:"property"`
+	Found    bool                `json:"found"`
+	Editable bool                `json:"editable"`
+	Points   []guiToneCurvePoint `json:"points"`
+}
+
+type guiToneCurveRequest struct {
+	Directory string              `json:"directory"`
+	Name      string              `json:"name"`
+	Channel   string              `json:"channel"`
+	Points    []guiToneCurvePoint `json:"points"`
+}
+
+func guiToneCurveProperties(channel string) (string, string, error) {
+	switch channel {
+	case "master":
+		return "ToneCurvePV2012", "ToneCurve", nil
+	case "red":
+		return "ToneCurvePV2012Red", "ToneCurveRed", nil
+	case "green":
+		return "ToneCurvePV2012Green", "ToneCurveGreen", nil
+	case "blue":
+		return "ToneCurvePV2012Blue", "ToneCurveBlue", nil
+	default:
+		return "", "", fmt.Errorf("channel must be master, red, green, or blue")
+	}
+}
+
+func readGUIToneCurve(packet *XMPPacket, channel string) (string, []toneCurvePoint, bool, bool, error) {
+	primary, fallback, err := guiToneCurveProperties(channel)
+	if err != nil {
+		return "", nil, false, false, err
+	}
+	points, found, editable, err := readXMPToneCurvePoints(packet, primary)
+	if err != nil {
+		return "", nil, false, false, err
+	}
+	property := primary
+	if !found && fallback != "" {
+		points, found, editable, err = readXMPToneCurvePoints(packet, fallback)
+		if err != nil {
+			return "", nil, false, false, err
+		}
+		if found {
+			property = fallback
+		}
+	}
+	if !found {
+		points = []toneCurvePoint{{x: 0, y: 0}, {x: 255, y: 255}}
+		editable = true
+	}
+	if len(points) > 64 || points[0].x != 0 || points[len(points)-1].x != 255 {
+		editable = false
+	}
+	return property, points, found, editable, nil
+}
+
+func serveGUIToneCurve(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		directory, err := canonicalGUIDirectory(r.URL.Query().Get("directory"))
+		if err != nil {
+			writeGUIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		frame, err := guiFrameByName(directory, r.URL.Query().Get("name"))
+		if err != nil {
+			writeGUIError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		channel := r.URL.Query().Get("channel")
+		if _, _, err := guiToneCurveProperties(channel); err != nil {
+			writeGUIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		packet, err := PacketForFrame(frame)
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		property, points, found, editable, err := readGUIToneCurve(packet, channel)
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		response := guiToneCurveResponse{Name: filepath.Base(frame.Image), Channel: channel, Property: property, Found: found, Editable: editable, Points: make([]guiToneCurvePoint, 0, len(points))}
+		for _, point := range points {
+			response.Points = append(response.Points, guiToneCurvePoint{X: int(point.x), Y: int(point.y)})
+		}
+		writeGUIJSON(w, http.StatusOK, response)
+	case http.MethodPost:
+		if !requireGUIJSONPost(w, r) {
+			return
+		}
+		var request guiToneCurveRequest
+		if !decodeGUIJSON(w, r, &request) {
+			return
+		}
+		directory, err := canonicalGUIDirectory(request.Directory)
+		if err != nil {
+			writeGUIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		frame, err := guiFrameByName(directory, request.Name)
+		if err != nil {
+			writeGUIError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		if _, _, err := guiToneCurveProperties(request.Channel); err != nil {
+			writeGUIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if len(request.Points) < 2 || len(request.Points) > 64 || request.Points[0].X != 0 || request.Points[len(request.Points)-1].X != 255 {
+			writeGUIError(w, http.StatusBadRequest, "curve requires 2 to 64 points with endpoints at x=0 and x=255")
+			return
+		}
+		points := make([]toneCurvePoint, len(request.Points))
+		for index, point := range request.Points {
+			if point.X < 0 || point.X > 255 || point.Y < 0 || point.Y > 255 || index > 0 && point.X <= request.Points[index-1].X {
+				writeGUIError(w, http.StatusBadRequest, "curve coordinates must be 0..255 with strictly increasing x values")
+				return
+			}
+			points[index] = toneCurvePoint{x: float64(point.X), y: float64(point.Y)}
+		}
+		packet, err := PacketForFrame(frame)
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		property, current, found, editable, err := readGUIToneCurve(packet, request.Channel)
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		if !editable {
+			writeGUIError(w, http.StatusConflict, "this curve uses a structured or unsupported XMP representation and cannot be edited in the GUI")
+			return
+		}
+		same := found && len(current) == len(points)
+		if same {
+			for index := range points {
+				if current[index] != points[index] {
+					same = false
+					break
+				}
+			}
+		}
+		if same {
+			writeGUIJSON(w, http.StatusOK, map[string]any{"output": "tone curve is unchanged", "saved": frame.OutputSidecar()})
+			return
+		}
+		if err := setXMPToneCurvePoints(packet, property, points); err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		backup, err := WritePacket(frame.OutputSidecar(), packet, true)
+		if err != nil {
+			writeGUIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeGUIJSON(w, http.StatusOK, map[string]any{"output": "tone curve saved", "saved": frame.OutputSidecar(), "backup": backup})
+	default:
+		writeGUIError(w, http.StatusMethodNotAllowed, "GET or POST required")
+	}
 }
 
 func serveGUILuminanceCurve(w http.ResponseWriter, r *http.Request) {

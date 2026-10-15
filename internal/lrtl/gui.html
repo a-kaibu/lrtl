@@ -28,6 +28,10 @@
     .toolbar div { display:flex; align-items:center; gap:8px; }
     .curve-panel { margin-bottom:12px; }
     #exposure-curve { display:block; width:100%; height:155px; cursor:ns-resize; touch-action:none; border-radius:5px; background:#111820; }
+    #tone-curve { display:block; width:100%; height:230px; cursor:crosshair; touch-action:none; border-radius:5px; background:#111820; }
+    .curve-channel { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+    .curve-channel label { color:var(--muted); font-size:12px; }
+    #tone-channel { width:auto; min-width:150px; }
     #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; }
     .card { overflow:hidden; border:1px solid var(--line); border-radius:9px; background:var(--panel); cursor:pointer; }
     .card.selected { outline:2px solid var(--accent); }
@@ -72,6 +76,12 @@
     </div>
     <div class="layout">
       <section>
+        <section class="panel curve-panel">
+          <h2>選択フレームのトーンカーブ</h2>
+          <div class="curve-channel"><label for="tone-channel">チャンネル</label><select id="tone-channel"><option value="master">RGB（マスター）</option><option value="red">レッド</option><option value="green">グリーン</option><option value="blue">ブルー</option></select></div>
+          <canvas id="tone-curve" aria-label="選択フレームのCamera Rawポイントトーンカーブ。クリックで点を追加、ドラッグで編集、右クリックで点を削除"></canvas>
+          <p id="tone-curve-info">フレームを選ぶとXMPカーブを表示します。空白をクリックして点を追加、点をドラッグして調整、右クリックで中間点を削除できます。</p>
+        </section>
         <section class="panel curve-panel">
           <h2>画像輝度・Exposure2012・キーフレーム</h2>
           <canvas id="exposure-curve" aria-label="連番全体のXMP Exposure2012グラフ。点をドラッグして現像値を編集し、クリックしてフレームを選択"></canvas>
@@ -210,6 +220,9 @@
     let selectedXMPValues = {};
     let exposureCurve = {total:0, points:[], xmpErrors:0};
     let luminanceCurve = null;
+    let toneCurve = {name:'', channel:'master', property:'ToneCurvePV2012', points:[], editable:false, found:false};
+    let toneCurveDrag = null;
+    let toneCurveSaving = false;
     let previewObjectURL = '';
     let playbackToken = 0;
     let playbackRunning = false;
@@ -272,6 +285,8 @@
       directory = data.directory; offset = data.offset; total = data.total; frames = data.frames;
       if (newSequence) {
         selected = null; selectedXMPValues = {};
+        toneCurve = {name:'', channel:el('tone-channel').value, property:'ToneCurvePV2012', points:[], editable:false, found:false};
+        toneCurveDrag = null; drawToneCurve();
         exposureCurve = {directory, total:0, points:[]};
         luminanceCurve = null;
         drawExposureCurve();
@@ -304,6 +319,7 @@
       showOriginalPreview();
       loadSelectedXMP(frame).catch(error => setStatus(error.message, true));
       loadSelectedCrop(frame).catch(error => setStatus(error.message, true));
+      loadToneCurve(frame).catch(error => { el('tone-curve-info').textContent = error.message; });
       document.querySelectorAll('.card').forEach(card => card.classList.remove('selected'));
       const card = [...document.querySelectorAll('.card')].find(item => item.querySelector('.filename')?.textContent.endsWith(' · ' + frame.name));
       if (card) card.classList.add('selected');
@@ -384,6 +400,132 @@
       const errorText = data.xmpErrors ? ' · 読めないXMP値 ' + data.xmpErrors + '件' : '';
       el('curve-info').textContent = data.total + 'フレーム · 青: Exposure2012 ΔEV' + sampleText + errorText + (luminanceCurve ? ' · 橙: 画像輝度 ΔEV' : ' · 画像輝度は未解析') + '。青い点を上下にドラッグして値を編集、クリックでフレームを選択。';
     }
+    async function loadToneCurve(frame = selected) {
+      if (!directory || !frame) {
+        toneCurve = {name:'', channel:el('tone-channel').value, property:'ToneCurvePV2012', points:[], editable:false, found:false};
+        drawToneCurve();
+        el('tone-curve-info').textContent = 'フレームを選ぶとXMPカーブを表示します。';
+        return;
+      }
+      const requestedDirectory = directory, channel = el('tone-channel').value;
+      const query = new URLSearchParams({directory:requestedDirectory, name:frame.name, channel});
+      const data = await api('/api/tone-curve?' + query.toString());
+      if (directory !== requestedDirectory || !selected || selected.name !== frame.name || channel !== el('tone-channel').value) return;
+      toneCurve = data;
+      drawToneCurve();
+      if (!data.editable) el('tone-curve-info').textContent = 'このXMPカーブ形式または制御点数は表示のみです。';
+      else el('tone-curve-info').textContent = (data.found ? data.property : '未設定（標準カーブ）') + ' · 空白をクリックで点を追加、ドラッグで編集、右クリックで中間点を削除。変更は選択フレームだけに保存します。';
+    }
+    function toneCurveLayout() {
+      const canvas = el('tone-curve'), rect = canvas.getBoundingClientRect();
+      if (!rect.width) return null;
+      const width = rect.width, height = rect.height, left = 28, right = 14, top = 12, bottom = 22;
+      const xAt = value => left + value / 255 * (width - left - right);
+      const yAt = value => top + (255 - value) / 255 * (height - top - bottom);
+      const pointAt = (x, y) => ({x:Math.round(Math.max(0, Math.min(255, (x-left) / (width-left-right) * 255))), y:Math.round(Math.max(0, Math.min(255, 255-(y-top) / (height-top-bottom) * 255)))});
+      return {rect, width, height, left, right, top, bottom, xAt, yAt, pointAt};
+    }
+    function drawToneCurve() {
+      const canvas = el('tone-curve'), layout = toneCurveLayout();
+      if (!layout) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(layout.width * dpr); canvas.height = Math.round(layout.height * dpr);
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const {width, height, left, right, top, bottom, xAt, yAt} = layout;
+      ctx.clearRect(0, 0, width, height);
+      ctx.strokeStyle = '#34414e'; ctx.lineWidth = 1;
+      for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+        const x = xAt(fraction * 255), y = yAt(fraction * 255);
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, height-bottom); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(width-right, y); ctx.stroke();
+      }
+      ctx.setLineDash([4,4]); ctx.strokeStyle = '#65717d';
+      ctx.beginPath(); ctx.moveTo(xAt(0), yAt(0)); ctx.lineTo(xAt(255), yAt(255)); ctx.stroke(); ctx.setLineDash([]);
+      const points = toneCurveDrag ? toneCurveDrag.points : toneCurve.points || [];
+      if (points.length < 2) {
+        ctx.fillStyle = '#9eacbb'; ctx.font = '12px system-ui'; ctx.fillText('フレームを選択してください', left, height/2);
+        return;
+      }
+      ctx.beginPath();
+      points.forEach((point, index) => { const x = xAt(point.x), y = yAt(point.y); if (!index) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+      const colors = {master:'#d5e8f8', red:'#ff7777', green:'#70d99b', blue:'#70aaff'};
+      ctx.strokeStyle = colors[toneCurve.channel] || '#d5e8f8'; ctx.lineWidth = 2; ctx.stroke();
+      for (let index = 0; index < points.length; index++) {
+        const point = points[index];
+        ctx.beginPath(); ctx.arc(xAt(point.x), yAt(point.y), toneCurveDrag && toneCurveDrag.index === index ? 5 : 3.5, 0, Math.PI*2);
+        ctx.fillStyle = index === 0 || index === points.length-1 ? '#ffc857' : (colors[toneCurve.channel] || '#d5e8f8'); ctx.fill();
+      }
+      ctx.fillStyle = '#9eacbb'; ctx.font = '10px system-ui'; ctx.fillText('0', left-3, height-5); ctx.fillText('255', width-right-20, height-5); ctx.fillText('255', 2, top+4);
+    }
+    function nearestToneCurvePoint(x, y, points = toneCurve.points) {
+      const layout = toneCurveLayout();
+      if (!layout) return -1;
+      let nearest = -1, distance = Infinity;
+      points.forEach((point, index) => {
+        const candidate = Math.hypot(layout.xAt(point.x)-x, layout.yAt(point.y)-y);
+        if (candidate < distance) { nearest = index; distance = candidate; }
+      });
+      return distance <= 12 ? nearest : -1;
+    }
+    async function saveToneCurvePoints(frame, channel, points) {
+      ensureActiveDirectory();
+      const label = {master:'RGB',red:'Red',green:'Green',blue:'Blue'}[channel] || channel;
+      if (!confirm(frame.name + ' の' + label + 'トーンカーブを保存しますか？XMPサイドカーをバックアップします。')) { await loadToneCurve(frame); return; }
+      const data = await api('/api/tone-curve', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:frame.name, channel, points})});
+      await loadToneCurve(frame);
+      await loadSelectedXMP(frame);
+      invalidateLuminanceCurve();
+      setStatus(data.output + (data.backup ? ' (backup: ' + data.backup + ')' : ''));
+    }
+    el('tone-curve').addEventListener('pointerdown', event => {
+      if (event.button !== 0 || toneCurveSaving || !selected || !toneCurve.editable || toneCurve.name !== selected.name) return;
+      const rect = el('tone-curve').getBoundingClientRect(), x = event.clientX-rect.left, y = event.clientY-rect.top;
+      const points = toneCurve.points.map(point => ({x:point.x,y:point.y}));
+      let index = nearestToneCurvePoint(x,y,points), added = false;
+      if (index < 0) {
+        if (points.length >= 64) return;
+        const layout = toneCurveLayout(), point = layout.pointAt(x,y);
+        let insertion = points.findIndex(candidate => candidate.x > point.x);
+        if (insertion < 0) insertion = points.length-1;
+        const minimum = points[insertion-1].x+1, maximum = points[insertion].x-1;
+        if (minimum > maximum) return;
+        point.x = Math.max(minimum, Math.min(maximum, point.x));
+        points.splice(insertion,0,point); index = insertion; added = true;
+      }
+      toneCurveDrag = {pointerId:event.pointerId,index,startX:event.clientX,startY:event.clientY,points,added,moved:added};
+      el('tone-curve').setPointerCapture(event.pointerId); drawToneCurve(); event.preventDefault();
+    });
+    el('tone-curve').addEventListener('pointermove', event => {
+      if (!toneCurveDrag || toneCurveDrag.pointerId !== event.pointerId) return;
+      const layout = toneCurveLayout(), point = toneCurveDrag.points[toneCurveDrag.index];
+      const next = layout.pointAt(event.clientX-layout.rect.left,event.clientY-layout.rect.top);
+      if (toneCurveDrag.index === 0) point.x = 0;
+      else if (toneCurveDrag.index === toneCurveDrag.points.length-1) point.x = 255;
+      else point.x = Math.max(toneCurveDrag.points[toneCurveDrag.index-1].x+1,Math.min(toneCurveDrag.points[toneCurveDrag.index+1].x-1,next.x));
+      point.y = next.y;
+      toneCurveDrag.moved = toneCurveDrag.moved || Math.hypot(event.clientX-toneCurveDrag.startX,event.clientY-toneCurveDrag.startY)>2;
+      drawToneCurve(); event.preventDefault();
+    });
+    el('tone-curve').addEventListener('pointerup', event => {
+      if (!toneCurveDrag || toneCurveDrag.pointerId !== event.pointerId) return;
+      const drag = toneCurveDrag; toneCurveDrag = null; drawToneCurve();
+      if (!drag.moved) return;
+      const frame = selected, channel = toneCurve.channel;
+      toneCurveSaving = true;
+      saveToneCurvePoints(frame,channel,drag.points).catch(error => setStatus(error.message,true)).finally(() => { toneCurveSaving=false; drawToneCurve(); });
+    });
+    el('tone-curve').addEventListener('pointercancel', event => {
+      if (toneCurveDrag && toneCurveDrag.pointerId === event.pointerId) { toneCurveDrag=null; drawToneCurve(); }
+    });
+    el('tone-curve').addEventListener('contextmenu', event => {
+      event.preventDefault();
+      if (toneCurveSaving || !selected || !toneCurve.editable || toneCurve.name !== selected.name) return;
+      const rect = el('tone-curve').getBoundingClientRect(), index = nearestToneCurvePoint(event.clientX-rect.left,event.clientY-rect.top);
+      if (index <= 0 || index >= toneCurve.points.length-1) return;
+      const points = toneCurve.points.filter((_,pointIndex)=>pointIndex!==index);
+      toneCurveSaving = true;
+      saveToneCurvePoints(selected,toneCurve.channel,points).catch(error=>setStatus(error.message,true)).finally(()=>{toneCurveSaving=false;drawToneCurve();});
+    });
     function exposureChartLayout() {
       const canvas = el('exposure-curve');
       const rect = canvas.getBoundingClientRect();
@@ -680,7 +822,9 @@
         if (frame) selectFrame(frame);
       } catch (error) { setStatus(error.message, true); }
     });
+    el('tone-channel').addEventListener('change', () => loadToneCurve().catch(error => setStatus(error.message,true)));
     window.addEventListener('resize', drawExposureCurve);
+    window.addEventListener('resize', drawToneCurve);
     window.addEventListener('resize', positionCropOverlay);
     buttonAction(el('analyze-luminance'), async () => {
       ensureActiveDirectory();

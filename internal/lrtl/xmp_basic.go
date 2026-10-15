@@ -401,6 +401,105 @@ func readXMPToneCurve(packet *XMPPacket, name string) ([256]uint8, bool, error) 
 	return readXMPToneCurveProperty(name, property.element, property.attribute)
 }
 
+func readXMPToneCurvePoints(packet *XMPPacket, name string) ([]toneCurvePoint, bool, bool, error) {
+	uri, local, err := expandedName("crs:" + name)
+	if err != nil {
+		return nil, false, false, err
+	}
+	property := packet.findRootProperty(uri, local)
+	if property.attribute == nil && property.element == nil {
+		return nil, false, true, nil
+	}
+	points, err := parseXMPToneCurveProperty(name, property.element, property.attribute)
+	if err != nil {
+		return nil, false, false, err
+	}
+	editable := property.attribute != nil
+	if property.element != nil {
+		_, editable = scalarElementText(property.element)
+		if !editable {
+			editable = toneCurveSequenceElement(property.element) != nil
+		}
+	}
+	return points, true, editable, nil
+}
+
+func setXMPToneCurvePoints(packet *XMPPacket, name string, points []toneCurvePoint) error {
+	uri, local, err := expandedName("crs:" + name)
+	if err != nil {
+		return err
+	}
+	property := packet.findRootProperty(uri, local)
+	var encoded strings.Builder
+	for index, point := range points {
+		if index > 0 {
+			encoded.WriteByte(' ')
+		}
+		fmt.Fprintf(&encoded, "%d, %d", int(point.x), int(point.y))
+	}
+	if property.attribute != nil {
+		property.attribute.Value = encoded.String()
+		return nil
+	}
+	if property.element != nil {
+		if _, scalar := scalarElementText(property.element); scalar {
+			property.element.SetText(encoded.String())
+			return nil
+		}
+		sequence := toneCurveSequenceElement(property.element)
+		if sequence == nil {
+			return xmpError("cannot replace unsupported structured property crs:%s", name)
+		}
+		sequence.Child = nil
+		for _, point := range points {
+			item := sequence.CreateElement("rdf:li")
+			item.SetText(fmt.Sprintf("%d, %d", int(point.x), int(point.y)))
+		}
+		return nil
+	}
+	return packet.SetScalar("crs:"+name, encoded.String())
+}
+
+func toneCurveSequenceElement(property *etree.Element) *etree.Element {
+	var sequence *etree.Element
+	for _, token := range property.Child {
+		child, ok := token.(*etree.Element)
+		if !ok {
+			if text, isText := token.(*etree.CharData); isText {
+				if strings.TrimSpace(text.Data) == "" {
+					continue
+				}
+			}
+			return nil
+		}
+		if child.NamespaceURI() != rdfNamespace || child.Tag != "Seq" || sequence != nil {
+			return nil
+		}
+		sequence = child
+	}
+	if sequence == nil {
+		return nil
+	}
+	for _, token := range sequence.Child {
+		child, ok := token.(*etree.Element)
+		if !ok {
+			if text, isText := token.(*etree.CharData); isText {
+				if strings.TrimSpace(text.Data) == "" {
+					continue
+				}
+			}
+			return nil
+		}
+		if child.NamespaceURI() != rdfNamespace || child.Tag != "li" {
+			return nil
+		}
+		if _, scalar := scalarElementText(child); !scalar {
+			return nil
+		}
+	}
+	return sequence
+}
+
 func readXMPLocalToneCurve(correction *etree.Element, name string) ([256]uint8, bool, error) {
 	var property *etree.Element
 	var attribute *etree.Attr
@@ -442,6 +541,14 @@ func hasLocalToneCurveProperty(correction *etree.Element, name string) bool {
 
 func readXMPToneCurveProperty(name string, property *etree.Element, attribute *etree.Attr) ([256]uint8, bool, error) {
 	var empty [256]uint8
+	points, err := parseXMPToneCurveProperty(name, property, attribute)
+	if err != nil {
+		return empty, false, err
+	}
+	return makeToneCurveTable(points), true, nil
+}
+
+func parseXMPToneCurveProperty(name string, property *etree.Element, attribute *etree.Attr) ([]toneCurvePoint, error) {
 	values := make([]string, 0, 32)
 	if attribute != nil {
 		values = append(values, attribute.Value)
@@ -468,9 +575,9 @@ func readXMPToneCurveProperty(name string, property *etree.Element, attribute *e
 	}
 	points, err := parseToneCurveValues(values)
 	if err != nil {
-		return empty, false, fmt.Errorf("crs:%s: %w", name, err)
+		return nil, fmt.Errorf("crs:%s: %w", name, err)
 	}
-	return makeToneCurveTable(points), true, nil
+	return points, nil
 }
 
 func parseToneCurveValues(values []string) ([]toneCurvePoint, error) {
