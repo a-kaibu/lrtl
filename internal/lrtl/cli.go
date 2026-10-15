@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const version = "0.5.0"
+const version = "0.6.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
 	flags := make([]string, 0, len(arguments))
@@ -74,6 +74,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runRender(arguments[1:], stdout, stderr)
 	case "keyframes":
 		return runKeyframes(arguments[1:], stdout, stderr)
+	case "holy-grail":
+		return runHolyGrail(arguments[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "lrtl: unknown command %q\n", arguments[0])
 		printUsage(stderr)
@@ -91,6 +93,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG/TIFF frames to MJPEG AVI")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N]        suggest luminance-based keyframes")
+	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 }
 
 func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
@@ -478,6 +481,78 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if !*write {
 		fmt.Fprintln(stdout, "Preview only. Pass --write to mark these frames; other existing keyframes are left unchanged.")
 	}
+	return 0
+}
+
+func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("holy-grail", stderr)
+	write := set.Bool("write", false, "write exposure compensation to XMP sidecars")
+	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
+	ignoreAperture := set.Bool("ignore-aperture", false, "ignore FNumber when aperture remained fixed")
+	reset := set.Bool("reset", false, "remove lrtl-managed Holy Grail compensation")
+	if err := set.Parse(flagFirst(arguments, nil)); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 {
+		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
+	}
+	if *reset && *ignoreAperture {
+		return reportError(stderr, fmt.Errorf("--ignore-aperture cannot be used with --reset"))
+	}
+	directory := set.Arg(0)
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	changes, err := buildHolyGrailPlan(frames, *ignoreAperture, *reset)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	mode := "EXIF exposure compensation"
+	if *reset {
+		mode = "lrtl Holy Grail correction reset"
+	}
+	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
+	fmt.Fprintf(stdout, "Frames: %d; %s: %d\n", len(frames), mode, len(changes))
+	for _, change := range changes {
+		if *reset {
+			fmt.Fprintf(stdout, "  %-42s Exposure2012 %+.4f -> %+.4f EV\n",
+				filepath.Base(change.Frame.Image), change.ExposureBefore, change.ExposureAfter)
+		} else {
+			fmt.Fprintf(stdout, "  %-42s shutter=%.6g s f/%.4g ISO=%.4g correction=%+.4f EV Exposure2012=%+.4f EV\n",
+				filepath.Base(change.Frame.Image), change.Camera.ExposureTime,
+				change.Camera.FNumber, change.Camera.ISO, change.Compensation, change.ExposureAfter)
+		}
+	}
+	if len(changes) == 0 {
+		if *reset {
+			fmt.Fprintln(stdout, "No lrtl-managed Holy Grail corrections to reset.")
+		} else {
+			fmt.Fprintln(stdout, "No exposure-setting compensation is needed.")
+		}
+		return 0
+	}
+	if !*write {
+		fmt.Fprintln(stdout, "Preview only. Pass --write to update sidecar XMP files.")
+		return 0
+	}
+	if err := applyHolyGrailPlan(changes); err != nil {
+		return reportError(stderr, err)
+	}
+	for _, change := range changes {
+		path := change.Frame.OutputSidecar()
+		backup, err := WritePacket(path, change.Packet, !*noBackup)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		if backup != "" {
+			fmt.Fprintf(stdout, "Backup: %s\n", backup)
+		}
+		fmt.Fprintf(stdout, "Saved: %s\n", path)
+	}
+	fmt.Fprintf(stdout, "Updated %d sidecar(s).\n", len(changes))
 	return 0
 }
 

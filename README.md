@@ -1,6 +1,6 @@
 # LumaFrame (`lrtl`)
 
-LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。現在はLightroom互換XMPのキーフレーム編集に加え、現像済みJPEG/PNG/TIFF連番からMJPEG AVIを生成できます。
+LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。現在はLightroom互換XMPのキーフレーム編集とHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFF連番からMJPEG AVIを生成できます。
 
 **現状は初期開発版です。RAW現像やXMPに保存されたCamera Raw設定の適用には対応していません。** RAW連番を読み込んでキーフレームから現像し、完成動画を書き出す一連の処理はまだできません。現像済みのJPEG/PNG/TIFFをAVIにまとめます。
 
@@ -14,7 +14,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 |---|---|---|---|
 | シーケンス | 画像列の読み込み、撮影順の扱い、プレビュー | 対応拡張子の画像を1フォルダーから列挙し、ファイル名を自然順で並べる。画像プレビューなし | 一部 |
 | キーフレーム | 明るさを解析する自動Keyframes Wizard、手動キーフレーム | 手動マークに加え、JPEG/PNG/TIFFの明るさ曲線から内側の候補を選ぶ`keyframes`コマンドを実装。両端は解析上の基準点に使う。候補選定は独自ヒューリスティック | 一部 |
-| Holy Grail | 露出変化やISOを補正して昼夜遷移をつなぐ | 未実装 | 未実装 |
+| Holy Grail | 露出変化やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出値から補正を計算し、`crs:Exposure2012`をプレビューまたはサイドカーに書き込む。先頭フレームを基準にした露出設定の逆補正。LRTの調整曲線UIや回転/伸縮操作、プレビュー画像を使った再補正は未実装 | 一部 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。明示的に許可した数値のグローバル設定を線形補間。XMP値を画素に適用する現像機能なし | 一部 |
 | Auto-Transition | キーフレーム間を自動補間 | 数値のグローバルCamera Raw項目を補間。ローカル補正、カーブ、マスク、色相環などの補間なし | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | 未実装 | 未実装 |
@@ -35,6 +35,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
 4. 現像済みJPEG/PNG/TIFF連番をMJPEG AVIにまとめる。
 5. レンダー時に、参照領域と平滑化曲線を使った簡易Deflickerを適用する。
+6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 
 動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`lrtl render`はXMPを読まず、画像の現像もしません。Deflickerは出力時に全体露出を画素へ適用する近似処理で、元画像やXMPは変更しません。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
 
@@ -67,6 +68,16 @@ lrtl unmark "D:\Timelapse\Sequence\IMG_0005.CR3"
 lrtl interpolate "D:\Timelapse\Sequence"
 lrtl interpolate "D:\Timelapse\Sequence" --write
 
+# EXIFの撮影露出設定を逆補正し、XMPへの変更案を表示
+lrtl holy-grail "D:\Timelapse\Sequence"
+lrtl holy-grail "D:\Timelapse\Sequence" --write
+
+# 絞りが固定で、EXIFのFNumberが欠落している素材を処理
+lrtl holy-grail "D:\Timelapse\Sequence" --ignore-aperture
+
+# lrtlが最後に書き込んだHoly Grail補正だけを取り消す
+lrtl holy-grail "D:\Timelapse\Sequence" --reset --write
+
 # JPEG/PNG/TIFFの輝度曲線から5つの候補を提案（既定はプレビューのみ）
 lrtl keyframes "D:\Timelapse\Developed" --count 5
 lrtl keyframes "D:\Timelapse\Developed" --count 5 --write
@@ -91,6 +102,10 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `unmark --force-rating`はlrtl以外が設定した4つ星/5つ星評価にも使えます。その評価を削除するため、評価がキーフレームマーカーとして使われている場合に限ってください。
 
+`holy-grail`は各フレームのEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す補正量として`crs:Exposure2012`に加えます。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。F値がない場合は`--ignore-aperture`を指定し、絞りが変化しなかったことを確認してください。XMPに保存済みのExposure値は保持したうえで補正量を加算し、lrtlの補正量を独自名前空間にも保存するため、再実行で補正が累積しません。`--reset --write`はその保存済み補正量だけを戻します。既定はプレビューで、書き込み時は既存サイドカーをバックアップします。
+
+この計算は記録されたカメラ設定による露出差を補う近似です。LRTimelapse公式ワークフローのHoly Grail Wizardも撮影中に変更したシャッター速度/ISOの補正曲線を作りますが、lrtlはLRTの曲線回転・伸縮や画像プレビューを使った調整を再現しません。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
+
 ## 今後の実装順
 
 | 段階 | 目標 | 状況 |
@@ -98,7 +113,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFからMJPEG AVIに対応 |
 | 3 | 画像解析、プレビュー、Deflicker | レンダー時の単一参照領域・全体露出補正を実装。LRT形式のVisual Preview、曲線UI、XMPロスレス適用、マスク別補正は未実装 |
-| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | 未着手 |
+| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正を実装。RAW現像とXMP現像値の画素への反映は未着手 |
 | 5 | H.264等の追加出力、クロップ/オーバーレイ、取り込み、GUI | 未着手 |
 
 ## 機能調査の出典
@@ -114,6 +129,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 - [LRTimelapse 7.2 release notes: Simple Deflicker](https://lrtimelapse.com/updates/lrtimelapse-7-2/)
 - [AVI/MJPEG writer for Go](https://github.com/icza/mjpeg)
 - [Pure-Go TIFF decoder/encoder used by lrtl](https://pkg.go.dev/golang.org/x/image@v0.29.0/tiff)
+- [Pure-Go EXIF reader used for Holy Grail exposure analysis](https://github.com/evanoberholster/imagemeta)
 
 ## 開発
 
