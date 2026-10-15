@@ -13,7 +13,7 @@ This project is not affiliated with or endorsed by LRTimelapse or Adobe. It does
 - Make a timestamped backup before each write by default.
 - Preview interpolation without changing files; pass `--write` to apply it.
 
-The current version does not render RAW files or video, analyze image luminance, understand embedded XMP, or reproduce LRTimelapse's masks, tone curves, deflicker, Holy Grail compensation, or UI. Its interpolation is based on natural filename order. Numeric controls outside the explicit whitelist are left untouched; categorical, boolean, angular, array, and structured properties need different interpolation rules. Where the first or last image already has a numeric setting, it uses that value as an edge anchor and preserves the endpoint XMP.
+The current version does not render RAW files or video, analyze image luminance, understand embedded XMP, or reproduce LRTimelapse's masks, tone curves, deflicker, Holy Grail compensation, or UI. Its interpolation is based on natural filename order. Numeric controls outside the explicit whitelist are left untouched; categorical, boolean, circular color-wheel hue, array, and structured properties need different interpolation rules. Where the first or last image already has a numeric setting, it uses that value as an edge anchor and preserves the endpoint XMP.
 
 ## Install
 
