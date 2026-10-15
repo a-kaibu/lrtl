@@ -71,6 +71,9 @@
           <h2>選択フレーム</h2>
           <img id="preview" alt="選択フレームのプレビュー">
           <p id="selected-name">フレームを選択するとプレビューします。</p>
+          <div class="card-actions"><button id="preview-original">元画像</button><button id="preview-adjusted">XMPプレビュー</button></div>
+          <label class="check"><input id="preview-basic" type="checkbox">対応するXMP現像値を適用</label>
+          <label class="check"><input id="preview-crop" type="checkbox">XMPクロップを適用</label>
           <div class="card-actions">
             <button id="mark4">4★ 編集</button><button id="mark5">5★ クロップ</button><button id="unmark">解除</button>
           </div>
@@ -130,6 +133,7 @@
     let limit = 80;
     let frames = [];
     let selected = null;
+    let previewObjectURL = '';
     const setStatus = (message, error = false) => { el('status').textContent = message; el('status').className = error ? 'error' : ''; };
     async function api(url, options = {}) {
       const response = await fetch(url, options);
@@ -195,10 +199,32 @@
     function selectFrame(frame) {
       selected = frame;
       el('selected-name').textContent = (frame.index + 1) + ' / ' + total + ' · ' + frame.name;
-      el('preview').src = frame.thumbnail;
+      showOriginalPreview();
       document.querySelectorAll('.card').forEach(card => card.classList.remove('selected'));
       const card = [...document.querySelectorAll('.card')].find(item => item.querySelector('.filename')?.textContent.endsWith(' · ' + frame.name));
       if (card) card.classList.add('selected');
+    }
+    function showOriginalPreview() {
+      if (!selected) return;
+      if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = ''; }
+      el('preview').src = selected.thumbnail;
+    }
+    async function showAdjustedPreview() {
+      if (!selected) throw new Error('先にフレームを選択してください。');
+      ensureActiveDirectory();
+      const query = new URLSearchParams({directory, name:selected.name, basic:String(el('preview-basic').checked), crop:String(el('preview-crop').checked)});
+      const rawMode = el('raw-mode').value;
+      if (rawMode) query.set('raw', rawMode);
+      const dnglab = el('dnglab').value.trim();
+      if (dnglab) query.set('dnglab', dnglab);
+      setStatus('XMPプレビューを作成しています…');
+      const response = await fetch('/api/preview?' + query.toString());
+      if (!response.ok) throw new Error(await response.text() || response.statusText);
+      const objectURL = URL.createObjectURL(await response.blob());
+      if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
+      previewObjectURL = objectURL;
+      el('preview').src = objectURL;
+      setStatus('対応するXMP現像値を適用したプレビューです。RAW現像やAdobe画素値との一致は保証しません。');
     }
     async function setKeyframe(frame, kind, remove = false) {
       ensureActiveDirectory();
@@ -217,6 +243,8 @@
     buttonAction(el('mark4'), () => selected ? setKeyframe(selected, 'default') : setStatus('先にフレームを選択してください。', true));
     buttonAction(el('mark5'), () => selected ? setKeyframe(selected, 'crop') : setStatus('先にフレームを選択してください。', true));
     buttonAction(el('unmark'), () => selected ? setKeyframe(selected, '', true) : setStatus('先にフレームを選択してください。', true));
+    el('preview-original').addEventListener('click', showOriginalPreview);
+    buttonAction(el('preview-adjusted'), showAdjustedPreview);
     buttonAction(el('suggest'), async () => {
       ensureActiveDirectory();
       if (!confirm('輝度推移を分析し、キーフレームXMPを保存しますか？既存マークは既定で保持されます。')) return;

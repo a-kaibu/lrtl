@@ -72,6 +72,7 @@ func newGUIHandler() http.Handler {
 	mux.HandleFunc("/", serveGUIIndex)
 	mux.HandleFunc("/api/sequence", serveGUISequence)
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
+	mux.HandleFunc("/api/preview", serveGUIPreview)
 	mux.HandleFunc("/api/keyframe", serveGUIKeyframe)
 	mux.HandleFunc("/api/keyframes", serveGUIKeyframes)
 	mux.HandleFunc("/api/interpolate", serveGUIInterpolate)
@@ -272,23 +273,35 @@ func serveGUIThumbnail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "empty preview image", http.StatusUnprocessableEntity)
 		return
 	}
-	maxSide := 640
-	if width > maxSide || height > maxSide {
-		scale := float64(maxSide) / float64(maxInt(width, height))
-		width, height = int(mathMaxOne(float64(width)*scale)), int(mathMaxOne(float64(height)*scale))
+	encoded, err := encodeGUIJPEG(img, 640, 84)
+	if err != nil {
+		http.Error(w, "could not encode preview image", http.StatusInternalServerError)
+		return
 	}
-	thumbnail := image.NewNRGBA(image.Rect(0, 0, width, height))
-	xdraw.CatmullRom.Scale(thumbnail, thumbnail.Bounds(), img, bounds, xdraw.Over, nil)
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.WriteHeader(http.StatusOK)
-	_ = jpeg.Encode(w, thumbnail, &jpeg.Options{Quality: 84})
+	_, _ = w.Write(encoded)
 }
 
-func mathMaxOne(value float64) float64 {
-	if value < 1 {
-		return 1
+func encodeGUIJPEG(img image.Image, maxSide, quality int) ([]byte, error) {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width < 1 || height < 1 {
+		return nil, fmt.Errorf("empty preview image")
 	}
-	return value
+	if width > maxSide || height > maxSide {
+		scale := float64(maxSide) / float64(maxInt(width, height))
+		width = maxInt(1, int(float64(width)*scale))
+		height = maxInt(1, int(float64(height)*scale))
+		resized := image.NewNRGBA(image.Rect(0, 0, width, height))
+		xdraw.CatmullRom.Scale(resized, resized.Bounds(), img, bounds, xdraw.Over, nil)
+		img = resized
+	}
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: quality}); err != nil {
+		return nil, err
+	}
+	return encoded.Bytes(), nil
 }
 
 func maxInt(left, right int) int {
@@ -296,6 +309,96 @@ func maxInt(left, right int) int {
 		return left
 	}
 	return right
+}
+
+func serveGUIPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	directory, err := canonicalGUIDirectory(r.URL.Query().Get("directory"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	frame, err := guiFrameByName(directory, r.URL.Query().Get("name"))
+	if err != nil {
+		http.Error(w, "image not found in sequence", http.StatusNotFound)
+		return
+	}
+	select {
+	case guiThumbnailSlots <- struct{}{}:
+		defer func() { <-guiThumbnailSlots }()
+	case <-r.Context().Done():
+		return
+	}
+	rawMode := r.URL.Query().Get("raw")
+	if rawMode != "" && rawMode != "preview" && rawMode != "develop" {
+		http.Error(w, "raw mode must be preview or develop", http.StatusBadRequest)
+		return
+	}
+	if rawMode == "" && !supportedRasterExtension(frame.Image) && supportsRawDevelopment(frame.Image) {
+		rawMode = "preview"
+	}
+	applyBasic, err := parseGUIBool(r.URL.Query().Get("basic"))
+	if err != nil {
+		http.Error(w, "basic must be true or false", http.StatusBadRequest)
+		return
+	}
+	applyCrop, err := parseGUIBool(r.URL.Query().Get("crop"))
+	if err != nil {
+		http.Error(w, "crop must be true or false", http.StatusBadRequest)
+		return
+	}
+	inputOptions := imageInputOptions{
+		RawPreview: rawMode == "preview", RawDevelop: rawMode == "develop",
+		ApplyXMPBasic: applyBasic, ApplyXMPCrop: applyCrop,
+	}
+	if rawMode == "develop" {
+		inputOptions.DNGLabPath = r.URL.Query().Get("dnglab")
+	}
+	data, config, _, err := readRenderInputWithOptions(frame, inputOptions)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	if config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > guiMaxDecodePixels {
+		http.Error(w, "image dimensions exceed preview decoder limit", http.StatusRequestEntityTooLarge)
+		return
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		http.Error(w, "could not decode preview image", http.StatusUnprocessableEntity)
+		return
+	}
+	orientation, err := readEXIFOrientation(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	img = applyEXIFOrientation(img, orientation)
+	width, height := img.Bounds().Dx(), img.Bounds().Dy()
+	adjustments, err := readSequenceXMPAdjustments([]Frame{frame}, width, height, inputOptions)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	img = adjustments.apply(0, img)
+	encoded, err := encodeGUIJPEG(img, 1920, 90)
+	if err != nil {
+		http.Error(w, "could not encode adjusted preview", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(encoded)
+}
+
+func parseGUIBool(value string) (bool, error) {
+	if value == "" {
+		return false, nil
+	}
+	return strconv.ParseBool(value)
 }
 
 func canonicalGUIDirectory(value string) (string, error) {
