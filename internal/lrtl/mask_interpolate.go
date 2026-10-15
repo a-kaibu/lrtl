@@ -383,31 +383,38 @@ func ensureRDFArrayPosition(container *etree.Element, position int, template *et
 	if position < 1 {
 		return nil, xmpError("RDF array position must be positive: %d", position)
 	}
-	items := rdfArrayItemsInContainer(container)
-	if len(items) >= position {
-		item := items[position-1]
-		if template == nil || !rdfArrayItemIsEmpty(item) {
-			return item, nil
-		}
-		if template.NamespaceURI() != rdfNamespace || template.Tag != "li" {
-			return nil, xmpError("cannot materialize RDF array position %d from non-rdf:li template", position)
-		}
-		copy := copyElementWithNamespaces(template)
-		for index, token := range container.Child {
-			if token == item {
-				container.Child[index] = copy
-				return copy, nil
-			}
-		}
-		return nil, xmpError("RDF array position %d is detached from its container", position)
-	}
 	if template != nil && (template.NamespaceURI() != rdfNamespace || template.Tag != "li") {
 		return nil, xmpError("cannot materialize RDF array position %d from non-rdf:li template", position)
 	}
+	items := rdfArrayItemsInContainer(container)
+	for index := 0; index < len(items) && index < position; index++ {
+		if !rdfArrayItemIsEmpty(items[index]) {
+			continue
+		}
+		itemTemplate := rdfArrayTemplateItem(template, index+1)
+		if itemTemplate == nil && index+1 == position {
+			itemTemplate = template
+		}
+		if itemTemplate != nil && !rdfArrayItemIsEmpty(itemTemplate) {
+			item, err := replaceRDFArrayItem(container, items[index], itemTemplate, index+1)
+			if err != nil {
+				return nil, err
+			}
+			items[index] = item
+		}
+	}
+	if len(items) >= position {
+		return items[position-1], nil
+	}
 	for len(items) < position {
+		currentPosition := len(items) + 1
+		itemTemplate := rdfArrayTemplateItem(template, currentPosition)
+		if itemTemplate == nil && currentPosition == position {
+			itemTemplate = template
+		}
 		var item *etree.Element
-		if len(items)+1 == position && template != nil {
-			item = copyElementWithNamespaces(template)
+		if itemTemplate != nil && !rdfArrayItemIsEmpty(itemTemplate) {
+			item = copyElementWithNamespaces(itemTemplate)
 		} else {
 			item = createRDFResourceArrayItem(container)
 		}
@@ -415,6 +422,33 @@ func ensureRDFArrayPosition(container *etree.Element, position int, template *et
 		items = append(items, item)
 	}
 	return items[position-1], nil
+}
+
+func rdfArrayTemplateItem(template *etree.Element, position int) *etree.Element {
+	if template == nil || position < 1 {
+		return nil
+	}
+	sourceContainer := template.Parent()
+	if sourceContainer == nil || sourceContainer == template {
+		return nil
+	}
+	items := rdfArrayItemsInContainer(sourceContainer)
+	if position > len(items) {
+		return nil
+	}
+	return items[position-1]
+}
+
+func replaceRDFArrayItem(container, oldItem, template *etree.Element, position int) (*etree.Element, error) {
+	copy := copyElementWithNamespaces(template)
+	for index, token := range container.Child {
+		if token == oldItem {
+			container.RemoveChild(oldItem)
+			container.InsertChildAt(index, copy)
+			return copy, nil
+		}
+	}
+	return nil, xmpError("RDF array position %d is detached from its container", position)
 }
 
 func rdfArrayItemIsEmpty(item *etree.Element) bool {
