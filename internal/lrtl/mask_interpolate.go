@@ -32,13 +32,15 @@ type maskTransitionKey struct {
 }
 
 type maskTransitionNode struct {
-	element *etree.Element
-	values  map[string]float64
+	element      *etree.Element
+	values       map[string]float64
+	colorSamples *etree.Element
 }
 
 type maskTransitionChange struct {
-	key    maskTransitionKey
-	values map[string]string
+	key          maskTransitionKey
+	values       map[string]string
+	colorSamples *etree.Element
 }
 
 var luminanceRangeTransitionProperties = [4]string{
@@ -141,6 +143,13 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 				values[luminanceRangeTransitionProperties[index]] = value
 			}
 		}
+		colorAmount, supported, err := parseXMPColorRangeAmount(element)
+		if err != nil {
+			return nil, err
+		}
+		if supported {
+			values["RangeMaskColorAmount"] = colorAmount
+		}
 	}
 	return values, nil
 }
@@ -180,7 +189,7 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 				if err != nil {
 					return fmt.Errorf("mask %q: %w", maskID, err)
 				}
-				indexed[key] = maskTransitionNode{element: element, values: values}
+				indexed[key] = maskTransitionNode{element: element, values: values, colorSamples: parseXMPColorRangePointModels(element)}
 			}
 			for _, token := range element.Child {
 				child, ok := token.(*etree.Element)
@@ -197,6 +206,148 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 		}
 	}
 	return indexed, nil
+}
+
+func correctionRangeMaskElement(element *etree.Element) *etree.Element {
+	for _, token := range element.Child {
+		child, ok := token.(*etree.Element)
+		if ok && child.NamespaceURI() == crsNamespace && child.Tag == "CorrectionRangeMask" {
+			return child
+		}
+	}
+	return nil
+}
+
+func parseXMPColorRangeAmount(element *etree.Element) (float64, bool, error) {
+	rangeElement := correctionRangeMaskElement(element)
+	if rangeElement == nil {
+		return 0, false, nil
+	}
+	typeValue, hasType, err := correctionRangeMaskType(rangeElement)
+	if err != nil {
+		return 0, false, err
+	}
+	if !hasType || typeValue != 1 {
+		return 0, false, nil
+	}
+	text, found, err := crsElementValue(rangeElement, "ColorAmount")
+	if err != nil || !found {
+		return 0, false, err
+	}
+	amount, valid := scalarNumber(text)
+	if !valid || amount < 0 || amount > 1 {
+		return 0, false, xmpError("crs:CorrectionRangeMask ColorAmount must be between 0 and 1")
+	}
+	return amount, true, nil
+}
+
+func correctionRangeMaskType(rangeElement *etree.Element) (float64, bool, error) {
+	typeText, found, err := crsElementValue(rangeElement, "Type")
+	if err != nil || !found {
+		return 0, found, err
+	}
+	typeValue, valid := scalarNumber(typeText)
+	if !valid || math.Trunc(typeValue) != typeValue {
+		return 0, false, xmpError("crs:CorrectionRangeMask Type must be an integer")
+	}
+	return typeValue, true, nil
+}
+
+func isXMPColorRangeMask(element *etree.Element) bool {
+	rangeElement := correctionRangeMaskElement(element)
+	if rangeElement == nil {
+		return false
+	}
+	typeValue, found, err := correctionRangeMaskType(rangeElement)
+	return err == nil && found && typeValue == 1
+}
+
+func parseXMPColorRangePointModels(element *etree.Element) *etree.Element {
+	rangeElement := correctionRangeMaskElement(element)
+	if rangeElement == nil {
+		return nil
+	}
+	typeValue, found, err := correctionRangeMaskType(rangeElement)
+	if err != nil || !found {
+		return nil
+	}
+	if typeValue != 1 {
+		return nil
+	}
+	return findColorRangePointModels(rangeElement)
+}
+
+func findColorRangePointModels(element *etree.Element) *etree.Element {
+	for _, token := range element.Child {
+		child, ok := token.(*etree.Element)
+		if !ok {
+			continue
+		}
+		if child.NamespaceURI() == crsNamespace && child.Tag == "PointModels" {
+			return child
+		}
+		if pointModels := findColorRangePointModels(child); pointModels != nil {
+			return pointModels
+		}
+	}
+	return nil
+}
+
+func colorRangePointModelValues(element *etree.Element) []string {
+	if element == nil {
+		return nil
+	}
+	values := make([]string, 0)
+	var walk func(*etree.Element)
+	walk = func(current *etree.Element) {
+		if current.NamespaceURI() == rdfNamespace && current.Tag == "li" {
+			if value, scalar := scalarElementText(current); scalar {
+				values = append(values, strings.TrimSpace(value))
+			}
+			return
+		}
+		for _, token := range current.Child {
+			child, ok := token.(*etree.Element)
+			if ok {
+				walk(child)
+			}
+		}
+	}
+	walk(element)
+	return values
+}
+
+func equalColorRangePointModels(left, right *etree.Element) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	leftValues, rightValues := colorRangePointModelValues(left), colorRangePointModelValues(right)
+	if len(leftValues) != len(rightValues) {
+		return false
+	}
+	for index := range leftValues {
+		if leftValues[index] != rightValues[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func colorRangePointModelsSource(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, target int, key maskTransitionKey) *etree.Element {
+	if len(keyframes) == 0 {
+		return nil
+	}
+	sourceFrame := keyframes[0]
+	for _, keyframe := range keyframes {
+		if keyframe > target {
+			break
+		}
+		sourceFrame = keyframe
+	}
+	if node, found := indexes[sourceFrame][key]; found {
+		return node.colorSamples
+	}
+	return nil
 }
 
 func cloneFloatMap(values map[string]float64) map[string]float64 {
@@ -355,7 +506,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, aspect flo
 		})
 		for _, key := range keys {
 			proposed := maskTransitionSource(keyframeIndices, indexes, target, key)
-			if len(proposed) == 0 {
+			if len(proposed) == 0 && colorRangePointModelsSource(keyframeIndices, indexes, target, key) == nil {
 				continue
 			}
 			if radial, ok := radialTransitionForTarget(keyframeIndices, indexes, target, key, aspect); ok {
@@ -373,6 +524,11 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, aspect flo
 			sort.Strings(propertyNames)
 			for _, property := range propertyNames {
 				value := proposed[property]
+				if property == "RangeMaskColorAmount" {
+					if _, found := current[property]; !found {
+						continue
+					}
+				}
 				if old, found := current[property]; found && closeEnough(old, value) {
 					continue
 				}
@@ -388,8 +544,17 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, aspect flo
 					}
 				}
 			}
-			if len(values) > 0 {
-				changes[target] = append(changes[target], maskTransitionChange{key: key, values: values})
+			colorSamples := colorRangePointModelsSource(keyframeIndices, indexes, target, key)
+			if !isXMPColorRangeMask(indexes[target][key].element) {
+				colorSamples = nil
+			}
+			if colorSamples != nil && !equalColorRangePointModels(indexes[target][key].colorSamples, colorSamples) {
+				colorSamples = colorSamples.Copy()
+			} else {
+				colorSamples = nil
+			}
+			if len(values) > 0 || colorSamples != nil {
+				changes[target] = append(changes[target], maskTransitionChange{key: key, values: values, colorSamples: colorSamples})
 			}
 		}
 	}
@@ -458,6 +623,20 @@ func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 			hasLuminanceRange[index] = true
 			continue
 		}
+		if name == "RangeMaskColorAmount" {
+			number, valid := scalarNumber(value)
+			if !valid || number < 0 || number > 1 {
+				return xmpError("interpolated crs:CorrectionRangeMask ColorAmount must be between 0 and 1")
+			}
+			rangeElement := correctionRangeMaskElement(target)
+			if rangeElement == nil {
+				return xmpError("missing crs:CorrectionRangeMask for color range transition")
+			}
+			if err := setCRSElementValue(rangeElement, "ColorAmount", value); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := setCRSElementValue(target, name, value); err != nil {
 			return err
 		}
@@ -469,6 +648,20 @@ func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 			}
 			break
 		}
+	}
+	if change.colorSamples != nil {
+		rangeElement := correctionRangeMaskElement(target)
+		if rangeElement == nil {
+			return xmpError("missing crs:CorrectionRangeMask for color selector transition")
+		}
+		parent := rangeElement
+		if current := findColorRangePointModels(rangeElement); current != nil {
+			if currentParent := current.Parent(); currentParent != nil {
+				parent = currentParent
+			}
+			current.Remove()
+		}
+		parent.AddChild(change.colorSamples.Copy())
 	}
 	return nil
 }

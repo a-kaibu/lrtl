@@ -80,6 +80,9 @@ func (plan InterpolationPlan) PropertyCount() int {
 		total += len(change.Values) + len(change.StructuredProperties)
 		for _, transition := range change.MaskTransitions {
 			total += len(transition.values)
+			if transition.colorSamples != nil {
+				total++
+			}
 		}
 	}
 	return total

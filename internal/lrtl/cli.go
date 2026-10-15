@@ -635,6 +635,9 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		structuredCount += len(change.StructuredProperties)
 		for _, transition := range change.MaskTransitions {
 			maskCount += len(transition.values)
+			if transition.colorSamples != nil {
+				maskCount++
+			}
 		}
 	}
 	fmt.Fprintf(stdout, "Proposed frames: %d; numeric values: %d; first-frame XMP values: %d; local mask values: %d\n", len(plan.Changes), numericCount, structuredCount, maskCount)
@@ -644,6 +647,9 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 			capacity := len(change.Values) + len(change.StructuredProperties)
 			for _, transition := range change.MaskTransitions {
 				capacity += len(transition.values)
+				if transition.colorSamples != nil {
+					capacity++
+				}
 			}
 			names := make([]string, 0, capacity)
 			for name := range change.Values {
@@ -655,6 +661,13 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 					label := "crs:" + transition.key.collection + "/" + transition.key.correctionID + "." + name
 					if transition.key.maskID != "" {
 						label = "crs:" + transition.key.collection + "/" + transition.key.correctionID + "/" + transition.key.maskID + "." + name
+					}
+					names = append(names, label)
+				}
+				if transition.colorSamples != nil {
+					label := "crs:" + transition.key.collection + "/" + transition.key.correctionID + ".ColorRangePointModels"
+					if transition.key.maskID != "" {
+						label = "crs:" + transition.key.collection + "/" + transition.key.correctionID + "/" + transition.key.maskID + ".ColorRangePointModels"
 					}
 					names = append(names, label)
 				}
