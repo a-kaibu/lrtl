@@ -29,6 +29,29 @@ type xmpBasicAdjustments struct {
 	hasMaster       bool
 	channelCurve    [3][256]uint8
 	hasChannel      [3]bool
+	colorMix        [8]xmpHSLColorAdjustment
+	hasColorMix     bool
+}
+
+type xmpHSLColorAdjustment struct {
+	hue        float64
+	saturation float64
+	luminance  float64
+}
+
+var xmpHSLBands = []struct {
+	name             string
+	legacyHue        string
+	legacySaturation string
+}{
+	{name: "Red", legacyHue: "RedHue", legacySaturation: "RedSaturation"},
+	{name: "Orange", legacyHue: "OrangeHue", legacySaturation: "OrangeSaturation"},
+	{name: "Yellow", legacyHue: "YellowHue", legacySaturation: "YellowSaturation"},
+	{name: "Green", legacyHue: "GreenHue", legacySaturation: "GreenSaturation"},
+	{name: "Aqua", legacyHue: "AquaHue", legacySaturation: "AquaSaturation"},
+	{name: "Blue", legacyHue: "BlueHue", legacySaturation: "BlueSaturation"},
+	{name: "Purple", legacyHue: "PurpleHue", legacySaturation: "PurpleSaturation"},
+	{name: "Magenta", legacyHue: "MagentaHue", legacySaturation: "MagentaSaturation"},
 }
 
 type toneCurvePoint struct {
@@ -70,6 +93,32 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 			return xmpBasicAdjustments{}, fmt.Errorf("crs:%s must be a finite number between %g and %g", property.name, property.min, property.max)
 		}
 		*property.target = number
+	}
+	for index, band := range xmpHSLBands {
+		for _, property := range []struct {
+			current string
+			legacy  string
+			target  *float64
+		}{
+			{current: "HueAdjustment" + band.name, legacy: band.legacyHue, target: &adjustments.colorMix[index].hue},
+			{current: "SaturationAdjustment" + band.name, legacy: band.legacySaturation, target: &adjustments.colorMix[index].saturation},
+			{current: "LuminanceAdjustment" + band.name, target: &adjustments.colorMix[index].luminance},
+		} {
+			value, found, err := readXMPBasicNumber(packet, property.current, -100, 100)
+			if err != nil {
+				return xmpBasicAdjustments{}, err
+			}
+			if !found && property.legacy != "" {
+				value, found, err = readXMPBasicNumber(packet, property.legacy, -100, 100)
+				if err != nil {
+					return xmpBasicAdjustments{}, err
+				}
+			}
+			if found {
+				*property.target = value
+				adjustments.hasColorMix = adjustments.hasColorMix || value != 0
+			}
+		}
 	}
 	temperature, hasTemperature, err := readXMPBasicNumber(packet, "Temperature", 2000, 50000)
 	if err != nil {
@@ -319,7 +368,7 @@ func (adjustments xmpBasicAdjustments) active() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
-		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2]
+		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix
 }
 
 func smoothstep(value float64) float64 {
@@ -406,10 +455,108 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			if adjustments.hasChannel[2] {
 				blue8 = adjustments.channelCurve[2][blue8]
 			}
+			if adjustments.hasColorMix {
+				red8, green8, blue8 = applyXMPHSLColorMix(red8, green8, blue8, adjustments.colorMix)
+			}
 			result.SetNRGBA(x, y, color.NRGBA{
 				R: red8, G: green8, B: blue8, A: pixel.A,
 			})
 		}
 	}
 	return result
+}
+
+var xmpHSLHueCenters = [8]float64{0, 30, 60, 120, 180, 240, 270, 315}
+
+func applyXMPHSLColorMix(red8, green8, blue8 uint8, adjustments [8]xmpHSLColorAdjustment) (uint8, uint8, uint8) {
+	hue, saturation, luminance := srgbToHSL(float64(red8)/255, float64(green8)/255, float64(blue8)/255)
+	colorAdjustment := interpolateHSLBandAdjustments(adjustments, hue)
+
+	// Camera Raw applies these controls in its RAW color pipeline. Here the
+	// slider values are mapped to bounded sRGB-domain approximations.
+	hue = math.Mod(hue+colorAdjustment.hue*0.3+360, 360)
+	saturation *= math.Max(0, math.Min(2, 1+colorAdjustment.saturation/100))
+	luminance += colorAdjustment.luminance / 100 * 0.25
+	red, green, blue := hslToSRGB(hue, math.Max(0, math.Min(1, saturation)), math.Max(0, math.Min(1, luminance)))
+	return encodeSRGBByte(red), encodeSRGBByte(green), encodeSRGBByte(blue)
+}
+
+func encodeSRGBByte(value float64) uint8 {
+	return uint8(math.Round(math.Max(0, math.Min(1, value)) * 255))
+}
+
+func interpolateHSLBandAdjustments(adjustments [8]xmpHSLColorAdjustment, hue float64) xmpHSLColorAdjustment {
+	hue = math.Mod(hue+360, 360)
+	for index, start := range xmpHSLHueCenters {
+		next := (index + 1) % len(xmpHSLHueCenters)
+		end := xmpHSLHueCenters[next]
+		wrappedHue := hue
+		if next == 0 {
+			end += 360
+			if wrappedHue < start {
+				wrappedHue += 360
+			}
+		}
+		if wrappedHue < start || wrappedHue > end {
+			continue
+		}
+		portion := (wrappedHue - start) / (end - start)
+		return xmpHSLColorAdjustment{
+			hue:        adjustments[index].hue*(1-portion) + adjustments[next].hue*portion,
+			saturation: adjustments[index].saturation*(1-portion) + adjustments[next].saturation*portion,
+			luminance:  adjustments[index].luminance*(1-portion) + adjustments[next].luminance*portion,
+		}
+	}
+	return adjustments[0]
+}
+
+func srgbToHSL(red, green, blue float64) (hue, saturation, luminance float64) {
+	minimum := math.Min(red, math.Min(green, blue))
+	maximum := math.Max(red, math.Max(green, blue))
+	delta := maximum - minimum
+	luminance = (maximum + minimum) / 2
+	if delta == 0 {
+		return 0, 0, luminance
+	}
+	if luminance <= 0.5 {
+		saturation = delta / (maximum + minimum)
+	} else {
+		saturation = delta / (2 - maximum - minimum)
+	}
+	switch maximum {
+	case red:
+		hue = (green - blue) / delta
+		if green < blue {
+			hue += 6
+		}
+	case green:
+		hue = (blue-red)/delta + 2
+	case blue:
+		hue = (red-green)/delta + 4
+	}
+	hue *= 60
+	return hue, saturation, luminance
+}
+
+func hslToSRGB(hue, saturation, luminance float64) (float64, float64, float64) {
+	chroma := (1 - math.Abs(2*luminance-1)) * saturation
+	segment := hue / 60
+	secondary := chroma * (1 - math.Abs(math.Mod(segment, 2)-1))
+	var red, green, blue float64
+	switch {
+	case segment < 1:
+		red, green = chroma, secondary
+	case segment < 2:
+		red, green = secondary, chroma
+	case segment < 3:
+		green, blue = chroma, secondary
+	case segment < 4:
+		green, blue = secondary, chroma
+	case segment < 5:
+		red, blue = secondary, chroma
+	default:
+		red, blue = chroma, secondary
+	}
+	minimum := luminance - chroma/2
+	return red + minimum, green + minimum, blue + minimum
 }
