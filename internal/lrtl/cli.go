@@ -688,7 +688,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
 	output := set.String("output", "", "output AVI, MP4, or MOV path")
 	selectionPath := set.String("selection", "", "use included frames from a long-term selection manifest")
-	codec := set.String("codec", "", "MP4 codec h264|h265 or MOV codec prores|prores-hq; defaults by extension")
+	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores|prores-hq|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
 	fps := set.Int("fps", 24, "integer frame rate (1-240)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")

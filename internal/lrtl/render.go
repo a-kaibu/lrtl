@@ -315,7 +315,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			return fmt.Errorf("MP4 codec must be h264 or h265: %q", options.Codec)
 		}
 		if outputExtension == ".mov" && options.Codec != "prores" && options.Codec != "prores-hq" {
-			return fmt.Errorf("MOV codec must be prores or prores-hq: %q", options.Codec)
+			if _, _, supported := dnxhrProfile(options.Codec); !supported {
+				return fmt.Errorf("MOV codec must be prores, prores-hq, or a DNxHR profile: %q", options.Codec)
+			}
 		}
 		if options.Codec == "h264" || options.Codec == "h265" {
 			if options.CRF < 0 || options.CRF > 51 {

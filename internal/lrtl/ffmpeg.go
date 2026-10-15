@@ -55,6 +55,23 @@ func validH264Preset(preset string) bool {
 	}
 }
 
+func dnxhrProfile(codec string) (string, string, bool) {
+	switch codec {
+	case "dnxhr-lb":
+		return "dnxhr_lb", "yuv422p", true
+	case "dnxhr-sq":
+		return "dnxhr_sq", "yuv422p", true
+	case "dnxhr-hq":
+		return "dnxhr_hq", "yuv422p", true
+	case "dnxhr-hqx":
+		return "dnxhr_hqx", "yuv422p10le", true
+	case "dnxhr-444":
+		return "dnxhr_444", "yuv444p10le", true
+	default:
+		return "", "", false
+	}
+}
+
 func newFFmpegFrameWriter(executable, output, container, codec string, width, height, fps, frameCount, crf int, preset, audioPath string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
@@ -87,7 +104,13 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			"-c:v", "prores_ks", "-profile:v", profile,
 			"-pix_fmt", "yuv422p10le", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
 	default:
-		return nil, fmt.Errorf("unsupported FFmpeg video codec %q", codec)
+		if profile, pixelFormat, supported := dnxhrProfile(codec); supported {
+			arguments = append(arguments,
+				"-c:v", "dnxhd", "-profile:v", profile,
+				"-pix_fmt", pixelFormat, "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
+		} else {
+			return nil, fmt.Errorf("unsupported FFmpeg video codec %q", codec)
+		}
 	}
 	if audioPath != "" {
 		duration := strconv.FormatFloat(float64(frameCount)/float64(fps), 'f', 9, 64)
