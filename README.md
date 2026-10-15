@@ -389,7 +389,7 @@ EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一�
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264/H.265 MP4、ProResとDNxHR MOVに対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、回転を含むXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、Geometry補正、Add/Intersect以外の複合マスク、色/深度/旧形式の範囲マスク、ブラシ/AIの画素現像は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定とLRTの既存XMP入力を使う近似Holy Grail補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と他のXMP値のRAW画素への反映は未実装 |
-| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProRes/DNxHR、日時オーバーレイ、写真フォルダーからの画像/XMP取り込み、対応RAWのlossless/uncompressed DNG変換、動画からJPG/PNGフレーム抽出、Goによる時間方向フレーム平均を実装。動画プレビュー・自動分割、ロッシーDNG・サイズ縮小、LRT互換のモーションブラー重み、GUIは未着手 |
+| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProRes/DNxHR、日時オーバーレイ、写真フォルダーからの画像/XMP取り込み、対応RAWのlossless/uncompressed DNG変換、動画からJPG/PNGフレーム抽出、LRTが選ぶ7種類の窓幅と時間重みでのPure Goフレーム合成を実装。動画プレビュー・自動分割、ロッシーDNG・サイズ縮小、GUI、LRTと同じ10-bit YUV画素処理は未対応 |
 
 ## 機能調査の出典
 
