@@ -112,7 +112,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		{name: "LocalBlacks2012", target: &correction.blacks},
 		{name: "LocalSaturation", target: &correction.saturation},
 	} {
-		*property.target, _, err = xmpLocalNumber(element, property.name, 0, -100, 100)
+		*property.target, _, err = xmpLocalSlider(element, property.name)
 		if err != nil {
 			return correction, false, err
 		}
@@ -121,15 +121,16 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 	if err != nil {
 		return correction, false, err
 	}
-	correction.toningSaturation, _, err = xmpLocalNumber(element, "LocalToningSaturation", 0, 0, 100)
+	correction.toningSaturation, _, err = xmpLocalNumber(element, "LocalToningSaturation", 0, 0, 1)
 	if err != nil {
 		return correction, false, err
 	}
-	temperature, _, err := xmpLocalNumber(element, "LocalTemperature", 0, -100, 100)
+	correction.toningSaturation *= 100
+	temperature, _, err := xmpLocalSlider(element, "LocalTemperature")
 	if err != nil {
 		return correction, false, err
 	}
-	tint, _, err := xmpLocalNumber(element, "LocalTint", 0, -100, 100)
+	tint, _, err := xmpLocalSlider(element, "LocalTint")
 	if err != nil {
 		return correction, false, err
 	}
@@ -313,6 +314,12 @@ func xmpLocalNumber(element *etree.Element, name string, fallback, min, max floa
 		return 0, false, fmt.Errorf("crs:%s must be a finite number between %g and %g", name, min, max)
 	}
 	return value, true, nil
+}
+
+func xmpLocalSlider(element *etree.Element, name string) (float64, bool, error) {
+	// Observed Camera Raw XMP stores these local sliders as normalized values in [-1, 1].
+	value, found, err := xmpLocalNumber(element, name, 0, -1, 1)
+	return value * 100, found, err
 }
 
 func xmpLocalBool(element *etree.Element, name string, fallback bool) (bool, bool, error) {
