@@ -105,7 +105,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json]")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--apply-xmp-basic]")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -572,6 +572,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to rendered frames")
+	applyXMPBasic := set.Bool("apply-xmp-basic", false, "apply supported global Camera Raw tone and color controls from sidecar XMP")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP")
 	timestampOverlay := set.Bool("timestamp-overlay", false, "burn each frame's EXIF/XMP capture time into the video")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
@@ -605,6 +606,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *output == "" {
 		return reportError(stderr, fmt.Errorf("--output is required"))
+	}
+	if *applyXMPExposure && *applyXMPBasic {
+		return reportError(stderr, fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012"))
 	}
 	var reference image.Rectangle
 	if *referenceValue != "" {
@@ -651,6 +655,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		DeflickerPasses:   *passes,
 		Constant:          *constant,
 		ApplyXMPExposure:  *applyXMPExposure,
+		ApplyXMPBasic:     *applyXMPBasic,
 		ApplyXMPCrop:      *applyXMPCrop,
 		TimestampOverlay:  timestampOverlayEnabled,
 		TimestampFormat:   *timestampFormat,
@@ -676,6 +681,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	features = append(features, strings.ToUpper(selectedCodec)+" codec")
 	if *applyXMPExposure {
 		features = append(features, "XMP Exposure2012")
+	}
+	if *applyXMPBasic {
+		features = append(features, "XMP basic tone and color controls")
 	}
 	if *applyXMPCrop {
 		features = append(features, "XMP crop")

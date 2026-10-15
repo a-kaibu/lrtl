@@ -36,6 +36,7 @@ type RenderOptions struct {
 	DeflickerSmoother string
 	Constant          bool
 	ApplyXMPExposure  bool
+	ApplyXMPBasic     bool
 	ApplyXMPCrop      bool
 	TimestampOverlay  bool
 	TimestampFormat   string
@@ -186,6 +187,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if err := validateImageInputOptions(inputOptions); err != nil {
 		return err
 	}
+	if options.ApplyXMPExposure && options.ApplyXMPBasic {
+		return fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012")
+	}
 	outputExtension := strings.ToLower(filepath.Ext(output))
 	if outputExtension != ".avi" && outputExtension != ".mp4" && outputExtension != ".mov" {
 		return fmt.Errorf("output must use the .avi, .mp4, or .mov extension: %s", output)
@@ -270,6 +274,17 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			xmpExposures[index] = exposure
 		}
 	}
+	var xmpBasics []xmpBasicAdjustments
+	if options.ApplyXMPBasic {
+		xmpBasics = make([]xmpBasicAdjustments, len(frames))
+		for index, frame := range frames {
+			adjustments, err := readXMPBasicAdjustments(frame)
+			if err != nil {
+				return fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
+			}
+			xmpBasics[index] = adjustments
+		}
+	}
 	var captureTimes []time.Time
 	var timestampFace font.Face
 
@@ -342,6 +357,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			if xmpCrops != nil {
 				img = applyXMPCrop(img, xmpCrops[index])
+			}
+			if xmpBasics != nil && xmpBasics[index].active() {
+				img = applyXMPBasic(img, xmpBasics[index])
 			}
 			if xmpExposures != nil && xmpExposures[index] != 0 {
 				img = applyExposureGain(img, math.Exp2(xmpExposures[index]))
@@ -428,6 +446,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 
 		applyXMP := xmpExposures != nil && xmpExposures[index] != 0
+		applyBasic := xmpBasics != nil && xmpBasics[index].active()
 		applyCrop := xmpCrops != nil && xmpCrops[index].Active && (xmpCrops[index].Bounds != image.Rect(0, 0, width, height) || math.Abs(xmpCrops[index].Angle) > 1e-9)
 		if outputExtension != ".avi" {
 			img, format, err := image.Decode(bytes.NewReader(data))
@@ -442,6 +461,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			if applyCrop {
 				img = applyXMPCrop(img, xmpCrops[index])
+			}
+			if applyBasic {
+				img = applyXMPBasic(img, xmpBasics[index])
 			}
 			gain := 1.0
 			if applyXMP {
@@ -474,13 +496,16 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyCrop || resizeFrames || timestampFace != nil || format != "jpeg" {
+		if options.Deflicker || applyXMP || applyBasic || applyCrop || resizeFrames || timestampFace != nil || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
 			}
 			if applyCrop {
 				img = applyXMPCrop(img, xmpCrops[index])
+			}
+			if applyBasic {
+				img = applyXMPBasic(img, xmpBasics[index])
 			}
 			var encoded bytes.Buffer
 			gain := 1.0
