@@ -33,7 +33,7 @@ type xmpLocalCorrection struct {
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
 	corrections := make([]xmpLocalCorrection, 0)
-	for _, collection := range []string{"GradientBasedCorrections", "CircularGradientBasedCorrections"} {
+	for _, collection := range []string{"MaskGroupBasedCorrections", "GradientBasedCorrections", "CircularGradientBasedCorrections"} {
 		property := packet.findRootProperty(crsNamespace, collection)
 		if property.element == nil {
 			continue
