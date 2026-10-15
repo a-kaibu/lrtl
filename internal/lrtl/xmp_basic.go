@@ -15,18 +15,20 @@ import (
 // applied meaningfully to an already-rendered sRGB image. It is deliberately
 // not a replacement for Adobe Camera Raw's RAW pipeline.
 type xmpBasicAdjustments struct {
-	exposure     float64
-	contrast     float64
-	highlights   float64
-	shadows      float64
-	whites       float64
-	blacks       float64
-	vibrance     float64
-	saturation   float64
-	masterCurve  [256]uint8
-	hasMaster    bool
-	channelCurve [3][256]uint8
-	hasChannel   [3]bool
+	exposure        float64
+	whiteBalance    [3]float64
+	hasWhiteBalance bool
+	contrast        float64
+	highlights      float64
+	shadows         float64
+	whites          float64
+	blacks          float64
+	vibrance        float64
+	saturation      float64
+	masterCurve     [256]uint8
+	hasMaster       bool
+	channelCurve    [3][256]uint8
+	hasChannel      [3]bool
 }
 
 type toneCurvePoint struct {
@@ -69,6 +71,21 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		}
 		*property.target = number
 	}
+	temperature, hasTemperature, err := readXMPBasicNumber(packet, "Temperature", 2000, 50000)
+	if err != nil {
+		return xmpBasicAdjustments{}, err
+	}
+	tint, hasTint, err := readXMPBasicNumber(packet, "Tint", -150, 150)
+	if err != nil {
+		return xmpBasicAdjustments{}, err
+	}
+	if hasTemperature || hasTint {
+		if !hasTemperature {
+			temperature = 6500
+		}
+		adjustments.whiteBalance = approximateWhiteBalanceGains(temperature, tint)
+		adjustments.hasWhiteBalance = true
+	}
 	curveProperties := []struct {
 		primary  string
 		fallback string
@@ -104,6 +121,67 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		}
 	}
 	return adjustments, nil
+}
+
+func readXMPBasicNumber(packet *XMPPacket, name string, min, max float64) (float64, bool, error) {
+	value, found, err := packet.GetScalar("crs:" + name)
+	if err != nil || !found {
+		return 0, found, err
+	}
+	number, valid := scalarNumber(value)
+	if !valid || number < min || number > max {
+		return 0, false, fmt.Errorf("crs:%s must be a finite number between %g and %g", name, min, max)
+	}
+	return number, true, nil
+}
+
+// approximateWhiteBalanceGains estimates a Camera Raw white-balance change on
+// an already-rendered sRGB image. Camera Raw's RAW pipeline needs sensor and
+// camera-profile data unavailable here, so this uses a Planckian chromaticity estimate
+// relative to neutral 6500 K and an independent green-magenta tint adjustment.
+func approximateWhiteBalanceGains(temperature, tint float64) [3]float64 {
+	reference := approximateTemperatureRGB(6500)
+	target := approximateTemperatureRGB(temperature)
+	magenta := math.Exp2(tint / 150 * 0.15)
+	gains := [3]float64{
+		reference[0] / target[0] * magenta,
+		reference[1] / target[1] / magenta,
+		reference[2] / target[2] * magenta,
+	}
+	luminance := 0.2126*gains[0] + 0.7152*gains[1] + 0.0722*gains[2]
+	if luminance > 0 {
+		for channel := range gains {
+			gains[channel] /= luminance
+		}
+	}
+	return gains
+}
+
+func approximateTemperatureRGB(temperature float64) [3]float64 {
+	// Convert an approximate CIE 1931 Planckian-locus xy white point to
+	// linear sRGB. The locus polynomial is extended above 25,000 K so that
+	// common Camera Raw metadata values remain usable, though less accurately.
+	var x float64
+	if temperature <= 4000 {
+		x = -0.2661239e9/math.Pow(temperature, 3) - 0.2343580e6/math.Pow(temperature, 2) + 0.8776956e3/temperature + 0.179910
+	} else {
+		x = -3.0258469e9/math.Pow(temperature, 3) + 2.1070379e6/math.Pow(temperature, 2) + 0.2226347e3/temperature + 0.240390
+	}
+	var y float64
+	switch {
+	case temperature <= 2222:
+		y = -1.1063814*math.Pow(x, 3) - 1.34811020*math.Pow(x, 2) + 2.18555832*x - 0.20219683
+	case temperature <= 4000:
+		y = -0.9549476*math.Pow(x, 3) - 1.37418593*math.Pow(x, 2) + 2.09137015*x - 0.16748867
+	default:
+		y = 3.0817580*math.Pow(x, 3) - 5.87338670*math.Pow(x, 2) + 3.75112997*x - 0.37001483
+	}
+	xyzX, xyzZ := x/y, (1-x-y)/y
+	return [3]float64{
+		3.2404542*xyzX - 1.5371385 - 0.4985314*xyzZ,
+		-0.9692660*xyzX + 1.8760108 + 0.0415560*xyzZ,
+		0.0556434*xyzX - 0.2040259 + 1.0572252*xyzZ,
+	}
 }
 
 func readXMPToneCurve(packet *XMPPacket, name string) ([256]uint8, bool, error) {
@@ -238,7 +316,7 @@ func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
 }
 
 func (adjustments xmpBasicAdjustments) active() bool {
-	return adjustments.exposure != 0 || adjustments.contrast != 0 || adjustments.highlights != 0 ||
+	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2]
@@ -290,9 +368,13 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			pixel := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
-			red := srgb8ToLinear[pixel.R] * exposure
-			green := srgb8ToLinear[pixel.G] * exposure
-			blue := srgb8ToLinear[pixel.B] * exposure
+			redGain, greenGain, blueGain := 1.0, 1.0, 1.0
+			if adjustments.hasWhiteBalance {
+				redGain, greenGain, blueGain = adjustments.whiteBalance[0], adjustments.whiteBalance[1], adjustments.whiteBalance[2]
+			}
+			red := srgb8ToLinear[pixel.R] * redGain * exposure
+			green := srgb8ToLinear[pixel.G] * greenGain * exposure
+			blue := srgb8ToLinear[pixel.B] * blueGain * exposure
 			luminance := 0.2126*red + 0.7152*green + 0.0722*blue
 			adjustedLuminance := basicAdjustedLuminance(luminance, adjustments)
 			if luminance > 1e-12 {
