@@ -19,7 +19,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で回転を含む矩形を画素へ適用し、元と同じ解像度に再サンプル。プレビュー上の構図作成・編集UIとCamera RawのGeometry補正は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で許可した131項目を編集し、数値設定をキーフレーム間で補間。色相角は最短回転で補間。レンダー時にExposure2012と回転を含むクロップ矩形を任意適用。他の現像値の画素反映、Camera Raw相当RAW現像、ローカルマスクは未対応 | 一部 |
-| Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | 露出・トーン、HSL色別スライダー、カラーグレーディング、色相角、ノイズ低減、シャープ化、粒子、周辺光量、レンズ/パースペクティブ等の数値値を補間。構造化Look/Preset/Tone Curve/PointColorsの均等化とローカルマスク補間は未対応 | 一部 |
+| Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | 131個の数値項目を補間し、グローバルのポイントトーンカーブはシーケンス先頭の値を全フレームへコピー。Look/Preset/PointColors、マスク内のカーブ、ローカル補正の遷移は未対応 | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。RAW内蔵プレビュー/DNGLab現像と、任意でXMP Exposure/cropを解析に適用。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--apply-xmp-exposure`/`--apply-xmp-crop`で既存現像設定を解析に含められる。独自の近似方式。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
@@ -204,7 +204,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `deflicker`はJPEG/PNG/TIFF、`--raw-preview`の内蔵画像、または`--raw-develop`でDNGLabが現像した画像の輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。`--apply-xmp-exposure`と`--apply-xmp-crop`を指定すると、解析前にサイドカーの値を画素へ近似適用します。既定はプレビューだけです。`--write`は求めた補正量を各フレームの`crs:Exposure2012`へ加算し、前回lrtlが加えた量を`ol:DeflickerCorrection2012`に記録します。再実行ではlrtl管理分を置き換え、`--reset --write`ではその分だけを戻します。Holy Grail補正やユーザーが後から加えたExposure値は差し引かずに残します。Camera Rawの現像パイプラインやLRTimelapseのVisual Deflickerと数値が一致する機能ではなく、画像列から露出差を推定する近似です。
 
-`set`は`NumericCRSProperties`にある数値のCamera RawプロパティだけをXMPサイドカーに書き込みます。131個の値を明示的に許可し、HSL色別スライダー、旧式のClarity/Fill Light/Highlight Recovery/増分WB、HDR最大値、カラーグレーディング、色別色相境界、パラメトリックトーン、ノイズ低減、シャープ化、粒子、周辺光量、手動レンズ/パースペクティブ補正などを含みます。名前はAdobeの公開XMP資料、インストール済みのXMPテンプレート、LRT 7.5.5のプロパティ登録情報から選びました。これはLRTがAuto-Transitionで扱う全項目を確定するものではありません。HueAdjustmentの色別バンドシフトは線形値として、カラーグレーディング/SplitToningの色相角とDefringeの色相境界は0〜360度の最短回転として補間します。LRT 7.1以降で確認できるLook/Preset/Tone Curve/PointColorsの構造化データ均等化、列挙モード、ON/OFF値、カーブ、マスク、配列、プロファイルは未対応です。プロパティ名には`crs:`を付けても省いても構いません。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --write`で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-exposure`でExposure2012を、`render --apply-xmp-crop`で回転を含むクロップを画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。これはLightroom/Camera Rawの現像エンジンを置き換える機能ではなく、XMPへ補間した値のうち現在レンダーに画素反映できるのはExposure2012とクロップだけです。`set`はCamera Rawスライダーごとの許容範囲を検証しません。
+`set`は`NumericCRSProperties`にある数値のCamera RawプロパティだけをXMPサイドカーに書き込みます。131個の値を明示的に許可し、HSL色別スライダー、旧式のClarity/Fill Light/Highlight Recovery/増分WB、HDR最大値、カラーグレーディング、色別色相境界、パラメトリックトーン、ノイズ低減、シャープ化、粒子、周辺光量、手動レンズ/パースペクティブ補正などを含みます。名前はAdobeの公開XMP資料、インストール済みのXMPテンプレート、LRT 7.5.5のプロパティ登録情報から選びました。これはLRTがAuto-Transitionで扱う全項目を確定するものではありません。HueAdjustmentの色別バンドシフトは線形値として、カラーグレーディング/SplitToningの色相角とDefringeの色相境界は0〜360度の最短回転として補間します。`interpolate`では、グローバルポイントトーンカーブの`ToneCurve`、`ToneCurveName`、`ToneCurveName2012`、`ToneCurvePV2012`とRGBチャンネル別カーブをシーケンス先頭から全フレームへコピーします。これらはキーフレーム間でアニメーションしません。LRTが均等化するLook/Preset/PointColorsとマスク内のカーブ、列挙モード、ON/OFF値、その他の配列、プロファイルは未対応です。プロパティ名には`crs:`を付けても省いても構いません。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --write`で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-exposure`でExposure2012を、`render --apply-xmp-crop`で回転を含むクロップを画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。これはLightroom/Camera Rawの現像エンジンを置き換える機能ではなく、XMPへ補間した値のうち現在レンダーに画素反映できるのはExposure2012とクロップだけです。`set`はCamera Rawスライダーごとの許容範囲を検証しません。
 
 `keyframes`は追加する内側の候補数を指定できます。既定は5候補で、未マークの内側フレームが5未満ならその数まで減らします。通常モードはJPEG/PNG/TIFFの明るさ曲線を平滑化し、直線遷移から外れるフレームを優先します。対応RAWは`--raw-preview`で埋め込みプレビュー、または`--raw-develop`でDNGLab現像画像を解析します。`--apply-xmp-exposure`/`--apply-xmp-crop`を指定すると、候補解析へ既存設定を反映します。`--evenly-spaced`は輝度を見ずに等間隔の候補を選び、画像デコードを省略します。どちらのモードも最初と最後の画像は候補にしません。既存の4/5つ星キーフレームと2/3つ星のHoly Grailマーカーは固定アンカーとして扱い、候補から除外します。`--write`でも既存評価やマーカーを上書きしません。
 
@@ -239,7 +239,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 - [Long Term / Construction](https://lrtimelapse.com/workflow/long-term-construction/)
 - [LRTimelapse Import](https://lrtimelapse.com/workflow/lrtimport/)
 - [LRTimelapse 7.2 release notes: Simple Deflicker](https://lrtimelapse.com/updates/lrtimelapse-7-2/)
-- [LRTimelapse 7.1 release notes: XMP equalization on Auto-Transition](https://lrtimelapse.com/updates/lrtimelapse-7-1/)
+- [LRTimelapse 7.1 release notes: XMP equalization on Auto-Transition](https://lrtimelapse.com/news/lrtimelapse-7-1-released/)
 - [Adobe Camera Raw XMP namespace reference](https://github.com/adobe/xmp-docs/blob/master/XMPNamespaces/crs.md)
 - [Adobe Community SDK guide to Lightroom crop coordinates and CropAngle](https://community.adobe.com/questions-675/sdk-computing-the-corners-of-a-crop-rectangle-962108)
 - [AVI/MJPEG writer for Go](https://github.com/icza/mjpeg)

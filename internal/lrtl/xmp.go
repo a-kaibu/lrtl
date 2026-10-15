@@ -311,6 +311,197 @@ func (p *XMPPacket) HasProperty(property string) (bool, error) {
 	return false, nil
 }
 
+type topLevelXMPProperty struct {
+	description *etree.Element
+	element     *etree.Element
+	attribute   *etree.Attr
+}
+
+func (p *XMPPacket) rootDescriptions() []*etree.Element {
+	var descriptions []*etree.Element
+	root := p.Document.Root()
+	if root == nil {
+		return descriptions
+	}
+	for _, token := range root.Child {
+		rdf, ok := token.(*etree.Element)
+		if !ok || rdf.NamespaceURI() != rdfNamespace || rdf.Tag != "RDF" {
+			continue
+		}
+		for _, childToken := range rdf.Child {
+			description, ok := childToken.(*etree.Element)
+			if ok && description.NamespaceURI() == rdfNamespace && description.Tag == "Description" {
+				descriptions = append(descriptions, description)
+			}
+		}
+	}
+	return descriptions
+}
+
+func (p *XMPPacket) findRootProperty(uri, local string) topLevelXMPProperty {
+	for _, description := range p.rootDescriptions() {
+		for index := range description.Attr {
+			if attributeMatches(&description.Attr[index], uri, local) {
+				return topLevelXMPProperty{description: description, attribute: &description.Attr[index]}
+			}
+		}
+		for _, token := range description.Child {
+			element, ok := token.(*etree.Element)
+			if ok && element.NamespaceURI() == uri && element.Tag == local {
+				return topLevelXMPProperty{description: description, element: element}
+			}
+		}
+	}
+	return topLevelXMPProperty{}
+}
+
+func rootDescriptionAbout(description *etree.Element) (string, bool) {
+	for index := range description.Attr {
+		attribute := &description.Attr[index]
+		if attributeMatches(attribute, rdfNamespace, "about") {
+			return attribute.Value, true
+		}
+	}
+	return "", false
+}
+
+func sortElementAttributes(element *etree.Element) {
+	element.SortAttrs()
+	for _, token := range element.Child {
+		if child, ok := token.(*etree.Element); ok {
+			sortElementAttributes(child)
+		}
+	}
+}
+
+func xmpElementSignature(element *etree.Element) (string, error) {
+	copy := element.Copy()
+	sortElementAttributes(copy)
+	document := etree.NewDocumentWithRoot(copy)
+	data, err := document.WriteToBytes()
+	return string(data), err
+}
+
+func sameRootProperty(left, right topLevelXMPProperty) (bool, error) {
+	if left.element != nil || right.element != nil {
+		if left.element == nil || right.element == nil {
+			return false, nil
+		}
+		leftSignature, err := xmpElementSignature(left.element)
+		if err != nil {
+			return false, err
+		}
+		rightSignature, err := xmpElementSignature(right.element)
+		if err != nil {
+			return false, err
+		}
+		return leftSignature == rightSignature, nil
+	}
+	if left.attribute == nil || right.attribute == nil {
+		return left.attribute == nil && right.attribute == nil, nil
+	}
+	return left.attribute.Value == right.attribute.Value, nil
+}
+
+// RootPropertyDiffers reports whether a top-level XMP property differs from
+// the corresponding property in source. Structured values are compared as
+// XML trees so RDF arrays and resource attributes are included.
+func (p *XMPPacket) RootPropertyDiffers(source *XMPPacket, property string) (bool, error) {
+	uri, local, err := expandedName(property)
+	if err != nil {
+		return false, err
+	}
+	left := p.findRootProperty(uri, local)
+	right := source.findRootProperty(uri, local)
+	same, err := sameRootProperty(left, right)
+	return !same, err
+}
+
+// CopyRootPropertyFrom replaces a top-level XMP property with the source
+// representation. A missing source property removes the destination value.
+func (p *XMPPacket) CopyRootPropertyFrom(source *XMPPacket, property string) (bool, error) {
+	uri, local, err := expandedName(property)
+	if err != nil {
+		return false, err
+	}
+	destination := p.findRootProperty(uri, local)
+	sourceValue := source.findRootProperty(uri, local)
+	same, err := sameRootProperty(destination, sourceValue)
+	if err != nil || same {
+		return false, err
+	}
+	for _, description := range p.rootDescriptions() {
+		attributes := description.Attr[:0]
+		for _, attribute := range description.Attr {
+			if !attributeMatches(&attribute, uri, local) {
+				attributes = append(attributes, attribute)
+			}
+		}
+		description.Attr = attributes
+		for _, token := range append([]etree.Token(nil), description.Child...) {
+			child, ok := token.(*etree.Element)
+			if ok && child.NamespaceURI() == uri && child.Tag == local {
+				child.Remove()
+			}
+		}
+	}
+	if sourceValue.element == nil && sourceValue.attribute == nil {
+		return true, nil
+	}
+	descriptions := p.rootDescriptions()
+	if len(descriptions) == 0 {
+		return false, xmpError("cannot copy a property without rdf:Description")
+	}
+	target := descriptions[0]
+	if sourceAbout, found := rootDescriptionAbout(sourceValue.description); found {
+		for _, description := range descriptions {
+			if about, exists := rootDescriptionAbout(description); exists && about == sourceAbout {
+				target = description
+				break
+			}
+		}
+	}
+	if sourceValue.element != nil {
+		copy := sourceValue.element.Copy()
+		prefixes := make(map[string]struct{})
+		var collect func(*etree.Element)
+		collect = func(element *etree.Element) {
+			if element.Space != "" {
+				prefixes[element.Space] = struct{}{}
+			}
+			for _, attribute := range element.Attr {
+				if attribute.Space != "" && attribute.Space != "xmlns" {
+					prefixes[attribute.Space] = struct{}{}
+				}
+			}
+			for _, token := range element.Child {
+				if child, ok := token.(*etree.Element); ok {
+					collect(child)
+				}
+			}
+		}
+		collect(copy)
+		for prefix := range prefixes {
+			if _, exists := prefixBinding(copy, prefix); exists {
+				continue
+			}
+			if namespace, found := prefixBinding(sourceValue.element, prefix); found {
+				copy.CreateAttr("xmlns:"+prefix, namespace)
+			}
+		}
+		target.AddChild(copy)
+		return true, nil
+	}
+	attribute := sourceValue.attribute
+	prefix := attribute.Space
+	if prefix == "" {
+		return false, xmpError("cannot copy unprefixed namespaced attribute %s", property)
+	}
+	prefix = ensurePrefix(target, prefix, uri)
+	target.CreateAttr(prefix+":"+local, attribute.Value)
+	return true, nil
+}
+
 func (p *XMPPacket) Rating() (int, bool) {
 	value, found, _ := p.GetScalar("xmp:Rating")
 	if !found {

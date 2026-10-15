@@ -53,23 +53,30 @@ var circularCRSProperties = map[string]struct{}{
 	"SplitToningHighlightHue": {}, "SplitToningShadowHue": {},
 }
 
+var firstFrameCurveProperties = []string{
+	"ToneCurve", "ToneCurveName", "ToneCurveName2012", "ToneCurvePV2012",
+	"ToneCurvePV2012Blue", "ToneCurvePV2012Green", "ToneCurvePV2012Red",
+}
+
 type ProposedFrame struct {
-	Frame          Frame
-	Packet         *XMPPacket
-	Values         map[string]string
-	CreatedSidecar bool
+	Frame                Frame
+	Packet               *XMPPacket
+	Values               map[string]string
+	StructuredProperties []string
+	CreatedSidecar       bool
 }
 
 type InterpolationPlan struct {
-	FrameCount      int
-	KeyframeIndices []int
-	Changes         []ProposedFrame
+	FrameCount       int
+	KeyframeIndices  []int
+	Changes          []ProposedFrame
+	StructuredSource *XMPPacket
 }
 
 func (plan InterpolationPlan) PropertyCount() int {
 	total := 0
 	for _, change := range plan.Changes {
-		total += len(change.Values)
+		total += len(change.Values) + len(change.StructuredProperties)
 	}
 	return total
 }
@@ -163,6 +170,28 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 		keyframes = append(keyframes, 0)
 	}
 	proposed := make(map[int]*ProposedFrame)
+	if len(packets) > 0 {
+		for targetIndex := 1; targetIndex < len(packets); targetIndex++ {
+			for _, property := range firstFrameCurveProperties {
+				differs, err := packets[targetIndex].RootPropertyDiffers(packets[0], "crs:"+property)
+				if err != nil {
+					return nil, fmt.Errorf("%s: %w", frames[targetIndex].Image, err)
+				}
+				if !differs {
+					continue
+				}
+				change := proposed[targetIndex]
+				if change == nil {
+					change = &ProposedFrame{
+						Frame: frames[targetIndex], Packet: packets[targetIndex],
+						Values: make(map[string]string), CreatedSidecar: created[targetIndex],
+					}
+					proposed[targetIndex] = change
+				}
+				change.StructuredProperties = append(change.StructuredProperties, property)
+			}
+		}
+	}
 	assign := func(targetIndex int, sourceValues map[string]float64) error {
 		for _, keyframeIndex := range keyframes {
 			if targetIndex == keyframeIndex {
@@ -248,7 +277,7 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 
 	indices := make([]int, 0, len(proposed))
 	for index, change := range proposed {
-		if len(change.Values) > 0 {
+		if len(change.Values) > 0 || len(change.StructuredProperties) > 0 {
 			indices = append(indices, index)
 		}
 	}
@@ -257,7 +286,14 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 	for _, index := range indices {
 		changes = append(changes, *proposed[index])
 	}
-	return &InterpolationPlan{FrameCount: len(frames), KeyframeIndices: keyframes, Changes: changes}, nil
+	var structuredSource *XMPPacket
+	if len(packets) > 0 {
+		structuredSource = packets[0]
+	}
+	return &InterpolationPlan{
+		FrameCount: len(frames), KeyframeIndices: keyframes, Changes: changes,
+		StructuredSource: structuredSource,
+	}, nil
 }
 
 func copyNumericValues(values map[string]float64) map[string]float64 {
@@ -285,6 +321,11 @@ func applyPlan(plan *InterpolationPlan) ([]packetOutput, error) {
 				if err := change.Packet.SetScalar("crs:"+name, value); err != nil {
 					return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
 				}
+			}
+		}
+		for _, property := range change.StructuredProperties {
+			if _, err := change.Packet.CopyRootPropertyFrom(plan.StructuredSource, "crs:"+property); err != nil {
+				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
 			}
 		}
 		outputs = append(outputs, packetOutput{Path: change.Frame.OutputSidecar(), Packet: change.Packet})

@@ -410,7 +410,12 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		anchors = "none"
 	}
 	fmt.Fprintf(stdout, "Anchors: %s\n", anchors)
-	fmt.Fprintf(stdout, "Proposed frames: %d; numeric values: %d\n", len(plan.Changes), plan.PropertyCount())
+	numericCount, curveCount := 0, 0
+	for _, change := range plan.Changes {
+		numericCount += len(change.Values)
+		curveCount += len(change.StructuredProperties)
+	}
+	fmt.Fprintf(stdout, "Proposed frames: %d; numeric values: %d; first-frame curve values: %d\n", len(plan.Changes), numericCount, curveCount)
 	if !*write {
 		fmt.Fprintln(stdout, "Dry run. Pass --write to update sidecar XMP files.")
 		for _, change := range plan.Changes {
@@ -418,6 +423,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 			for name := range change.Values {
 				names = append(names, name)
 			}
+			names = append(names, change.StructuredProperties...)
 			sort.Strings(names)
 			fmt.Fprintf(stdout, "  %s: %s\n", filepath.Base(change.Frame.Image), strings.Join(names, ", "))
 		}
