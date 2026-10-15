@@ -119,7 +119,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
@@ -1146,9 +1146,10 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 
 func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("keyframes", stderr)
-	count := set.Int("count", 0, "number of new suggestions (default estimated from luminance; 5 for --evenly-spaced)")
-	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius in frames")
-	evenlySpaced := set.Bool("evenly-spaced", false, "suggest uniformly spaced interior keyframes without decoding images")
+	count := set.Int("count", 0, "number of new keyframe suggestions (default estimated from luminance; 5 for --evenly-spaced; maximum 20)")
+	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius for --luminance-deviation")
+	evenlySpaced := set.Bool("evenly-spaced", false, "use the LRT helper's uniform frame positions without decoding images")
+	luminanceDeviation := set.Bool("luminance-deviation", false, "use lrtl's luminance-deviation frame selection instead of LRT spacing")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
@@ -1174,6 +1175,12 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 			countSpecified = true
 		}
 	})
+	if countSpecified && (*count < 1 || *count > 20) {
+		return reportError(stderr, fmt.Errorf("keyframe count must be between 1 and 20: %d", *count))
+	}
+	if *evenlySpaced && *luminanceDeviation {
+		return reportError(stderr, fmt.Errorf("--evenly-spaced and --luminance-deviation select different placement methods"))
+	}
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
@@ -1200,8 +1207,8 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	frameCount := len(frames)
-	if frameCount < 3 {
-		return reportError(stderr, fmt.Errorf("keyframe suggestions require at least one interior frame between the sequence endpoints"))
+	if frameCount < 1 {
+		return reportError(stderr, fmt.Errorf("sequence contains no images"))
 	}
 	packets := make([]*XMPPacket, frameCount)
 	existingKeyframes := make([]int, 0)
@@ -1245,19 +1252,21 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	autoTargetCount := 0
 	if !countSpecified {
 		if *evenlySpaced {
-			suggestionCount = min(5, availableSuggestions)
+			suggestionCount = 5
 		} else {
-			autoTargetCount = estimateAutoKeyframeCount(curve, holyGrailMarkers)
+			autoTargetCount = min(20, estimateAutoKeyframeCount(curve, holyGrailMarkers))
 			suggestionCount = max(0, autoTargetCount-len(existingKeyframes))
-			suggestionCount = min(suggestionCount, availableSuggestions)
+			if *luminanceDeviation {
+				suggestionCount = min(suggestionCount, max(0, availableSuggestions))
+			}
 		}
 	}
 	if !countSpecified && !*evenlySpaced {
-		fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing keyframe(s), suggesting %d new\n", autoTargetCount, len(existingKeyframes), suggestionCount)
+		fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing keyframe(s), suggesting up to %d new\n", autoTargetCount, len(existingKeyframes), suggestionCount)
 	}
 	if suggestionCount == 0 {
 		if countSpecified {
-			if availableSuggestions == 0 {
+			if *luminanceDeviation && availableSuggestions <= 0 {
 				return reportError(stderr, fmt.Errorf("no unmarked interior frames are available for new keyframes"))
 			}
 			return reportError(stderr, fmt.Errorf("new keyframe count must be at least 1"))
@@ -1267,10 +1276,24 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	var indices []int
-	if *evenlySpaced {
-		indices, err = selectEvenlySpacedKeyframeIndicesWithAnchors(frameCount, suggestionCount, selectionAnchors)
-	} else {
+	if *luminanceDeviation {
 		indices, err = selectKeyframeIndicesWithAnchors(curve, suggestionCount, *smoothRadius, selectionAnchors)
+	} else {
+		indices, err = selectLRTWizardKeyframeIndices(frameCount, suggestionCount)
+		if err == nil && len(selectionAnchors) > 0 {
+			blocked := make(map[int]struct{}, len(selectionAnchors))
+			for _, index := range selectionAnchors {
+				blocked[index] = struct{}{}
+			}
+			newIndices := indices[:0]
+			for _, index := range indices {
+				if _, exists := blocked[index]; exists {
+					continue
+				}
+				newIndices = append(newIndices, index)
+			}
+			indices = newIndices
+		}
 	}
 	if err != nil {
 		return reportError(stderr, err)
@@ -1290,8 +1313,8 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Frames: %d; existing keyframes: %d; new suggestions: %d\n", len(frames), len(existingKeyframes), len(indices))
 	for _, index := range indices {
 		frame := frames[index]
-		if *evenlySpaced {
-			fmt.Fprintf(stdout, "%4d %-42s evenly spaced\n", index+1, filepath.Base(frame.Image))
+		if !*luminanceDeviation {
+			fmt.Fprintf(stdout, "%4d %-42s LRT wizard spacing\n", index+1, filepath.Base(frame.Image))
 		} else {
 			fmt.Fprintf(stdout, "%4d %-42s luminance=%.6f\n", index+1, filepath.Base(frame.Image), math.Exp2(curve[index]))
 		}

@@ -234,6 +234,36 @@ func estimateAutoKeyframeCount(logLuminance []float64, holyGrailMarkers []bool) 
 	return count
 }
 
+// selectLRTWizardKeyframeIndices follows the installed keyframe helper's
+// integer spacing and endpoint rules for a sequence with no preselected rows.
+func selectLRTWizardKeyframeIndices(frameCount, count int) ([]int, error) {
+	if frameCount < 1 {
+		return nil, fmt.Errorf("sequence contains no frames")
+	}
+	if count < 1 {
+		return nil, fmt.Errorf("keyframe quantity must be at least 1")
+	}
+	if count == 1 {
+		return []int{0}, nil
+	}
+
+	step := frameCount / (count - 1)
+	if step > frameCount {
+		step = frameCount - 1
+	}
+	if step == 0 {
+		step = 1
+	}
+	lastRegularIndex := frameCount - int(float64(step)*0.8)
+	indices := make([]int, 0, count+1)
+	for index := 0; index < frameCount; index++ {
+		if (index%step == 0 && index < lastRegularIndex) || index == frameCount-1 {
+			indices = append(indices, index)
+		}
+	}
+	return indices, nil
+}
+
 func selectEvenlySpacedKeyframeIndices(frameCount, count int) ([]int, error) {
 	return selectEvenlySpacedKeyframeIndicesWithAnchors(frameCount, count, nil)
 }
