@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/icza/mjpeg"
+	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/tiff"
 )
 
@@ -23,6 +24,7 @@ type RenderOptions struct {
 	FFmpegPath       string
 	CRF              int
 	Preset           string
+	LongEdge         int
 	Overwrite        bool
 	Deflicker        bool
 	Reference        image.Rectangle
@@ -117,6 +119,35 @@ func imageRGB24(img image.Image) ([]byte, error) {
 	return rgb, nil
 }
 
+func validateLongEdge(longEdge int) error {
+	if longEdge < 0 || longEdge > 32768 || (longEdge > 0 && longEdge < 16) {
+		return fmt.Errorf("long edge must be 0 or between 16 and 32768 pixels: %d", longEdge)
+	}
+	return nil
+}
+
+func outputDimensions(width, height, longEdge int) (int, int, error) {
+	if err := validateLongEdge(longEdge); err != nil {
+		return 0, 0, err
+	}
+	if longEdge == 0 || max(width, height) <= longEdge {
+		return width, height, nil
+	}
+	if width >= height {
+		return longEdge, max(1, int(math.Round(float64(height)*float64(longEdge)/float64(width)))), nil
+	}
+	return max(1, int(math.Round(float64(width)*float64(longEdge)/float64(height)))), longEdge, nil
+}
+
+func resizeFrame(img image.Image, width, height int) image.Image {
+	if img.Bounds().Dx() == width && img.Bounds().Dy() == height {
+		return img
+	}
+	resized := image.NewNRGBA(image.Rect(0, 0, width, height))
+	xdraw.CatmullRom.Scale(resized, resized.Bounds(), img, img.Bounds(), xdraw.Src, nil)
+	return resized
+}
+
 const maxVideoDimension = int64(1<<31 - 1)
 
 // RenderSequence writes JPEG, PNG, TIFF, or explicitly selected embedded RAW previews
@@ -131,6 +162,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
+	}
+	if err := validateLongEdge(options.LongEdge); err != nil {
+		return err
 	}
 	outputExtension := strings.ToLower(filepath.Ext(output))
 	if outputExtension != ".avi" && outputExtension != ".mp4" {
@@ -200,6 +234,11 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		return fmt.Errorf("image dimensions exceed supported limits in %s", frames[0].Image)
 	}
 	width, height := config.Width, config.Height
+	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge)
+	if err != nil {
+		return err
+	}
+	resizeFrames := outputWidth != width || outputHeight != height
 	var xmpCrops []cropSpec
 	if options.ApplyXMPCrop {
 		xmpCrops, err = readXMPCrops(frames, width, height)
@@ -287,13 +326,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 
 	var writer renderFrameWriter
 	if outputExtension == ".avi" {
-		writer, err = mjpeg.New(tempPath, int32(config.Width), int32(config.Height), int32(options.FPS))
+		writer, err = mjpeg.New(tempPath, int32(outputWidth), int32(outputHeight), int32(options.FPS))
 		if err != nil {
 			cleanup()
 			return fmt.Errorf("create MJPEG AVI: %w", err)
 		}
 	} else {
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, config.Width, config.Height, options.FPS, len(frames), options.CRF, options.Preset)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, outputWidth, outputHeight, options.FPS, len(frames), options.CRF, options.Preset)
 		if err != nil {
 			cleanup()
 			return err
@@ -352,6 +391,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if applyXMP || options.Deflicker {
 				img = applyExposureGain(img, gain)
 			}
+			if resizeFrames {
+				img = resizeFrame(img, outputWidth, outputHeight)
+			}
 			rgb, err := imageRGB24(img)
 			if err != nil {
 				return fmt.Errorf("convert %s to RGB24: %w", frame.Image, err)
@@ -367,7 +409,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyCrop || format != "jpeg" {
+		if options.Deflicker || applyXMP || applyCrop || resizeFrames || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
@@ -385,6 +427,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			if applyXMP || options.Deflicker {
 				img = applyExposureGain(img, gain)
+			}
+			if resizeFrames {
+				img = resizeFrame(img, outputWidth, outputHeight)
 			}
 			if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
 				return fmt.Errorf("encode %s as JPEG: %w", frame.Image, err)

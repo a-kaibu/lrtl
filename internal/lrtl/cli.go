@@ -99,7 +99,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --raw-preview uses embedded RAW images")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --long-edge downsizes output")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg   plot brightness, XMP exposure, and keyframe marks")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-preview]  analyze and update XMP exposure")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-preview]")
@@ -451,6 +451,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for H.264 MP4 output; defaults to PATH")
 	crf := set.Int("crf", 18, "H.264 quality for MP4 output (0-51; lower is higher quality)")
 	preset := set.String("preset", "medium", "H.264 speed/size preset for MP4 output")
+	longEdge := set.Int("long-edge", 0, "downscale so the longest side is at most this many pixels (0 keeps input size)")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
 	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
@@ -467,6 +468,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--ffmpeg": true, "-ffmpeg": true,
 		"--crf": true, "-crf": true,
 		"--preset": true, "-preset": true,
+		"--long-edge": true, "-long-edge": true,
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--passes": true, "-passes": true,
@@ -508,6 +510,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		FFmpegPath:       *ffmpeg,
 		CRF:              *crf,
 		Preset:           *preset,
+		LongEdge:         *longEdge,
 		Overwrite:        *overwrite,
 		Deflicker:        deflickerEnabled,
 		Reference:        reference,
@@ -521,7 +524,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
-	features := make([]string, 0, 2)
+	features := make([]string, 0, 4)
 	if *applyXMPExposure {
 		features = append(features, "XMP Exposure2012")
 	}
@@ -530,6 +533,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *rawPreview {
 		features = append(features, "embedded RAW previews")
+	}
+	if *longEdge > 0 {
+		features = append(features, fmt.Sprintf("long-edge limit of %d pixels", *longEdge))
 	}
 	if len(features) > 0 {
 		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)

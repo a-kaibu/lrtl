@@ -23,9 +23,9 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`の輝度解析結果を`crs:Exposure2012`へ記録可能。両者とも独自の近似方式。LRTのVisual Preview、RAW現像連携、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
-| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFと一部RAW内蔵プレビューをMJPEG AVIまたは外部FFmpegを使うH.264 MP4に出力。固定サイズの画像列、整数1–240 fps | 一部 |
+| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFと一部RAW内蔵プレビューをMJPEG AVIまたは外部FFmpegを使うH.264 MP4に出力。固定サイズの画像列、整数1–240 fps、`--long-edge`によるアスペクト比維持の縮小 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-preview`でCR2/DNG/NEF/NRW/ARW/ORF/PEF/SRWのTIFF内画像、Panasonic RW2の埋め込みJPEG、Fuji RAFヘッダー指定JPEG、Canon CR3のUUIDプレビューを抽出してレンダー。CR3は既知UUIDのプレビューを含む素材が対象。RAWのデモザイクやCamera Raw現像は未実装 | 一部 |
-| 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | 入力と同じ解像度のみ。中間画像の書き出し工程なし | 一部 |
+| 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--long-edge`で長辺の上限を指定して縮小可能。拡大や16:9等のプリセット、非圧縮TIFF中間画像は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpeg/libx264経由のH.264 MP4。Rec.2020、HDR、音声なし | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | 未実装 | 未実装 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | 未実装 | 未実装 |
@@ -61,7 +61,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 1. `.xmp`サイドカーをスキャンし、キーフレームと数値設定を確認する。
 2. JPEG/PNG/TIFF連番、または`--raw-preview`でRAWに埋め込まれた画像の明るさ曲線からキーフレーム候補を表示し、任意でXMPにマークする。
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
-4. 現像済みJPEG/PNG/TIFF、または対応RAW内蔵プレビューをMJPEG AVIまたはH.264 MP4にまとめる。
+4. 現像済みJPEG/PNG/TIFF、または対応RAW内蔵プレビューをMJPEG AVIまたはH.264 MP4にまとめ、必要に応じて`--long-edge`で縮小する。
 5. レンダー時に簡易Deflickerを画素へ適用するか、解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。
@@ -139,6 +139,9 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
 # 外部FFmpeg/libx264で24 fpsのH.264 MP4を作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.mp4" --fps 24 --crf 18 --preset medium
 
+# 4K相当の長辺3840px以下へ縮小してレンダー（アスペクト比維持、拡大なし）
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview-4k.mp4" --long-edge 3840
+
 # 輝度・XMP露出・キーフレームをSVGグラフで確認
 lrtl preview "D:\Timelapse\Developed" --output "D:\Timelapse\brightness.svg"
 
@@ -173,7 +176,7 @@ lrtl deflicker "D:\Timelapse\Developed" --reset --write
 lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constant
 ```
 
-`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。AVIでは画素処理なしのJPEG入力を再圧縮せず格納し、それ以外の入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bit出力時に失われます。MP4ではJPEG/PNG/TIFFをGoでデコードし、H.264エンコーダーにRGBフレームとして渡すため中間JPEG圧縮をしません。`--crf`はH.264品質（0–51、低いほど高品質）、`--preset`は速度と圧縮率の選択です。MP4の画素は8-bit YUV 4:2:0に変換され、奇数幅/高さは右端/下端をパディングします。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
+`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。`--long-edge N`は元の長辺がNより大きいときだけ縮小し、縦横比を保って長辺をNピクセル以下にします。入力より大きくはしません。AVIでは画素処理なしのJPEG入力を再圧縮せず格納し、それ以外の入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bit出力時に失われます。MP4ではJPEG/PNG/TIFFをGoでデコードし、H.264エンコーダーにRGBフレームとして渡すため中間JPEG圧縮をしません。`--crf`はH.264品質（0–51、低いほど高品質）、`--preset`は速度と圧縮率の選択です。MP4の画素は8-bit YUV 4:2:0に変換され、奇数幅/高さは右端/下端をパディングします。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
 
 `--apply-xmp-exposure`は各画像に対応する外部XMPサイドカーから数値の`crs:Exposure2012`を読み、線形sRGB画素に露出倍率を適用します。±32 stopsを超える値や不正な数値はエラーにします。Camera Rawの全現像パイプラインと一致する機能ではなく、露出スライダーだけの近似適用です。JPEGはこの指定で再エンコードされます。
 
@@ -198,7 +201,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 | 段階 | 目標 | 状況 |
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
-| 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264 MP4に対応。完全なRAW現像は未実装 |
+| 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264 MP4に対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、軸に平行なXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、回転クロップ、マスク別補正は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビューの取り出しを実装。RAWデモザイクとCamera Raw現像の完全再現は未着手 |
 | 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.264 MP4は外部FFmpeg経由で実装。その他は未着手 |
