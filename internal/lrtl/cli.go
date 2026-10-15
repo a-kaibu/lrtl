@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const version = "0.8.0"
+const version = "0.9.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
 	flags := make([]string, 0, len(arguments))
@@ -510,8 +510,13 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	ignoreAperture := set.Bool("ignore-aperture", false, "ignore FNumber when aperture remained fixed")
 	forceMarkJumps := set.Bool("mark-jumps", false, "force 2*/3* marks when EXIF does not confirm Manual mode")
 	noMarkJumps := set.Bool("no-mark-jumps", false, "do not mark camera-setting changes as 2*/3* keyframe pairs")
+	stretch := set.Float64("stretch", 0, "add LRT-style normalized Holy Grail curve stretch (-1.5 to +1.5)")
+	rotate := set.Float64("rotate", 0, "add LRT-style linear Holy Grail curve rotation (-4 to +4)")
 	reset := set.Bool("reset", false, "remove lrtl-managed Holy Grail compensation")
-	if err := set.Parse(flagFirst(arguments, nil)); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--stretch": true, "-stretch": true,
+		"--rotate": true, "-rotate": true,
+	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}
@@ -522,17 +527,36 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if *forceMarkJumps && *noMarkJumps {
 		return reportError(stderr, fmt.Errorf("--mark-jumps and --no-mark-jumps cannot be used together"))
 	}
+	useCurveOptions := false
+	set.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "stretch" || parsed.Name == "rotate" {
+			useCurveOptions = true
+		}
+	})
+	if useCurveOptions && (math.IsNaN(*stretch) || math.IsInf(*stretch, 0) || math.IsNaN(*rotate) || math.IsInf(*rotate, 0) || *stretch < -1.5 || *stretch > 1.5 || *rotate < -4 || *rotate > 4) {
+		return reportError(stderr, fmt.Errorf("--stretch must be between -1.5 and +1.5 and --rotate between -4 and +4"))
+	}
+	if useCurveOptions && *reset {
+		return reportError(stderr, fmt.Errorf("--stretch and --rotate cannot be used with --reset"))
+	}
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	plan, err := buildHolyGrailPlan(frames, *ignoreAperture, *reset, *forceMarkJumps, *noMarkJumps)
+	var curveOptions *HolyGrailCurveOptions
+	if useCurveOptions {
+		curveOptions = &HolyGrailCurveOptions{Stretch: *stretch, Rotate: *rotate}
+	}
+	plan, err := buildHolyGrailPlanWithCurveOptions(frames, *ignoreAperture, *reset, *forceMarkJumps, *noMarkJumps, curveOptions)
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	changes := plan.Changes
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
+	if curveOptions != nil {
+		fmt.Fprintf(stdout, "Curve adjustments: stretch=%+.2f rotate=%+.2f\n", curveOptions.Stretch, curveOptions.Rotate)
+	}
 	correctionUpdates := 0
 	jumpMarks := 0
 	for _, change := range changes {

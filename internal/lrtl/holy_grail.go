@@ -23,6 +23,11 @@ type CameraExposure struct {
 	Manual       bool
 }
 
+type HolyGrailCurveOptions struct {
+	Stretch float64
+	Rotate  float64
+}
+
 type HolyGrailChange struct {
 	Frame            Frame
 	Packet           *XMPPacket
@@ -65,7 +70,7 @@ func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error
 	if exposureTime <= 0 || math.IsNaN(exposureTime) || math.IsInf(exposureTime, 0) {
 		return CameraExposure{}, fmt.Errorf("EXIF ExposureTime is missing or invalid")
 	}
-	if iso <= 0 {
+	if iso <= 0 || math.IsNaN(iso) || math.IsInf(iso, 0) {
 		return CameraExposure{}, fmt.Errorf("EXIF ISO speed is missing or invalid")
 	}
 	if !ignoreAperture && (fNumber <= 0 || math.IsNaN(fNumber) || math.IsInf(fNumber, 0)) {
@@ -74,6 +79,9 @@ func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error
 	setting := math.Log2(exposureTime * iso)
 	if !ignoreAperture {
 		setting -= 2 * math.Log2(fNumber)
+	}
+	if math.IsNaN(setting) || math.IsInf(setting, 0) {
+		return CameraExposure{}, fmt.Errorf("EXIF exposure settings produce an invalid exposure value")
 	}
 	manual := uint16(metadata.ExposureMode) == 1 || uint16(metadata.ExposureProgram) == 1
 	return CameraExposure{ExposureTime: exposureTime, FNumber: fNumber, ISO: iso, Stops: setting, Manual: manual}, nil
@@ -87,6 +95,28 @@ func cameraSettingsChanged(before, after CameraExposure, ignoreAperture bool) bo
 		return true
 	}
 	return !ignoreAperture && changed(before.FNumber, after.FNumber)
+}
+
+func holyGrailCurveAdjustments(cameras []CameraExposure, options HolyGrailCurveOptions) []float64 {
+	adjustments := make([]float64, len(cameras))
+	if len(cameras) == 0 {
+		return adjustments
+	}
+	minimum, maximum := cameras[0].Stops, cameras[0].Stops
+	for _, camera := range cameras[1:] {
+		minimum = math.Min(minimum, camera.Stops)
+		maximum = math.Max(maximum, camera.Stops)
+	}
+	span := maximum - minimum
+	if span <= 1e-12 {
+		return adjustments
+	}
+	for index, camera := range cameras {
+		normalized := (camera.Stops-minimum)/span - 0.5
+		trend := float64(index)/float64(len(cameras)) - 0.5
+		adjustments[index] = normalized*options.Stretch + trend*options.Rotate
+	}
+	return adjustments
 }
 
 func holyGrailKeyframePlan(packet *XMPPacket, desiredRating int) (int, bool, string, error) {
@@ -140,6 +170,10 @@ func holyGrailKeyframePlan(packet *XMPPacket, desiredRating int) (int, bool, str
 }
 
 func buildHolyGrailPlan(frames []Frame, ignoreAperture, reset, forceMarkJumps, noMarkJumps bool) (*HolyGrailPlan, error) {
+	return buildHolyGrailPlanWithCurveOptions(frames, ignoreAperture, reset, forceMarkJumps, noMarkJumps, nil)
+}
+
+func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, forceMarkJumps, noMarkJumps bool, curveOptions *HolyGrailCurveOptions) (*HolyGrailPlan, error) {
 	plan := &HolyGrailPlan{}
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
@@ -163,8 +197,18 @@ func buildHolyGrailPlan(frames []Frame, ignoreAperture, reset, forceMarkJumps, n
 		plan.MarkJumps = !noMarkJumps && (forceMarkJumps || plan.ManualMode)
 	}
 	base := 0.0
+	compensations := make([]float64, len(frames))
 	if !reset {
 		base = cameras[0].Stops
+		for index, camera := range cameras {
+			compensations[index] = base - camera.Stops
+		}
+		if curveOptions != nil {
+			adjustments := holyGrailCurveAdjustments(cameras, *curveOptions)
+			for index := range compensations {
+				compensations[index] += adjustments[index]
+			}
+		}
 	}
 	jumpRatings := make([]int, len(frames))
 	if !reset && plan.MarkJumps {
@@ -210,7 +254,7 @@ func buildHolyGrailPlan(frames []Frame, ignoreAperture, reset, forceMarkJumps, n
 		before := current - previous
 		compensation := 0.0
 		if !reset {
-			compensation = base - cameras[index].Stops
+			compensation = compensations[index]
 		}
 		after := before + compensation
 		exposureChanged := math.Abs(compensation-previous) > 1e-12
