@@ -385,11 +385,11 @@ EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一�
 
 | 段階 | 目標 | 状況 |
 |---|---|---|
-| 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
-| 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264/H.265 MP4、ProResとDNxHR MOVに対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
-| 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、回転を含むXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、Geometry補正、Add/Intersect以外の複合マスク、色/深度/旧形式の範囲マスク、ブラシ/AIの画素現像は未実装 |
-| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定とLRTの既存XMP入力を使う近似Holy Grail補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と他のXMP値のRAW画素への反映は未実装 |
-| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProRes/DNxHR、日時オーバーレイ、写真フォルダーからの画像/XMP取り込み、対応RAWのlossless/uncompressed DNG変換、動画からJPG/PNGフレーム抽出、LRTが選ぶ7種類の窓幅と時間重みでのPure Goフレーム合成を実装。動画プレビュー・自動分割、ロッシーDNG・サイズ縮小、GUI、LRTと同じ10-bit YUV画素処理は未対応 |
+| 1 | XMPサイドカー、キーフレーム、数値設定の補間 | XMPの読み書き、4/5つ星キーフレーム操作、LRT 7.5.5由来の数量/配置規則、127個の全体数値項目と登録ローカル項目のスプライン補間、スナップショットを実装。選択行UIやLightroom/Camera Raw連携画面は未実装 |
+| 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264/H.265 MP4、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWは埋め込みプレビューまたは外部DNGLab現像が必要 |
+| 3 | 画像解析、プレビュー、Deflicker | 静的SVGプレビュー、長期撮影指標、XMP画素反映、回転クロップ、参照領域/全体露出Deflickerを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、Geometry補正、未対応マスク形式の画素現像は未実装 |
+| 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定と既存LRT XMP入力を使う近似Holy Grail補正、現像済みラスターへの対応XMP値適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と同等のRAW画素処理は未実装 |
+| 5 | LRTのGUIワークフローと残りの取り込み機能 | CLIのみ。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed DNG変換、追加コーデックは実装。GUI、動画プレビュー/自動分割、ロッシーDNG/サイズ縮小、LRTと同じ10-bit YUV画素処理は未対応 |
 
 ## 機能調査の出典
 
