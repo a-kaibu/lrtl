@@ -67,6 +67,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runScan(arguments[1], stdout, stderr)
 	case "import":
 		return runImport(arguments[1:], stdout, stderr)
+	case "import-video":
+		return runImportVideo(arguments[1:], stdout, stderr)
 	case "mark":
 		return runMark(arguments[1:], stdout, stderr)
 	case "set":
@@ -104,6 +106,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
 	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--dry-run]")
+	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
@@ -158,6 +161,36 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		RenameByDate:  *renameByDate, DryRun: *dryRun,
 	}
 	if err := ImportSequence(set.Arg(0), *output, options, stdout); err != nil {
+		return reportError(stderr, err)
+	}
+	return 0
+}
+
+func runImportVideo(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("import-video", stderr)
+	output := set.String("output", "", "destination image sequence directory")
+	fps := set.Float64("fps", 0, "sample frames at this rate; default extracts every decoded frame")
+	format := set.String("format", "jpg", "output image format: jpg or png")
+	quality := set.Int("quality", 2, "JPEG quality for --format jpg (1 is best, 31 is worst)")
+	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable; defaults to PATH")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--output": true, "-output": true,
+		"--fps": true, "-fps": true,
+		"--format": true, "-format": true,
+		"--quality": true, "-quality": true,
+		"--ffmpeg": true, "-ffmpeg": true,
+	})); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 || *output == "" {
+		return reportError(stderr, fmt.Errorf("Usage: lrtl import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]"))
+	}
+	options := VideoImportOptions{
+		FFmpegPath: *ffmpeg, Format: *format, FPS: *fps, JPEGQuality: *quality,
+	}
+	if err := ImportVideo(set.Arg(0), *output, options, stdout); err != nil {
 		return reportError(stderr, err)
 	}
 	return 0
