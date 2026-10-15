@@ -122,12 +122,8 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 	packets := make([]*XMPPacket, len(frames))
 	created := make([]bool, len(frames))
 	for index, frame := range frames {
-		if frame.Sidecar == "" {
-			packets[index] = EmptyXMPPacket()
-			created[index] = true
-			continue
-		}
-		packet, err := loadPacket(frame)
+		created[index] = frame.Sidecar == ""
+		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return nil, err
 		}
@@ -258,9 +254,14 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			}
 		}
 		anchors := make([]lrtSplinePoint, 0, len(keyframes))
+		preciseAnchors := make([]transitionAnchor, 0, len(keyframes))
 		for _, keyframe := range keyframes {
 			if value, found := numericValues[keyframe][name]; found {
+				if math.IsInf(float64(float32(value)), 0) {
+					return nil, fmt.Errorf("%s: crs:%s exceeds finite float32 transition range", frames[keyframe].Image, name)
+				}
 				anchors = append(anchors, lrtSplinePoint{x: float32(keyframe), y: float32(value)})
+				preciseAnchors = append(preciseAnchors, transitionAnchor{keyframe, value})
 			}
 		}
 		if len(anchors) == 0 {
@@ -271,7 +272,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 				if keyframeSet[targetIndex] {
 					continue
 				}
-				if err := assign(targetIndex, map[string]float64{name: float64(anchors[0].y)}); err != nil {
+				if err := assign(targetIndex, map[string]float64{name: adjustTransitionValue(float64(anchors[0].y), spec)}); err != nil {
 					return nil, err
 				}
 			}
@@ -283,6 +284,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			return nil, err
 		}
 		values, filled := spline.sampleFrames(len(frames), keyframeFlags)
+		postprocessLRTTransition(values, filled, keyframeFlags, preciseAnchors, spec)
 		for targetIndex := range frames {
 			if keyframeSet[targetIndex] {
 				continue

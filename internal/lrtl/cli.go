@@ -690,7 +690,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	write := set.Bool("write", false, "write interpolated sidecar values")
 	noBackup := set.Bool("no-backup", false, "do not create a backup")
 	smoothness := set.Int("smoothness", 50, "LRT-compatible spline smoothness (0-100; default 50)")
-	if err := set.Parse(flagFirst(arguments, nil)); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--smoothness": true, "-smoothness": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}

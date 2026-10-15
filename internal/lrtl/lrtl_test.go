@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -46,9 +47,9 @@ func makeFrames(t *testing.T, folder string, count int) []Frame {
 
 func strconvTwo(value int) string {
 	if value < 10 {
-		return "0" + string(rune('0'+value))
+		return "0" + strconv.Itoa(value)
 	}
-	return string(rune('0'+value/10)) + string(rune('0'+value%10))
+	return strconv.Itoa(value)
 }
 
 func TestXMPPacketRoundTripPreservesPrefixesUnknownPropertiesAndPacketPIs(t *testing.T) {

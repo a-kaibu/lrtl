@@ -130,6 +130,7 @@ func setCRSElementValue(element *etree.Element, name, value string) error {
 
 func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, error) {
 	values := make(map[string]float64)
+	var numericError error
 	add := func(name, value string) {
 		allowed := localCorrectionProperty(name)
 		if mask {
@@ -141,6 +142,10 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 			return
 		}
 		if number, ok := scalarNumber(value); ok {
+			if math.IsInf(float64(float32(number)), 0) {
+				numericError = xmpError("crs:%s exceeds finite float32 transition range", name)
+				return
+			}
 			values[name] = number
 		}
 	}
@@ -180,7 +185,7 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 			values["RangeMask"+property] = number
 		}
 	}
-	return values, nil
+	return values, numericError
 }
 
 func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTransitionNode, error) {
@@ -702,10 +707,12 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 			continue
 		}
 		anchors := make([]lrtSplinePoint, 0, len(keyframes))
+		preciseAnchors := make([]transitionAnchor, 0, len(keyframes))
 		for _, keyframe := range keyframes {
 			if node, found := indexes[keyframe][key]; found {
 				if value, present := node.values[name]; present {
 					anchors = append(anchors, lrtSplinePoint{x: float32(keyframe), y: float32(value)})
+					preciseAnchors = append(preciseAnchors, transitionAnchor{keyframe, value})
 				}
 			}
 		}
@@ -717,6 +724,7 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 			continue
 		}
 		values, filled := spline.sampleFrames(frameCount, keyframeFlags)
+		postprocessLRTTransition(values, filled, keyframeFlags, preciseAnchors, spec)
 		for target := 0; target < frameCount; target++ {
 			if keyframeFlags[target] || !filled[target] {
 				continue

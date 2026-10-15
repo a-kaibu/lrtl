@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"fmt"
+	"math"
 	"sort"
 )
 
@@ -26,6 +27,11 @@ func newLRTTransitionSpline(points []lrtSplinePoint, smoothness int) (*lrtTransi
 		return nil, fmt.Errorf("a transition spline needs at least two anchor values")
 	}
 	points = append([]lrtSplinePoint(nil), points...)
+	for _, point := range points {
+		if math.IsNaN(float64(point.x)) || math.IsInf(float64(point.x), 0) || math.IsNaN(float64(point.y)) || math.IsInf(float64(point.y), 0) {
+			return nil, fmt.Errorf("transition spline anchors must be finite float32 values")
+		}
+	}
 	sort.Slice(points, func(i, j int) bool { return points[i].x < points[j].x })
 	for index := 1; index < len(points); index++ {
 		if points[index].x <= points[index-1].x {
@@ -54,6 +60,13 @@ func newLRTTransitionSpline(points []lrtSplinePoint, smoothness int) (*lrtTransi
 	}
 	for index := len(points) - 2; index > 0; index-- {
 		spline.tangents[index] = splineAdd(c[index], splineScale(spline.tangents[index+1], j[index]))
+	}
+	for i, point := range spline.points {
+		for _, control := range []lrtSplinePoint{splineAdd(point, spline.tangents[i]), splineSubtract(point, spline.tangents[i])} {
+			if math.IsNaN(float64(control.x)) || math.IsInf(float64(control.x), 0) || math.IsNaN(float64(control.y)) || math.IsInf(float64(control.y), 0) {
+				return nil, fmt.Errorf("transition spline control points exceed finite float32 range")
+			}
+		}
 	}
 	return spline, nil
 }
@@ -141,10 +154,13 @@ func splineScale(point lrtSplinePoint, scale float32) lrtSplinePoint {
 
 func cubicBezier(p0, p1, p2, p3 lrtSplinePoint, t float32) lrtSplinePoint {
 	oneMinusT := 1 - t
-	b0 := oneMinusT * oneMinusT * oneMinusT
-	b1 := 3 * oneMinusT * oneMinusT * t
-	b2 := 3 * oneMinusT * t * t
-	b3 := t * t * t
+	// Match the observed single-precision basis evaluation order. Reordering
+	// these products changes low bits and can change a frame's bin or rounding.
+	u2, t2 := oneMinusT*oneMinusT, t*t
+	b0 := oneMinusT * u2
+	b1 := (3 * t) * u2
+	b2 := (3 * t2) * oneMinusT
+	b3 := t * t2
 	return lrtSplinePoint{
 		x: p0.x*b0 + p1.x*b1 + p2.x*b2 + p3.x*b3,
 		y: p0.y*b0 + p1.y*b1 + p2.y*b2 + p3.y*b3,
