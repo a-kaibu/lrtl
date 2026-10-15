@@ -84,6 +84,51 @@ func xmpApplyDehaze(luminance, amount float64, detail int8) float64 {
 	}
 	return math.Max(0, math.Min(1, luminance))
 }
+
+func xmpSharpenRadius(width, height int, radius float64) int {
+	scale := float64(min(width, height)) / 1080
+	return max(1, min(24, int(math.Round(radius*scale))))
+}
+
+func xmpApplySharpness(luminance, amount, detail, edgeMasking float64, highpass int8) float64 {
+	amount = math.Max(-100, math.Min(150, amount)) / 100
+	detail = math.Max(0, math.Min(100, detail))
+	edgeMasking = math.Max(0, math.Min(100, edgeMasking))
+	edgeWeight := 1.0
+	if edgeMasking > 0 {
+		threshold := edgeMasking / 100 * 0.12
+		edgeWeight = smoothstep((math.Abs(float64(highpass)/127) - threshold) / 0.12)
+	}
+	gain := (0.35 + detail/100*0.65) * edgeWeight * 0.75
+	return math.Max(0, math.Min(1, luminance+float64(highpass)/127*amount*gain))
+}
+
+func xmpApplyImageSharpness(img *image.NRGBA, amount, radius, detail, edgeMasking float64) *image.NRGBA {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	highpass := xmpLuminanceDetail(img, xmpSharpenRadius(width, height, radius))
+	result := image.NewNRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			pixel := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+			index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
+			luminance := 0.2126*srgb8ToLinear[pixel.R] + 0.7152*srgb8ToLinear[pixel.G] + 0.0722*srgb8ToLinear[pixel.B]
+			sharpened := xmpApplySharpness(luminance, amount, detail, edgeMasking, highpass[index])
+			if luminance > 1e-12 {
+				scale := sharpened / luminance
+				pixel.R = encodeLinearSRGB(srgb8ToLinear[pixel.R] * scale)
+				pixel.G = encodeLinearSRGB(srgb8ToLinear[pixel.G] * scale)
+				pixel.B = encodeLinearSRGB(srgb8ToLinear[pixel.B] * scale)
+			} else {
+				value := encodeLinearSRGB(sharpened)
+				pixel.R, pixel.G, pixel.B = value, value, value
+			}
+			result.SetNRGBA(x, y, pixel)
+		}
+	}
+	return result
+}
+
 func xmpTextureRadius(width, height int) int {
 	return max(1, min(3, min(width, height)/600))
 }

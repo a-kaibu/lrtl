@@ -26,6 +26,10 @@ type xmpBasicAdjustments struct {
 	texture         float64
 	clarity         float64
 	dehaze          float64
+	sharpness       float64
+	sharpenRadius   float64
+	sharpenDetail   float64
+	sharpenMasking  float64
 	parametric      xmpParametricCurve
 	vibrance        float64
 	saturation      float64
@@ -128,6 +132,27 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 			return xmpBasicAdjustments{}, fmt.Errorf("crs:%s must be a finite number between %g and %g", property.name, property.min, property.max)
 		}
 		*property.target = number
+	}
+	adjustments.sharpenRadius = 1
+	adjustments.sharpenDetail = 25
+	for _, property := range []struct {
+		name   string
+		target *float64
+		min    float64
+		max    float64
+	}{
+		{name: "Sharpness", target: &adjustments.sharpness, min: 0, max: 150},
+		{name: "SharpenRadius", target: &adjustments.sharpenRadius, min: 0.5, max: 3},
+		{name: "SharpenDetail", target: &adjustments.sharpenDetail, min: 0, max: 100},
+		{name: "SharpenEdgeMasking", target: &adjustments.sharpenMasking, min: 0, max: 100},
+	} {
+		value, found, err := readXMPBasicNumber(packet, property.name, property.min, property.max)
+		if err != nil {
+			return xmpBasicAdjustments{}, err
+		}
+		if found {
+			*property.target = value
+		}
 	}
 	for index, band := range xmpHSLBands {
 		for _, property := range []struct {
@@ -506,7 +531,7 @@ func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
 func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
-		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.dehaze != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
+		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.dehaze != 0 || adjustments.sharpness != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
 }
 
@@ -666,6 +691,9 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 				R: red8, G: green8, B: blue8, A: pixel.A,
 			})
 		}
+	}
+	if adjustments.sharpness != 0 {
+		result = xmpApplyImageSharpness(result, adjustments.sharpness, adjustments.sharpenRadius, adjustments.sharpenDetail, adjustments.sharpenMasking)
 	}
 	return result
 }
