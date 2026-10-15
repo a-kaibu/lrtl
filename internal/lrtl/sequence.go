@@ -1,0 +1,163 @@
+package lrtl
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+)
+
+var imageExtensions = map[string]bool{
+	".arw": true, ".cr2": true, ".cr3": true, ".dng": true,
+	".fff": true, ".iiq": true, ".jpeg": true, ".jpg": true,
+	".nef": true, ".nrw": true, ".orf": true, ".pef": true,
+	".png": true, ".raf": true, ".rw2": true, ".srw": true,
+	".tif": true, ".tiff": true,
+}
+
+var naturalParts = regexp.MustCompile(`(\d+)`)
+
+type Frame struct {
+	Index   int
+	Image   string
+	Sidecar string
+}
+
+func (frame Frame) OutputSidecar() string {
+	if frame.Sidecar != "" {
+		return frame.Sidecar
+	}
+	return frame.Image + ".xmp"
+}
+
+func naturalLess(left, right string) bool {
+	left = strings.ToLower(filepath.Base(left))
+	right = strings.ToLower(filepath.Base(right))
+	leftParts := naturalParts.Split(left, -1)
+	rightParts := naturalParts.Split(right, -1)
+	leftMatches := naturalParts.FindAllString(left, -1)
+	rightMatches := naturalParts.FindAllString(right, -1)
+	leftTokens := mergeNaturalTokens(leftParts, leftMatches)
+	rightTokens := mergeNaturalTokens(rightParts, rightMatches)
+	limit := len(leftTokens)
+	if len(rightTokens) < limit {
+		limit = len(rightTokens)
+	}
+	for index := 0; index < limit; index++ {
+		leftToken, rightToken := leftTokens[index], rightTokens[index]
+		if leftToken.number != rightToken.number {
+			return leftToken.number
+		}
+		if leftToken.number {
+			leftNumber := strings.TrimLeft(leftToken.value, "0")
+			rightNumber := strings.TrimLeft(rightToken.value, "0")
+			if leftNumber == "" {
+				leftNumber = "0"
+			}
+			if rightNumber == "" {
+				rightNumber = "0"
+			}
+			if len(leftNumber) != len(rightNumber) {
+				return len(leftNumber) < len(rightNumber)
+			}
+			if leftNumber != rightNumber {
+				return leftNumber < rightNumber
+			}
+		} else if leftToken.value != rightToken.value {
+			return leftToken.value < rightToken.value
+		}
+	}
+	if len(leftTokens) != len(rightTokens) {
+		return len(leftTokens) < len(rightTokens)
+	}
+	return left < right
+}
+
+type naturalToken struct {
+	value  string
+	number bool
+}
+
+func mergeNaturalTokens(parts, numbers []string) []naturalToken {
+	tokens := make([]naturalToken, 0, len(parts)+len(numbers))
+	for index, part := range parts {
+		tokens = append(tokens, naturalToken{value: part})
+		if index < len(numbers) {
+			tokens = append(tokens, naturalToken{value: numbers[index], number: true})
+		}
+	}
+	return tokens
+}
+
+func sidecarCandidates(image string) []string {
+	return []string{image + ".xmp", strings.TrimSuffix(image, filepath.Ext(image)) + ".xmp"}
+}
+
+func findSidecar(image string) (string, error) {
+	var best string
+	var bestModTime int64
+	for index, candidate := range sidecarCandidates(image) {
+		info, err := os.Stat(candidate)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		modTime := info.ModTime().UnixNano()
+		if best == "" || modTime > bestModTime || (modTime == bestModTime && index == 0) {
+			best = candidate
+			bestModTime = modTime
+		}
+	}
+	return best, nil
+}
+
+func DiscoverSequence(directory string) ([]Frame, error) {
+	info, err := os.Stat(directory)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("not a directory: %s", directory)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return nil, err
+	}
+	images := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !imageExtensions[strings.ToLower(filepath.Ext(entry.Name()))] {
+			continue
+		}
+		images = append(images, filepath.Join(directory, entry.Name()))
+	}
+	sort.SliceStable(images, func(i, j int) bool { return naturalLess(images[i], images[j]) })
+
+	frames := make([]Frame, 0, len(images))
+	for index, image := range images {
+		sidecar, err := findSidecar(image)
+		if err != nil {
+			return nil, err
+		}
+		frames = append(frames, Frame{Index: index, Image: image, Sidecar: sidecar})
+	}
+	return frames, nil
+}
+
+func loadPacket(frame Frame) (*XMPPacket, error) {
+	if frame.Sidecar == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(frame.Sidecar)
+	if err != nil {
+		return nil, err
+	}
+	packet, err := parseXMP(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", frame.Sidecar, err)
+	}
+	return packet, nil
+}

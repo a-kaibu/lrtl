@@ -1,8 +1,7 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
 build/
 dist/
 work/
+__pycache__/
+*.py[cod]
+*.exe
 *.lrtl-*.bak

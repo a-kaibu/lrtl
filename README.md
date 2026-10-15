@@ -17,12 +17,10 @@ The current version does not render RAW files or video, analyze image luminance,
 
 ## Install
 
-Requires Python 3.10 or newer. There are no runtime dependencies.
+Requires Go 1.23 or newer to build. The XML library is pure Go, so the compiled CLI has no native runtime dependencies.
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+go install github.com/a-kaibu/lrtl/cmd/lrtl@latest
 ```
 
 ## Commands
@@ -47,7 +45,12 @@ lrtl unmark "D:\Timelapse\Sequence\IMG_0005.CR3"
 
 ## Development
 
-The implementation uses only Python's standard library. See [reverse-engineering notes](docs/reverse-engineering.md) for the compatibility observations and known gaps that guide this milestone.
+```powershell
+go test ./...
+go build -o lrtl.exe ./cmd/lrtl
+```
+
+See [reverse-engineering notes](docs/reverse-engineering.md) for the compatibility observations and known gaps that guide this milestone.
 
 ## License
 
