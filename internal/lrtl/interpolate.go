@@ -172,6 +172,14 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 					if err != nil {
 						return nil, fmt.Errorf("%s: %w", frames[targetIndex].Image, err)
 					}
+					if !differs && maskGroupCorrectionAt(packets[targetIndex], correctionIndex) == nil {
+						for _, packet := range packets {
+							if packet.hasMaskGroupStructuredProperty(correctionIndex, property) {
+								differs = true
+								break
+							}
+						}
+					}
 					if !differs {
 						continue
 					}
@@ -352,13 +360,13 @@ func applyPlan(plan *InterpolationPlan) ([]packetOutput, error) {
 				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
 			}
 		}
-		for _, property := range change.MaskStructuredProperties {
-			if _, err := change.Packet.copyMaskGroupStructuredPropertyFrom(plan.StructuredSource, property.correctionIndex, property.property); err != nil {
+		for _, transition := range change.MaskTransitions {
+			if err := applyMaskTransition(change.Packet, transition); err != nil {
 				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
 			}
 		}
-		for _, transition := range change.MaskTransitions {
-			if err := applyMaskTransition(change.Packet, transition); err != nil {
+		for _, property := range change.MaskStructuredProperties {
+			if _, err := change.Packet.copyMaskGroupStructuredPropertyFrom(plan.StructuredSource, property.correctionIndex, property.property); err != nil {
 				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
 			}
 		}

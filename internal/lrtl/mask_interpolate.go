@@ -47,13 +47,17 @@ type maskTransitionNode struct {
 	values            map[string]float64
 	luminanceRange    string
 	hasLuminanceRange bool
+	correctionItem    *etree.Element
+	maskItem          *etree.Element
 }
 
 type maskTransitionChange struct {
-	key               maskTransitionKey
-	values            map[string]string
-	luminanceRange    string
-	hasLuminanceRange bool
+	key                maskTransitionKey
+	values             map[string]string
+	luminanceRange     string
+	hasLuminanceRange  bool
+	templateCorrection *etree.Element
+	templateMask       *etree.Element
 }
 
 type maskStructuredProperty struct {
@@ -211,7 +215,7 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 			}
 			indexed[correctionKey] = maskTransitionNode{
 				values: correctionValues, luminanceRange: correctionRange,
-				hasLuminanceRange: hasCorrectionRange,
+				hasLuminanceRange: hasCorrectionRange, correctionItem: item,
 			}
 
 			maskProperty := findCRSDescendant(correction, "CorrectionMasks")
@@ -238,7 +242,7 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 				}
 				indexed[maskKey] = maskTransitionNode{
 					values: maskValues, luminanceRange: maskRange,
-					hasLuminanceRange: hasMaskRange,
+					hasLuminanceRange: hasMaskRange, correctionItem: item, maskItem: maskItem,
 				}
 			}
 		}
@@ -299,6 +303,10 @@ func indexMaskTransitionNodesByID(root *etree.Element, collection string, indexe
 }
 
 func rdfArrayItems(property *etree.Element) []*etree.Element {
+	return rdfArrayItemsInContainer(rdfArrayContainer(property))
+}
+
+func rdfArrayContainer(property *etree.Element) *etree.Element {
 	if property == nil {
 		return nil
 	}
@@ -307,16 +315,129 @@ func rdfArrayItems(property *etree.Element) []*etree.Element {
 		if !ok || container.NamespaceURI() != rdfNamespace || (container.Tag != "Seq" && container.Tag != "Bag" && container.Tag != "Alt") {
 			continue
 		}
-		var items []*etree.Element
-		for _, itemToken := range container.Child {
-			item, ok := itemToken.(*etree.Element)
-			if ok && item.NamespaceURI() == rdfNamespace && item.Tag == "li" {
-				items = append(items, item)
-			}
-		}
-		return items
+		return container
 	}
 	return nil
+}
+
+func rdfArrayItemsInContainer(container *etree.Element) []*etree.Element {
+	var items []*etree.Element
+	if container == nil {
+		return items
+	}
+	for _, itemToken := range container.Child {
+		item, ok := itemToken.(*etree.Element)
+		if ok && item.NamespaceURI() == rdfNamespace && item.Tag == "li" {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func ensureRDFArrayContainer(property *etree.Element) (*etree.Element, error) {
+	if container := rdfArrayContainer(property); container != nil {
+		return container, nil
+	}
+	for _, token := range property.Child {
+		if child, ok := token.(*etree.Element); ok {
+			return nil, xmpError("crs:%s contains %s instead of an RDF array", property.Tag, child.Tag)
+		}
+		if text, ok := token.(*etree.CharData); ok && strings.TrimSpace(text.Data) != "" {
+			return nil, xmpError("crs:%s contains text instead of an RDF array", property.Tag)
+		}
+	}
+	prefix := ensurePrefix(property, "rdf", rdfNamespace)
+	return property.CreateElement(prefix + ":Seq"), nil
+}
+
+func ensureCRSArrayProperty(scope *etree.Element, local string) (*etree.Element, error) {
+	property := directCRSProperty(scope, local)
+	if property.attribute != nil {
+		return nil, xmpError("crs:%s is stored as an attribute, not an RDF array", local)
+	}
+	if property.element == nil {
+		prefix := ensurePrefix(scope, "crs", crsNamespace)
+		property.element = scope.CreateElement(prefix + ":" + local)
+	}
+	return property.element, nil
+}
+
+func ensurePacketCRSArray(packet *XMPPacket, local string) (*etree.Element, *etree.Element, error) {
+	property := packet.findRootProperty(crsNamespace, local)
+	if property.element == nil && property.attribute != nil {
+		return nil, nil, xmpError("crs:%s is stored as an attribute, not an RDF array", local)
+	}
+	if property.element == nil {
+		descriptions := packet.rootDescriptions()
+		if len(descriptions) == 0 {
+			return nil, nil, xmpError("cannot create crs:%s without rdf:Description", local)
+		}
+		prefix := ensurePrefix(descriptions[0], "crs", crsNamespace)
+		property.element = descriptions[0].CreateElement(prefix + ":" + local)
+	}
+	container, err := ensureRDFArrayContainer(property.element)
+	return property.element, container, err
+}
+
+func ensureRDFArrayPosition(container *etree.Element, position int, template *etree.Element) (*etree.Element, error) {
+	if position < 1 {
+		return nil, xmpError("RDF array position must be positive: %d", position)
+	}
+	items := rdfArrayItemsInContainer(container)
+	if len(items) >= position {
+		item := items[position-1]
+		if template == nil || !rdfArrayItemIsEmpty(item) {
+			return item, nil
+		}
+		if template.NamespaceURI() != rdfNamespace || template.Tag != "li" {
+			return nil, xmpError("cannot materialize RDF array position %d from non-rdf:li template", position)
+		}
+		copy := copyElementWithNamespaces(template)
+		for index, token := range container.Child {
+			if token == item {
+				container.Child[index] = copy
+				return copy, nil
+			}
+		}
+		return nil, xmpError("RDF array position %d is detached from its container", position)
+	}
+	if template != nil && (template.NamespaceURI() != rdfNamespace || template.Tag != "li") {
+		return nil, xmpError("cannot materialize RDF array position %d from non-rdf:li template", position)
+	}
+	for len(items) < position {
+		var item *etree.Element
+		if len(items)+1 == position && template != nil {
+			item = copyElementWithNamespaces(template)
+		} else {
+			prefix := ensurePrefix(container, "rdf", rdfNamespace)
+			item = container.CreateElement(prefix + ":li")
+		}
+		container.AddChild(item)
+		items = append(items, item)
+	}
+	return items[position-1], nil
+}
+
+func rdfArrayItemIsEmpty(item *etree.Element) bool {
+	if item == nil {
+		return true
+	}
+	for _, attribute := range item.Attr {
+		if attribute.Space != "xmlns" && attribute.Key != "xmlns" {
+			return false
+		}
+	}
+	for _, token := range item.Child {
+		switch child := token.(type) {
+		case *etree.Element:
+			return false
+		case *etree.CharData:
+			if strings.TrimSpace(child.Data) != "" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func unwrapRDFArrayItem(item *etree.Element) *etree.Element {
@@ -355,6 +476,14 @@ func correctionRangeMaskElement(element *etree.Element) *etree.Element {
 }
 
 func maskGroupCorrectionAt(packet *XMPPacket, correctionIndex int) *etree.Element {
+	item := maskGroupCorrectionItemAt(packet, correctionIndex)
+	if item == nil {
+		return nil
+	}
+	return unwrapRDFArrayItem(item)
+}
+
+func maskGroupCorrectionItemAt(packet *XMPPacket, correctionIndex int) *etree.Element {
 	if packet == nil || correctionIndex < 1 {
 		return nil
 	}
@@ -363,7 +492,7 @@ func maskGroupCorrectionAt(packet *XMPPacket, correctionIndex int) *etree.Elemen
 	if correctionIndex > len(items) {
 		return nil
 	}
-	return unwrapRDFArrayItem(items[correctionIndex-1])
+	return items[correctionIndex-1]
 }
 
 func directCRSProperty(element *etree.Element, local string) topLevelXMPProperty {
@@ -386,13 +515,18 @@ func directCRSProperty(element *etree.Element, local string) topLevelXMPProperty
 
 func (packet *XMPPacket) maskGroupStructuredPropertyDiffers(source *XMPPacket, correctionIndex int, local string) (bool, error) {
 	targetCorrection := maskGroupCorrectionAt(packet, correctionIndex)
-	if targetCorrection == nil {
-		return false, nil
-	}
 	sourceProperty := directCRSProperty(maskGroupCorrectionAt(source, correctionIndex), local)
+	if targetCorrection == nil {
+		return sourceProperty.element != nil || sourceProperty.attribute != nil, nil
+	}
 	targetProperty := directCRSProperty(targetCorrection, local)
 	same, err := sameRootProperty(targetProperty, sourceProperty)
 	return !same, err
+}
+
+func (packet *XMPPacket) hasMaskGroupStructuredProperty(correctionIndex int, local string) bool {
+	property := directCRSProperty(maskGroupCorrectionAt(packet, correctionIndex), local)
+	return property.element != nil || property.attribute != nil
 }
 
 func copyElementWithNamespaces(source *etree.Element) *etree.Element {
@@ -461,8 +595,21 @@ func copyScopedCRSPropertyFrom(source, target *etree.Element, local string) (boo
 
 func (packet *XMPPacket) copyMaskGroupStructuredPropertyFrom(source *XMPPacket, correctionIndex int, local string) (bool, error) {
 	targetCorrection := maskGroupCorrectionAt(packet, correctionIndex)
-	if targetCorrection == nil {
-		return false, nil
+	targetItem := maskGroupCorrectionItemAt(packet, correctionIndex)
+	if targetCorrection == nil || rdfArrayItemIsEmpty(targetItem) {
+		sourceItem := maskGroupCorrectionItemAt(source, correctionIndex)
+		if sourceItem == nil || rdfArrayItemIsEmpty(sourceItem) {
+			return false, nil
+		}
+		_, container, err := ensurePacketCRSArray(packet, "MaskGroupBasedCorrections")
+		if err != nil {
+			return false, err
+		}
+		item, err := ensureRDFArrayPosition(container, correctionIndex, sourceItem)
+		if err != nil {
+			return false, err
+		}
+		targetCorrection = unwrapRDFArrayItem(item)
 	}
 	return copyScopedCRSPropertyFrom(maskGroupCorrectionAt(source, correctionIndex), targetCorrection, local)
 }
@@ -602,7 +749,18 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		luminanceRangeByKey[key], hasLuminanceRangeByKey[key] = firstMaskLuminanceRange(indexes, key)
 	}
 	for target := range packets {
-		if len(indexes[target]) == 0 {
+		if !keyframeSet[target] {
+			for key := range allKeys {
+				if key.correctionIndex < 1 {
+					continue
+				}
+				interpolated := target < len(seriesByKey[key]) && seriesByKey[key][target] != nil
+				if interpolated || hasLuminanceRangeByKey[key] {
+					keysByTarget[target][key] = true
+				}
+			}
+		}
+		if len(keysByTarget[target]) == 0 {
 			continue
 		}
 		keys := make([]maskTransitionKey, 0, len(keysByTarget[target]))
@@ -631,7 +789,8 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 					proposed = seriesByKey[key][target]
 				}
 			}
-			current := indexes[target][key].values
+			currentNode, present := indexes[target][key]
+			current := currentNode.values
 			if lrtNormalizesMaskAngle(key) {
 				if angle, found := current["Angle"]; found {
 					_, hasInterpolatedAngle := proposed["Angle"]
@@ -657,11 +816,17 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 				values[property] = formatNumber(value)
 			}
 			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
-			hasLuminanceRangeChange := hasLuminanceRange && (!indexes[target][key].hasLuminanceRange || indexes[target][key].luminanceRange != luminanceRange)
+			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
 			if len(values) > 0 || hasLuminanceRangeChange {
+				templateCorrection, templateMask := (*etree.Element)(nil), (*etree.Element)(nil)
+				if !present && !keyframeSet[target] {
+					template := maskTransitionTemplate(indexes, keyframeIndices, key, target)
+					templateCorrection, templateMask = template.correctionItem, template.maskItem
+				}
 				changes[target] = append(changes[target], maskTransitionChange{
 					key: key, values: values, luminanceRange: luminanceRange,
-					hasLuminanceRange: hasLuminanceRangeChange,
+					hasLuminanceRange: hasLuminanceRangeChange, templateCorrection: templateCorrection,
+					templateMask: templateMask,
 				})
 			}
 		}
@@ -688,7 +853,78 @@ func firstMaskLuminanceRange(indexes []map[maskTransitionKey]maskTransitionNode,
 	return "", false
 }
 
+func maskTransitionTemplate(indexes []map[maskTransitionKey]maskTransitionNode, keyframes []int, key maskTransitionKey, target int) maskTransitionNode {
+	bestIndex, bestDistance := -1, math.MaxInt
+	for _, candidate := range keyframes {
+		if candidate < 0 || candidate >= len(indexes) {
+			continue
+		}
+		node, found := indexes[candidate][key]
+		if !found || !maskTransitionNodeHasTemplate(node, key) {
+			continue
+		}
+		distance := absInt(candidate - target)
+		if bestIndex < 0 || distance < bestDistance || (distance == bestDistance && candidate < bestIndex) {
+			bestIndex, bestDistance = candidate, distance
+		}
+	}
+	if bestIndex < 0 {
+		for candidate, frame := range indexes {
+			node, found := frame[key]
+			if !found || !maskTransitionNodeHasTemplate(node, key) {
+				continue
+			}
+			distance := absInt(candidate - target)
+			if bestIndex < 0 || distance < bestDistance || (distance == bestDistance && candidate < bestIndex) {
+				bestIndex, bestDistance = candidate, distance
+			}
+		}
+	}
+	if bestIndex < 0 {
+		return maskTransitionNode{}
+	}
+	return indexes[bestIndex][key]
+}
+
+func maskTransitionNodeHasTemplate(node maskTransitionNode, key maskTransitionKey) bool {
+	if key.maskIndex > 0 {
+		return !rdfArrayItemIsEmpty(node.maskItem)
+	}
+	return !rdfArrayItemIsEmpty(node.correctionItem)
+}
+
+func ensureMaskTransitionStructure(packet *XMPPacket, change maskTransitionChange) error {
+	if change.key.correctionIndex < 1 {
+		return nil
+	}
+	_, corrections, err := ensurePacketCRSArray(packet, change.key.collection)
+	if err != nil {
+		return err
+	}
+	correctionItem, err := ensureRDFArrayPosition(corrections, change.key.correctionIndex, change.templateCorrection)
+	if err != nil {
+		return err
+	}
+	if change.key.maskIndex < 1 {
+		return nil
+	}
+	correction := unwrapRDFArrayItem(correctionItem)
+	maskProperty, err := ensureCRSArrayProperty(correction, "CorrectionMasks")
+	if err != nil {
+		return err
+	}
+	masks, err := ensureRDFArrayContainer(maskProperty)
+	if err != nil {
+		return err
+	}
+	_, err = ensureRDFArrayPosition(masks, change.key.maskIndex, change.templateMask)
+	return err
+}
+
 func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
+	if err := ensureMaskTransitionStructure(packet, change); err != nil {
+		return fmt.Errorf("crs:%s[%d]: %w", change.key.collection, change.key.correctionIndex, err)
+	}
 	property := packet.findRootProperty(crsNamespace, change.key.collection)
 	if property.element == nil {
 		return xmpError("missing crs:%s for local-correction transition", change.key.collection)
