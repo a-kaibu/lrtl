@@ -449,6 +449,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to raster frames")
+	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply axis-aligned crop rectangles from sidecar XMP")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
@@ -498,12 +499,20 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		DeflickerPasses:  *passes,
 		Constant:         *constant,
 		ApplyXMPExposure: *applyXMPExposure,
+		ApplyXMPCrop:     *applyXMPCrop,
 	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
+	features := make([]string, 0, 2)
 	if *applyXMPExposure {
-		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with XMP Exposure2012: %s\n", len(frames), *fps, *output)
+		features = append(features, "XMP Exposure2012")
+	}
+	if *applyXMPCrop {
+		features = append(features, "XMP crop")
+	}
+	if len(features) > 0 {
+		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)
 	} else {
 		fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
 	}

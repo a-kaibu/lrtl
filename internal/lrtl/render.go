@@ -26,6 +26,7 @@ type RenderOptions struct {
 	DeflickerPasses  int
 	Constant         bool
 	ApplyXMPExposure bool
+	ApplyXMPCrop     bool
 }
 
 func supportedRasterExtension(path string) bool {
@@ -44,8 +45,8 @@ func supportedRasterFormat(format string) bool {
 const maxAVIDimension = int64(1<<31 - 1)
 
 // RenderSequence writes already-developed JPEG, PNG, or TIFF frames to an MJPEG AVI
-// file. It can optionally apply the global XMP Exposure2012 slider, but does not
-// implement full Camera Raw rendering or decode RAWs.
+// file. It can optionally apply the global XMP Exposure2012 slider and axis-aligned
+// XMP crop bounds, but does not implement full Camera Raw rendering or decode RAWs.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -107,6 +108,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		return fmt.Errorf("image dimensions exceed AVI limits in %s", frames[0].Image)
 	}
 	width, height := config.Width, config.Height
+	var xmpCrops []cropSpec
+	if options.ApplyXMPCrop {
+		xmpCrops, err = readXMPCrops(frames, width, height)
+		if err != nil {
+			return err
+		}
+	}
 
 	var gains []float64
 	if options.Deflicker {
@@ -134,6 +142,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+			}
+			if xmpCrops != nil {
+				img = applyXMPCrop(img, xmpCrops[index])
 			}
 			if xmpExposures != nil && xmpExposures[index] != 0 {
 				img = applyExposureGain(img, math.Exp2(xmpExposures[index]))
@@ -209,11 +220,15 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 
 		applyXMP := xmpExposures != nil && xmpExposures[index] != 0
+		applyCrop := xmpCrops != nil && xmpCrops[index].Active && xmpCrops[index].Bounds != image.Rect(0, 0, width, height)
 		jpegData := data
-		if options.Deflicker || applyXMP || format != "jpeg" {
+		if options.Deflicker || applyXMP || applyCrop || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
+			}
+			if applyCrop {
+				img = applyXMPCrop(img, xmpCrops[index])
 			}
 			var encoded bytes.Buffer
 			gain := 1.0
