@@ -28,6 +28,7 @@ type RenderOptions struct {
 	CRF               int
 	Preset            string
 	LongEdge          int
+	OutputHeight      int
 	Overwrite         bool
 	Deflicker         bool
 	Reference         image.Rectangle
@@ -205,9 +206,29 @@ func validateLongEdge(longEdge int) error {
 	return nil
 }
 
-func outputDimensions(width, height, longEdge int) (int, int, error) {
+func validateRenderDimensions(longEdge, outputHeight int) error {
 	if err := validateLongEdge(longEdge); err != nil {
+		return err
+	}
+	if outputHeight < 0 || outputHeight > 32768 || (outputHeight > 0 && outputHeight < 16) {
+		return fmt.Errorf("output height must be 0 or between 16 and 32768 pixels: %d", outputHeight)
+	}
+	if longEdge > 0 && outputHeight > 0 {
+		return fmt.Errorf("--long-edge and --output-height cannot be used together")
+	}
+	return nil
+}
+
+func outputDimensions(width, height, longEdge, outputHeight int) (int, int, error) {
+	if err := validateRenderDimensions(longEdge, outputHeight); err != nil {
 		return 0, 0, err
+	}
+	if outputHeight > 0 {
+		scaledWidth := math.Round(float64(width) * float64(outputHeight) / float64(height))
+		if scaledWidth < 1 || scaledWidth > float64(maxVideoDimension) {
+			return 0, 0, fmt.Errorf("output dimensions exceed supported limits: %.0fx%d", scaledWidth, outputHeight)
+		}
+		return int(scaledWidth), outputHeight, nil
 	}
 	if longEdge == 0 || max(width, height) <= longEdge {
 		return width, height, nil
@@ -243,7 +264,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
-	if err := validateLongEdge(options.LongEdge); err != nil {
+	if err := validateRenderDimensions(options.LongEdge, options.OutputHeight); err != nil {
 		return err
 	}
 	if options.MotionBlurFrames != 0 && !validMotionBlurFrames(options.MotionBlurFrames) {
@@ -372,7 +393,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 	width, height := orientedDimensions(config.Width, config.Height, firstOrientation)
-	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge)
+	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge, options.OutputHeight)
 	if err != nil {
 		return err
 	}
