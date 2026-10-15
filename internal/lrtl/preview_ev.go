@@ -85,7 +85,8 @@ func framePreviewEV(img image.Image) (float64, error) {
 		}
 	}
 	if count == 0 {
-		// LRTimelapse returns 255 when its ROI contains no pixels.
+		// Integer smoothing can erase every bin in a very small image.
+		// LRTimelapse returns 255 when the resulting histogram is empty.
 		return 255.0 / 256.0, nil
 	}
 	value := float64(weighted) / float64(count) / 256.0

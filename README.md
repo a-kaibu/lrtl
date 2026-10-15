@@ -470,6 +470,10 @@ lrtl preview-ev "D:\Timelapse\Developed" --write
 
 ## 開発
 
+Goの機能追加・修正では、数値の期待値、境界条件、異常入力、既存XMPの保持とバックアップを回帰テストで確認します。数値テストは手計算や独立した参照値を使い、実装の計算をそのまま複製して期待値にはしません。変更後は以下のテスト・静的解析・ビルドを実行します。GitHub ActionsもWindows/Linuxで同じ3項目を実行します。
+
+現在の自動テストはXMP読み書き・補間、キーフレーム、Preview EV、Deflicker、MJPEG AVI生成などを対象としています。LRTが実際に出力したXMPとの数値比較、GUIの操作、外部FFmpeg/DNGLabを含む処理全体の検証は未整備です。ビルド成功だけでは動作確認済みとしません。
+
 ```powershell
 go test ./...
 go vet ./...

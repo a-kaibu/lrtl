@@ -137,7 +137,7 @@ func TestXMPRejectsMalformedAndStructuredPackets(t *testing.T) {
 
 func TestMarkAndUnmarkRestoresRatings(t *testing.T) {
 	packet := EmptyXMPPacket()
-	if err := packet.SetScalar("xmp:Rating", "2"); err != nil {
+	if err := packet.SetScalar("xmp:Rating", "1"); err != nil {
 		t.Fatal(err)
 	}
 	if rating, err := MarkKeyframe(packet, "default"); err != nil || rating != 4 {
@@ -146,7 +146,7 @@ func TestMarkAndUnmarkRestoresRatings(t *testing.T) {
 	if err := UnmarkKeyframe(packet, false); err != nil {
 		t.Fatal(err)
 	}
-	if rating, valid := packet.Rating(); !valid || rating != 2 || packet.IsKeyframe() {
+	if rating, valid := packet.Rating(); !valid || rating != 1 || packet.IsKeyframe() {
 		t.Fatalf("rating=%d valid=%v kind=%q", rating, valid, packet.KeyframeKind())
 	}
 
@@ -265,7 +265,7 @@ func TestSingleAndUnmarkedSequencesUseReferenceFrames(t *testing.T) {
 	t.Run("one marked keyframe", func(t *testing.T) {
 		folder := t.TempDir()
 		frames := makeFrames(t, folder, 3)
-		writeTestXMP(t, frames[1].Image, map[string]string{"xmp:Rating": "4", "crs:Exposure": "-1.5"})
+		writeTestXMP(t, frames[1].Image, map[string]string{"xmp:Rating": "4", "crs:Exposure2012": "-1.5"})
 		frames, _ = DiscoverSequence(folder)
 		plan, err := buildPlan(frames)
 		if err != nil {
@@ -276,6 +276,11 @@ func TestSingleAndUnmarkedSequencesUseReferenceFrames(t *testing.T) {
 		}
 		if !plan.Changes[0].CreatedSidecar || !plan.Changes[1].CreatedSidecar {
 			t.Fatal("missing sidecars should be marked for creation")
+		}
+		for _, change := range plan.Changes {
+			if change.Values["Exposure2012"] != "-1.5" {
+				t.Fatalf("single reference value not propagated: %#v", change.Values)
+			}
 		}
 	})
 
@@ -299,7 +304,7 @@ func TestSingleAndUnmarkedSequencesUseReferenceFrames(t *testing.T) {
 	})
 }
 
-func TestInterpolationFillsInteriorAndEdgesButKeepsEndpoints(t *testing.T) {
+func TestInterpolationExtendsNearestKeyframeToEndpoints(t *testing.T) {
 	folder := t.TempDir()
 	frames := makeFrames(t, folder, 7)
 	writeTestXMP(t, frames[0].Image, map[string]string{"crs:Exposure2012": "-4"})
@@ -307,16 +312,20 @@ func TestInterpolationFillsInteriorAndEdgesButKeepsEndpoints(t *testing.T) {
 	writeTestXMP(t, frames[4].Image, map[string]string{"xmp:Rating": "4", "crs:Exposure2012": "4"})
 	writeTestXMP(t, frames[6].Image, map[string]string{"crs:Exposure2012": "8"})
 	frames, _ = DiscoverSequence(folder)
-	plan, err := buildPlan(frames)
+	// With zero Bezier tangents the outer segments are constant, and the
+	// middle segment passes through value 2 at frame 3. Unmarked endpoint
+	// values are overwritten by the nearest keyframe under lrtl's current
+	// endpoint policy. Exact LRT endpoint parity remains unverified.
+	plan, err := buildPlanWithSmoothness(frames, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Changes) != 3 {
+	if len(plan.Changes) != 5 {
 		t.Fatalf("got changes at %d frames", len(plan.Changes))
 	}
-	for index, want := range []string{"-2", "2", "6"} {
+	for index, want := range []string{"0", "0", "2", "4", "4"} {
 		change := plan.Changes[index]
-		if change.Frame.Index != []int{1, 3, 5}[index] || change.Values["Exposure2012"] != want {
+		if change.Frame.Index != []int{0, 1, 3, 5, 6}[index] || change.Values["Exposure2012"] != want {
 			t.Errorf("change %d: index=%d value=%q", index, change.Frame.Index, change.Values["Exposure2012"])
 		}
 	}
@@ -427,7 +436,7 @@ func TestCLICommandsRestoreMarksAndDefaultToDryRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	packet := EmptyXMPPacket()
-	if err := packet.SetScalar("xmp:Rating", "2"); err != nil {
+	if err := packet.SetScalar("xmp:Rating", "1"); err != nil {
 		t.Fatal(err)
 	}
 	sidecar := image + ".xmp"
@@ -462,7 +471,7 @@ func TestCLICommandsRestoreMarksAndDefaultToDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rating, valid := restored.Rating(); !valid || rating != 2 {
+	if rating, valid := restored.Rating(); !valid || rating != 1 {
 		t.Fatalf("rating=%d valid=%v", rating, valid)
 	}
 
