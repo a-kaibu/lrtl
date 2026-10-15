@@ -38,6 +38,7 @@ type RenderOptions struct {
 	ApplyXMPExposure  bool
 	ApplyXMPBasic     bool
 	ApplyXMPCrop      bool
+	AutoOrient        bool
 	TimestampOverlay  bool
 	TimestampFormat   string
 	RawPreview        bool
@@ -167,9 +168,9 @@ func resizeFrame(img image.Image, width, height int) image.Image {
 const maxVideoDimension = int64(1<<31 - 1)
 
 // RenderSequence writes JPEG, PNG, TIFF, selected embedded RAW previews, or DNGLab-developed
-// RAW frames to MJPEG AVI, H.264/H.265 MP4, or ProRes MOV. It can optionally apply the global XMP Exposure2012
-// slider, rotated XMP crop bounds, and an optional metadata timestamp overlay, but does not
-// implement full Camera Raw RAW rendering.
+// RAW frames to MJPEG AVI, H.264/H.265 MP4, or ProRes MOV. It can optionally apply selected
+// global XMP tone controls, EXIF orientation, rotated XMP crop bounds, and a metadata timestamp
+// overlay, but does not implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -298,7 +299,14 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if int64(config.Width) > maxVideoDimension || int64(config.Height) > maxVideoDimension {
 		return fmt.Errorf("image dimensions exceed supported limits in %s", frames[0].Image)
 	}
-	width, height := config.Width, config.Height
+	firstOrientation := uint16(1)
+	if options.AutoOrient {
+		firstOrientation, err = readEXIFOrientation(first)
+		if err != nil {
+			return fmt.Errorf("%s: %w", filepath.Base(frames[0].Image), err)
+		}
+	}
+	width, height := orientedDimensions(config.Width, config.Height, firstOrientation)
 	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge)
 	if err != nil {
 		return err
@@ -352,8 +360,20 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if !supportedRasterFormat(format) {
 				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 			}
-			if frameConfig.Width != width || frameConfig.Height != height || img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+			orientation := uint16(1)
+			if options.AutoOrient {
+				orientation, err = readEXIFOrientation(data)
+				if err != nil {
+					return fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
+				}
+			}
+			frameWidth, frameHeight := orientedDimensions(frameConfig.Width, frameConfig.Height, orientation)
+			if frameWidth != width || frameHeight != height {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+			}
+			img = applyEXIFOrientation(img, orientation)
+			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+				return fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
 			}
 			if xmpCrops != nil {
 				img = applyXMPCrop(img, xmpCrops[index])
@@ -441,7 +461,15 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				return err
 			}
 		}
-		if config.Width != width || config.Height != height {
+		orientation := uint16(1)
+		if options.AutoOrient {
+			orientation, err = readEXIFOrientation(data)
+			if err != nil {
+				return fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
+			}
+		}
+		frameWidth, frameHeight := orientedDimensions(config.Width, config.Height, orientation)
+		if frameWidth != width || frameHeight != height {
 			return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
 
@@ -456,6 +484,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if !supportedRasterFormat(format) {
 				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 			}
+			img = applyEXIFOrientation(img, orientation)
 			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 			}
@@ -496,11 +525,12 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyBasic || applyCrop || resizeFrames || timestampFace != nil || format != "jpeg" {
+		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || timestampFace != nil || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
 			}
+			img = applyEXIFOrientation(img, orientation)
 			if applyCrop {
 				img = applyXMPCrop(img, xmpCrops[index])
 			}

@@ -19,14 +19,14 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で回転を含む矩形を画素へ適用し、元と同じ解像度に再サンプル。プレビュー上の構図作成・編集UIとCamera RawのGeometry補正は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`で自然順に一覧表示し、キーフレーム評価を確認可能。選択UI、フィルター、コピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
-| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF/XMP日時や露出情報の読込、XMP数値値の個別編集に対応。メタデータ一括操作や日時シフトUI、Lens Taggerは未対応 | 一部 |
-| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で許可した131項目を編集し、全体設定と共通Sync IDを持つローカル補正・基本マスク形状をキーフレーム間で補間。JPEG/PNG/TIFFへのレンダーでは`--apply-xmp-basic`で基本8項目に加え、明示されたマスター/RGBポイントカーブを独自近似で画素反映し、クロップも任意適用。色温度、Camera Raw相当RAW現像、ローカル値・マスクの画素現像は未対応 | 一部 |
+| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF/XMP日時・露出・画像向きの読込、XMP数値値の個別編集に対応。メタデータ一括操作や日時シフトUI、Lens Taggerは未対応 | 一部 |
+| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で許可した131項目を編集し、全体設定と共通Sync IDを持つローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力（JPEG/PNG/TIFFや指定時のRAWプレビュー/現像画像）のレンダーでは`--apply-xmp-basic`で基本8項目に加え、明示されたマスター/RGBポイントカーブを独自近似で画素反映し、クロップも任意適用。色温度、Camera Raw相当RAW現像、ローカル値・マスクの画素現像は未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | 131個の全体数値項目を補間。初期化済みの共通Sync ID付きローカル補正・マスクの数値パラメーターと基本形状値も補間。ポイントトーンカーブとLook/Preset/PointColorsは先頭フレームから後続へコピー。Tone Curveのコピー元はLRTの説明で確認済み。範囲セレクター、ブラシ描線、ローカルカーブ、IDのないマスクは未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。RAW内蔵プレビュー/DNGLab現像と、任意でXMP Exposure/cropを解析に適用。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化できる。指標は独自定義で、LRTの曲線/UIや現像プレビューとは一致しない | 一部 |
-| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。XMP基本8項目/ポイントカーブ/クロップ、Deflicker、撮影日時焼き込みを任意適用。固定サイズの画像列、整数1–240 fps、`--long-edge`によるアスペクト比維持の縮小 | 一部 |
+| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMP基本8項目/ポイントカーブ/クロップ、Deflicker、撮影日時焼き込みを任意適用。整数1–240 fps、`--long-edge`によるアスペクト比維持の縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`で外部DNGLabにより主要RAW形式を現像し、その16-bit sRGB TIFF出力からレンダー可能。`--raw-preview`によるカメラ内プレビュー経路も維持。DNGLabは別途インストールが必要。Camera Raw/Lightroom設定の完全な適用やDNG変換は未実装 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--long-edge`で長辺の上限を指定して縮小可能。拡大や16:9等のプリセット、非圧縮TIFF中間画像は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks経由のH.264/H.265 MP4、ProRes 422/422 HQ MOV。Rec.2020、HDR、音声なし。入力画素はRGB 8-bitなのでProRes 10-bit出力も16-bit RAW精度を保持しない | 一部 |
@@ -64,7 +64,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 1. `.xmp`サイドカーをスキャンし、キーフレームと数値設定を確認する。
 2. JPEG/PNG/TIFF連番、RAW内蔵プレビュー、またはDNGLabで現像したRAWの明るさ曲線からキーフレーム候補を表示し、任意でXMPにマークする。
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
-4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはDNGLabで現像したRAWをMJPEG AVI、H.264/H.265 MP4、ProRes MOVにまとめ、必要に応じて`--long-edge`で縮小する。JPEG/PNG/TIFFには`--apply-xmp-basic`で基本8項目のXMP補正を近似適用できる。
+4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはDNGLabで現像したRAWをMJPEG AVI、H.264/H.265 MP4、ProRes MOVにまとめ、必要に応じて`--long-edge`で縮小する。XMP値未焼き込みのsRGB入力には`--apply-xmp-basic`で基本8項目と明示ポイントカーブを近似適用できる。
 5. レンダー時に簡易Deflickerを画素へ適用するか、JPEG/PNG/TIFFまたは選択したRAW入力の解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。RAW解析時は内蔵プレビューまたはDNGLab現像を選び、必要に応じてXMP Exposure/cropを反映する。
@@ -184,6 +184,9 @@ lrtl preview "D:\Timelapse\Developed" --output "D:\Timelapse\brightness.svg"
 # 対応RAWの埋め込みプレビューからMJPEG AVIを作成（RAW現像ではない）
 lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-preview.avi" --raw-preview
 
+# EXIFの向きを適用して動画化（回転・鏡像を反映）
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\oriented.mp4" --auto-orient
+
 # 対応RAWの埋め込みプレビューからH.264 MP4を作成（FFmpegが必要、RAW現像ではない）
 lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-preview.mp4" --raw-preview
 
@@ -239,6 +242,8 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 `--apply-xmp-basic`はExposure2012に加えてContrast2012、Highlights2012、Shadows2012、Whites2012、Blacks2012、Vibrance、Saturationを画像画素に近似適用します。後ろ7項目は-100〜100、露出は±32 stops以内である必要があります。`ToneCurvePV2012`とRGB別の明示ポイントカーブも読み、順序付きの整数点間をPCHIP補間した8-bit LUTとして適用します。表示済みsRGBの輝度選択マスク、LUT、彩度倍率による独立実装であり、Camera Rawのトーン応答や色管理を再現しません。ホワイトバランス、プリセット名だけのカーブ、Texture/Clarity、Dehaze、色別ミキサー、ローカル補正などは無視されます。Lightroom/Camera Rawで現像値を焼き込み済みの画像では同じ値を二重適用しないでください。`--apply-xmp-exposure`とは同時指定できません。JPEG/PNG/TIFFは再エンコードし、元画像とXMPは変更しません。
 
 `--apply-xmp-crop`は各サイドカーの`crs:HasCrop`、`CropTop/Left/Bottom/Right`、`CropAngle`を読み、回転した矩形クロップを適用して入力と同じ解像度に再サンプルします。クロップのないフレームはそのままです。空または範囲外の矩形はエラーにします。Camera RawのGeometry/遠近補正は再現しません。Lightroom等でキーフレームのクロップ値を保存し、`interpolate --write`で間を埋めてからこのオプションでレンダーできます。
+
+`--auto-orient`は入力画像、RAW内蔵プレビュー、またはDNGLab出力のEXIF Orientationを読み、回転と鏡像を画素へ適用してからXMPクロップ、色調補正、Deflicker、リサイズを行います。向き情報がないフレームはそのままです。向きを適用した後の全フレームは同じ幅と高さである必要があります。この処理は入力ファイルとメタデータを変更しません。
 
 `--timestamp-overlay`と`subtitles`は、各サイドカーの`exif:DateTimeOriginal`、`xmp:CreateDate`、`xmp:ModifyDate`の順で日時を探し、なければ画像内EXIFの撮影/作成/更新日時を使います。全フレームの日時が必要です。`subtitles`は各画像の撮影日時を、そのフレームが動画上に表示される区間のSRT字幕として書き出します。`--fps`は動画のフレームレートと合わせてください。既定の表示形式は`2006-01-02 15:04:05`で、`--timestamp-format`へGoの日時レイアウトを渡して変更できます。`render --timestamp-overlay`は日時を右下に焼き込み、埋め込みGoフォントを使うため外部フォントは不要です。任意テキストの透かしは未実装です。
 
