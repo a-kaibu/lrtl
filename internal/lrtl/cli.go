@@ -512,6 +512,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	noMarkJumps := set.Bool("no-mark-jumps", false, "do not mark camera-setting changes as 2*/3* keyframe pairs")
 	stretch := set.Float64("stretch", 0, "add LRT-style normalized Holy Grail curve stretch (-1.5 to +1.5)")
 	rotate := set.Float64("rotate", 0, "add LRT-style linear Holy Grail curve rotation (-4 to +4)")
+	autoShape := set.Bool("auto-shape", false, "search curve stretch and rotation using L1 smoothness scores")
 	reset := set.Bool("reset", false, "remove lrtl-managed Holy Grail compensation")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--stretch": true, "-stretch": true,
@@ -527,12 +528,16 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if *forceMarkJumps && *noMarkJumps {
 		return reportError(stderr, fmt.Errorf("--mark-jumps and --no-mark-jumps cannot be used together"))
 	}
-	useCurveOptions := false
+	explicitCurveOptions := false
 	set.Visit(func(parsed *flag.Flag) {
 		if parsed.Name == "stretch" || parsed.Name == "rotate" {
-			useCurveOptions = true
+			explicitCurveOptions = true
 		}
 	})
+	if *autoShape && explicitCurveOptions {
+		return reportError(stderr, fmt.Errorf("--auto-shape cannot be combined with --stretch or --rotate"))
+	}
+	useCurveOptions := *autoShape || explicitCurveOptions
 	if useCurveOptions && (math.IsNaN(*stretch) || math.IsInf(*stretch, 0) || math.IsNaN(*rotate) || math.IsInf(*rotate, 0) || *stretch < -1.5 || *stretch > 1.5 || *rotate < -4 || *rotate > 4) {
 		return reportError(stderr, fmt.Errorf("--stretch must be between -1.5 and +1.5 and --rotate between -4 and +4"))
 	}
@@ -546,7 +551,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	}
 	var curveOptions *HolyGrailCurveOptions
 	if useCurveOptions {
-		curveOptions = &HolyGrailCurveOptions{Stretch: *stretch, Rotate: *rotate}
+		curveOptions = &HolyGrailCurveOptions{Stretch: *stretch, Rotate: *rotate, Auto: *autoShape}
 	}
 	plan, err := buildHolyGrailPlanWithCurveOptions(frames, *ignoreAperture, *reset, *forceMarkJumps, *noMarkJumps, curveOptions)
 	if err != nil {
@@ -554,8 +559,11 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	}
 	changes := plan.Changes
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
-	if curveOptions != nil {
-		fmt.Fprintf(stdout, "Curve adjustments: stretch=%+.2f rotate=%+.2f\n", curveOptions.Stretch, curveOptions.Rotate)
+	if plan.CurveOptions != nil {
+		fmt.Fprintf(stdout, "Curve adjustments: stretch=%+.2f rotate=%+.2f\n", plan.CurveOptions.Stretch, plan.CurveOptions.Rotate)
+		if plan.AutoCurve {
+			fmt.Fprintln(stdout, "Curve adjustments selected automatically with the lrtl L1/Gaussian approximation.")
+		}
 	}
 	correctionUpdates := 0
 	jumpMarks := 0

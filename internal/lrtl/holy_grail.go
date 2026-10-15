@@ -26,6 +26,7 @@ type CameraExposure struct {
 type HolyGrailCurveOptions struct {
 	Stretch float64
 	Rotate  float64
+	Auto    bool
 }
 
 type HolyGrailChange struct {
@@ -43,9 +44,11 @@ type HolyGrailChange struct {
 }
 
 type HolyGrailPlan struct {
-	Changes    []HolyGrailChange
-	ManualMode bool
-	MarkJumps  bool
+	Changes      []HolyGrailChange
+	ManualMode   bool
+	MarkJumps    bool
+	CurveOptions *HolyGrailCurveOptions
+	AutoCurve    bool
 }
 
 func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error) {
@@ -102,6 +105,73 @@ func holyGrailCurveAdjustments(cameras []CameraExposure, options HolyGrailCurveO
 	if len(cameras) == 0 {
 		return adjustments
 	}
+	normalized := normalizedCameraExposureCurve(cameras)
+	for index := range cameras {
+		trend := float64(index)/float64(len(cameras)) - 0.5
+		adjustments[index] = normalized[index]*options.Stretch + trend*options.Rotate
+	}
+	return adjustments
+}
+
+func optimizeHolyGrailCurve(cameras []CameraExposure) HolyGrailCurveOptions {
+	options := HolyGrailCurveOptions{}
+	if len(cameras) < 2 {
+		return options
+	}
+	base := make([]float64, len(cameras))
+	minimum, maximum := cameras[0].Stops, cameras[0].Stops
+	for index := range cameras {
+		base[index] = cameras[0].Stops - cameras[index].Stops
+		minimum = math.Min(minimum, cameras[index].Stops)
+		maximum = math.Max(maximum, cameras[index].Stops)
+	}
+	if maximum-minimum <= 1e-12 {
+		return options
+	}
+	normalized := normalizedCameraExposureCurve(cameras)
+	trend := make([]float64, len(cameras))
+	for index := range cameras {
+		trend[index] = float64(index)/float64(len(cameras)) - 0.5
+	}
+	baseSmooth := smoothLogLuminance(base, 3)
+	normalizedSmooth := smoothLogLuminance(normalized, 3)
+	trendSmooth := smoothLogLuminance(trend, 3)
+
+	bestScore := math.Inf(1)
+	for step := 1; step <= 150; step++ {
+		candidate := float64(step)/50 - 1.5
+		score := 0.0
+		for index := range base {
+			residual := (base[index] - baseSmooth[index]) + candidate*(normalized[index]-normalizedSmooth[index])
+			score += math.Abs(residual)
+		}
+		if score < bestScore {
+			bestScore = score
+			options.Stretch = candidate
+		}
+	}
+
+	bestScore = math.Inf(1)
+	for step := 1; step <= 200; step++ {
+		candidate := float64(step)/25 - 4
+		score := 0.0
+		for index := range base {
+			smoothed := baseSmooth[index] + options.Stretch*normalizedSmooth[index] + candidate*trendSmooth[index]
+			score += math.Abs(smoothed)
+		}
+		if score < bestScore {
+			bestScore = score
+			options.Rotate = candidate
+		}
+	}
+	return options
+}
+
+func normalizedCameraExposureCurve(cameras []CameraExposure) []float64 {
+	values := make([]float64, len(cameras))
+	if len(cameras) == 0 {
+		return values
+	}
 	minimum, maximum := cameras[0].Stops, cameras[0].Stops
 	for _, camera := range cameras[1:] {
 		minimum = math.Min(minimum, camera.Stops)
@@ -109,14 +179,12 @@ func holyGrailCurveAdjustments(cameras []CameraExposure, options HolyGrailCurveO
 	}
 	span := maximum - minimum
 	if span <= 1e-12 {
-		return adjustments
+		return values
 	}
 	for index, camera := range cameras {
-		normalized := (camera.Stops-minimum)/span - 0.5
-		trend := float64(index)/float64(len(cameras)) - 0.5
-		adjustments[index] = normalized*options.Stretch + trend*options.Rotate
+		values[index] = (camera.Stops-minimum)/span - 0.5
 	}
-	return adjustments
+	return values
 }
 
 func holyGrailKeyframePlan(packet *XMPPacket, desiredRating int) (int, bool, string, error) {
@@ -195,6 +263,16 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 			}
 		}
 		plan.MarkJumps = !noMarkJumps && (forceMarkJumps || plan.ManualMode)
+	}
+	if !reset && curveOptions != nil {
+		resolvedOptions := *curveOptions
+		if resolvedOptions.Auto {
+			resolvedOptions = optimizeHolyGrailCurve(cameras)
+			plan.AutoCurve = true
+		}
+		resolvedOptions.Auto = false
+		plan.CurveOptions = &resolvedOptions
+		curveOptions = plan.CurveOptions
 	}
 	base := 0.0
 	compensations := make([]float64, len(frames))
