@@ -12,6 +12,14 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 状態の「一部」は該当機能の一部を実装済みですが、LRTと同等ではないことを示します。「未実装」は対応コマンドや処理がありません。「対象外」はLRTのライセンス区分にある制限をOSS版では再現しない項目です。
 
+### 到達度の要約
+
+- **単独で完了できる作業:** JPEG/PNG/TIFFの連番を並べ、追加ソフトなしでMJPEG AVIを生成できます。キーフレームと数値XMPの編集・補間、連番プレビュー、Deflicker、クロップ、字幕などもCLIで利用できます。
+- **LRT相当を目指して一部実装:** 画像列からの自動キーフレーム提案、Holy Grail補正、XMP値の画像適用、GUIでのフレーム選択・編集、MP4/MOV出力、RAW対応。これらは個々の経路が使えますが、LRTとの操作性・演算結果・対応形式の完全一致は確認できていません。
+- **到達していない範囲:** Camera Raw/Lightroomと同等のRAW現像、HDR処理、LRT Visual Previewと同等のプレビュー、未対応のマスク形式やGeometry補正は未実装または近似です。詳しい境界は下表と各コマンドの説明を参照してください。
+
+下表の「一部」はLRTLの基本処理が未完成という意味ではなく、LRTの対応機能全体との比較です。たとえば画像連番からの基本動画生成は達成済みですが、LRTの全コーデック・色深度・HDRとの同等性はありません。
+
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
@@ -104,7 +112,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ## インストール
 
-ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264/H.265 MP4とProRes MOV出力、動画からのフレーム抽出には外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAW現像とDNG変換には外部DNGLabが必要です（PATHに置くか`--dnglab`で指定）。FFmpegとDNGLabはlrtlに同梱しません。
+ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264/H.265 MP4とProRes MOV出力、動画からのフレーム抽出には外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAW現像とDNG変換には外部DNGLabが必要です（PATHに置くか`--dnglab`で指定）。FFmpegとDNGLabはlrtlに同梱しません。RAWデコーダー候補の[raw-go](https://github.com/vegidio/raw-go)はLibRawをCGOで静的リンクするためCツールチェーンが必要で、現行のPure Goビルド条件に合わず採用していません。LibRaw自体はLGPL-2.1またはCDDL 1.0で提供されています（[ライセンス説明](https://github.com/LibRaw/LibRaw#licensing)）。
 
 ```powershell
 go install github.com/a-kaibu/lrtl/cmd/lrtl@latest
