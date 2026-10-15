@@ -1253,13 +1253,6 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if *evenlySpaced && (*rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "" || *applyXMPExposure || *applyXMPBasic || *applyXMPCrop) {
 		return reportError(stderr, fmt.Errorf("image processing options cannot be combined with --evenly-spaced because that mode does not decode images"))
 	}
-	var curve []float64
-	if !*evenlySpaced {
-		curve, err = analyzeLuminanceSequenceWithInputOptions(frames, inputOptions)
-		if err != nil {
-			return reportError(stderr, err)
-		}
-	}
 	frameCount := len(frames)
 	if frameCount < 1 {
 		return reportError(stderr, fmt.Errorf("sequence contains no images"))
@@ -1305,6 +1298,18 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 			selectionAnchors = append(selectionAnchors, index)
 		}
 	}
+	lrtMeasurements, hasLRTMeasurements, err := readLRTKeyframeMeasurements(frames, packets)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	useLRTMeasurements := hasLRTMeasurements && !*applyXMPExposure && !*applyXMPBasic && !*applyXMPCrop && !*rawPreview && !*rawDevelop && strings.TrimSpace(*dnglab) == ""
+	var curve []float64
+	if !*evenlySpaced && (*luminanceDeviation || (!countSpecified && !useLRTMeasurements)) {
+		curve, err = analyzeLuminanceSequenceWithInputOptions(frames, inputOptions)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
 	availableSuggestions := frameCount - 2
 	for _, index := range selectionAnchors {
 		if index > 0 && index < frameCount-1 {
@@ -1316,11 +1321,18 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	}
 	suggestionCount := *count
 	autoTargetCount := 0
+	countSource := ""
 	if !countSpecified {
 		if *evenlySpaced {
 			suggestionCount = 5
 		} else {
-			autoTargetCount = min(20, estimateAutoKeyframeCount(curve, holyGrailMarkers))
+			countMeasurements := curve
+			countSource = "image luminance"
+			if useLRTMeasurements {
+				countMeasurements = lrtMeasurements
+				countSource = "LRT XMP (lrt:ExternalExposureDefault / 4)"
+			}
+			autoTargetCount = min(20, estimateAutoKeyframeCount(countMeasurements, holyGrailMarkers))
 			suggestionCount = autoTargetCount
 			if !*replaceExisting {
 				suggestionCount = max(0, suggestionCount-existingTargetRating)
@@ -1332,9 +1344,9 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if !countSpecified && !*evenlySpaced {
 		if *replaceExisting {
-			fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; replacing %d existing %d-star keyframe(s), suggesting up to %d\n", autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
+			fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula, source: %s): %d total; replacing %d existing %d-star keyframe(s), suggesting up to %d\n", countSource, autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
 		} else {
-			fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula): %d total; preserving %d existing %d-star keyframe(s), suggesting up to %d new\n", autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
+			fmt.Fprintf(stdout, "Keyframe quantity estimate (LRT formula, source: %s): %d total; preserving %d existing %d-star keyframe(s), suggesting up to %d new\n", countSource, autoTargetCount, existingTargetRating, *ratingOption, suggestionCount)
 		}
 	}
 	if suggestionCount == 0 {

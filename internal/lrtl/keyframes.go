@@ -219,7 +219,9 @@ func estimateAutoKeyframeCount(logLuminance []float64, holyGrailMarkers []bool) 
 	// LRT calculates in float32 here after dividing the luminance range by 0.1.
 	// Keep that rounding step so values near an integer boundary match its UI.
 	frameFactor := float32(1) + float32(1000)/float32(frameCount)/float32(10)
-	count := int((maximum - minimum) / 0.1 * float64(frameFactor))
+	// The installed Java helper divides by the float32 value 0.1, then
+	// multiplies by its float32 frame factor.
+	count := int((maximum - minimum) / float64(float32(0.1)) * float64(frameFactor))
 	if minimumSpacingCount := span / 250; count < minimumSpacingCount {
 		count = minimumSpacingCount
 	}
@@ -233,6 +235,35 @@ func estimateAutoKeyframeCount(logLuminance []float64, holyGrailMarkers []bool) 
 		count = 2
 	}
 	return count
+}
+
+// readLRTKeyframeMeasurements returns the per-frame values that the installed
+// LRT keyframe helper reads from ExternalExposureDefault / 4. The boolean is
+// false when any frame lacks a finite value, allowing callers to use image
+// luminance as a fallback.
+func readLRTKeyframeMeasurements(frames []Frame, packets []*XMPPacket) ([]float64, bool, error) {
+	if len(frames) == 0 || len(frames) != len(packets) {
+		return nil, false, nil
+	}
+	values := make([]float64, len(packets))
+	for index, packet := range packets {
+		if packet == nil {
+			return nil, false, nil
+		}
+		text, found, err := packet.GetScalar("lrt:ExternalExposureDefault")
+		if err != nil {
+			return nil, false, fmt.Errorf("%s: %w", frames[index].OutputSidecar(), err)
+		}
+		if !found {
+			return nil, false, nil
+		}
+		value, valid := scalarNumber(text)
+		if !valid {
+			return nil, false, nil
+		}
+		values[index] = value / 4
+	}
+	return values, true, nil
 }
 
 // selectLRTWizardKeyframeIndices follows the installed keyframe helper's
