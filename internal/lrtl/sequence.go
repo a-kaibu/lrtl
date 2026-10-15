@@ -182,7 +182,7 @@ func loadFramePacket(frame Frame) (*XMPPacket, bool, error) {
 			return nil, false, err
 		}
 	}
-	data, found, err := readEmbeddedJPEGXMP(frame.Image)
+	data, found, err := readEmbeddedImageXMP(frame.Image)
 	if err != nil {
 		return nil, false, err
 	}

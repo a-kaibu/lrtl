@@ -39,7 +39,7 @@ func PacketForImage(imagePath, sidecarPath string) (*XMPPacket, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	data, found, err := readEmbeddedJPEGXMP(imagePath)
+	data, found, err := readEmbeddedImageXMP(imagePath)
 	if err != nil {
 		return nil, err
 	}
