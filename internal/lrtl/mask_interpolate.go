@@ -862,7 +862,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
 			if len(values) > 0 || hasLuminanceRangeChange {
 				templateCorrection, templateMask := (*etree.Element)(nil), (*etree.Element)(nil)
-				if !present && !keyframeSet[target] {
+				if !keyframeSet[target] && (!present || !maskTransitionNodeHasTemplate(currentNode, key)) {
 					template := maskTransitionTemplate(indexes, keyframeIndices, key, target)
 					templateCorrection, templateMask = template.correctionItem, template.maskItem
 				}
