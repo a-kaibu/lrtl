@@ -32,7 +32,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks経由のH.264/H.265 MP4、ProRes 422/422 HQ MOV。Rec.2020、HDR、音声なし。入力画素はRGB 8-bitなのでProRes 10-bit出力も16-bit RAW精度を保持しない | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --timestamp-overlay`で撮影日時を各動画フレームへ焼き込み、`subtitles`で同じ日時情報からSRT字幕を出力。フレームレートと表示形式を指定可能。任意テキストの透かしは未実装 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | 未実装 | 未実装 |
-| 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | 未実装 | 未実装 |
+| 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、dry-runに対応。撮影動画からの静止画取り込みとDNG変換は未実装 | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | 未実装 | 未実装 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | 未実装 | 未実装 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | CLIのみ | 未実装 |
@@ -71,6 +71,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 8. XMPサイドカーをZIPスナップショットに保存し、一覧表示とプレビュー後の復元を行う。
 9. フレームのEXIF/XMP撮影日時を動画タイミングに合わせたSRT字幕に出力する。
 10. 長期連番を輝度・コントラスト・色相で分析し、選択した画像だけを動画にする。
+11. カード/フォルダーから写真とXMPを取り込み、必要に応じて日時順へ並べたりJPEGを除外したりする。
 
 動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。キーフレーム間のXMP値も反映する場合は、XMP現像値をまだ焼き込んでいない画像に対して`interpolate --write`後に`render --apply-xmp-basic`を使います。このオプションはExposure2012、Contrast2012、Highlights2012、Shadows2012、Whites2012、Blacks2012、Vibrance、Saturationの8項目と、XMPに明示されたマスター/RGBポイントカーブを表示済みsRGB画像へ独自近似で適用します。Lightroom/Camera Rawと画素値が一致する現像機能ではなく、WB、プリセット名だけのカーブ、色別調整、ローカル補正などは適用しません。既にLightroom/Camera Rawで同じ現像値を焼き込んで書き出したJPEG等には再適用せず、通常の`render`を使ってください。RAW連番を直接レンダーするには外部DNGLabを使う`--raw-develop`を指定します。DNGLabのRAW対応はカメラ形式ごとに異なり、DNGLabはalpha版です。`--raw-preview`は内蔵プレビューを使う別経路です。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`だけをレンダー入力画像に近似適用します。`--apply-xmp-basic`には同じ露出値が含まれるため、両方は同時に指定できません。DNGLabの現像パラメーターはCamera Rawと一致せず、サイドカーにある他の現像値もRAW現像には使いません。Deflickerはレンダー時に出力画素へ適用できます。これらのレンダー操作は元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正をXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。MP4/MOV出力は外部FFmpegを必要とし、入力画像をGoで8-bit RGBへデコードしてから選択したエンコーダーへ渡します。`.mp4`の既定はH.264、`.mov`の既定はProRes 422です。`--codec h265`でH.265、`--codec prores-hq`でProRes 422 HQを選べます。FFmpegにそれぞれ`libx264`、`libx265`、`prores_ks`エンコーダーが必要です。
 
@@ -96,9 +97,17 @@ go build -o lrtl.exe ./cmd/lrtl
 
 ## 使い方
 
+`import`は指定フォルダーの対応画像と、見つかった同名XMPサイドカーを出力フォルダーへコピーします。`--recursive`でサブフォルダーも検索し、元フォルダー名を出力名に付けて衝突を避けます。`--sort capture-time`はXMP/EXIF撮影日時順に並ぶ連番を付け、`--rename-by-date`は日時をファイル名に使います。同じ秒の撮影には連番を追加します。`--skip-jpeg`はJPEG/JPGを除外し、`--dry-run`はコピー予定だけを表示します。撮影日時順・日時リネームには全画像の撮影日時が必要です。動画からのフレーム抽出とDNG変換は未対応です。
+
 ```powershell
 # 画像列、サイドカー、キーフレームを確認
 lrtl scan "D:\Timelapse\Sequence"
+
+# カメラカードからRAWだけを撮影日時順で取り込む
+lrtl import "E:\DCIM" --output "D:\Timelapse\Sequence" --recursive --sort capture-time --skip-jpeg
+
+# 取り込み名も撮影日時へ変更し、実行前に内容を確認
+lrtl import "E:\DCIM" --output "D:\Timelapse\SequenceByDate" --recursive --skip-jpeg --rename-by-date --dry-run
 
 # XMPサイドカーのスナップショットを作成・一覧表示
 lrtl snapshot create "D:\Timelapse\Sequence" --name before-edit
@@ -271,7 +280,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264/H.265 MP4とProRes MOVに対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、回転を含むXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、Geometry補正、マスク補正値の画素現像は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と他のXMP値のRAW画素への反映は未実装 |
-| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProResと日時オーバーレイを実装。DNxHR、モーションブラー、取り込み、GUIは未着手 |
+| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProRes、日時オーバーレイ、写真フォルダーからの画像/XMP取り込みを実装。動画からのフレーム取り込み、DNxHR、モーションブラー、GUIは未着手 |
 
 ## 機能調査の出典
 

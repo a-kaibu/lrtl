@@ -65,6 +65,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		return runScan(arguments[1], stdout, stderr)
+	case "import":
+		return runImport(arguments[1:], stdout, stderr)
 	case "mark":
 		return runMark(arguments[1:], stdout, stderr)
 	case "set":
@@ -101,6 +103,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
+	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--dry-run]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
@@ -115,6 +118,49 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
 	fmt.Fprintln(writer, "  snapshot restore DIRECTORY FILE.zip [--write] [--no-backup] [--allow-moved]")
+}
+
+func runImport(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("import", stderr)
+	output := set.String("output", "", "destination image sequence directory")
+	sortBy := set.String("sort", "name", "image order: name or capture-time")
+	recursive := set.Bool("recursive", false, "include images in subdirectories")
+	skipJPEG := set.Bool("skip-jpeg", false, "omit JPEG and JPG images (keep RAW and other formats)")
+	renameByDate := set.Bool("rename-by-date", false, "rename images to capture time and sort by capture time")
+	dryRun := set.Bool("dry-run", false, "show planned copies without writing files")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--output": true, "-output": true,
+		"--sort": true, "-sort": true,
+	})); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 || *output == "" {
+		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--dry-run]"))
+	}
+	sortValue := strings.ToLower(strings.TrimSpace(*sortBy))
+	sortWasSpecified := false
+	set.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "sort" {
+			sortWasSpecified = true
+		}
+	})
+	if sortValue != "name" && sortValue != "capture-time" {
+		return reportError(stderr, fmt.Errorf("--sort must be name or capture-time: %q", *sortBy))
+	}
+	if *renameByDate && sortWasSpecified && sortValue != "capture-time" {
+		return reportError(stderr, fmt.Errorf("--rename-by-date requires --sort capture-time"))
+	}
+	options := ImportOptions{
+		Recursive: *recursive, SkipJPEG: *skipJPEG,
+		SortByCapture: sortValue == "capture-time" || *renameByDate,
+		RenameByDate:  *renameByDate, DryRun: *dryRun,
+	}
+	if err := ImportSequence(set.Arg(0), *output, options, stdout); err != nil {
+		return reportError(stderr, err)
+	}
+	return 0
 }
 
 func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
