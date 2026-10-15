@@ -319,7 +319,11 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			return fmt.Errorf("motion blur frame-buffer estimate exceeds 768 MiB; reduce --motion-blur or use --long-edge")
 		}
 		estimatedBytes := outputPixels * bytesPerOutputPixel
-		if inputPixels > (maxMotionBlurWorkingSet-estimatedBytes)/8 {
+		inputBytesPerPixel := uint64(32)
+		if options.ApplyXMPBasic {
+			inputBytesPerPixel = 64
+		}
+		if inputPixels > (maxMotionBlurWorkingSet-estimatedBytes)/inputBytesPerPixel {
 			return fmt.Errorf("motion blur frame-buffer estimate exceeds 768 MiB; reduce --motion-blur or use --long-edge")
 		}
 	}

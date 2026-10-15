@@ -104,17 +104,7 @@ func applyExposureGainFrame(img image.Image, gain float64) image.Image {
 	result := image.NewNRGBA64(img.Bounds())
 	var lookup [65536]uint16
 	for i := range lookup {
-		encoded := float64(i) / 65535
-		linear := encoded / 12.92
-		if encoded > .04045 {
-			linear = math.Pow((encoded+.055)/1.055, 2.4)
-		}
-		linear = math.Max(0, math.Min(1, linear*gain))
-		value := linear * 12.92
-		if linear > .0031308 {
-			value = 1.055*math.Pow(linear, 1/2.4) - .055
-		}
-		lookup[i] = uint16(math.Round(value * 65535))
+		lookup[i] = encodeLinearSRGB16(srgb16ToLinear[i] * gain)
 	}
 	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
 		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
@@ -125,7 +115,7 @@ func applyExposureGainFrame(img image.Image, gain float64) image.Image {
 	return result
 }
 
-// Basic exposure-only edits need not pass through the legacy 8-bit tone LUTs.
+// Exposure-only edits use a LUT; other edits use the shared 16-bit tone path.
 func applyXMPBasicFrame(img image.Image, adjustments xmpBasicAdjustments) image.Image {
 	other := adjustments
 	other.exposure = 0

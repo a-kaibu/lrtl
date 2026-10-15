@@ -10,7 +10,7 @@ import (
 	"github.com/beevik/etree"
 )
 
-type localMaskKind uint8
+type localMaskKind uint16
 
 const (
 	localMaskGradient localMaskKind = iota + 1
@@ -19,7 +19,7 @@ const (
 	localMaskColorRange
 )
 
-type localMaskBlendMode uint8
+type localMaskBlendMode uint16
 
 const (
 	// Camera Raw serializes Add as 0 and Intersect as 1.
@@ -38,9 +38,9 @@ type xmpLocalCorrection struct {
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
 	colorGrading                            xmpColorGrading
-	mainCurve                               [256]uint8
+	mainCurve                               toneCurveTable
 	hasMainCurve                            bool
-	channelCurve                            [3][256]uint8
+	channelCurve                            [3]toneCurveTable
 	hasChannelCurve                         [3]bool
 	amount                                  float64
 	masks                                   []xmpLocalMask
@@ -192,7 +192,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 	for _, name := range []string{"ExtendedMainCurve", "ExtendedRedCurve", "ExtendedGreenCurve", "ExtendedBlueCurve"} {
 		if hasLocalToneCurveProperty(element, name) {
 			// Extended point curves use an HDR-domain representation that the
-			// current 8-bit sRGB LUT cannot preserve.
+			// current bounded SDR sRGB pipeline cannot preserve.
 			return correction, false, nil
 		}
 	}
@@ -701,7 +701,7 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 	}
 	current := img
 	for _, correction := range corrections {
-		var textureDetail, clarityDetail, dehazeDetail, sharpnessDetail []int8
+		var textureDetail, clarityDetail, dehazeDetail, sharpnessDetail []float32
 		if correction.dehaze != 0 {
 			dehazeDetail = xmpLuminanceDetail(current, xmpDehazeRadius(width, height))
 		}
@@ -714,12 +714,12 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 		if correction.sharpness != 0 {
 			sharpnessDetail = xmpLuminanceDetail(current, xmpSharpenRadius(width, height, 1))
 		}
-		result := image.NewNRGBA(bounds)
+		result := image.NewNRGBA64(bounds)
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				pixel := color.NRGBAModel.Convert(current.At(x, y)).(color.NRGBA)
-				maskLuminance := 0.2126*srgb8ToLinear[pixel.R] + 0.7152*srgb8ToLinear[pixel.G] + 0.0722*srgb8ToLinear[pixel.B]
-				pixelRGB := [3]float64{float64(pixel.R) / 255, float64(pixel.G) / 255, float64(pixel.B) / 255}
+				pixel := color.NRGBA64Model.Convert(current.At(x, y)).(color.NRGBA64)
+				maskLuminance := 0.2126*srgb16ToLinear[pixel.R] + 0.7152*srgb16ToLinear[pixel.G] + 0.0722*srgb16ToLinear[pixel.B]
+				pixelRGB := [3]float64{float64(pixel.R) / 65535, float64(pixel.G) / 65535, float64(pixel.B) / 65535}
 				weight := correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance, pixelRGB) * correction.amount
 				redGain, greenGain, blueGain := 1.0, 1.0, 1.0
 				if correction.hasWhiteBalance {
@@ -728,9 +728,9 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 					greenGain += (correction.whiteBalance[1] - 1) * blend
 					blueGain += (correction.whiteBalance[2] - 1) * blend
 				}
-				red := srgb8ToLinear[pixel.R] * redGain
-				green := srgb8ToLinear[pixel.G] * greenGain
-				blue := srgb8ToLinear[pixel.B] * blueGain
+				red := srgb16ToLinear[pixel.R] * redGain
+				green := srgb16ToLinear[pixel.G] * greenGain
+				blue := srgb16ToLinear[pixel.B] * blueGain
 				if correction.exposure != 0 {
 					gain := math.Exp2(correction.exposure * weight)
 					red, green, blue = red*gain, green*gain, blue*gain
@@ -753,7 +753,7 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 				}
 				if correction.texture != 0 || correction.clarity != 0 {
 					index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
-					var fineDetail, broadDetail int8
+					var fineDetail, broadDetail float32
 					if textureDetail != nil {
 						fineDetail = textureDetail[index]
 					}
@@ -801,27 +801,27 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 				if correction.toningSaturation > 0 {
 					red, green, blue = applyLocalToningColor(red, green, blue, correction.toningHue, correction.toningSaturation, weight)
 				}
-				red8, green8, blue8 := encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
+				red16, green16, blue16 := encodeLinearSRGB16(red), encodeLinearSRGB16(green), encodeLinearSRGB16(blue)
 				curveBlend := math.Max(0, math.Min(1, weight))
 				if correction.hasMainCurve {
-					red8 = blendLocalCurve(red8, correction.mainCurve, curveBlend)
-					green8 = blendLocalCurve(green8, correction.mainCurve, curveBlend)
-					blue8 = blendLocalCurve(blue8, correction.mainCurve, curveBlend)
+					red16 = blendLocalCurve(red16, correction.mainCurve, curveBlend)
+					green16 = blendLocalCurve(green16, correction.mainCurve, curveBlend)
+					blue16 = blendLocalCurve(blue16, correction.mainCurve, curveBlend)
 				}
 				if correction.hasChannelCurve[0] {
-					red8 = blendLocalCurve(red8, correction.channelCurve[0], curveBlend)
+					red16 = blendLocalCurve(red16, correction.channelCurve[0], curveBlend)
 				}
 				if correction.hasChannelCurve[1] {
-					green8 = blendLocalCurve(green8, correction.channelCurve[1], curveBlend)
+					green16 = blendLocalCurve(green16, correction.channelCurve[1], curveBlend)
 				}
 				if correction.hasChannelCurve[2] {
-					blue8 = blendLocalCurve(blue8, correction.channelCurve[2], curveBlend)
+					blue16 = blendLocalCurve(blue16, correction.channelCurve[2], curveBlend)
 				}
 				if correction.colorGrading.active {
-					red8, green8, blue8 = applyXMPColorGrading(red8, green8, blue8, correction.colorGrading, curveBlend)
+					red16, green16, blue16 = applyXMPColorGrading(red16, green16, blue16, correction.colorGrading, curveBlend)
 				}
-				result.SetNRGBA(x, y, color.NRGBA{
-					R: red8, G: green8, B: blue8, A: pixel.A,
+				result.SetNRGBA64(x, y, color.NRGBA64{
+					R: red16, G: green16, B: blue16, A: pixel.A,
 				})
 			}
 		}
@@ -830,8 +830,8 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 	return current
 }
 
-func blendLocalCurve(input uint8, curve [256]uint8, amount float64) uint8 {
-	return uint8(math.Round(float64(input)*(1-amount) + float64(curve[input])*amount))
+func blendLocalCurve(input uint16, curve toneCurveTable, amount float64) uint16 {
+	return uint16(math.Round(float64(input)*(1-amount) + float64(curve.sample(input))*amount))
 }
 
 func applyLocalToningColor(red, green, blue, hue, saturation, weight float64) (float64, float64, float64) {
@@ -843,11 +843,11 @@ func applyLocalToningColor(red, green, blue, hue, saturation, weight float64) (f
 	if hue < 0 {
 		hue += 360
 	}
-	red8, green8, blue8 := encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
-	redSRGB, greenSRGB, blueSRGB := float64(red8)/255, float64(green8)/255, float64(blue8)/255
+	red16, green16, blue16 := encodeLinearSRGB16(red), encodeLinearSRGB16(green), encodeLinearSRGB16(blue)
+	redSRGB, greenSRGB, blueSRGB := float64(red16)/65535, float64(green16)/65535, float64(blue16)/65535
 	_, _, luminance := srgbToHSL(redSRGB, greenSRGB, blueSRGB)
 	tintRed, tintGreen, tintBlue := hslToSRGB(hue, 1, luminance)
-	return srgb8ToLinear[encodeSRGBByte(redSRGB*(1-blend)+tintRed*blend)],
-		srgb8ToLinear[encodeSRGBByte(greenSRGB*(1-blend)+tintGreen*blend)],
-		srgb8ToLinear[encodeSRGBByte(blueSRGB*(1-blend)+tintBlue*blend)]
+	return srgb16ToLinear[encodeSRGB16(redSRGB*(1-blend)+tintRed*blend)],
+		srgb16ToLinear[encodeSRGB16(greenSRGB*(1-blend)+tintGreen*blend)],
+		srgb16ToLinear[encodeSRGB16(blueSRGB*(1-blend)+tintBlue*blend)]
 }

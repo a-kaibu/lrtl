@@ -328,4 +328,32 @@ func TestRealFFmpegProResRetainsMoreThan8BitGradation(t *testing.T) {
 		t.Fatalf("only %d distinct gray levels survive the actual ProRes encode/decode", len(unique))
 	}
 	t.Logf("actual ProRes encode/decode: %d distinct levels in the 10-bit gradient", len(unique))
+	writeTestXMP(t, frames[0].Image, map[string]string{
+		"crs:Contrast2012": "-10", "crs:Saturation": "20", "crs:ToneCurvePV2012": "0, 0 255, 255",
+		"crs:Sharpness": "10", "crs:LuminanceSmoothing": "10", "crs:ColorNoiseReduction": "10",
+	})
+	frames, err = DiscoverSequence(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output = filepath.Join(dir, "edited.mov")
+	if err := RenderSequence(frames, output, RenderOptions{FPS: 24, Quality: 90, Codec: "prores-hq", FFmpegPath: ffmpeg, ApplyXMPBasic: true}); err != nil {
+		t.Fatal(err)
+	}
+	data, err = exec.Command(ffmpeg, "-v", "error", "-i", output, "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "gray10le", "pipe:1").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) != 1024*128*2 {
+		t.Fatalf("edited decoded size=%d", len(data))
+	}
+	unique = map[uint16]bool{}
+	row = data[64*1024*2 : 65*1024*2]
+	for x := 0; x < 1024; x++ {
+		unique[binary.LittleEndian.Uint16(row[x*2:])] = true
+	}
+	if len(unique) < 512 {
+		t.Fatalf("only %d edited gray levels survive ProRes", len(unique))
+	}
+	t.Logf("actual ProRes with XMP contrast/saturation/curve/sharpening/denoise: %d distinct levels", len(unique))
 }

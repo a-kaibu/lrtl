@@ -44,9 +44,9 @@ type xmpBasicAdjustments struct {
 	parametric           xmpParametricCurve
 	vibrance             float64
 	saturation           float64
-	masterCurve          [256]uint8
+	masterCurve          toneCurveTable
 	hasMaster            bool
-	channelCurve         [3][256]uint8
+	channelCurve         [3]toneCurveTable
 	hasChannel           [3]bool
 	colorMix             [8]xmpHSLColorAdjustment
 	hasColorMix          bool
@@ -393,8 +393,8 @@ func approximateTemperatureRGB(temperature float64) [3]float64 {
 	}
 }
 
-func readXMPToneCurve(packet *XMPPacket, name string) ([256]uint8, bool, error) {
-	var empty [256]uint8
+func readXMPToneCurve(packet *XMPPacket, name string) (toneCurveTable, bool, error) {
+	var empty toneCurveTable
 	uri, local, err := expandedName("crs:" + name)
 	if err != nil {
 		return empty, false, err
@@ -505,7 +505,7 @@ func toneCurveSequenceElement(property *etree.Element) *etree.Element {
 	return sequence
 }
 
-func readXMPLocalToneCurve(correction *etree.Element, name string) ([256]uint8, bool, error) {
+func readXMPLocalToneCurve(correction *etree.Element, name string) (toneCurveTable, bool, error) {
 	var property *etree.Element
 	var attribute *etree.Attr
 	for index := range correction.Attr {
@@ -524,7 +524,7 @@ func readXMPLocalToneCurve(correction *etree.Element, name string) ([256]uint8, 
 		}
 	}
 	if property == nil && attribute == nil {
-		return [256]uint8{}, false, nil
+		return toneCurveTable{}, false, nil
 	}
 	return readXMPToneCurveProperty(name, property, attribute)
 }
@@ -544,8 +544,8 @@ func hasLocalToneCurveProperty(correction *etree.Element, name string) bool {
 	return false
 }
 
-func readXMPToneCurveProperty(name string, property *etree.Element, attribute *etree.Attr) ([256]uint8, bool, error) {
-	var empty [256]uint8
+func readXMPToneCurveProperty(name string, property *etree.Element, attribute *etree.Attr) (toneCurveTable, bool, error) {
+	var empty toneCurveTable
 	points, err := parseXMPToneCurveProperty(name, property, attribute)
 	if err != nil {
 		return empty, false, err
@@ -632,8 +632,8 @@ func toneCurveEndpointSlope(firstWidth, secondWidth, firstDelta, secondDelta flo
 	return slope
 }
 
-func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
-	var table [256]uint8
+func makeToneCurveTable(points []toneCurvePoint) toneCurveTable {
+	var table toneCurveTable
 	widths := make([]float64, len(points)-1)
 	deltas := make([]float64, len(points)-1)
 	for index := range widths {
@@ -651,27 +651,14 @@ func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
 			slopes[index] = toneCurveSlope(widths[index-1], widths[index], deltas[index-1], deltas[index])
 		}
 	}
-	segment := 0
-	for input := 0; input < 256; input++ {
-		x := float64(input)
-		if x <= points[0].x {
-			table[input] = uint8(math.Round(points[0].y))
-			continue
-		}
-		if x >= points[len(points)-1].x {
-			table[input] = uint8(math.Round(points[len(points)-1].y))
-			continue
-		}
-		for segment+1 < len(points)-1 && x > points[segment+1].x {
-			segment++
-		}
-		width := widths[segment]
-		t := (x - points[segment].x) / width
-		t2, t3 := t*t, t*t*t
-		value := (2*t3-3*t2+1)*points[segment].y + (t3-2*t2+t)*width*slopes[segment] +
-			(-2*t3+3*t2)*points[segment+1].y + (t3-t2)*width*slopes[segment+1]
-		table[input] = uint8(math.Round(math.Max(0, math.Min(255, value))))
+	table.first, table.last = points[0], points[len(points)-1]
+	table.segments = make([]toneCurveSegment, len(widths))
+	for i, width := range widths {
+		y0, y1 := points[i].y, points[i+1].y
+		m0, m1 := width*slopes[i], width*slopes[i+1]
+		table.segments[i] = toneCurveSegment{start: points[i].x, width: width, a: 2*y0 - 2*y1 + m0 + m1, b: -3*y0 + 3*y1 - 2*m0 - m1, c: m0, d: y0}
 	}
+
 	return table
 }
 
@@ -747,23 +734,23 @@ func applyParametricToneCurve(luminance float64, curve xmpParametricCurve) float
 		curve.lights/100*lightWeight + curve.highlights/100*highlightWeight)
 	return math.Max(0, math.Min(1, luminance+delta))
 }
-func encodeLinearSRGB(value float64) uint8 {
+func encodeLinearSRGB16(value float64) uint16 {
 	value = math.Max(0, math.Min(1, value))
 	encoded := 12.92 * value
 	if value > 0.0031308 {
 		encoded = 1.055*math.Pow(value, 1.0/2.4) - 0.055
 	}
-	return uint8(math.Round(encoded * 255))
+	return uint16(math.Round(encoded * 65535))
 }
 
-func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGBA {
+func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGBA64 {
 	bounds := img.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
-	result := image.NewNRGBA(bounds)
+	result := image.NewNRGBA64(bounds)
 	exposure := math.Exp2(adjustments.exposure)
 	saturation := 1 + adjustments.saturation/100
 	dehazeSaturation := 1 + adjustments.dehaze/100*0.15
-	var textureDetail, clarityDetail, dehazeDetail []int8
+	var textureDetail, clarityDetail, dehazeDetail []float32
 	if adjustments.dehaze != 0 {
 		dehazeDetail = xmpLuminanceDetail(img, xmpDehazeRadius(width, height))
 	}
@@ -775,14 +762,14 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 	}
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			pixel := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
+			pixel := color.NRGBA64Model.Convert(img.At(x, y)).(color.NRGBA64)
 			redGain, greenGain, blueGain := 1.0, 1.0, 1.0
 			if adjustments.hasWhiteBalance {
 				redGain, greenGain, blueGain = adjustments.whiteBalance[0], adjustments.whiteBalance[1], adjustments.whiteBalance[2]
 			}
-			red := srgb8ToLinear[pixel.R] * redGain * exposure
-			green := srgb8ToLinear[pixel.G] * greenGain * exposure
-			blue := srgb8ToLinear[pixel.B] * blueGain * exposure
+			red := srgb16ToLinear[pixel.R] * redGain * exposure
+			green := srgb16ToLinear[pixel.G] * greenGain * exposure
+			blue := srgb16ToLinear[pixel.B] * blueGain * exposure
 			luminance := 0.2126*red + 0.7152*green + 0.0722*blue
 			adjustedLuminance := basicAdjustedLuminance(luminance, adjustments)
 			if adjustments.dehaze != 0 {
@@ -791,7 +778,7 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			}
 			if adjustments.texture != 0 || adjustments.clarity != 0 {
 				index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
-				var fineDetail, broadDetail int8
+				var fineDetail, broadDetail float32
 				if textureDetail != nil {
 					fineDetail = textureDetail[index]
 				}
@@ -814,29 +801,29 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 				green = adjustedLuminance + (green-adjustedLuminance)*scale
 				blue = adjustedLuminance + (blue-adjustedLuminance)*scale
 			}
-			red8, green8, blue8 := encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
+			red16, green16, blue16 := encodeLinearSRGB16(red), encodeLinearSRGB16(green), encodeLinearSRGB16(blue)
 			if adjustments.hasMaster {
-				red8 = adjustments.masterCurve[red8]
-				green8 = adjustments.masterCurve[green8]
-				blue8 = adjustments.masterCurve[blue8]
+				red16 = adjustments.masterCurve.sample(red16)
+				green16 = adjustments.masterCurve.sample(green16)
+				blue16 = adjustments.masterCurve.sample(blue16)
 			}
 			if adjustments.hasChannel[0] {
-				red8 = adjustments.channelCurve[0][red8]
+				red16 = adjustments.channelCurve[0].sample(red16)
 			}
 			if adjustments.hasChannel[1] {
-				green8 = adjustments.channelCurve[1][green8]
+				green16 = adjustments.channelCurve[1].sample(green16)
 			}
 			if adjustments.hasChannel[2] {
-				blue8 = adjustments.channelCurve[2][blue8]
+				blue16 = adjustments.channelCurve[2].sample(blue16)
 			}
 			if adjustments.hasColorMix {
-				red8, green8, blue8 = applyXMPHSLColorMix(red8, green8, blue8, adjustments.colorMix)
+				red16, green16, blue16 = applyXMPHSLColorMix(red16, green16, blue16, adjustments.colorMix)
 			}
 			if adjustments.colorGrading.active {
-				red8, green8, blue8 = applyXMPColorGrading(red8, green8, blue8, adjustments.colorGrading, 1)
+				red16, green16, blue16 = applyXMPColorGrading(red16, green16, blue16, adjustments.colorGrading, 1)
 			}
-			result.SetNRGBA(x, y, color.NRGBA{
-				R: red8, G: green8, B: blue8, A: pixel.A,
+			result.SetNRGBA64(x, y, color.NRGBA64{
+				R: red16, G: green16, B: blue16, A: pixel.A,
 			})
 		}
 	}
@@ -856,12 +843,12 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 	return result
 }
 
-func applyXMPColorGrading(red8, green8, blue8 uint8, grading xmpColorGrading, amount float64) (uint8, uint8, uint8) {
+func applyXMPColorGrading(red16, green16, blue16 uint16, grading xmpColorGrading, amount float64) (uint16, uint16, uint16) {
 	amount = math.Max(0, math.Min(1, amount))
 	if !grading.active || amount == 0 {
-		return red8, green8, blue8
+		return red16, green16, blue16
 	}
-	red, green, blue := srgb8ToLinear[red8], srgb8ToLinear[green8], srgb8ToLinear[blue8]
+	red, green, blue := srgb16ToLinear[red16], srgb16ToLinear[green16], srgb16ToLinear[blue16]
 	luminance := 0.2126*red + 0.7152*green + 0.0722*blue
 	weights := colorGradeWeights(luminance, grading.balance, grading.blending)
 	for index, tone := range []xmpColorGradeTone{grading.shadows, grading.midtones, grading.highlights} {
@@ -871,7 +858,7 @@ func applyXMPColorGrading(red8, green8, blue8 uint8, grading xmpColorGrading, am
 	}
 	red, green, blue = applyLocalToningColor(red, green, blue, grading.global.hue, grading.global.saturation, amount)
 	red, green, blue = applyColorGradeLuminance(red, green, blue, grading.global.luminance, amount)
-	return encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
+	return encodeLinearSRGB16(red), encodeLinearSRGB16(green), encodeLinearSRGB16(blue)
 }
 
 func colorGradeWeights(luminance, balance, blending float64) [3]float64 {
@@ -909,8 +896,8 @@ func applyColorGradeLuminance(red, green, blue, adjustment, amount float64) (flo
 
 var xmpHSLHueCenters = [8]float64{0, 30, 60, 120, 180, 240, 270, 315}
 
-func applyXMPHSLColorMix(red8, green8, blue8 uint8, adjustments [8]xmpHSLColorAdjustment) (uint8, uint8, uint8) {
-	hue, saturation, luminance := srgbToHSL(float64(red8)/255, float64(green8)/255, float64(blue8)/255)
+func applyXMPHSLColorMix(red16, green16, blue16 uint16, adjustments [8]xmpHSLColorAdjustment) (uint16, uint16, uint16) {
+	hue, saturation, luminance := srgbToHSL(float64(red16)/65535, float64(green16)/65535, float64(blue16)/65535)
 	colorAdjustment := interpolateHSLBandAdjustments(adjustments, hue)
 
 	// Camera Raw applies these controls in its RAW color pipeline. Here the
@@ -919,11 +906,11 @@ func applyXMPHSLColorMix(red8, green8, blue8 uint8, adjustments [8]xmpHSLColorAd
 	saturation *= math.Max(0, math.Min(2, 1+colorAdjustment.saturation/100))
 	luminance += colorAdjustment.luminance / 100 * 0.25
 	red, green, blue := hslToSRGB(hue, math.Max(0, math.Min(1, saturation)), math.Max(0, math.Min(1, luminance)))
-	return encodeSRGBByte(red), encodeSRGBByte(green), encodeSRGBByte(blue)
+	return encodeSRGB16(red), encodeSRGB16(green), encodeSRGB16(blue)
 }
 
-func encodeSRGBByte(value float64) uint8 {
-	return uint8(math.Round(math.Max(0, math.Min(1, value)) * 255))
+func encodeSRGB16(value float64) uint16 {
+	return uint16(math.Round(math.Max(0, math.Min(1, value)) * 65535))
 }
 
 func interpolateHSLBandAdjustments(adjustments [8]xmpHSLColorAdjustment, hue float64) xmpHSLColorAdjustment {
