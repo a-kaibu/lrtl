@@ -77,6 +77,7 @@ type imageInputOptions struct {
 	RawDevelop       bool
 	DNGLabPath       string
 	ApplyXMPExposure bool
+	ApplyXMPBasic    bool
 	ApplyXMPCrop     bool
 }
 
@@ -86,6 +87,9 @@ func validateImageInputOptions(options imageInputOptions) error {
 	}
 	if strings.TrimSpace(options.DNGLabPath) != "" && !options.RawDevelop {
 		return fmt.Errorf("--dnglab requires --raw-develop")
+	}
+	if options.ApplyXMPExposure && options.ApplyXMPBasic {
+		return fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012")
 	}
 	return nil
 }
