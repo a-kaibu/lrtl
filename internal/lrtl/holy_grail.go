@@ -16,6 +16,7 @@ const holyGrailCorrectionProperty = "ol:HolyGrailCorrection2012"
 const holyGrailTargetProperty = "ol:HolyGrailXMPTarget"
 const holyGrailKeyframeProperty = "ol:HolyGrailKeyframeKind"
 const holyGrailPreviousRatingProperty = "ol:HolyGrailPreviousRating"
+const legacyLRTInternalMaskName = "LRT: don't alter!"
 const maxRenderXMPExposureStops = 32
 
 type holyGrailXMPTarget struct {
@@ -62,12 +63,13 @@ func findHolyGrailXMPTarget(packet *XMPPacket) holyGrailXMPTarget {
 	maskGroups := packet.findRootProperty(crsNamespace, "MaskGroupBasedCorrections")
 	maskGroupItems := rdfArrayItems(maskGroups.element)
 	gradients := packet.findRootProperty(crsNamespace, "GradientBasedCorrections")
+	gradientItems := rdfArrayItems(gradients.element)
 	for _, candidate := range []struct {
 		collection string
 		items      []*etree.Element
 	}{
 		{collection: "MaskGroupBasedCorrections", items: maskGroupItems},
-		{collection: "GradientBasedCorrections", items: rdfArrayItems(gradients.element)},
+		{collection: "GradientBasedCorrections", items: gradientItems},
 	} {
 		for index, item := range candidate.items {
 			correction := unwrapRDFArrayItem(item)
@@ -77,7 +79,25 @@ func findHolyGrailXMPTarget(packet *XMPPacket) holyGrailXMPTarget {
 			}
 		}
 	}
+	if len(gradientItems) >= 7 &&
+		isLegacyLRTInternalGradient(gradientItems[4]) &&
+		isLegacyLRTInternalGradient(gradientItems[5]) &&
+		isLegacyLRTInternalGradient(gradientItems[6]) {
+		return holyGrailXMPTarget{Collection: "GradientBasedCorrections", Index: 5}
+	}
 	return globalHolyGrailTarget()
+}
+
+func isLegacyLRTInternalGradient(item *etree.Element) bool {
+	correction := unwrapRDFArrayItem(item)
+	masks := findCRSDescendant(correction, "CorrectionMasks")
+	maskItems := rdfArrayItems(masks)
+	if len(maskItems) != 1 {
+		return false
+	}
+	mask := unwrapRDFArrayItem(maskItems[0])
+	name, found, err := crsElementValue(mask, "MaskName")
+	return err == nil && found && strings.TrimSpace(name) == legacyLRTInternalMaskName
 }
 
 func holyGrailTargetElement(packet *XMPPacket, target holyGrailXMPTarget) (*etree.Element, error) {
