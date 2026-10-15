@@ -53,8 +53,8 @@ var circularCRSProperties = map[string]struct{}{
 	"SplitToningHighlightHue": {}, "SplitToningShadowHue": {},
 }
 
-var firstFrameCurveProperties = []string{
-	"ToneCurve", "ToneCurveName", "ToneCurveName2012", "ToneCurvePV2012",
+var firstFrameEqualizedProperties = []string{
+	"Look", "PointColors", "Preset", "ToneCurve", "ToneCurveName", "ToneCurveName2012", "ToneCurvePV2012",
 	"ToneCurvePV2012Blue", "ToneCurvePV2012Green", "ToneCurvePV2012Red",
 }
 
@@ -172,7 +172,7 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 	proposed := make(map[int]*ProposedFrame)
 	if len(packets) > 0 {
 		for targetIndex := 1; targetIndex < len(packets); targetIndex++ {
-			for _, property := range firstFrameCurveProperties {
+			for _, property := range firstFrameEqualizedProperties {
 				differs, err := packets[targetIndex].RootPropertyDiffers(packets[0], "crs:"+property)
 				if err != nil {
 					return nil, fmt.Errorf("%s: %w", frames[targetIndex].Image, err)
