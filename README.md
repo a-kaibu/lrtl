@@ -1,6 +1,6 @@
 # LumaFrame XMP tools (`lrtl`)
 
-An independent, open-source starting point for interoperable timelapse keyframe editing. The first milestone focuses on Lightroom-compatible XMP sidecars: inspect a sequence, mark keyframes, and linearly interpolate a small set of numeric Camera Raw controls.
+An independent, open-source starting point for interoperable timelapse keyframe editing. The first milestone focuses on Lightroom-compatible XMP sidecars: inspect a sequence, mark keyframes, and linearly interpolate an explicit set of scalar Camera Raw controls.
 
 This project is not affiliated with or endorsed by LRTimelapse or Adobe. It does not include their code, artwork, or bundled tools.
 
@@ -9,11 +9,11 @@ This project is not affiliated with or endorsed by LRTimelapse or Adobe. It does
 - Find common still-image formats in one folder and sort names naturally (`frame2` before `frame10`).
 - Read and write external `.xmp` sidecars while retaining unknown RDF properties.
 - Mark a normal keyframe with `xmp:Rating=4` or a crop keyframe with `xmp:Rating=5`.
-- Linearly interpolate selected numeric `crs:` develop controls between keyframes.
+- Linearly interpolate selected numeric `crs:` develop controls between keyframes, including legacy controls such as `Exposure` and `RedHue` and newer controls such as `Exposure2012` and `Highlights2012`.
 - Make a timestamped backup before each write by default.
 - Preview interpolation without changing files; pass `--write` to apply it.
 
-The current version does not render RAW files or video, analyze image luminance, understand embedded XMP, or reproduce LRTimelapse's masks, tone curves, deflicker, Holy Grail compensation, or UI. Its interpolation is based on natural filename order. Numeric controls outside the explicit whitelist are left untouched. Where the first or last image already has a numeric setting, it uses that value as an edge anchor and preserves the endpoint XMP.
+The current version does not render RAW files or video, analyze image luminance, understand embedded XMP, or reproduce LRTimelapse's masks, tone curves, deflicker, Holy Grail compensation, or UI. Its interpolation is based on natural filename order. Numeric controls outside the explicit whitelist are left untouched; categorical, boolean, angular, array, and structured properties need different interpolation rules. Where the first or last image already has a numeric setting, it uses that value as an edge anchor and preserves the endpoint XMP.
 
 ## Install
 

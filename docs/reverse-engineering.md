@@ -21,12 +21,15 @@ These notes record observed interfaces and public workflow behavior used to desi
 
 - Four-star ratings (`xmp:Rating=4`) identify ordinary keyframes; five-star ratings (`xmp:Rating=5`) identify crop keyframes according to the installed labels.
 - A marker made by `lrtl mark` records the prior Lightroom rating in its own namespace so `lrtl unmark` can restore it. It always keeps the Adobe rating marker that Lightroom filters can see.
-- Transitions operate only on an explicit list of numeric Camera Raw properties. Categorical, structured, mask, profile, and tone-curve properties are left untouched.
+- Transitions operate only on an explicit list of scalar numeric Camera Raw properties. It includes selected legacy controls listed with integer/real types in Adobe's Camera Raw namespace reference and common newer Develop controls such as `Exposure2012`, `Contrast2012`, and `Highlights2012`. Boolean flags, categorical values such as `CropUnits`, circular color-hue angles, profiles, masks, arrays, and tone curves are left untouched because a numeric encoding alone does not make linear interpolation meaningful.
 - Every write is atomic and makes a timestamped sidecar backup unless `--no-backup` is provided. Interpolation is preview-only unless `--write` is provided.
 - This milestone reads external sidecars only. It does not inspect or update XMP embedded in JPEG, TIFF, or DNG files, nor compare embedded and sidecar timestamps.
 
 ## References
 
+- [Adobe Camera Raw namespace reference](https://developer.adobe.com/xmp/docs/xmp-namespaces/crs/)
+- [Adobe XMP specification overview](https://developer.adobe.com/xmp/docs/xmp-specifications/)
+- [Adobe Photoshop edit operations example showing Camera Raw XMP controls](https://developer.adobe.com/firefly-services/docs/photoshop/guides/photoshop-v2/v1-to-v2/edit-operations)
 - [LRTimelapse visual workflow](https://lrtimelapse.com/workflow/visual-workflow/)
 - [LRTimelapse basic tutorial](https://lrtimelapse.com/tutorial/basic/complete/)
 - [LRTimelapse 7.4 release notes](https://lrtimelapse.com/updates/lrtimelapse-7-4/)

@@ -1,4 +1,4 @@
-"""A conservative linear interpolator for common numeric Camera Raw controls."""
+"""A conservative linear interpolator for scalar Camera Raw controls."""
 
 from __future__ import annotations
 
@@ -10,15 +10,21 @@ from .sequence import Frame, load_packet
 from .xmp import XmpError, XmpPacket
 
 
-# Categorical fields, masks, tone curves, profiles, and unknown properties are
-# intentionally excluded. These are numeric slider values whose interpolation
-# has a clear meaning across two edited keyframes.
+# Keep this list explicit: numeric-looking metadata can still represent an enum,
+# version, identifier, angle that wraps at 360 degrees, or part of a structure.
+# Those fields, plus masks and curves, need dedicated interpolation semantics.
 NUMERIC_CRS_PROPERTIES = (
+    "BlueHue",
+    "BlueSaturation",
+    "Brightness",
+    "ChromaticAberrationB",
+    "ChromaticAberrationR",
     "Blacks2012",
     "Clarity2012",
     "ColorNoiseReduction",
     "ColorNoiseReductionDetail",
     "ColorNoiseReductionSmoothness",
+    "Contrast",
     "Contrast2012",
     "CropAngle",
     "CropBottom",
@@ -26,10 +32,19 @@ NUMERIC_CRS_PROPERTIES = (
     "CropRight",
     "CropTop",
     "Dehaze",
+    "Exposure",
     "Exposure2012",
+    "GreenHue",
+    "GreenSaturation",
     "Highlights2012",
+    "LuminanceNoiseReductionContrast",
+    "LuminanceNoiseReductionDetail",
     "LuminanceSmoothing",
+    "RedHue",
+    "RedSaturation",
     "Saturation",
+    "ShadowTint",
+    "Shadows",
     "Shadows2012",
     "SharpenDetail",
     "SharpenEdgeMasking",
@@ -39,6 +54,8 @@ NUMERIC_CRS_PROPERTIES = (
     "Texture",
     "Tint",
     "Vibrance",
+    "VignetteAmount",
+    "VignetteMidpoint",
     "Whites2012",
 )
 
