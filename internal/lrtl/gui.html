@@ -63,9 +63,10 @@
     <div class="layout">
       <section>
         <section class="panel curve-panel">
-          <h2>Exposure2012 とキーフレーム</h2>
+          <h2>画像輝度・Exposure2012・キーフレーム</h2>
           <canvas id="exposure-curve" aria-label="連番全体のXMP Exposure2012グラフ。点をクリックしてフレームを選択"></canvas>
-          <p id="curve-info">画像ごとのXMP Exposure2012を表示します。画像の実測輝度グラフではありません。点をクリックすると該当フレームを選びます。</p>
+          <p id="curve-info">青はXMP Exposure2012の先頭フレームとの差分です。画像輝度は解析ボタンで別に測定します。点をクリックすると該当フレームを選びます。</p>
+          <button id="analyze-luminance" class="primary" disabled>画像輝度を解析して重ねる</button>
         </section>
         <div class="toolbar">
           <span id="count">フォルダーを指定してください</span>
@@ -151,6 +152,7 @@
     let selected = null;
     let selectedXMPValues = {};
     let exposureCurve = {total:0, points:[], xmpErrors:0};
+    let luminanceCurve = null;
     let previewObjectURL = '';
     const setStatus = (message, error = false) => { el('status').textContent = message; el('status').className = error ? 'error' : ''; };
     async function api(url, options = {}) {
@@ -200,8 +202,10 @@
       directory = data.directory; offset = data.offset; total = data.total; frames = data.frames;
       if (newSequence) {
         selected = null; selectedXMPValues = {};
+        luminanceCurve = null;
         el('xmp-property').replaceChildren(); el('xmp-value').value = '';
         el('preview').removeAttribute('src'); el('selected-name').textContent = 'フレームを選択するとプレビューします。';
+        el('analyze-luminance').disabled = data.total === 0;
         if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = ''; }
       }
       el('directory').value = directory;
@@ -259,7 +263,7 @@
       drawExposureCurve();
       const sampleText = data.step > 1 ? ' · ' + data.step + 'フレーム間隔で表示' : '';
       const errorText = data.xmpErrors ? ' · 読めないXMP値 ' + data.xmpErrors + '件' : '';
-      el('curve-info').textContent = data.total + 'フレーム · XMP Exposure2012' + sampleText + errorText + '。実測輝度ではありません。点をクリックするとフレームを選びます。';
+      el('curve-info').textContent = data.total + 'フレーム · 青: Exposure2012 ΔEV' + sampleText + errorText + (luminanceCurve ? ' · 橙: 画像輝度 ΔEV' : ' · 画像輝度は未解析') + '。点をクリックするとフレームを選びます。';
     }
     function drawExposureCurve() {
       const canvas = el('exposure-curve');
@@ -272,8 +276,10 @@
       ctx.clearRect(0, 0, width, height);
       const points = exposureCurve.points || [];
       if (!points.length) { ctx.fillStyle = '#9eacbb'; ctx.font = '12px system-ui'; ctx.fillText('XMPデータなし', left, height / 2); return; }
-      let minimum = Math.min(0, ...points.map(point => point.exposure));
-      let maximum = Math.max(0, ...points.map(point => point.exposure));
+      const values = points.map(point => point.exposure);
+      if (luminanceCurve && luminanceCurve.directory === directory) values.push(...luminanceCurve.points.map(point => point.ev));
+      let minimum = Math.min(0, ...values);
+      let maximum = Math.max(0, ...values);
       if (maximum - minimum < 0.25) { minimum -= 0.5; maximum += 0.5; }
       const padding = (maximum - minimum) * 0.12;
       minimum -= padding; maximum += padding;
@@ -285,6 +291,11 @@
       ctx.beginPath();
       points.forEach((point, index) => { const x = xAt(point.index), y = yAt(point.exposure); if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.strokeStyle = '#70c3ff'; ctx.lineWidth = 1.8; ctx.stroke();
+      if (luminanceCurve && luminanceCurve.directory === directory && luminanceCurve.points.length) {
+        ctx.beginPath();
+        luminanceCurve.points.forEach((point, index) => { const x = xAt(point.index), y = yAt(point.ev); if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+        ctx.strokeStyle = '#ff9b57'; ctx.lineWidth = 1.8; ctx.stroke();
+      }
       for (const point of points) {
         if (!point.keyframe) continue;
         const x = xAt(point.index), y = yAt(point.exposure);
@@ -293,6 +304,14 @@
       }
       ctx.fillStyle = '#9eacbb'; ctx.fillText('1', left, height - 5);
       ctx.fillText(String(exposureCurve.total), width - right - 24, height - 5);
+      ctx.fillStyle = '#70c3ff'; ctx.fillText('XMP ΔEV', left, 11);
+      if (luminanceCurve && luminanceCurve.directory === directory) { ctx.fillStyle = '#ff9b57'; ctx.fillText('輝度 ΔEV', left + 84, 11); }
+    }
+    function invalidateLuminanceCurve(message = 'XMP値または解析条件が変わりました。画像輝度を再解析してください。') {
+      if (!luminanceCurve) return;
+      luminanceCurve = null;
+      drawExposureCurve();
+      el('curve-info').textContent = message;
     }
     function showOriginalPreview() {
       if (!selected) return;
@@ -350,6 +369,28 @@
       } catch (error) { setStatus(error.message, true); }
     });
     window.addEventListener('resize', drawExposureCurve);
+    buttonAction(el('analyze-luminance'), async () => {
+      ensureActiveDirectory();
+      if (!confirm('連番の全画像を読み込んで輝度を測定します。画像数や解像度によって時間がかかります。続けますか？')) return;
+      const query = new URLSearchParams({
+        directory, basic:String(el('analysis-xmp-basic').checked), crop:String(el('analysis-xmp-crop').checked)
+      });
+      const rawMode = el('analysis-raw-mode').value;
+      if (rawMode) query.set('raw', rawMode);
+      const dnglab = el('analysis-dnglab').value.trim();
+      if (dnglab) query.set('dnglab', dnglab);
+      setStatus('全フレームの輝度を解析しています…');
+      const data = await api('/api/luminance?' + query.toString());
+      if (data.directory !== directory) return;
+      luminanceCurve = data;
+      drawExposureCurve();
+      const sampleText = data.step > 1 ? ' · ' + data.step + 'フレーム間隔で表示' : '';
+      el('curve-info').textContent = data.total + 'フレーム · 青:XMP Exposure2012 ΔEV · 橙:画像輝度 ΔEV' + sampleText + '。輝度は先頭フレームとの差分です。';
+      setStatus('画像輝度の解析が完了しました。');
+    });
+    for (const id of ['analysis-raw-mode', 'analysis-dnglab', 'analysis-xmp-basic', 'analysis-xmp-crop']) {
+      el(id).addEventListener('change', () => invalidateLuminanceCurve());
+    }
     el('xmp-property').addEventListener('change', updateXMPValueInput);
     buttonAction(el('xmp-save'), async () => {
       ensureActiveDirectory();
@@ -361,6 +402,7 @@
       const data = await api('/api/xmp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:selected.name, property, value})});
       const frame = selected;
       await loadSelectedXMP(frame);
+      invalidateLuminanceCurve();
       if (property === 'Exposure2012') await loadExposureCurve();
       setStatus(data.output || 'XMP値を保存しました。');
     });
@@ -382,6 +424,7 @@
       const data = await api('/api/interpolate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, smoothness:Number(el('smoothness').value)})});
       await loadSequence();
       if (selected) await loadSelectedXMP(selected);
+      invalidateLuminanceCurve();
       await loadExposureCurve();
       setStatus(data.output || '補間したXMPを保存しました。');
     });

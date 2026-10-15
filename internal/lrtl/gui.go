@@ -34,6 +34,7 @@ const (
 )
 
 var guiThumbnailSlots = make(chan struct{}, 1)
+var guiLuminanceAnalysisSlots = make(chan struct{}, 1)
 
 func runGUI(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("gui", stderr)
@@ -74,6 +75,7 @@ func newGUIHandler() http.Handler {
 	mux.HandleFunc("/", serveGUIIndex)
 	mux.HandleFunc("/api/sequence", serveGUISequence)
 	mux.HandleFunc("/api/curve", serveGUICurve)
+	mux.HandleFunc("/api/luminance", serveGUILuminanceCurve)
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
 	mux.HandleFunc("/api/preview", serveGUIPreview)
 	mux.HandleFunc("/api/xmp", serveGUIXMP)
@@ -227,6 +229,18 @@ type guiExposureCurveResponse struct {
 	Points    []guiExposurePoint `json:"points"`
 }
 
+type guiLuminancePoint struct {
+	Index int     `json:"index"`
+	EV    float64 `json:"ev"`
+}
+
+type guiLuminanceCurveResponse struct {
+	Directory string              `json:"directory"`
+	Total     int                 `json:"total"`
+	Step      int                 `json:"step"`
+	Points    []guiLuminancePoint `json:"points"`
+}
+
 func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeGUIError(w, http.StatusMethodNotAllowed, "GET required")
@@ -273,6 +287,12 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 		}
 		allPoints[index] = point
 	}
+	if len(allPoints) > 0 {
+		baseline := allPoints[0].Exposure
+		for index := range allPoints {
+			allPoints[index].Exposure -= baseline
+		}
+	}
 	step := 1
 	if len(allPoints) > guiMaxCurveSamples {
 		step = (len(allPoints) + guiMaxCurveSamples - 1) / guiMaxCurveSamples
@@ -312,6 +332,71 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 	writeGUIJSON(w, http.StatusOK, guiExposureCurveResponse{
 		Directory: directory, Total: len(frames), Step: step, XMPErrors: xmpErrors, Points: points,
 	})
+}
+
+func serveGUILuminanceCurve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeGUIError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
+	select {
+	case guiLuminanceAnalysisSlots <- struct{}{}:
+		defer func() { <-guiLuminanceAnalysisSlots }()
+	default:
+		writeGUIError(w, http.StatusConflict, "another luminance analysis is already running")
+		return
+	}
+	directory, err := canonicalGUIDirectory(r.URL.Query().Get("directory"))
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	rawMode := r.URL.Query().Get("raw")
+	if rawMode != "" && rawMode != "preview" && rawMode != "develop" {
+		writeGUIError(w, http.StatusBadRequest, "RAW mode must be preview or develop")
+		return
+	}
+	applyBasic, err := parseGUIBool(r.URL.Query().Get("basic"))
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, "basic must be true or false")
+		return
+	}
+	applyCrop, err := parseGUIBool(r.URL.Query().Get("crop"))
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, "crop must be true or false")
+		return
+	}
+	options := imageInputOptions{RawPreview: rawMode == "preview", RawDevelop: rawMode == "develop", ApplyXMPBasic: applyBasic, ApplyXMPCrop: applyCrop}
+	if rawMode == "develop" {
+		options.DNGLabPath = r.URL.Query().Get("dnglab")
+	}
+	luminance, err := analyzeLuminanceSequenceWithInputOptions(frames, options)
+	if err != nil {
+		writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	if len(luminance) > 0 {
+		baseline := luminance[0]
+		for index := range luminance {
+			luminance[index] -= baseline
+		}
+	}
+	step := 1
+	if len(luminance) > guiMaxCurveSamples {
+		step = (len(luminance) + guiMaxCurveSamples - 1) / guiMaxCurveSamples
+	}
+	points := make([]guiLuminancePoint, 0, guiMaxCurveSamples)
+	for index, value := range luminance {
+		if index%step == 0 || index == len(luminance)-1 {
+			points = append(points, guiLuminancePoint{Index: index, EV: value})
+		}
+	}
+	writeGUIJSON(w, http.StatusOK, guiLuminanceCurveResponse{Directory: directory, Total: len(frames), Step: step, Points: points})
 }
 
 func parseNonnegativeQuery(r *http.Request, key string, fallback int) (int, error) {
