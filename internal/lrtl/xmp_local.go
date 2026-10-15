@@ -17,22 +17,36 @@ const (
 	localMaskCircularGradient
 )
 
+type localMaskBlendMode uint8
+
+const (
+	// Camera Raw serializes Add as 0 and Intersect as 1.
+	localMaskBlendAdd localMaskBlendMode = iota
+	localMaskBlendIntersect
+)
+
 // xmpLocalCorrection is the renderable subset of a Camera Raw local correction.
 // The geometry is evaluated in normalized, oriented image coordinates.
 type xmpLocalCorrection struct {
-	kind                                    localMaskKind
 	exposure, contrast, highlights, shadows float64
 	whites, blacks, saturation              float64
 	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
-	amount, maskValue                       float64
-	zeroX, zeroY                            float64
-	fullX, fullY                            float64
-	left, top                               float64
-	right, bottom                           float64
-	angle, feather                          float64
-	flipped, maskInverted                   bool
+	amount                                  float64
+	masks                                   []xmpLocalMask
+}
+
+type xmpLocalMask struct {
+	kind                  localMaskKind
+	blendMode             localMaskBlendMode
+	maskValue             float64
+	zeroX, zeroY          float64
+	fullX, fullY          float64
+	left, top             float64
+	right, bottom         float64
+	angle, feather        float64
+	flipped, maskInverted bool
 }
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
@@ -74,7 +88,7 @@ func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
 }
 
 func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, error) {
-	correction := xmpLocalCorrection{amount: 1, maskValue: 1}
+	correction := xmpLocalCorrection{amount: 1}
 	active, _, err := xmpLocalBool(element, "CorrectionActive", true)
 	if err != nil || !active {
 		return correction, false, err
@@ -123,6 +137,16 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		correction.whiteBalance = approximateWhiteBalanceGains(6500+temperature*40, tint)
 		correction.hasWhiteBalance = true
 	}
+	for _, token := range element.Child {
+		selector, ok := token.(*etree.Element)
+		if !ok || selector.NamespaceURI() != crsNamespace {
+			continue
+		}
+		if selector.Tag == "CorrectionRangeMask" || selector.Tag == "CorrectionSubject" {
+			// Do not render only the spatial base while silently dropping its selector.
+			return correction, false, nil
+		}
+	}
 	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
 		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.toningSaturation == 0 && !correction.hasWhiteBalance {
 		return correction, false, nil
@@ -135,8 +159,19 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		if err != nil {
 			return err
 		}
+		if found && strings.TrimSpace(what) == "Mask/Aggregate" {
+			for _, token := range node.Child {
+				if child, ok := token.(*etree.Element); ok {
+					if err := findMasks(child); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		}
 		if found && strings.HasPrefix(strings.TrimSpace(what), "Mask/") {
 			masks = append(masks, node)
+			return nil
 		}
 		for _, token := range node.Child {
 			if child, ok := token.(*etree.Element); ok {
@@ -148,99 +183,124 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		return nil
 	}
 	for _, token := range element.Child {
-		if child, ok := token.(*etree.Element); ok {
-			if err := findMasks(child); err != nil {
-				return correction, false, err
-			}
+		child, ok := token.(*etree.Element)
+		if !ok || child.NamespaceURI() != crsNamespace || child.Tag != "CorrectionMasks" {
+			continue
+		}
+		if err := findMasks(child); err != nil {
+			return correction, false, err
 		}
 	}
-	// Combined masks need mask-compositing semantics that are not modeled yet.
-	if len(masks) != 1 {
+	if len(masks) == 0 {
 		return correction, false, nil
 	}
-	mask := masks[0]
-	what, _, _ := crsElementValue(mask, "What")
-	switch strings.TrimSpace(what) {
-	case "Mask/Gradient":
-		correction.kind = localMaskGradient
-	case "Mask/CircularGradient":
-		correction.kind = localMaskCircularGradient
-	default:
-		return correction, false, nil
-	}
-	maskActive, _, err := xmpLocalBool(mask, "MaskActive", true)
-	if err != nil || !maskActive {
-		return correction, false, err
-	}
-	correction.maskValue, _, err = xmpLocalNumber(mask, "MaskValue", 1, 0, 1)
-	if err != nil {
-		return correction, false, err
-	}
-	correction.maskInverted, _, err = xmpLocalBool(mask, "MaskInverted", false)
-	if err != nil {
-		return correction, false, err
-	}
-	if correction.maskValue == 0 {
-		return correction, false, nil
-	}
-	if correction.kind == localMaskGradient {
-		var haveZeroX, haveZeroY, haveFullX, haveFullY bool
-		correction.zeroX, haveZeroX, err = xmpLocalNumber(mask, "ZeroX", 0, -2, 3)
+	for _, maskElement := range masks {
+		maskActive, _, err := xmpLocalBool(maskElement, "MaskActive", true)
 		if err != nil {
 			return correction, false, err
 		}
-		correction.zeroY, haveZeroY, err = xmpLocalNumber(mask, "ZeroY", 0, -2, 3)
+		if !maskActive {
+			continue
+		}
+		mask, supported, err := parseXMPLocalMask(maskElement)
 		if err != nil {
 			return correction, false, err
 		}
-		correction.fullX, haveFullX, err = xmpLocalNumber(mask, "FullX", 0, -2, 3)
-		if err != nil {
-			return correction, false, err
-		}
-		correction.fullY, haveFullY, err = xmpLocalNumber(mask, "FullY", 0, -2, 3)
-		if err != nil {
-			return correction, false, err
-		}
-		if !haveZeroX || !haveZeroY || !haveFullX || !haveFullY || (correction.zeroX == correction.fullX && correction.zeroY == correction.fullY) {
+		if !supported {
 			return correction, false, nil
 		}
-		correction.flipped, _, err = xmpLocalBool(mask, "Flipped", false)
-		return correction, err == nil, err
+		correction.masks = append(correction.masks, mask)
+	}
+	if len(correction.masks) == 0 {
+		return correction, false, nil
+	}
+	return correction, true, nil
+}
+
+func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
+	mask := xmpLocalMask{maskValue: 1}
+	what, _, _ := crsElementValue(element, "What")
+	switch strings.TrimSpace(what) {
+	case "Mask/Gradient":
+		mask.kind = localMaskGradient
+	case "Mask/CircularGradient":
+		mask.kind = localMaskCircularGradient
+	default:
+		return mask, false, nil
+	}
+	blendMode, _, err := xmpLocalNumber(element, "MaskBlendMode", float64(localMaskBlendAdd), 0, 1)
+	if err != nil {
+		return mask, false, err
+	}
+	if math.Trunc(blendMode) != blendMode {
+		return mask, false, fmt.Errorf("crs:MaskBlendMode must be 0 (add) or 1 (intersect)")
+	}
+	mask.blendMode = localMaskBlendMode(blendMode)
+	mask.maskValue, _, err = xmpLocalNumber(element, "MaskValue", 1, 0, 1)
+	if err != nil {
+		return mask, false, err
+	}
+	mask.maskInverted, _, err = xmpLocalBool(element, "MaskInverted", false)
+	if err != nil {
+		return mask, false, err
+	}
+	mask.flipped, _, err = xmpLocalBool(element, "Flipped", false)
+	if err != nil {
+		return mask, false, err
+	}
+	if mask.kind == localMaskGradient {
+		var haveZeroX, haveZeroY, haveFullX, haveFullY bool
+		mask.zeroX, haveZeroX, err = xmpLocalNumber(element, "ZeroX", 0, -2, 3)
+		if err != nil {
+			return mask, false, err
+		}
+		mask.zeroY, haveZeroY, err = xmpLocalNumber(element, "ZeroY", 0, -2, 3)
+		if err != nil {
+			return mask, false, err
+		}
+		mask.fullX, haveFullX, err = xmpLocalNumber(element, "FullX", 0, -2, 3)
+		if err != nil {
+			return mask, false, err
+		}
+		mask.fullY, haveFullY, err = xmpLocalNumber(element, "FullY", 0, -2, 3)
+		if err != nil {
+			return mask, false, err
+		}
+		if !haveZeroX || !haveZeroY || !haveFullX || !haveFullY || (mask.zeroX == mask.fullX && mask.zeroY == mask.fullY) {
+			return mask, false, nil
+		}
+		return mask, true, nil
 	}
 
 	var haveLeft, haveTop, haveRight, haveBottom bool
-	correction.left, haveLeft, err = xmpLocalNumber(mask, "Left", 0, -2, 3)
+	mask.left, haveLeft, err = xmpLocalNumber(element, "Left", 0, -2, 3)
 	if err != nil {
-		return correction, false, err
+		return mask, false, err
 	}
-	correction.top, haveTop, err = xmpLocalNumber(mask, "Top", 0, -2, 3)
+	mask.top, haveTop, err = xmpLocalNumber(element, "Top", 0, -2, 3)
 	if err != nil {
-		return correction, false, err
+		return mask, false, err
 	}
-	correction.right, haveRight, err = xmpLocalNumber(mask, "Right", 0, -2, 3)
+	mask.right, haveRight, err = xmpLocalNumber(element, "Right", 0, -2, 3)
 	if err != nil {
-		return correction, false, err
+		return mask, false, err
 	}
-	correction.bottom, haveBottom, err = xmpLocalNumber(mask, "Bottom", 0, -2, 3)
+	mask.bottom, haveBottom, err = xmpLocalNumber(element, "Bottom", 0, -2, 3)
 	if err != nil {
-		return correction, false, err
+		return mask, false, err
 	}
-	if !haveLeft || !haveTop || !haveRight || !haveBottom || math.Abs(correction.right-correction.left) <= 1e-12 || math.Abs(correction.bottom-correction.top) <= 1e-12 {
-		return correction, false, nil
+	if !haveLeft || !haveTop || !haveRight || !haveBottom || math.Abs(mask.right-mask.left) <= 1e-12 || math.Abs(mask.bottom-mask.top) <= 1e-12 {
+		return mask, false, nil
 	}
-	correction.angle, _, err = xmpLocalNumber(mask, "Angle", 0, -3600, 3600)
+	mask.angle, _, err = xmpLocalNumber(element, "Angle", 0, -3600, 3600)
 	if err != nil {
-		return correction, false, err
+		return mask, false, err
 	}
-	correction.feather, _, err = xmpLocalNumber(mask, "Feather", 50, -100, 100)
+	mask.feather, _, err = xmpLocalNumber(element, "Feather", 50, -100, 100)
 	if err != nil {
-		return correction, false, err
+		return mask, false, err
 	}
-	correction.flipped, _, err = xmpLocalBool(mask, "Flipped", false)
-	if err != nil {
-		return correction, false, err
-	}
-	return correction, true, nil
+	return mask, true, nil
 }
 
 func xmpLocalNumber(element *etree.Element, name string, fallback, min, max float64) (float64, bool, error) {
@@ -271,28 +331,50 @@ func xmpLocalBool(element *etree.Element, name string, fallback bool) (bool, boo
 }
 
 func (correction xmpLocalCorrection) maskWeight(x, y, width, height int) float64 {
+	if len(correction.masks) == 0 {
+		return 0
+	}
+	weight := 0.0
+	for index, mask := range correction.masks {
+		component := mask.maskWeight(x, y, width, height)
+		if index == 0 {
+			weight = component
+			continue
+		}
+		switch mask.blendMode {
+		case localMaskBlendAdd:
+			// Treat soft mask weights as independent alpha coverage when adding.
+			weight += component * (1 - weight)
+		case localMaskBlendIntersect:
+			weight *= component
+		}
+	}
+	return math.Max(0, math.Min(1, weight))
+}
+
+func (mask xmpLocalMask) maskWeight(x, y, width, height int) float64 {
 	nx := (float64(x) + 0.5) / float64(width)
 	ny := (float64(y) + 0.5) / float64(height)
 	weight := 0.0
-	switch correction.kind {
+	switch mask.kind {
 	case localMaskGradient:
-		dx, dy := correction.zeroX-correction.fullX, correction.zeroY-correction.fullY
+		dx, dy := mask.zeroX-mask.fullX, mask.zeroY-mask.fullY
 		lengthSquared := dx*dx + dy*dy
-		position := ((nx-correction.fullX)*dx + (ny-correction.fullY)*dy) / lengthSquared
+		position := ((nx-mask.fullX)*dx + (ny-mask.fullY)*dy) / lengthSquared
 		weight = 1 - math.Max(0, math.Min(1, position))
 	case localMaskCircularGradient:
-		radius, decoded := radialMaskWeight(correction.left, correction.top, correction.right, correction.bottom, correction.angle, x, y, width, height)
+		radius, decoded := radialMaskWeight(mask.left, mask.top, mask.right, mask.bottom, mask.angle, x, y, width, height)
 		if !decoded {
-			centerX, centerY := (correction.left+correction.right)/2, (correction.top+correction.bottom)/2
-			halfWidth := math.Abs(correction.right-correction.left) * float64(width) / 2
-			halfHeight := math.Abs(correction.bottom-correction.top) * float64(height) / 2
+			centerX, centerY := (mask.left+mask.right)/2, (mask.top+mask.bottom)/2
+			halfWidth := math.Abs(mask.right-mask.left) * float64(width) / 2
+			halfHeight := math.Abs(mask.bottom-mask.top) * float64(height) / 2
 			dx, dy := (nx-centerX)*float64(width), (ny-centerY)*float64(height)
-			angle := correction.angle * math.Pi / 180
+			angle := mask.angle * math.Pi / 180
 			rotatedX := dx*math.Cos(angle) + dy*math.Sin(angle)
 			rotatedY := -dx*math.Sin(angle) + dy*math.Cos(angle)
 			radius = math.Sqrt((rotatedX/halfWidth)*(rotatedX/halfWidth) + (rotatedY/halfHeight)*(rotatedY/halfHeight))
 		}
-		feather := math.Abs(correction.feather) / 100
+		feather := math.Abs(mask.feather) / 100
 		if feather < 1e-6 {
 			if radius < 1 {
 				weight = 1
@@ -301,10 +383,10 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int) float64
 			weight = 1 - smoothstep((radius-(1-feather))/feather)
 		}
 	}
-	if correction.flipped != correction.maskInverted {
+	if mask.flipped != mask.maskInverted {
 		weight = 1 - weight
 	}
-	return math.Max(0, math.Min(1, weight*correction.maskValue))
+	return math.Max(0, math.Min(1, weight*mask.maskValue))
 }
 
 func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection) image.Image {
