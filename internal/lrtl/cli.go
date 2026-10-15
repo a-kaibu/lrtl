@@ -75,6 +75,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runInterpolate(arguments[1:], stdout, stderr)
 	case "render":
 		return runRender(arguments[1:], stdout, stderr)
+	case "deflicker":
+		return runDeflicker(arguments[1:], stdout, stderr)
 	case "keyframes":
 		return runKeyframes(arguments[1:], stdout, stderr)
 	case "holy-grail":
@@ -96,6 +98,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG/TIFF frames to MJPEG AVI")
+	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write]           analyze luminance and update XMP exposure")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced]  suggest keyframes")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 }
@@ -516,6 +519,119 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	} else {
 		fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
 	}
+	return 0
+}
+
+func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("deflicker", stderr)
+	write := set.Bool("write", false, "write exposure corrections to XMP sidecars")
+	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
+	reset := set.Bool("reset", false, "remove lrtl-managed deflicker exposure corrections")
+	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
+	smoothRadius := set.Int("smooth", 5, "deflicker smoothing radius in frames")
+	passes := set.Int("passes", 1, "deflicker passes (1-8)")
+	constant := set.Bool("constant", false, "deflicker toward constant luminance")
+	parseArgs := flagFirst(arguments, map[string]bool{
+		"--reference": true, "-reference": true,
+		"--smooth": true, "-smooth": true,
+		"--passes": true, "-passes": true,
+	})
+	if err := set.Parse(parseArgs); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 {
+		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
+	}
+	if *smoothRadius < 1 || *smoothRadius > 1000 {
+		return reportError(stderr, fmt.Errorf("smoothing radius must be between 1 and 1000 frames: %d", *smoothRadius))
+	}
+	if *passes < 1 || *passes > 8 {
+		return reportError(stderr, fmt.Errorf("deflicker passes must be between 1 and 8: %d", *passes))
+	}
+	if *reset {
+		analysisOption := false
+		set.Visit(func(parsed *flag.Flag) {
+			switch parsed.Name {
+			case "reference", "smooth", "passes", "constant":
+				analysisOption = true
+			}
+		})
+		if analysisOption {
+			return reportError(stderr, fmt.Errorf("--reset cannot be combined with --reference, --smooth, --passes, or --constant"))
+		}
+	}
+	frames, err := DiscoverSequence(set.Arg(0))
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	var reference image.Rectangle
+	if *referenceValue != "" {
+		reference, err = parseReferenceArea(*referenceValue)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
+	var luminances []float64
+	if !*reset {
+		luminances, err = analyzeDeflickerSequence(frames, reference)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
+	changes, err := buildDeflickerChanges(frames, luminances, *smoothRadius, *passes, *constant, *reset)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Sequence: %s\n", set.Arg(0))
+	if *reset {
+		fmt.Fprintf(stdout, "Frames: %d; deflicker corrections to reset: %d\n", len(frames), len(changes))
+	} else {
+		target := "smoothed luminance"
+		if *constant {
+			target = "constant median luminance"
+		}
+		fmt.Fprintf(stdout, "Frames: %d; corrections: %d; target: %s; smooth radius: %d; passes: %d\n",
+			len(frames), len(changes), target, *smoothRadius, *passes)
+	}
+	for _, change := range changes {
+		fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))
+		if *reset {
+			fmt.Fprintf(stdout, " Exposure2012 %+.4f -> %+.4f EV (remove lrtl correction)", change.ExposureBefore, change.ExposureAfter)
+		} else {
+			fmt.Fprintf(stdout, " luminance=%.6g correction=%+.4f EV Exposure2012=%+.4f EV",
+				change.Luminance, change.Correction, change.ExposureAfter)
+		}
+		fmt.Fprintln(stdout)
+	}
+	if len(changes) == 0 {
+		if *reset {
+			fmt.Fprintln(stdout, "No lrtl-managed deflicker corrections to reset.")
+		} else {
+			fmt.Fprintln(stdout, "No Exposure2012 changes are needed.")
+		}
+		return 0
+	}
+	if !*write {
+		fmt.Fprintln(stdout, "Preview only. Pass --write to update sidecar XMP files.")
+		return 0
+	}
+	if err := applyDeflickerChanges(changes); err != nil {
+		return reportError(stderr, err)
+	}
+	for _, change := range changes {
+		path := change.Frame.OutputSidecar()
+		backup, err := WritePacket(path, change.Packet, !*noBackup)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		if backup != "" {
+			fmt.Fprintf(stdout, "Backup: %s\n", backup)
+		}
+		fmt.Fprintf(stdout, "Saved: %s\n", path)
+	}
+	fmt.Fprintf(stdout, "Updated %d sidecar(s).\n", len(changes))
 	return 0
 }
 

@@ -21,7 +21,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で数値を編集し、許可したグローバル設定を線形補間。レンダー時に`Exposure2012`と軸に平行なクロップ矩形を任意適用。他のCamera Raw現像値、RAW現像、ローカルマスクは未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間 | 数値のグローバルCamera Raw項目を補間。ローカル補正、カーブ、マスク、色相環などの補間なし | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | 未実装 | 未実装 |
-| Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス | `render --deflicker`がJPEG/PNG/TIFFを解析し、任意の参照矩形内の中央値から全画面への露出補正を計算。平滑化幅・パス数・一定輝度モードを指定可能。独自の近似方式で、LRTのVisual PreviewやXMPへのロスレス記録は未対応 | 一部 |
+| Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`で現像済みJPEG/PNG/TIFFの輝度解析結果を`crs:Exposure2012`へ記録可能。両者とも独自の近似方式。LRTのVisual Preview、RAW現像連携、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFをMJPEG AVIに変換。固定サイズの画像列、整数1–240 fps。JPEGは画素処理なしなら入力データを格納し、画素処理時とPNG/TIFFはJPEGに変換 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | 未実装。JPEG/PNG/TIFF以外をrenderに渡すとエラー | 未実装 |
@@ -62,10 +62,10 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 2. JPEG/PNG/TIFF連番の明るさ曲線からキーフレーム候補を表示し、任意でXMPにマークする。
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
 4. 現像済みJPEG/PNG/TIFF連番をMJPEG AVIにまとめる。
-5. レンダー時に、参照領域と平滑化曲線を使った簡易Deflickerを適用する。
+5. レンダー時に簡易Deflickerを画素へ適用するか、解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 
-動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。既定ではXMPを読まず、画像の現像もしません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。ほかの現像設定やRAWデータには対応しません。DeflickerとXMP露出補正は出力画素に適用するため、元画像やXMPは変更しません。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
+動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。ほかの現像設定やRAWデータには対応しません。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
 
 ## インストール
 
@@ -143,6 +143,14 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi" --fps 3
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\smooth.avi" `
   --deflicker --reference 200,100,600,300 --smooth 6 --passes 3
 
+# 同じ解析を露出補正値としてXMPへプレビューし、書き込む
+lrtl deflicker "D:\Timelapse\Developed" --reference 200,100,600,300 --smooth 6 --passes 3
+lrtl deflicker "D:\Timelapse\Developed" --reference 200,100,600,300 --smooth 6 --passes 3 --write
+
+# lrtlが記録したDeflicker補正だけをXMPから戻す
+lrtl deflicker "D:\Timelapse\Developed" --reset
+lrtl deflicker "D:\Timelapse\Developed" --reset --write
+
 # 露出変化を残さず、一定の明るさへ寄せる（定常光のシーン向け）
 lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constant
 ```
@@ -152,6 +160,8 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 `--apply-xmp-exposure`は各画像に対応する外部XMPサイドカーから数値の`crs:Exposure2012`を読み、線形sRGB画素に露出倍率を適用します。±32 stopsを超える値や不正な数値はエラーにします。Camera Rawの全現像パイプラインと一致する機能ではなく、露出スライダーだけの近似適用です。JPEGはこの指定で再エンコードされます。
 
 `--apply-xmp-crop`は各サイドカーの`crs:HasCrop`と`CropTop/Left/Bottom/Right`を読み、フレームを矩形で切り出して入力と同じ解像度に再サンプルします。クロップのないフレームはそのままです。`CropAngle`が0以外の場合、または矩形が空/範囲外の場合はエラーにします。Camera Rawの回転クロップやジオメトリ補正は再現しません。Lightroom等でキーフレームのクロップ値を保存し、`interpolate --write`で間を埋めてからこのオプションでレンダーできます。
+
+`deflicker`はJPEG/PNG/TIFFの輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。既定はプレビューだけです。`--write`は求めた補正量を各フレームの`crs:Exposure2012`へ加算し、前回lrtlが加えた量を`ol:DeflickerCorrection2012`に記録します。再実行ではlrtl管理分を置き換え、`--reset --write`ではその分だけを戻します。Holy Grail補正やユーザーが後から加えたExposure値は差し引かずに残します。Camera Rawの現像パイプラインやLRTimelapseのVisual Deflickerと数値が一致する機能ではなく、画像列から露出差を推定する近似です。
 
 `set`は`NumericCRSProperties`にある数値のCamera RawプロパティだけをXMPサイドカーに書き込みます。プロパティ名には`crs:`を付けても省いても構いません。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --write`で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-exposure`でExposure2012を、`render --apply-xmp-crop`で軸に平行なクロップを画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。これはLightroom/Camera Rawの現像エンジンを置き換える機能ではなく、上記以外のCamera Raw値はXMPに記録・補間しても現在のレンダー画素には反映されません。数値が各Camera Rawスライダーの範囲内かは`set`では検証しません。
 
@@ -171,7 +181,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFからMJPEG AVIに対応 |
-| 3 | 画像解析、プレビュー、Deflicker | レンダー時の単一参照領域・全体露出補正と、軸に平行なXMPクロップ適用を実装。LRT形式のVisual Preview、曲線UI、XMPロスレス適用、回転クロップ、マスク別補正は未実装 |
+| 3 | 画像解析、プレビュー、Deflicker | 単一参照領域・全体露出補正をレンダー時またはXMPへ適用。軸に平行なXMPクロップも実装。LRT形式のVisual Preview、曲線UI、XMPロスレス適用、回転クロップ、マスク別補正は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正と、現像済みラスターへのExposure2012近似適用を実装。RAW現像とCamera Raw現像の完全再現は未着手 |
 | 5 | H.264等の追加出力、クロップ/オーバーレイ、取り込み、GUI | 未着手 |
 
