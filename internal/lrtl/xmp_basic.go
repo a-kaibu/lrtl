@@ -31,6 +31,7 @@ type xmpBasicAdjustments struct {
 	hasChannel      [3]bool
 	colorMix        [8]xmpHSLColorAdjustment
 	hasColorMix     bool
+	colorGrading    xmpColorGrading
 	local           []xmpLocalCorrection
 }
 
@@ -38,6 +39,16 @@ type xmpHSLColorAdjustment struct {
 	hue        float64
 	saturation float64
 	luminance  float64
+}
+
+type xmpColorGradeTone struct {
+	hue, saturation, luminance float64
+}
+
+type xmpColorGrading struct {
+	shadows, midtones, highlights, global xmpColorGradeTone
+	blending, balance                     float64
+	active                                bool
 }
 
 var xmpHSLBands = []struct {
@@ -136,6 +147,12 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		adjustments.whiteBalance = approximateWhiteBalanceGains(temperature, tint)
 		adjustments.hasWhiteBalance = true
 	}
+	adjustments.colorGrading, err = readXMPColorGrading(func(name string, min, max float64) (float64, bool, error) {
+		return readXMPBasicNumber(packet, name, min, max)
+	}, "ColorGrade")
+	if err != nil {
+		return xmpBasicAdjustments{}, err
+	}
 	curveProperties := []struct {
 		primary  string
 		fallback string
@@ -187,6 +204,56 @@ func readXMPBasicNumber(packet *XMPPacket, name string, min, max float64) (float
 		return 0, false, fmt.Errorf("crs:%s must be a finite number between %g and %g", name, min, max)
 	}
 	return number, true, nil
+}
+
+func readXMPColorGrading(read func(string, float64, float64) (float64, bool, error), prefix string) (xmpColorGrading, error) {
+	grading := xmpColorGrading{blending: 50}
+	for _, zone := range []struct {
+		name   string
+		target *xmpColorGradeTone
+	}{
+		{name: "Shadow", target: &grading.shadows},
+		{name: "Midtone", target: &grading.midtones},
+		{name: "Highlight", target: &grading.highlights},
+		{name: "Global", target: &grading.global},
+	} {
+		for _, control := range []struct {
+			name   string
+			target *float64
+			min    float64
+			max    float64
+		}{
+			{name: "Hue", target: &zone.target.hue, min: 0, max: 360},
+			{name: "Sat", target: &zone.target.saturation, min: 0, max: 100},
+			{name: "Lum", target: &zone.target.luminance, min: -100, max: 100},
+		} {
+			value, found, err := read(prefix+zone.name+control.name, control.min, control.max)
+			if err != nil {
+				return xmpColorGrading{}, err
+			}
+			if found {
+				*control.target = value
+			}
+		}
+		grading.active = grading.active || zone.target.saturation != 0 || zone.target.luminance != 0
+	}
+	if value, found, err := read(prefix+"Blending", 0, 100); err != nil {
+		return xmpColorGrading{}, err
+	} else if found {
+		grading.blending = value
+	}
+	if value, _, err := read(prefix+"Balance", -100, 100); err != nil {
+		return xmpColorGrading{}, err
+	} else {
+		grading.balance = value
+	}
+	return grading, nil
+}
+
+func readXMPLocalColorGrading(element *etree.Element) (xmpColorGrading, error) {
+	return readXMPColorGrading(func(name string, min, max float64) (float64, bool, error) {
+		return xmpLocalNumber(element, name, 0, min, max)
+	}, "LocalColorGrade")
 }
 
 // approximateWhiteBalanceGains estimates a Camera Raw white-balance change on
@@ -417,7 +484,7 @@ func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
-		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix
+		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
 }
 
 func (adjustments xmpBasicAdjustments) active() bool {
@@ -511,12 +578,66 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			if adjustments.hasColorMix {
 				red8, green8, blue8 = applyXMPHSLColorMix(red8, green8, blue8, adjustments.colorMix)
 			}
+			if adjustments.colorGrading.active {
+				red8, green8, blue8 = applyXMPColorGrading(red8, green8, blue8, adjustments.colorGrading, 1)
+			}
 			result.SetNRGBA(x, y, color.NRGBA{
 				R: red8, G: green8, B: blue8, A: pixel.A,
 			})
 		}
 	}
 	return result
+}
+
+func applyXMPColorGrading(red8, green8, blue8 uint8, grading xmpColorGrading, amount float64) (uint8, uint8, uint8) {
+	amount = math.Max(0, math.Min(1, amount))
+	if !grading.active || amount == 0 {
+		return red8, green8, blue8
+	}
+	red, green, blue := srgb8ToLinear[red8], srgb8ToLinear[green8], srgb8ToLinear[blue8]
+	luminance := 0.2126*red + 0.7152*green + 0.0722*blue
+	weights := colorGradeWeights(luminance, grading.balance, grading.blending)
+	for index, tone := range []xmpColorGradeTone{grading.shadows, grading.midtones, grading.highlights} {
+		weight := weights[index] * amount
+		red, green, blue = applyLocalToningColor(red, green, blue, tone.hue, tone.saturation, weight)
+		red, green, blue = applyColorGradeLuminance(red, green, blue, tone.luminance, weight)
+	}
+	red, green, blue = applyLocalToningColor(red, green, blue, grading.global.hue, grading.global.saturation, amount)
+	red, green, blue = applyColorGradeLuminance(red, green, blue, grading.global.luminance, amount)
+	return encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
+}
+
+func colorGradeWeights(luminance, balance, blending float64) [3]float64 {
+	// Adobe documents how blending and balance affect tonal overlap, but not
+	// the exact transfer curves; use normalized Gaussian zones as an sRGB approximation.
+	effective := math.Max(0, math.Min(1, luminance+balance/100*0.2))
+	spread := 0.12 + math.Max(0, math.Min(100, blending))/100*0.22
+	weights := [3]float64{}
+	total := 0.0
+	for index, center := range [3]float64{0.15, 0.5, 0.85} {
+		distance := (effective - center) / spread
+		weights[index] = math.Exp(-0.5 * distance * distance)
+		total += weights[index]
+	}
+	if total > 0 {
+		for index := range weights {
+			weights[index] /= total
+		}
+	}
+	return weights
+}
+
+func applyColorGradeLuminance(red, green, blue, adjustment, amount float64) (float64, float64, float64) {
+	if adjustment == 0 || amount == 0 {
+		return red, green, blue
+	}
+	luminance := 0.2126*red + 0.7152*green + 0.0722*blue
+	adjusted := math.Max(0, math.Min(1, luminance+adjustment/100*0.25*amount))
+	if luminance <= 1e-12 {
+		return adjusted, adjusted, adjusted
+	}
+	scale := adjusted / luminance
+	return red * scale, green * scale, blue * scale
 }
 
 var xmpHSLHueCenters = [8]float64{0, 30, 60, 120, 180, 240, 270, 315}

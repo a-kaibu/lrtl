@@ -35,6 +35,7 @@ type xmpLocalCorrection struct {
 	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
+	colorGrading                            xmpColorGrading
 	mainCurve                               [256]uint8
 	hasMainCurve                            bool
 	channelCurve                            [3][256]uint8
@@ -157,6 +158,10 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		correction.whiteBalance = approximateWhiteBalanceGains(6500+temperature*40, tint)
 		correction.hasWhiteBalance = true
 	}
+	correction.colorGrading, err = readXMPLocalColorGrading(element)
+	if err != nil {
+		return correction, false, err
+	}
 	correction.mainCurve, correction.hasMainCurve, err = readXMPLocalToneCurve(element, "MainCurve")
 	if err != nil {
 		return correction, false, err
@@ -186,7 +191,8 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 	}
 	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
 		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.toningSaturation == 0 &&
-		!correction.hasWhiteBalance && !correction.hasMainCurve && !correction.hasChannelCurve[0] && !correction.hasChannelCurve[1] && !correction.hasChannelCurve[2] {
+		!correction.hasWhiteBalance && !correction.colorGrading.active && !correction.hasMainCurve &&
+		!correction.hasChannelCurve[0] && !correction.hasChannelCurve[1] && !correction.hasChannelCurve[2] {
 		return correction, false, nil
 	}
 
@@ -740,6 +746,9 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 				if correction.hasChannelCurve[2] {
 					blue8 = blendLocalCurve(blue8, correction.channelCurve[2], curveBlend)
 				}
+				if correction.colorGrading.active {
+					red8, green8, blue8 = applyXMPColorGrading(red8, green8, blue8, correction.colorGrading, curveBlend)
+				}
 				result.SetNRGBA(x, y, color.NRGBA{
 					R: red8, G: green8, B: blue8, A: pixel.A,
 				})
@@ -758,6 +767,10 @@ func applyLocalToningColor(red, green, blue, hue, saturation, weight float64) (f
 	blend := math.Max(0, math.Min(1, saturation/100*weight))
 	if blend == 0 {
 		return red, green, blue
+	}
+	hue = math.Mod(hue, 360)
+	if hue < 0 {
+		hue += 360
 	}
 	red8, green8, blue8 := encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
 	redSRGB, greenSRGB, blueSRGB := float64(red8)/255, float64(green8)/255, float64(blue8)/255
