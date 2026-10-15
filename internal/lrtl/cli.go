@@ -462,19 +462,62 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	frameCount := len(frames)
-	maxSuggestions := frameCount - 2
-	if maxSuggestions < 1 {
+	if frameCount < 3 {
 		return reportError(stderr, fmt.Errorf("keyframe suggestions require at least one interior frame between the sequence endpoints"))
+	}
+	packets := make([]*XMPPacket, frameCount)
+	existingKeyframes := make([]int, 0)
+	selectionAnchors := make([]int, 0)
+	for index, frame := range frames {
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+		}
+		packets[index] = packet
+		if packet.IsKeyframe() {
+			existingKeyframes = append(existingKeyframes, index)
+			selectionAnchors = append(selectionAnchors, index)
+			continue
+		}
+		if _, found, err := packet.GetScalar(holyGrailKeyframeProperty); err != nil {
+			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+		} else if found {
+			selectionAnchors = append(selectionAnchors, index)
+			continue
+		}
+		if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
+			selectionAnchors = append(selectionAnchors, index)
+		}
+	}
+	availableSuggestions := frameCount - 2
+	for _, index := range selectionAnchors {
+		if index > 0 && index < frameCount-1 {
+			availableSuggestions--
+		}
+	}
+	if availableSuggestions < 0 {
+		availableSuggestions = 0
 	}
 	suggestionCount := *count
 	if !countSpecified {
-		suggestionCount = min(suggestionCount, maxSuggestions)
+		suggestionCount = min(suggestionCount, availableSuggestions)
+	}
+	if suggestionCount == 0 {
+		if countSpecified {
+			if availableSuggestions == 0 {
+				return reportError(stderr, fmt.Errorf("no unmarked interior frames are available for new keyframes"))
+			}
+			return reportError(stderr, fmt.Errorf("new keyframe count must be at least 1"))
+		}
+		fmt.Fprintf(stdout, "Sequence: %s\n", directory)
+		fmt.Fprintf(stdout, "Frames: %d; existing keyframes: %d; no new keyframes suggested\n", frameCount, len(existingKeyframes))
+		return 0
 	}
 	var indices []int
 	if *evenlySpaced {
-		indices, err = selectEvenlySpacedKeyframeIndices(frameCount, suggestionCount)
+		indices, err = selectEvenlySpacedKeyframeIndicesWithAnchors(frameCount, suggestionCount, selectionAnchors)
 	} else {
-		indices, err = selectKeyframeIndices(curve, suggestionCount, *smoothRadius)
+		indices, err = selectKeyframeIndicesWithAnchors(curve, suggestionCount, *smoothRadius, selectionAnchors)
 	}
 	if err != nil {
 		return reportError(stderr, err)
@@ -483,10 +526,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if *write {
 		for _, index := range indices {
 			frame := frames[index]
-			packet, err := PacketForSidecar(frame.OutputSidecar())
-			if err != nil {
-				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
-			}
+			packet := packets[index]
 			if _, err := MarkKeyframe(packet, "default"); err != nil {
 				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 			}
@@ -494,7 +534,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
-	fmt.Fprintf(stdout, "Frames: %d; suggested keyframes: %d\n", len(frames), len(indices))
+	fmt.Fprintf(stdout, "Frames: %d; existing keyframes: %d; new suggestions: %d\n", len(frames), len(existingKeyframes), len(indices))
 	for _, index := range indices {
 		frame := frames[index]
 		if *evenlySpaced {

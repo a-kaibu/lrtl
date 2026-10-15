@@ -59,12 +59,41 @@ func analyzeLuminanceSequence(frames []Frame) ([]float64, error) {
 // interior frames, then repeatedly splits the segment with the largest deviation
 // from a straight luminance transition.
 func selectKeyframeIndices(logLuminance []float64, count, smoothRadius int) ([]int, error) {
+	return selectKeyframeIndicesWithAnchors(logLuminance, count, smoothRadius, nil)
+}
+
+// selectKeyframeIndicesWithAnchors adds count new interior indices while
+// preserving existing keyframes as fixed curve anchors.
+func selectKeyframeIndicesWithAnchors(logLuminance []float64, count, smoothRadius int, existing []int) ([]int, error) {
 	if len(logLuminance) == 0 {
 		return nil, fmt.Errorf("sequence contains no luminance samples")
 	}
+	if len(logLuminance) < 3 {
+		return nil, fmt.Errorf("keyframe suggestions require at least one interior frame between the sequence endpoints")
+	}
 	interiorCount := len(logLuminance) - 2
-	if count < 1 || count > interiorCount {
-		return nil, fmt.Errorf("keyframe count must be between 1 and %d interior frames: %d", max(0, interiorCount), count)
+	anchors := make([]int, 0, len(existing)+2)
+	anchors = append(anchors, 0, len(logLuminance)-1)
+	blocked := make([]bool, len(logLuminance))
+	blocked[0], blocked[len(blocked)-1] = true, true
+	for _, index := range existing {
+		if index < 0 || index >= len(logLuminance) {
+			return nil, fmt.Errorf("existing keyframe index is outside the sequence: %d", index)
+		}
+		if index == 0 || index == len(logLuminance)-1 || blocked[index] {
+			continue
+		}
+		blocked[index] = true
+		anchors = append(anchors, index)
+	}
+	available := interiorCount
+	for _, isBlocked := range blocked[1 : len(blocked)-1] {
+		if isBlocked {
+			available--
+		}
+	}
+	if count < 1 || count > available {
+		return nil, fmt.Errorf("new keyframe count must be between 1 and %d unmarked interior frames: %d", max(0, available), count)
 	}
 	if smoothRadius < 0 || smoothRadius > 1000 {
 		return nil, fmt.Errorf("smoothing radius must be between 0 and 1000 frames: %d", smoothRadius)
@@ -79,29 +108,45 @@ func selectKeyframeIndices(logLuminance []float64, count, smoothRadius int) ([]i
 		curve = smoothLogLuminance(curve, smoothRadius)
 	}
 	if count == 1 {
-		median := medianFloat64(curve[1 : len(curve)-1])
-		best := 1
-		for index := 2; index < len(curve)-1; index++ {
+		values := make([]float64, 0, available)
+		for index := 1; index < len(curve)-1; index++ {
+			if !blocked[index] {
+				values = append(values, curve[index])
+			}
+		}
+		median := medianFloat64(values)
+		best := -1
+		for index := 1; index < len(curve)-1; index++ {
+			if blocked[index] {
+				continue
+			}
+			if best < 0 {
+				best = index
+				continue
+			}
 			if math.Abs(curve[index]-median) < math.Abs(curve[best]-median) {
 				best = index
 			}
 		}
 		return []int{best}, nil
 	}
-	if count == interiorCount {
-		indices := make([]int, interiorCount)
-		for index := range indices {
-			indices[index] = index + 1
+	if count == available {
+		indices := make([]int, 0, available)
+		for index := 1; index < len(curve)-1; index++ {
+			if !blocked[index] {
+				indices = append(indices, index)
+			}
 		}
 		return indices, nil
 	}
 
-	indices := []int{0, len(curve) - 1}
-	for len(indices) < count+2 {
+	sort.Ints(anchors)
+	targetAnchorCount := len(anchors) + count
+	for len(anchors) < targetAnchorCount {
 		bestIndex, bestSpan := -1, -1
 		bestDeviation := -1.0
-		for segment := 0; segment < len(indices)-1; segment++ {
-			left, right := indices[segment], indices[segment+1]
+		for segment := 0; segment < len(anchors)-1; segment++ {
+			left, right := anchors[segment], anchors[segment+1]
 			span := right - left
 			if span < 2 {
 				continue
@@ -124,26 +169,89 @@ func selectKeyframeIndices(logLuminance []float64, count, smoothRadius int) ([]i
 		if bestIndex < 0 {
 			break
 		}
-		indices = append(indices, bestIndex)
-		sort.Ints(indices)
+		anchors = append(anchors, bestIndex)
+		sort.Ints(anchors)
 	}
-	return indices[1 : len(indices)-1], nil
+
+	selected := make([]int, 0, count)
+	for _, index := range anchors {
+		if index != 0 && index != len(curve)-1 && !blocked[index] {
+			selected = append(selected, index)
+		}
+	}
+	return selected, nil
 }
 
 func selectEvenlySpacedKeyframeIndices(frameCount, count int) ([]int, error) {
+	return selectEvenlySpacedKeyframeIndicesWithAnchors(frameCount, count, nil)
+}
+
+func selectEvenlySpacedKeyframeIndicesWithAnchors(frameCount, count int, existing []int) ([]int, error) {
 	if frameCount < 1 {
 		return nil, fmt.Errorf("sequence contains no frames")
 	}
+	if frameCount < 3 {
+		return nil, fmt.Errorf("keyframe suggestions require at least one interior frame between the sequence endpoints")
+	}
 	interiorCount := frameCount - 2
-	if count < 1 || count > interiorCount {
-		return nil, fmt.Errorf("keyframe count must be between 1 and %d interior frames: %d", max(0, interiorCount), count)
+	blocked := make([]bool, frameCount)
+	if frameCount > 0 {
+		blocked[0] = true
+		blocked[frameCount-1] = true
+	}
+	for _, index := range existing {
+		if index < 0 || index >= frameCount {
+			return nil, fmt.Errorf("existing keyframe index is outside the sequence: %d", index)
+		}
+		blocked[index] = true
+	}
+	available := interiorCount
+	for _, isBlocked := range blocked[1 : frameCount-1] {
+		if isBlocked {
+			available--
+		}
+	}
+	if count < 1 || count > available {
+		return nil, fmt.Errorf("new keyframe count must be between 1 and %d unmarked interior frames: %d", max(0, available), count)
 	}
 
-	indices := make([]int, count)
+	indices := make([]int, 0, count)
+	if count == available {
+		for index := 1; index < frameCount-1; index++ {
+			if !blocked[index] {
+				indices = append(indices, index)
+			}
+		}
+		return indices, nil
+	}
+
 	divisions := count + 1
 	for position := 1; position <= count; position++ {
 		numerator := position * (frameCount - 1)
-		indices[position-1] = (numerator + divisions/2) / divisions
+		target := (numerator + divisions/2) / divisions
+		best, bestDistance := -1, math.MaxInt
+		for index := 1; index < frameCount-1; index++ {
+			if blocked[index] {
+				continue
+			}
+			distance := absInt(index - target)
+			if distance < bestDistance || (distance == bestDistance && index < best) {
+				best, bestDistance = index, distance
+			}
+		}
+		if best < 0 {
+			return nil, fmt.Errorf("not enough unmarked frames for %d new keyframes", count)
+		}
+		blocked[best] = true
+		indices = append(indices, best)
 	}
+	sort.Ints(indices)
 	return indices, nil
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
