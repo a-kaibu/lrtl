@@ -32,7 +32,7 @@ type xmpLocalCorrection struct {
 	left, top                               float64
 	right, bottom                           float64
 	angle, feather                          float64
-	flipped                                 bool
+	flipped, maskInverted                   bool
 }
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
@@ -176,6 +176,10 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 	if err != nil {
 		return correction, false, err
 	}
+	correction.maskInverted, _, err = xmpLocalBool(mask, "MaskInverted", false)
+	if err != nil {
+		return correction, false, err
+	}
 	if correction.maskValue == 0 {
 		return correction, false, nil
 	}
@@ -297,7 +301,7 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int) float64
 			weight = 1 - smoothstep((radius-(1-feather))/feather)
 		}
 	}
-	if correction.flipped {
+	if correction.flipped != correction.maskInverted {
 		weight = 1 - weight
 	}
 	return math.Max(0, math.Min(1, weight*correction.maskValue))
