@@ -26,6 +26,14 @@ func MarkKeyframe(packet *XMPPacket, kind string) (int, error) {
 	if kind != "default" && kind != "crop" {
 		return 0, fmt.Errorf("unsupported keyframe kind: %s", kind)
 	}
+	if _, hgMarked, err := packet.GetScalar(holyGrailKeyframeProperty); err != nil {
+		return 0, err
+	} else if hgMarked {
+		return 0, fmt.Errorf("this image is an internal Holy Grail keyframe; reset Holy Grail marks before assigning a regular keyframe")
+	}
+	if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
+		return 0, fmt.Errorf("this image has an LRTimelapse 2- or 3-star Holy Grail keyframe rating; reset Holy Grail marks before assigning a regular keyframe")
+	}
 	marked, err := packet.HasProperty("ol:KeyframeKind")
 	if err != nil {
 		return 0, err

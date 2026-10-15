@@ -5,11 +5,14 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/evanoberholster/imagemeta"
 )
 
 const holyGrailCorrectionProperty = "ol:HolyGrailCorrection2012"
+const holyGrailKeyframeProperty = "ol:HolyGrailKeyframeKind"
+const holyGrailPreviousRatingProperty = "ol:HolyGrailPreviousRating"
 const maxRenderXMPExposureStops = 32
 
 type CameraExposure struct {
@@ -17,6 +20,7 @@ type CameraExposure struct {
 	FNumber      float64
 	ISO          float64
 	Stops        float64
+	Manual       bool
 }
 
 type HolyGrailChange struct {
@@ -26,7 +30,17 @@ type HolyGrailChange struct {
 	Compensation     float64
 	ExposureBefore   float64
 	ExposureAfter    float64
+	ExposureChanged  bool
 	RemoveCorrection bool
+	KeyframeRating   int
+	RestoreKeyframe  bool
+	PreviousRating   string
+}
+
+type HolyGrailPlan struct {
+	Changes    []HolyGrailChange
+	ManualMode bool
+	MarkJumps  bool
 }
 
 func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error) {
@@ -61,10 +75,72 @@ func readCameraExposure(path string, ignoreAperture bool) (CameraExposure, error
 	if !ignoreAperture {
 		setting -= 2 * math.Log2(fNumber)
 	}
-	return CameraExposure{ExposureTime: exposureTime, FNumber: fNumber, ISO: iso, Stops: setting}, nil
+	manual := uint16(metadata.ExposureMode) == 1 || uint16(metadata.ExposureProgram) == 1
+	return CameraExposure{ExposureTime: exposureTime, FNumber: fNumber, ISO: iso, Stops: setting, Manual: manual}, nil
 }
 
-func buildHolyGrailPlan(frames []Frame, ignoreAperture, reset bool) ([]HolyGrailChange, error) {
+func cameraSettingsChanged(before, after CameraExposure, ignoreAperture bool) bool {
+	changed := func(left, right float64) bool {
+		return math.Abs(left-right) > 1e-6*math.Max(1, math.Max(math.Abs(left), math.Abs(right)))
+	}
+	if changed(before.ExposureTime, after.ExposureTime) || changed(before.ISO, after.ISO) {
+		return true
+	}
+	return !ignoreAperture && changed(before.FNumber, after.FNumber)
+}
+
+func holyGrailKeyframePlan(packet *XMPPacket, desiredRating int) (int, bool, string, error) {
+	kind, hasKind, err := packet.GetScalar(holyGrailKeyframeProperty)
+	if err != nil {
+		return 0, false, "", err
+	}
+	previous, hasPrevious, err := packet.GetScalar(holyGrailPreviousRatingProperty)
+	if err != nil {
+		return 0, false, "", err
+	}
+	ratingText, hasRating, err := packet.GetScalar("xmp:Rating")
+	if err != nil {
+		return 0, false, "", err
+	}
+	if hasKind {
+		oldRating, valid := scalarNumber(kind)
+		if !valid || (oldRating != 2 && oldRating != 3) || !hasPrevious {
+			return 0, false, "", fmt.Errorf("invalid lrtl Holy Grail keyframe marker")
+		}
+		if !hasRating || ratingText != kind {
+			return 0, false, "", fmt.Errorf("Holy Grail keyframe marker was changed outside lrtl; restore or remove %s first", holyGrailKeyframeProperty)
+		}
+		if desiredRating == int(oldRating) {
+			return 0, false, "", nil
+		}
+		if desiredRating == 0 {
+			return 0, true, previous, nil
+		}
+		return desiredRating, false, previous, nil
+	}
+	if hasPrevious {
+		return 0, false, "", fmt.Errorf("orphaned lrtl property %s", holyGrailPreviousRatingProperty)
+	}
+	if desiredRating == 0 {
+		return 0, false, "", nil
+	}
+	if marked, err := packet.HasProperty("ol:KeyframeKind"); err != nil {
+		return 0, false, "", err
+	} else if marked {
+		return 0, false, "", fmt.Errorf("cannot place an HG marker over an existing regular keyframe")
+	}
+	if hasRating {
+		rating, valid := scalarNumber(ratingText)
+		if valid && rating == float64(desiredRating) {
+			return 0, false, "", nil
+		}
+		return 0, false, "", fmt.Errorf("cannot mark an HG %d-star keyframe over existing xmp:Rating=%s", desiredRating, ratingText)
+	}
+	return desiredRating, false, absentRating, nil
+}
+
+func buildHolyGrailPlan(frames []Frame, ignoreAperture, reset, forceMarkJumps, noMarkJumps bool) (*HolyGrailPlan, error) {
+	plan := &HolyGrailPlan{}
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
 	}
@@ -77,10 +153,30 @@ func buildHolyGrailPlan(frames []Frame, ignoreAperture, reset bool) ([]HolyGrail
 			}
 			cameras[index] = camera
 		}
+		plan.ManualMode = len(cameras) > 0
+		for _, camera := range cameras {
+			if !camera.Manual {
+				plan.ManualMode = false
+				break
+			}
+		}
+		plan.MarkJumps = !noMarkJumps && (forceMarkJumps || plan.ManualMode)
 	}
 	base := 0.0
 	if !reset {
 		base = cameras[0].Stops
+	}
+	jumpRatings := make([]int, len(frames))
+	if !reset && plan.MarkJumps {
+		for index := 1; index < len(frames); index++ {
+			if !cameraSettingsChanged(cameras[index-1], cameras[index], ignoreAperture) {
+				continue
+			}
+			if jumpRatings[index-1] != 0 || jumpRatings[index] != 0 {
+				return nil, fmt.Errorf("camera exposure changes are too close to mark adjacent 2*/3* pairs near %s; use --no-mark-jumps for this sequence", filepath.Base(frames[index].Image))
+			}
+			jumpRatings[index-1], jumpRatings[index] = 2, 3
+		}
 	}
 
 	changes := make([]HolyGrailChange, 0, len(frames))
@@ -117,30 +213,70 @@ func buildHolyGrailPlan(frames []Frame, ignoreAperture, reset bool) ([]HolyGrail
 			compensation = base - cameras[index].Stops
 		}
 		after := before + compensation
-		changed := math.Abs(compensation-previous) > 1e-12
-		if !changed {
+		exposureChanged := math.Abs(compensation-previous) > 1e-12
+		keyframeRating, restoreKeyframe, previousRating := 0, false, ""
+		if reset {
+			keyframeRating, restoreKeyframe, previousRating, err = holyGrailKeyframePlan(packet, 0)
+		} else if plan.MarkJumps {
+			keyframeRating, restoreKeyframe, previousRating, err = holyGrailKeyframePlan(packet, jumpRatings[index])
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+		}
+		if !exposureChanged && keyframeRating == 0 && !restoreKeyframe {
 			continue
 		}
 		changes = append(changes, HolyGrailChange{
 			Frame: frame, Packet: packet, Camera: cameras[index],
 			Compensation: compensation, ExposureBefore: before, ExposureAfter: after,
+			ExposureChanged:  exposureChanged,
 			RemoveCorrection: reset || math.Abs(compensation) < 1e-12,
+			KeyframeRating:   keyframeRating, RestoreKeyframe: restoreKeyframe, PreviousRating: previousRating,
 		})
 	}
-	return changes, nil
+	plan.Changes = changes
+	return plan, nil
 }
 
 func applyHolyGrailPlan(changes []HolyGrailChange) error {
 	for _, change := range changes {
-		if err := change.Packet.SetScalar("crs:Exposure2012", formatNumber(change.ExposureAfter)); err != nil {
-			return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
-		}
-		if change.RemoveCorrection {
-			if err := change.Packet.RemoveProperty(holyGrailCorrectionProperty); err != nil {
+		if change.ExposureChanged {
+			if err := change.Packet.SetScalar("crs:Exposure2012", formatNumber(change.ExposureAfter)); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
-		} else if err := change.Packet.SetScalar(holyGrailCorrectionProperty, formatNumber(change.Compensation)); err != nil {
-			return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			if change.RemoveCorrection {
+				if err := change.Packet.RemoveProperty(holyGrailCorrectionProperty); err != nil {
+					return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+				}
+			} else if err := change.Packet.SetScalar(holyGrailCorrectionProperty, formatNumber(change.Compensation)); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
+		}
+		if change.RestoreKeyframe {
+			if change.PreviousRating == absentRating {
+				if err := change.Packet.RemoveProperty("xmp:Rating"); err != nil {
+					return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+				}
+			} else if err := change.Packet.SetScalar("xmp:Rating", change.PreviousRating); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
+			if err := change.Packet.RemoveProperty(holyGrailKeyframeProperty); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
+			if err := change.Packet.RemoveProperty(holyGrailPreviousRatingProperty); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
+		}
+		if change.KeyframeRating != 0 {
+			if err := change.Packet.SetScalar("xmp:Rating", strconv.Itoa(change.KeyframeRating)); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
+			if err := change.Packet.SetScalar(holyGrailKeyframeProperty, strconv.Itoa(change.KeyframeRating)); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
+			if err := change.Packet.SetScalar(holyGrailPreviousRatingProperty, change.PreviousRating); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
 		}
 	}
 	return nil

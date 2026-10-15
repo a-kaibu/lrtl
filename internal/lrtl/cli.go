@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-const version = "0.7.0"
+const version = "0.8.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
 	flags := make([]string, 0, len(arguments))
@@ -132,7 +132,13 @@ func runScan(directory string, stdout, stderr io.Writer) int {
 			state = "yes"
 			marker = packet.KeyframeKind()
 			if marker == "" {
-				marker = "-"
+				if hgKind, found, _ := packet.GetScalar(holyGrailKeyframeProperty); found {
+					marker = "HG-" + hgKind
+				} else if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
+					marker = fmt.Sprintf("HG-%d", rating)
+				} else {
+					marker = "-"
+				}
 			}
 			for _, name := range NumericCRSProperties {
 				if _, found, _ := packet.GetScalar("crs:" + name); found {
@@ -460,6 +466,20 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
+	markedPackets := make(map[int]*XMPPacket)
+	if *write {
+		for _, index := range indices {
+			frame := frames[index]
+			packet, err := PacketForSidecar(frame.OutputSidecar())
+			if err != nil {
+				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+			}
+			if _, err := MarkKeyframe(packet, "default"); err != nil {
+				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
+			}
+			markedPackets[index] = packet
+		}
+	}
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
 	fmt.Fprintf(stdout, "Frames: %d; suggested keyframes: %d\n", len(frames), len(indices))
 	for _, index := range indices {
@@ -468,14 +488,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		if !*write {
 			continue
 		}
-		packet, err := PacketForSidecar(frame.OutputSidecar())
-		if err != nil {
-			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
-		}
-		if _, err := MarkKeyframe(packet, "default"); err != nil {
-			return reportError(stderr, err)
-		}
-		backup, err := WritePacket(frame.OutputSidecar(), packet, !*noBackup)
+		backup, err := WritePacket(frame.OutputSidecar(), markedPackets[index], !*noBackup)
 		if err != nil {
 			return reportError(stderr, err)
 		}
@@ -492,9 +505,11 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 
 func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("holy-grail", stderr)
-	write := set.Bool("write", false, "write exposure compensation to XMP sidecars")
+	write := set.Bool("write", false, "write exposure compensation and 2*/3* jump keyframes to XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
 	ignoreAperture := set.Bool("ignore-aperture", false, "ignore FNumber when aperture remained fixed")
+	forceMarkJumps := set.Bool("mark-jumps", false, "force 2*/3* marks when EXIF does not confirm Manual mode")
+	noMarkJumps := set.Bool("no-mark-jumps", false, "do not mark camera-setting changes as 2*/3* keyframe pairs")
 	reset := set.Bool("reset", false, "remove lrtl-managed Holy Grail compensation")
 	if err := set.Parse(flagFirst(arguments, nil)); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -504,32 +519,61 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if set.NArg() != 1 {
 		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
 	}
-	if *reset && *ignoreAperture {
-		return reportError(stderr, fmt.Errorf("--ignore-aperture cannot be used with --reset"))
+	if *forceMarkJumps && *noMarkJumps {
+		return reportError(stderr, fmt.Errorf("--mark-jumps and --no-mark-jumps cannot be used together"))
 	}
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	changes, err := buildHolyGrailPlan(frames, *ignoreAperture, *reset)
+	plan, err := buildHolyGrailPlan(frames, *ignoreAperture, *reset, *forceMarkJumps, *noMarkJumps)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	mode := "EXIF exposure compensation"
-	if *reset {
-		mode = "lrtl Holy Grail correction reset"
-	}
+	changes := plan.Changes
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
-	fmt.Fprintf(stdout, "Frames: %d; %s: %d\n", len(frames), mode, len(changes))
+	correctionUpdates := 0
+	jumpMarks := 0
+	for _, change := range changes {
+		if change.ExposureChanged {
+			correctionUpdates++
+		}
+		if change.KeyframeRating == 2 || change.KeyframeRating == 3 || change.RestoreKeyframe {
+			jumpMarks++
+		}
+	}
+	if *reset {
+		fmt.Fprintf(stdout, "Frames: %d; frames to reset: %d\n", len(frames), len(changes))
+	} else {
+		fmt.Fprintf(stdout, "Frames: %d; exposure corrections: %d\n", len(frames), correctionUpdates)
+	}
+	if !*reset && plan.MarkJumps {
+		fmt.Fprintf(stdout, "HG jump keyframe marks: %d\n", jumpMarks)
+	} else if !*reset && !*noMarkJumps && !plan.ManualMode && !*forceMarkJumps {
+		fmt.Fprintln(stdout, "EXIF does not confirm Manual mode; 2*/3* marks are omitted. Pass --mark-jumps to force them.")
+	}
 	for _, change := range changes {
 		if *reset {
-			fmt.Fprintf(stdout, "  %-42s Exposure2012 %+.4f -> %+.4f EV\n",
-				filepath.Base(change.Frame.Image), change.ExposureBefore, change.ExposureAfter)
+			fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))
+			if change.ExposureChanged {
+				fmt.Fprintf(stdout, " Exposure2012 %+.4f -> %+.4f EV", change.ExposureBefore, change.ExposureAfter)
+			}
+			if change.RestoreKeyframe {
+				fmt.Fprint(stdout, " restore HG rating")
+			}
+			fmt.Fprintln(stdout)
 		} else {
-			fmt.Fprintf(stdout, "  %-42s shutter=%.6g s f/%.4g ISO=%.4g correction=%+.4f EV Exposure2012=%+.4f EV\n",
+			fmt.Fprintf(stdout, "  %-42s shutter=%.6g s f/%.4g ISO=%.4g",
 				filepath.Base(change.Frame.Image), change.Camera.ExposureTime,
-				change.Camera.FNumber, change.Camera.ISO, change.Compensation, change.ExposureAfter)
+				change.Camera.FNumber, change.Camera.ISO)
+			if change.ExposureChanged {
+				fmt.Fprintf(stdout, " correction=%+.4f EV Exposure2012=%+.4f EV", change.Compensation, change.ExposureAfter)
+			}
+			if change.KeyframeRating != 0 {
+				fmt.Fprintf(stdout, " HG keyframe=%d*", change.KeyframeRating)
+			}
+			fmt.Fprintln(stdout)
 		}
 	}
 	if len(changes) == 0 {
