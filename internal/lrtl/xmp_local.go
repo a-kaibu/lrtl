@@ -15,6 +15,7 @@ type localMaskKind uint8
 const (
 	localMaskGradient localMaskKind = iota + 1
 	localMaskCircularGradient
+	localMaskLuminanceRange
 )
 
 type localMaskBlendMode uint8
@@ -37,6 +38,11 @@ type xmpLocalCorrection struct {
 	masks                                   []xmpLocalMask
 }
 
+type xmpLocalLuminanceRange struct {
+	lowOuter, lowInner, highInner, highOuter float64
+	invert                                   bool
+}
+
 type xmpLocalMask struct {
 	kind                  localMaskKind
 	blendMode             localMaskBlendMode
@@ -47,6 +53,7 @@ type xmpLocalMask struct {
 	right, bottom         float64
 	angle, feather        float64
 	flipped, maskInverted bool
+	luminanceRange        *xmpLocalLuminanceRange
 }
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
@@ -226,6 +233,8 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 		mask.kind = localMaskGradient
 	case "Mask/CircularGradient":
 		mask.kind = localMaskCircularGradient
+	case "Mask/RangeMask":
+		mask.kind = localMaskLuminanceRange
 	default:
 		return mask, false, nil
 	}
@@ -237,9 +246,21 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 		return mask, false, fmt.Errorf("crs:MaskBlendMode must be 0 (add) or 1 (intersect)")
 	}
 	mask.blendMode = localMaskBlendMode(blendMode)
-	mask.maskValue, _, err = xmpLocalNumber(element, "MaskValue", 1, 0, 1)
-	if err != nil {
-		return mask, false, err
+	if mask.kind == localMaskLuminanceRange {
+		// RangeMask stores its selection in CorrectionRangeMask. In observed
+		// XMP, MaskValue=0 is the empty spatial base that the range selector
+		// refines, so use full coverage for this selector component.
+		mask.maskValue = 1
+		luminanceRange, supported, err := parseXMPLuminanceRange(element)
+		if err != nil || !supported {
+			return mask, supported, err
+		}
+		mask.luminanceRange = luminanceRange
+	} else {
+		mask.maskValue, _, err = xmpLocalNumber(element, "MaskValue", 1, 0, 1)
+		if err != nil {
+			return mask, false, err
+		}
 	}
 	mask.maskInverted, _, err = xmpLocalBool(element, "MaskInverted", false)
 	if err != nil {
@@ -248,6 +269,9 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 	mask.flipped, _, err = xmpLocalBool(element, "Flipped", false)
 	if err != nil {
 		return mask, false, err
+	}
+	if mask.kind == localMaskLuminanceRange {
+		return mask, true, nil
 	}
 	if mask.kind == localMaskGradient {
 		var haveZeroX, haveZeroY, haveFullX, haveFullY bool
@@ -304,6 +328,63 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 	return mask, true, nil
 }
 
+func parseXMPLuminanceRange(element *etree.Element) (*xmpLocalLuminanceRange, bool, error) {
+	var rangeElement *etree.Element
+	for _, token := range element.Child {
+		child, ok := token.(*etree.Element)
+		if ok && child.NamespaceURI() == crsNamespace && child.Tag == "CorrectionRangeMask" {
+			rangeElement = child
+			break
+		}
+	}
+	if rangeElement == nil {
+		return nil, false, nil
+	}
+	typeText, hasType, err := crsElementValue(rangeElement, "Type")
+	if err != nil {
+		return nil, false, err
+	}
+	if hasType {
+		typeValue, valid := scalarNumber(typeText)
+		if !valid || math.Trunc(typeValue) != typeValue {
+			return nil, false, fmt.Errorf("crs:CorrectionRangeMask Type must be an integer")
+		}
+		// Type 1 is Color and Type 3 is Depth in observed Camera Raw XMP.
+		if typeValue != 2 {
+			return nil, false, nil
+		}
+	}
+	text, found, err := crsElementValue(rangeElement, "LumRange")
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, nil
+	}
+	parts := strings.Fields(text)
+	if len(parts) != 4 {
+		return nil, false, fmt.Errorf("crs:CorrectionRangeMask LumRange must contain four values")
+	}
+	values := [4]float64{}
+	for index, part := range parts {
+		value, valid := scalarNumber(part)
+		if !valid || value < 0 || value > 1 {
+			return nil, false, fmt.Errorf("crs:CorrectionRangeMask LumRange values must be between 0 and 1")
+		}
+		values[index] = value
+	}
+	if values[0] > values[1] || values[1] > values[2] || values[2] > values[3] {
+		return nil, false, fmt.Errorf("crs:CorrectionRangeMask LumRange values must be ordered")
+	}
+	invert, _, err := xmpLocalBool(rangeElement, "Invert", false)
+	if err != nil {
+		return nil, false, err
+	}
+	return &xmpLocalLuminanceRange{
+		lowOuter: values[0], lowInner: values[1], highInner: values[2], highOuter: values[3], invert: invert,
+	}, true, nil
+}
+
 func xmpLocalNumber(element *etree.Element, name string, fallback, min, max float64) (float64, bool, error) {
 	text, found, err := crsElementValue(element, name)
 	if err != nil || !found {
@@ -337,13 +418,13 @@ func xmpLocalBool(element *etree.Element, name string, fallback bool) (bool, boo
 	}
 }
 
-func (correction xmpLocalCorrection) maskWeight(x, y, width, height int) float64 {
+func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminance float64) float64 {
 	if len(correction.masks) == 0 {
 		return 0
 	}
 	weight := 0.0
 	for index, mask := range correction.masks {
-		component := mask.maskWeight(x, y, width, height)
+		component := mask.maskWeight(x, y, width, height, luminance)
 		if index == 0 {
 			weight = component
 			continue
@@ -359,7 +440,7 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int) float64
 	return math.Max(0, math.Min(1, weight))
 }
 
-func (mask xmpLocalMask) maskWeight(x, y, width, height int) float64 {
+func (mask xmpLocalMask) maskWeight(x, y, width, height int, luminance float64) float64 {
 	nx := (float64(x) + 0.5) / float64(width)
 	ny := (float64(y) + 0.5) / float64(height)
 	weight := 0.0
@@ -389,11 +470,36 @@ func (mask xmpLocalMask) maskWeight(x, y, width, height int) float64 {
 		} else {
 			weight = 1 - smoothstep((radius-(1-feather))/feather)
 		}
+	case localMaskLuminanceRange:
+		weight = luminanceRangeWeight(*mask.luminanceRange, luminance)
 	}
 	if mask.flipped != mask.maskInverted {
 		weight = 1 - weight
 	}
 	return math.Max(0, math.Min(1, weight*mask.maskValue))
+}
+
+func luminanceRangeWeight(luminanceRange xmpLocalLuminanceRange, luminance float64) float64 {
+	luminance = math.Max(0, math.Min(1, luminance))
+	weight := 1.0
+	if luminance < luminanceRange.lowInner {
+		if luminanceRange.lowInner <= luminanceRange.lowOuter {
+			weight = 0
+		} else {
+			weight = smoothstep((luminance - luminanceRange.lowOuter) / (luminanceRange.lowInner - luminanceRange.lowOuter))
+		}
+	}
+	if luminance > luminanceRange.highInner {
+		if luminanceRange.highOuter <= luminanceRange.highInner {
+			weight = 0
+		} else {
+			weight *= 1 - smoothstep((luminance-luminanceRange.highInner)/(luminanceRange.highOuter-luminanceRange.highInner))
+		}
+	}
+	if luminanceRange.invert {
+		weight = 1 - weight
+	}
+	return weight
 }
 
 func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection) image.Image {
@@ -411,7 +517,8 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				pixel := color.NRGBAModel.Convert(current.At(x, y)).(color.NRGBA)
-				weight := correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height) * correction.amount
+				maskLuminance := 0.2126*srgb8ToLinear[pixel.R] + 0.7152*srgb8ToLinear[pixel.G] + 0.0722*srgb8ToLinear[pixel.B]
+				weight := correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance) * correction.amount
 				redGain, greenGain, blueGain := 1.0, 1.0, 1.0
 				if correction.hasWhiteBalance {
 					blend := math.Max(-1, math.Min(1, weight))
