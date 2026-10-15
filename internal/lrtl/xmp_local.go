@@ -23,6 +23,7 @@ type xmpLocalCorrection struct {
 	kind                                    localMaskKind
 	exposure, contrast, highlights, shadows float64
 	whites, blacks, saturation              float64
+	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
 	amount, maskValue                       float64
@@ -102,6 +103,14 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 			return correction, false, err
 		}
 	}
+	correction.toningHue, _, err = xmpLocalNumber(element, "LocalToningHue", 230, 0, 360)
+	if err != nil {
+		return correction, false, err
+	}
+	correction.toningSaturation, _, err = xmpLocalNumber(element, "LocalToningSaturation", 0, 0, 100)
+	if err != nil {
+		return correction, false, err
+	}
 	temperature, _, err := xmpLocalNumber(element, "LocalTemperature", 0, -100, 100)
 	if err != nil {
 		return correction, false, err
@@ -115,7 +124,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		correction.hasWhiteBalance = true
 	}
 	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
-		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && !correction.hasWhiteBalance {
+		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.toningSaturation == 0 && !correction.hasWhiteBalance {
 		return correction, false, nil
 	}
 
@@ -346,6 +355,9 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 					green = adjustedLuminance + (green-adjustedLuminance)*factor
 					blue = adjustedLuminance + (blue-adjustedLuminance)*factor
 				}
+				if correction.toningSaturation > 0 {
+					red, green, blue = applyLocalToningColor(red, green, blue, correction.toningHue, correction.toningSaturation, weight)
+				}
 				result.SetNRGBA(x, y, color.NRGBA{
 					R: encodeLinearSRGB(red), G: encodeLinearSRGB(green), B: encodeLinearSRGB(blue), A: pixel.A,
 				})
@@ -354,4 +366,18 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 		current = result
 	}
 	return current
+}
+
+func applyLocalToningColor(red, green, blue, hue, saturation, weight float64) (float64, float64, float64) {
+	blend := math.Max(0, math.Min(1, saturation/100*weight))
+	if blend == 0 {
+		return red, green, blue
+	}
+	red8, green8, blue8 := encodeLinearSRGB(red), encodeLinearSRGB(green), encodeLinearSRGB(blue)
+	redSRGB, greenSRGB, blueSRGB := float64(red8)/255, float64(green8)/255, float64(blue8)/255
+	_, _, luminance := srgbToHSL(redSRGB, greenSRGB, blueSRGB)
+	tintRed, tintGreen, tintBlue := hslToSRGB(hue, 1, luminance)
+	return srgb8ToLinear[encodeSRGBByte(redSRGB*(1-blend)+tintRed*blend)],
+		srgb8ToLinear[encodeSRGBByte(greenSRGB*(1-blend)+tintGreen*blend)],
+		srgb8ToLinear[encodeSRGBByte(blueSRGB*(1-blend)+tintBlue*blend)]
 }
