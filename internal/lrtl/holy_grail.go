@@ -133,9 +133,10 @@ func optimizeHolyGrailCurve(cameras []CameraExposure) HolyGrailCurveOptions {
 	for index := range cameras {
 		trend[index] = float64(index)/float64(len(cameras)) - 0.5
 	}
-	baseSmooth := smoothLogLuminance(base, 3)
-	normalizedSmooth := smoothLogLuminance(normalized, 3)
-	trendSmooth := smoothLogLuminance(trend, 3)
+	neighbors := len(cameras) - 1
+	baseSmooth := lowessSmooth(base, neighbors)
+	normalizedSmooth := lowessSmooth(normalized, neighbors)
+	trendSmooth := lowessSmooth(trend, neighbors)
 
 	bestScore := math.Inf(1)
 	for step := 1; step <= 150; step++ {

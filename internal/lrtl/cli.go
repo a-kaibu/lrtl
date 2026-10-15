@@ -562,7 +562,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if plan.CurveOptions != nil {
 		fmt.Fprintf(stdout, "Curve adjustments: stretch=%+.2f rotate=%+.2f\n", plan.CurveOptions.Stretch, plan.CurveOptions.Rotate)
 		if plan.AutoCurve {
-			fmt.Fprintln(stdout, "Curve adjustments selected automatically with the lrtl L1/Gaussian approximation.")
+			fmt.Fprintln(stdout, "Curve adjustments selected automatically with the LRT-style L1/LOWESS approximation.")
 		}
 	}
 	correctionUpdates := 0
