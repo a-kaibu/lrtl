@@ -129,6 +129,82 @@ func xmpApplyImageSharpness(img *image.NRGBA, amount, radius, detail, edgeMaskin
 	return result
 }
 
+// xmpApplyNoiseReduction is a fixed-neighborhood sRGB approximation, not a RAW denoiser.
+func xmpApplyNoiseReduction(img *image.NRGBA, luminanceAmount, luminanceDetail, luminanceContrast, colorAmount, colorDetail, colorSmoothness float64) *image.NRGBA {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return img
+	}
+	luminanceAmount = math.Max(0, math.Min(100, luminanceAmount)) / 100
+	colorAmount = math.Max(0, math.Min(100, colorAmount)) / 100
+	luminanceDetail = math.Max(0, math.Min(100, luminanceDetail))
+	luminanceContrast = math.Max(0, math.Min(100, luminanceContrast))
+	colorDetail = math.Max(0, math.Min(100, colorDetail))
+	colorSmoothness = math.Max(0, math.Min(100, colorSmoothness))
+	luminanceSigma := 0.015 + (100-luminanceDetail)/100*0.09
+	chromaSigma := 0.012 + colorSmoothness/100*0.09 + (100-colorDetail)/100*0.03
+	result := image.NewNRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			pixel := img.NRGBAAt(x, y)
+			centerY, centerU, centerV := xmpLinearLumaChroma(pixel)
+			lumaSum, lumaWeightSum := 0.0, 0.0
+			chromaUSum, chromaVSum, chromaWeightSum := 0.0, 0.0, 0.0
+			for dy := -1; dy <= 1; dy++ {
+				neighborY := max(bounds.Min.Y, min(bounds.Max.Y-1, y+dy))
+				for dx := -1; dx <= 1; dx++ {
+					neighborX := max(bounds.Min.X, min(bounds.Max.X-1, x+dx))
+					neighbor := img.NRGBAAt(neighborX, neighborY)
+					neighborLuma, neighborU, neighborV := xmpLinearLumaChroma(neighbor)
+					spatialWeight := 1.0
+					if dx != 0 && dy != 0 {
+						spatialWeight = 0.7
+					} else if dx == 0 && dy == 0 {
+						spatialWeight = 2
+					}
+					lumaAffinity := math.Max(0, 1-math.Abs(neighborLuma-centerY)/luminanceSigma)
+					lumaWeight := spatialWeight * lumaAffinity
+					lumaSum += neighborLuma * lumaWeight
+					lumaWeightSum += lumaWeight
+					chromaDifference := math.Max(math.Abs(neighborU-centerU), math.Abs(neighborV-centerV))
+					chromaAffinity := math.Max(0, 1-chromaDifference/chromaSigma)
+					chromaWeight := spatialWeight * lumaAffinity * chromaAffinity
+					chromaUSum += neighborU * chromaWeight
+					chromaVSum += neighborV * chromaWeight
+					chromaWeightSum += chromaWeight
+				}
+			}
+			lumaAverage := centerY
+			if lumaWeightSum > 0 {
+				lumaAverage = lumaSum / lumaWeightSum
+			}
+			chromaUAverage, chromaVAverage := centerU, centerV
+			if chromaWeightSum > 0 {
+				chromaUAverage = chromaUSum / chromaWeightSum
+				chromaVAverage = chromaVSum / chromaWeightSum
+			}
+			adjustedY := centerY + (lumaAverage-centerY)*luminanceAmount
+			adjustedY += (centerY - lumaAverage) * luminanceAmount * luminanceContrast / 100 * 0.35
+			adjustedU := centerU + (chromaUAverage-centerU)*colorAmount
+			adjustedV := centerV + (chromaVAverage-centerV)*colorAmount
+			red := adjustedY + adjustedV
+			blue := adjustedY + adjustedU
+			green := (adjustedY - 0.2126*red - 0.0722*blue) / 0.7152
+			result.SetNRGBA(x, y, color.NRGBA{
+				R: encodeLinearSRGB(red), G: encodeLinearSRGB(green), B: encodeLinearSRGB(blue), A: pixel.A,
+			})
+		}
+	}
+	return result
+}
+
+func xmpLinearLumaChroma(pixel color.NRGBA) (luminance, blueDifference, redDifference float64) {
+	red, green, blue := srgb8ToLinear[pixel.R], srgb8ToLinear[pixel.G], srgb8ToLinear[pixel.B]
+	luminance = 0.2126*red + 0.7152*green + 0.0722*blue
+	return luminance, blue - luminance, red - luminance
+}
+
 func xmpTextureRadius(width, height int) int {
 	return max(1, min(3, min(width, height)/600))
 }

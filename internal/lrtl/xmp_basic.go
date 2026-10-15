@@ -15,32 +15,38 @@ import (
 // applied meaningfully to an already-rendered sRGB image. It is deliberately
 // not a replacement for Adobe Camera Raw's RAW pipeline.
 type xmpBasicAdjustments struct {
-	exposure        float64
-	whiteBalance    [3]float64
-	hasWhiteBalance bool
-	contrast        float64
-	highlights      float64
-	shadows         float64
-	whites          float64
-	blacks          float64
-	texture         float64
-	clarity         float64
-	dehaze          float64
-	sharpness       float64
-	sharpenRadius   float64
-	sharpenDetail   float64
-	sharpenMasking  float64
-	parametric      xmpParametricCurve
-	vibrance        float64
-	saturation      float64
-	masterCurve     [256]uint8
-	hasMaster       bool
-	channelCurve    [3][256]uint8
-	hasChannel      [3]bool
-	colorMix        [8]xmpHSLColorAdjustment
-	hasColorMix     bool
-	colorGrading    xmpColorGrading
-	local           []xmpLocalCorrection
+	exposure             float64
+	whiteBalance         [3]float64
+	hasWhiteBalance      bool
+	contrast             float64
+	highlights           float64
+	shadows              float64
+	whites               float64
+	blacks               float64
+	texture              float64
+	clarity              float64
+	dehaze               float64
+	sharpness            float64
+	sharpenRadius        float64
+	sharpenDetail        float64
+	sharpenMasking       float64
+	luminanceNoise       float64
+	lumaNoiseDetail      float64
+	lumaNoiseContrast    float64
+	colorNoise           float64
+	colorNoiseDetail     float64
+	colorNoiseSmoothness float64
+	parametric           xmpParametricCurve
+	vibrance             float64
+	saturation           float64
+	masterCurve          [256]uint8
+	hasMaster            bool
+	channelCurve         [3][256]uint8
+	hasChannel           [3]bool
+	colorMix             [8]xmpHSLColorAdjustment
+	hasColorMix          bool
+	colorGrading         xmpColorGrading
+	local                []xmpLocalCorrection
 }
 
 type xmpParametricCurve struct {
@@ -94,6 +100,9 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		return xmpBasicAdjustments{}, err
 	}
 	adjustments := xmpBasicAdjustments{parametric: xmpParametricCurve{shadowSplit: 25, midtoneSplit: 50, highlightSplit: 75}}
+	adjustments.lumaNoiseDetail = 50
+	adjustments.colorNoiseDetail = 50
+	adjustments.colorNoiseSmoothness = 50
 	properties := []struct {
 		name   string
 		target *float64
@@ -109,6 +118,12 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		{"Texture", &adjustments.texture, -100, 100},
 		{"Clarity2012", &adjustments.clarity, -100, 100},
 		{"Dehaze", &adjustments.dehaze, -100, 100},
+		{"LuminanceSmoothing", &adjustments.luminanceNoise, 0, 100},
+		{"LuminanceNoiseReductionDetail", &adjustments.lumaNoiseDetail, 0, 100},
+		{"LuminanceNoiseReductionContrast", &adjustments.lumaNoiseContrast, 0, 100},
+		{"ColorNoiseReduction", &adjustments.colorNoise, 0, 100},
+		{"ColorNoiseReductionDetail", &adjustments.colorNoiseDetail, 0, 100},
+		{"ColorNoiseReductionSmoothness", &adjustments.colorNoiseSmoothness, 0, 100},
 		{"ParametricShadows", &adjustments.parametric.shadows, -100, 100},
 		{"ParametricDarks", &adjustments.parametric.darks, -100, 100},
 		{"ParametricLights", &adjustments.parametric.lights, -100, 100},
@@ -532,6 +547,7 @@ func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.dehaze != 0 || adjustments.sharpness != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
+		adjustments.luminanceNoise != 0 || adjustments.colorNoise != 0 ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
 }
 
@@ -691,6 +707,11 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 				R: red8, G: green8, B: blue8, A: pixel.A,
 			})
 		}
+	}
+	if adjustments.luminanceNoise != 0 || adjustments.colorNoise != 0 {
+		result = xmpApplyNoiseReduction(result,
+			adjustments.luminanceNoise, adjustments.lumaNoiseDetail, adjustments.lumaNoiseContrast,
+			adjustments.colorNoise, adjustments.colorNoiseDetail, adjustments.colorNoiseSmoothness)
 	}
 	if adjustments.sharpness != 0 {
 		result = xmpApplyImageSharpness(result, adjustments.sharpness, adjustments.sharpenRadius, adjustments.sharpenDetail, adjustments.sharpenMasking)
