@@ -40,8 +40,12 @@ func readEmbeddedJPEGXMP(path string) ([]byte, bool, error) {
 		return nil, false, err
 	}
 	defer file.Close()
+	return readEmbeddedJPEGXMPFromReader(file)
+}
+
+func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 	var signature [2]byte
-	if _, err := io.ReadFull(file, signature[:]); err != nil {
+	if _, err := io.ReadFull(reader, signature[:]); err != nil {
 		if err == io.EOF || err == io.ErrUnexpectedEOF {
 			return nil, false, nil
 		}
@@ -54,7 +58,7 @@ func readEmbeddedJPEGXMP(path string) ([]byte, bool, error) {
 	var standard []byte
 	extended := make(map[string]*extendedXMP)
 	for {
-		marker, err := nextJPEGMarker(file)
+		marker, err := nextJPEGMarker(reader)
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
 				break
@@ -68,7 +72,7 @@ func readEmbeddedJPEGXMP(path string) ([]byte, bool, error) {
 			continue // Standalone markers have no length field.
 		}
 		var lengthBytes [2]byte
-		if _, err := io.ReadFull(file, lengthBytes[:]); err != nil {
+		if _, err := io.ReadFull(reader, lengthBytes[:]); err != nil {
 			return nil, false, fmt.Errorf("read JPEG segment length: %w", err)
 		}
 		length := binary.BigEndian.Uint16(lengthBytes[:])
@@ -76,7 +80,7 @@ func readEmbeddedJPEGXMP(path string) ([]byte, bool, error) {
 			return nil, false, fmt.Errorf("invalid JPEG segment length %d", length)
 		}
 		payload := make([]byte, int(length)-2)
-		if _, err := io.ReadFull(file, payload); err != nil {
+		if _, err := io.ReadFull(reader, payload); err != nil {
 			return nil, false, fmt.Errorf("read JPEG segment: %w", err)
 		}
 		if marker != 0xe1 {

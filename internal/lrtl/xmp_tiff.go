@@ -37,6 +37,8 @@ func readEmbeddedImageXMP(path string) ([]byte, bool, error) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".jpg", ".jpeg":
 		return readEmbeddedJPEGXMP(path)
+	case ".raf":
+		return readEmbeddedRAFXMP(path)
 	case ".tif", ".tiff", ".dng", ".cr2", ".rw2", ".nef", ".nrw", ".arw", ".sr2", ".pef", ".erf", ".orf":
 		return readEmbeddedTIFFXMP(path)
 	case ".cr3":
