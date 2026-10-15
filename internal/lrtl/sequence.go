@@ -10,11 +10,12 @@ import (
 )
 
 var imageExtensions = map[string]bool{
-	".arw": true, ".cr2": true, ".cr3": true, ".dng": true,
-	".fff": true, ".iiq": true, ".jpeg": true, ".jpg": true,
-	".nef": true, ".nrw": true, ".orf": true, ".pef": true,
-	".png": true, ".raf": true, ".rw2": true, ".srw": true,
-	".tif": true, ".tiff": true,
+	".3fr": true, ".ari": true, ".arw": true, ".cr2": true, ".cr3": true,
+	".crw": true, ".dcr": true, ".dcs": true, ".dng": true, ".erf": true,
+	".fff": true, ".iiq": true, ".jpeg": true, ".jpg": true, ".kdc": true,
+	".mef": true, ".mos": true, ".mrw": true, ".nef": true, ".nrw": true,
+	".orf": true, ".pef": true, ".png": true, ".raf": true, ".rw2": true,
+	".sr2": true, ".srf": true, ".srw": true, ".tif": true, ".tiff": true,
 }
 
 var naturalParts = regexp.MustCompile(`(\d+)`)

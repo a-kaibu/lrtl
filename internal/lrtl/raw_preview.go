@@ -29,6 +29,14 @@ var embeddedRawPreviewExtensions = map[string]bool{
 	".rw2": true, ".srw": true,
 }
 
+var rawDevelopmentExtensions = map[string]bool{
+	".ari": true, ".cr2": true, ".cr3": true, ".crw": true, ".dcr": true,
+	".dcs": true, ".erf": true, ".fff": true, ".iiq": true, ".kdc": true,
+	".mef": true, ".mos": true, ".mrw": true, ".nef": true, ".nrw": true,
+	".orf": true, ".pef": true, ".raf": true, ".rw2": true, ".sr2": true,
+	".srf": true, ".srw": true, ".dng": true, ".arw": true, ".3fr": true,
+}
+
 var cr3PreviewUUID = []byte{
 	0xea, 0xf4, 0x2b, 0x5e, 0x1c, 0x98, 0x4b, 0x88,
 	0xb9, 0xfb, 0xb7, 0xdc, 0x40, 0x6e, 0x4d, 0x16,
@@ -56,23 +64,42 @@ func supportsEmbeddedRawPreview(path string) bool {
 	return embeddedRawPreviewExtensions[strings.ToLower(filepath.Ext(path))]
 }
 
+func supportsRawDevelopment(path string) bool {
+	return rawDevelopmentExtensions[strings.ToLower(filepath.Ext(path))]
+}
+
 func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, string, error) {
+	return readRenderInputWithOptions(frame, imageInputOptions{RawPreview: useRawPreview})
+}
+
+type imageInputOptions struct {
+	RawPreview bool
+	RawDevelop bool
+	DNGLabPath string
+}
+
+func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte, image.Config, string, error) {
 	path := frame.Image
 	var data []byte
 	var err error
 	if supportedRasterExtension(path) {
 		data, err = os.ReadFile(path)
-	} else if supportsEmbeddedRawPreview(path) {
-		if !useRawPreview {
-			return nil, image.Config{}, "", fmt.Errorf("RAW input %s requires --raw-preview; this uses the camera's embedded preview, not RAW development", filepath.Base(path))
+	} else if supportsRawDevelopment(path) {
+		if options.RawDevelop {
+			data, err = developRawWithDNGLab(path, options.DNGLabPath)
+		} else if options.RawPreview && supportsEmbeddedRawPreview(path) {
+			raw, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return nil, image.Config{}, "", fmt.Errorf("read %s: %w", path, readErr)
+			}
+			data, err = extractRawPreview(path, raw)
+		} else if options.RawPreview {
+			return nil, image.Config{}, "", fmt.Errorf("RAW input %s does not have an embedded-preview reader; use --raw-develop with DNGLab", filepath.Base(path))
+		} else {
+			return nil, image.Config{}, "", fmt.Errorf("RAW input %s requires --raw-preview or --raw-develop with DNGLab", filepath.Base(path))
 		}
-		raw, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return nil, image.Config{}, "", fmt.Errorf("read %s: %w", path, readErr)
-		}
-		data, err = extractRawPreview(path, raw)
 	} else {
-		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, TIFF, and selected RAW previews; unsupported image type: %s", filepath.Base(path))
+		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, TIFF, and selected DNGLab RAW formats; unsupported image type: %s", filepath.Base(path))
 	}
 	if err != nil {
 		return nil, image.Config{}, "", fmt.Errorf("read %s: %w", path, err)

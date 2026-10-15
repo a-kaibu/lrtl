@@ -34,6 +34,8 @@ type RenderOptions struct {
 	ApplyXMPExposure bool
 	ApplyXMPCrop     bool
 	RawPreview       bool
+	RawDevelop       bool
+	DNGLabPath       string
 }
 
 type renderFrameWriter interface {
@@ -150,9 +152,9 @@ func resizeFrame(img image.Image, width, height int) image.Image {
 
 const maxVideoDimension = int64(1<<31 - 1)
 
-// RenderSequence writes JPEG, PNG, TIFF, or explicitly selected embedded RAW previews
-// to MJPEG AVI or H.264 MP4. It can optionally apply the global XMP Exposure2012 slider
-// and rotated XMP crop bounds, but does not implement full Camera Raw RAW rendering.
+// RenderSequence writes JPEG, PNG, TIFF, selected embedded RAW previews, or DNGLab-developed
+// RAW frames to MJPEG AVI or H.264 MP4. It can optionally apply the global XMP Exposure2012
+// slider and rotated XMP crop bounds, but does not implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -165,6 +167,12 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}
 	if err := validateLongEdge(options.LongEdge); err != nil {
 		return err
+	}
+	if options.RawPreview && options.RawDevelop {
+		return fmt.Errorf("--raw-preview and --raw-develop cannot be used together")
+	}
+	if strings.TrimSpace(options.DNGLabPath) != "" && !options.RawDevelop {
+		return fmt.Errorf("--dnglab requires --raw-develop")
 	}
 	outputExtension := strings.ToLower(filepath.Ext(output))
 	if outputExtension != ".avi" && outputExtension != ".mp4" {
@@ -203,13 +211,24 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}
 
 	for _, frame := range frames {
-		if !supportedRasterExtension(frame.Image) && !supportsEmbeddedRawPreview(frame.Image) {
+		if supportedRasterExtension(frame.Image) {
+			continue
+		}
+		if !supportsRawDevelopment(frame.Image) {
 			return fmt.Errorf("render does not support this image type: %s", filepath.Base(frame.Image))
 		}
-		if supportsEmbeddedRawPreview(frame.Image) && !options.RawPreview {
-			return fmt.Errorf("RAW input %s requires --raw-preview; this uses the camera's embedded preview, not RAW development", filepath.Base(frame.Image))
+		if options.RawDevelop {
+			continue
 		}
+		if options.RawPreview && supportsEmbeddedRawPreview(frame.Image) {
+			continue
+		}
+		if options.RawPreview {
+			return fmt.Errorf("RAW input %s has no embedded-preview reader; use --raw-develop with DNGLab", filepath.Base(frame.Image))
+		}
+		return fmt.Errorf("RAW input %s requires --raw-preview or --raw-develop with DNGLab", filepath.Base(frame.Image))
 	}
+	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath}
 
 	var xmpExposures []float64
 	if options.ApplyXMPExposure {
@@ -223,7 +242,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 
-	first, config, firstFormat, err := readRenderInput(frames[0], options.RawPreview)
+	first, config, firstFormat, err := readRenderInputWithOptions(frames[0], inputOptions)
 	if err != nil {
 		return err
 	}
@@ -259,7 +278,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		for index, frame := range frames {
 			data, frameConfig, format := first, config, firstFormat
 			if index > 0 {
-				data, frameConfig, format, err = readRenderInput(frame, options.RawPreview)
+				data, frameConfig, format, err = readRenderInputWithOptions(frame, inputOptions)
 				if err != nil {
 					return err
 				}
@@ -356,7 +375,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	for index, frame := range frames {
 		data, config, format := first, config, firstFormat
 		if index > 0 {
-			data, config, format, err = readRenderInput(frame, options.RawPreview)
+			data, config, format, err = readRenderInputWithOptions(frame, inputOptions)
 			if err != nil {
 				return err
 			}

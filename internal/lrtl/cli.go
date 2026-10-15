@@ -99,7 +99,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --long-edge downsizes output")
+		fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --long-edge downsizes, --raw-develop uses DNGLab")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg   plot brightness, XMP exposure, and keyframe marks")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-preview]  analyze and update XMP exposure")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-preview]")
@@ -458,9 +458,11 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	smoothRadius := set.Int("smooth", 5, "deflicker smoothing radius in frames")
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
-	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to raster frames")
+	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP to rendered frames")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP")
-	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported TIFF-based RAW files")
+	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
+	rawDevelop := set.Bool("raw-develop", false, "develop supported RAW files with DNGLab")
+	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
@@ -472,6 +474,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--passes": true, "-passes": true,
+		"--dnglab": true, "-dnglab": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -520,11 +523,13 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		ApplyXMPExposure: *applyXMPExposure,
 		ApplyXMPCrop:     *applyXMPCrop,
 		RawPreview:       *rawPreview,
+		RawDevelop:       *rawDevelop,
+		DNGLabPath:       *dnglab,
 	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
-	features := make([]string, 0, 4)
+	features := make([]string, 0, 5)
 	if *applyXMPExposure {
 		features = append(features, "XMP Exposure2012")
 	}
@@ -533,6 +538,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *rawPreview {
 		features = append(features, "embedded RAW previews")
+	}
+	if *rawDevelop {
+		features = append(features, "DNGLab RAW development")
 	}
 	if *longEdge > 0 {
 		features = append(features, fmt.Sprintf("long-edge limit of %d pixels", *longEdge))
