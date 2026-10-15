@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,7 @@ const (
 	guiMaxPageSize     = 240
 	guiMaxRequestSize  = 64 << 10
 	guiMaxDecodePixels = 70_000_000
+	guiMaxCurveSamples = 4000
 )
 
 var guiThumbnailSlots = make(chan struct{}, 1)
@@ -71,6 +73,7 @@ func newGUIHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveGUIIndex)
 	mux.HandleFunc("/api/sequence", serveGUISequence)
+	mux.HandleFunc("/api/curve", serveGUICurve)
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
 	mux.HandleFunc("/api/preview", serveGUIPreview)
 	mux.HandleFunc("/api/xmp", serveGUIXMP)
@@ -208,6 +211,107 @@ func serveGUISequence(w http.ResponseWriter, r *http.Request) {
 		response.Frames = append(response.Frames, row)
 	}
 	writeGUIJSON(w, http.StatusOK, response)
+}
+
+type guiExposurePoint struct {
+	Index    int     `json:"index"`
+	Exposure float64 `json:"exposure"`
+	Keyframe string  `json:"keyframe,omitempty"`
+}
+
+type guiExposureCurveResponse struct {
+	Directory string             `json:"directory"`
+	Total     int                `json:"total"`
+	Step      int                `json:"step"`
+	XMPErrors int                `json:"xmpErrors"`
+	Points    []guiExposurePoint `json:"points"`
+}
+
+func serveGUICurve(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeGUIError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
+	directory, err := canonicalGUIDirectory(r.URL.Query().Get("directory"))
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	allPoints := make([]guiExposurePoint, len(frames))
+	markerCount := 0
+	xmpErrors := 0
+	for index, frame := range frames {
+		point := guiExposurePoint{Index: index}
+		packet, packetErr := PacketForSidecar(frame.OutputSidecar())
+		if packetErr != nil {
+			xmpErrors++
+			allPoints[index] = point
+			continue
+		}
+		if value, found, getErr := packet.GetScalar("crs:Exposure2012"); getErr != nil {
+			xmpErrors++
+		} else if found {
+			if number, valid := scalarNumber(value); valid {
+				point.Exposure = number
+			} else {
+				xmpErrors++
+			}
+		}
+		point.Keyframe = packet.KeyframeKind()
+		if point.Keyframe == "" {
+			if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
+				point.Keyframe = fmt.Sprintf("hg-%d", rating)
+			}
+		}
+		if point.Keyframe != "" {
+			markerCount++
+		}
+		allPoints[index] = point
+	}
+	step := 1
+	if len(allPoints) > guiMaxCurveSamples {
+		step = (len(allPoints) + guiMaxCurveSamples - 1) / guiMaxCurveSamples
+	}
+	markerStep := 1
+	if markerCount > guiMaxCurveSamples {
+		markerStep = (markerCount + guiMaxCurveSamples - 1) / guiMaxCurveSamples
+	}
+	included := make([]bool, len(allPoints))
+	for index, point := range allPoints {
+		if index%step == 0 || index == len(allPoints)-1 {
+			included[index] = true
+		}
+		if point.Keyframe != "" && markerCount <= guiMaxCurveSamples {
+			included[index] = true
+		}
+	}
+	if markerCount > guiMaxCurveSamples {
+		markerIndex := 0
+		for index, point := range allPoints {
+			if point.Keyframe == "" {
+				continue
+			}
+			if markerIndex%markerStep == 0 {
+				included[index] = true
+			}
+			markerIndex++
+		}
+	}
+	points := make([]guiExposurePoint, 0, guiMaxCurveSamples+guiMaxCurveSamples)
+	for index, include := range included {
+		if include {
+			points = append(points, allPoints[index])
+		}
+	}
+	sort.Slice(points, func(i, j int) bool { return points[i].Index < points[j].Index })
+	writeGUIJSON(w, http.StatusOK, guiExposureCurveResponse{
+		Directory: directory, Total: len(frames), Step: step, XMPErrors: xmpErrors, Points: points,
+	})
 }
 
 func parseNonnegativeQuery(r *http.Request, key string, fallback int) (int, error) {

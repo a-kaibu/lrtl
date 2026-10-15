@@ -26,6 +26,8 @@
     .layout { display:grid; grid-template-columns:minmax(0,1fr) 330px; align-items:start; gap:14px; }
     .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; color:var(--muted); }
     .toolbar div { display:flex; align-items:center; gap:8px; }
+    .curve-panel { margin-bottom:12px; }
+    #exposure-curve { display:block; width:100%; height:155px; cursor:crosshair; border-radius:5px; background:#111820; }
     #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; }
     .card { overflow:hidden; border:1px solid var(--line); border-radius:9px; background:var(--panel); cursor:pointer; }
     .card.selected { outline:2px solid var(--accent); }
@@ -60,6 +62,11 @@
     </div>
     <div class="layout">
       <section>
+        <section class="panel curve-panel">
+          <h2>Exposure2012 とキーフレーム</h2>
+          <canvas id="exposure-curve" aria-label="連番全体のXMP Exposure2012グラフ。点をクリックしてフレームを選択"></canvas>
+          <p id="curve-info">画像ごとのXMP Exposure2012を表示します。画像の実測輝度グラフではありません。点をクリックすると該当フレームを選びます。</p>
+        </section>
         <div class="toolbar">
           <span id="count">フォルダーを指定してください</span>
           <div><button id="previous">前へ</button><span id="page">-</span><button id="next">次へ</button></div>
@@ -143,6 +150,7 @@
     let frames = [];
     let selected = null;
     let selectedXMPValues = {};
+    let exposureCurve = {total:0, points:[], xmpErrors:0};
     let previewObjectURL = '';
     const setStatus = (message, error = false) => { el('status').textContent = message; el('status').className = error ? 'error' : ''; };
     async function api(url, options = {}) {
@@ -206,6 +214,7 @@
       const basename = directory.replace(/[\\/]$/, '').split(/[\\/]/).pop() || 'timelapse';
       if (!el('output').value.trim()) el('output').value = directory.replace(/[\\/]$/, '') + '\\' + basename + '_timelapse.avi';
       setStatus('連番を読み込みました。XMPへの変更はサイドカーのバックアップを作成して保存します。');
+      if (newSequence) loadExposureCurve().catch(error => { el('curve-info').textContent = error.message; });
     }
     function ensureActiveDirectory() {
       if (!directory) throw new Error('先に連番を開いてください。');
@@ -240,6 +249,51 @@
       const property = el('xmp-property').value;
       el('xmp-value').value = Object.prototype.hasOwnProperty.call(selectedXMPValues, property) ? selectedXMPValues[property] : '0';
     }
+    async function loadExposureCurve() {
+      if (!directory) return;
+      const requestedDirectory = directory;
+      const query = new URLSearchParams({directory:requestedDirectory});
+      const data = await api('/api/curve?' + query.toString());
+      if (directory !== requestedDirectory) return;
+      exposureCurve = data;
+      drawExposureCurve();
+      const sampleText = data.step > 1 ? ' · ' + data.step + 'フレーム間隔で表示' : '';
+      const errorText = data.xmpErrors ? ' · 読めないXMP値 ' + data.xmpErrors + '件' : '';
+      el('curve-info').textContent = data.total + 'フレーム · XMP Exposure2012' + sampleText + errorText + '。実測輝度ではありません。点をクリックするとフレームを選びます。';
+    }
+    function drawExposureCurve() {
+      const canvas = el('exposure-curve');
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const width = rect.width, height = rect.height, left = 38, right = 12, top = 12, bottom = 22;
+      ctx.clearRect(0, 0, width, height);
+      const points = exposureCurve.points || [];
+      if (!points.length) { ctx.fillStyle = '#9eacbb'; ctx.font = '12px system-ui'; ctx.fillText('XMPデータなし', left, height / 2); return; }
+      let minimum = Math.min(0, ...points.map(point => point.exposure));
+      let maximum = Math.max(0, ...points.map(point => point.exposure));
+      if (maximum - minimum < 0.25) { minimum -= 0.5; maximum += 0.5; }
+      const padding = (maximum - minimum) * 0.12;
+      minimum -= padding; maximum += padding;
+      const xAt = index => left + (exposureCurve.total <= 1 ? 0 : index / (exposureCurve.total - 1)) * (width - left - right);
+      const yAt = value => top + (maximum - value) / (maximum - minimum) * (height - top - bottom);
+      ctx.strokeStyle = '#43515f'; ctx.lineWidth = 1;
+      const zeroY = yAt(0); ctx.beginPath(); ctx.moveTo(left, zeroY); ctx.lineTo(width - right, zeroY); ctx.stroke();
+      ctx.fillStyle = '#9eacbb'; ctx.font = '11px system-ui'; ctx.fillText('0 EV', 4, zeroY + 4);
+      ctx.beginPath();
+      points.forEach((point, index) => { const x = xAt(point.index), y = yAt(point.exposure); if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+      ctx.strokeStyle = '#70c3ff'; ctx.lineWidth = 1.8; ctx.stroke();
+      for (const point of points) {
+        if (!point.keyframe) continue;
+        const x = xAt(point.index), y = yAt(point.exposure);
+        ctx.beginPath(); ctx.arc(x, y, 3.4, 0, Math.PI * 2);
+        ctx.fillStyle = point.keyframe === 'crop' ? '#ffc857' : point.keyframe === 'default' ? '#80d6ff' : '#c59aff'; ctx.fill();
+      }
+      ctx.fillStyle = '#9eacbb'; ctx.fillText('1', left, height - 5);
+      ctx.fillText(String(exposureCurve.total), width - right - 24, height - 5);
+    }
     function showOriginalPreview() {
       if (!selected) return;
       if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = ''; }
@@ -270,6 +324,7 @@
       setStatus('XMPを書き込んでいます…');
       await api('/api/keyframe', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:frame.name, kind, remove})});
       await loadSequence();
+      await loadExposureCurve();
       setStatus(frame.name + ' のキーフレームを保存しました。');
     }
     el('load').addEventListener('click', () => loadSequence(true).catch(error => setStatus(error.message, true)));
@@ -281,6 +336,20 @@
     buttonAction(el('unmark'), () => selected ? setKeyframe(selected, '', true) : setStatus('先にフレームを選択してください。', true));
     el('preview-original').addEventListener('click', showOriginalPreview);
     buttonAction(el('preview-adjusted'), showAdjustedPreview);
+    el('exposure-curve').addEventListener('click', async event => {
+      if (!exposureCurve.total) return;
+      const rect = el('exposure-curve').getBoundingClientRect();
+      const plotLeft = 38, plotRight = 12;
+      const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - plotLeft) / Math.max(1, rect.width - plotLeft - plotRight)));
+      const index = Math.round(fraction * Math.max(0, exposureCurve.total - 1));
+      offset = Math.floor(index / limit) * limit;
+      try {
+        await loadSequence();
+        const frame = frames.find(item => item.index === index);
+        if (frame) selectFrame(frame);
+      } catch (error) { setStatus(error.message, true); }
+    });
+    window.addEventListener('resize', drawExposureCurve);
     el('xmp-property').addEventListener('change', updateXMPValueInput);
     buttonAction(el('xmp-save'), async () => {
       ensureActiveDirectory();
@@ -292,6 +361,7 @@
       const data = await api('/api/xmp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:selected.name, property, value})});
       const frame = selected;
       await loadSelectedXMP(frame);
+      if (property === 'Exposure2012') await loadExposureCurve();
       setStatus(data.output || 'XMP値を保存しました。');
     });
     buttonAction(el('suggest'), async () => {
@@ -303,7 +373,7 @@
         dngMode:el('analysis-raw-mode').value, dnglab:el('analysis-dnglab').value.trim(),
         xmpBasic:el('analysis-xmp-basic').checked, xmpCrop:el('analysis-xmp-crop').checked
       })});
-      await loadSequence(); setStatus(data.output || 'キーフレームを保存しました。');
+      await loadSequence(); await loadExposureCurve(); setStatus(data.output || 'キーフレームを保存しました。');
     });
     buttonAction(el('interpolate'), async () => {
       ensureActiveDirectory();
@@ -312,6 +382,7 @@
       const data = await api('/api/interpolate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, smoothness:Number(el('smoothness').value)})});
       await loadSequence();
       if (selected) await loadSelectedXMP(selected);
+      await loadExposureCurve();
       setStatus(data.output || '補間したXMPを保存しました。');
     });
     buttonAction(el('render'), async () => {
