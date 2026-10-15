@@ -27,7 +27,7 @@
     .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; color:var(--muted); }
     .toolbar div { display:flex; align-items:center; gap:8px; }
     .curve-panel { margin-bottom:12px; }
-    #exposure-curve { display:block; width:100%; height:155px; cursor:crosshair; border-radius:5px; background:#111820; }
+    #exposure-curve { display:block; width:100%; height:155px; cursor:ns-resize; touch-action:none; border-radius:5px; background:#111820; }
     #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; }
     .card { overflow:hidden; border:1px solid var(--line); border-radius:9px; background:var(--panel); cursor:pointer; }
     .card.selected { outline:2px solid var(--accent); }
@@ -74,8 +74,8 @@
       <section>
         <section class="panel curve-panel">
           <h2>画像輝度・Exposure2012・キーフレーム</h2>
-          <canvas id="exposure-curve" aria-label="連番全体のXMP Exposure2012グラフ。点をクリックしてフレームを選択"></canvas>
-          <p id="curve-info">青はXMP Exposure2012の先頭フレームとの差分です。画像輝度は解析ボタンで別に測定します。点をクリックすると該当フレームを選びます。</p>
+          <canvas id="exposure-curve" aria-label="連番全体のXMP Exposure2012グラフ。点をドラッグして現像値を編集し、クリックしてフレームを選択"></canvas>
+          <p id="curve-info">青いExposure2012の点を上下にドラッグすると、そのフレームの値を編集できます。クリックすると該当フレームを選びます。</p>
           <button id="analyze-luminance" class="primary" disabled>画像輝度を解析して重ねる</button>
         </section>
         <div class="toolbar">
@@ -213,6 +213,9 @@
     let previewObjectURL = '';
     let playbackToken = 0;
     let playbackRunning = false;
+    let curveDrag = null;
+    let curveSaving = false;
+    let suppressNextCurveClick = false;
     let cropBounds = {left:0, top:0, right:1, bottom:1};
     let cropDragStart = null;
     const lensApertures = ['1.0','1.1','1.2','1.4','1.6','1.8','2.0','2.2','2.5','2.8','3.2','3.5','4.0','4.5','5.0','5.6','6.3','7.1','8.0','9.0','10.0','11.0','13.0','14.0','16.0','18.0','20.0','22.0','25.0','29.0','32.0','36.0','40.0','45.0','51.0','57.0','64.0','72.0','80.0','90.0'];
@@ -269,7 +272,9 @@
       directory = data.directory; offset = data.offset; total = data.total; frames = data.frames;
       if (newSequence) {
         selected = null; selectedXMPValues = {};
+        exposureCurve = {directory, total:0, points:[]};
         luminanceCurve = null;
+        drawExposureCurve();
         el('crop-edit').checked = false; setCropEditing(false); setCropBounds(0,0,1,1); el('crop-angle').value = 0;
         el('xmp-property').replaceChildren(); el('xmp-value').value = '';
         el('preview').removeAttribute('src'); el('selected-name').textContent = 'フレームを選択するとプレビューします。';
@@ -377,33 +382,47 @@
       drawExposureCurve();
       const sampleText = data.step > 1 ? ' · ' + data.step + 'フレーム間隔で表示' : '';
       const errorText = data.xmpErrors ? ' · 読めないXMP値 ' + data.xmpErrors + '件' : '';
-      el('curve-info').textContent = data.total + 'フレーム · 青: Exposure2012 ΔEV' + sampleText + errorText + (luminanceCurve ? ' · 橙: 画像輝度 ΔEV' : ' · 画像輝度は未解析') + '。点をクリックするとフレームを選びます。';
+      el('curve-info').textContent = data.total + 'フレーム · 青: Exposure2012 ΔEV' + sampleText + errorText + (luminanceCurve ? ' · 橙: 画像輝度 ΔEV' : ' · 画像輝度は未解析') + '。青い点を上下にドラッグして値を編集、クリックでフレームを選択。';
     }
-    function drawExposureCurve() {
+    function exposureChartLayout() {
       const canvas = el('exposure-curve');
       const rect = canvas.getBoundingClientRect();
-      if (!rect.width) return;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
-      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      if (!rect.width) return null;
       const width = rect.width, height = rect.height, left = 38, right = 12, top = 12, bottom = 22;
-      ctx.clearRect(0, 0, width, height);
       const points = exposureCurve.points || [];
-      if (!points.length) { ctx.fillStyle = '#9eacbb'; ctx.font = '12px system-ui'; ctx.fillText('XMPデータなし', left, height / 2); return; }
+      const baseline = Number(exposureCurve.baseline) || 0;
+      const exposureLimit = Number(exposureCurve.exposureLimit) || 5;
       const values = points.map(point => point.exposure);
       if (luminanceCurve && luminanceCurve.directory === directory) values.push(...luminanceCurve.points.map(point => point.ev));
-      let minimum = Math.min(0, ...values);
-      let maximum = Math.max(0, ...values);
-      if (maximum - minimum < 0.25) { minimum -= 0.5; maximum += 0.5; }
-      const padding = (maximum - minimum) * 0.12;
+      let minimum = Math.min(-exposureLimit - baseline, 0, ...values);
+      let maximum = Math.max(exposureLimit - baseline, 0, ...values);
+      const padding = Math.max(0.1, (maximum - minimum) * 0.03);
       minimum -= padding; maximum += padding;
       const xAt = index => left + (exposureCurve.total <= 1 ? 0 : index / (exposureCurve.total - 1)) * (width - left - right);
       const yAt = value => top + (maximum - value) / (maximum - minimum) * (height - top - bottom);
+      const valueAtY = y => {
+        const value = maximum - ((y - top) / (height - top - bottom)) * (maximum - minimum);
+        return Math.max(-exposureLimit - baseline, Math.min(exposureLimit - baseline, value));
+      };
+      return {rect, width, height, left, right, top, bottom, minimum, maximum, xAt, yAt, valueAtY};
+    }
+    function drawExposureCurve() {
+      const canvas = el('exposure-curve');
+      const layout = exposureChartLayout();
+      if (!layout) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(layout.width * dpr); canvas.height = Math.round(layout.height * dpr);
+      const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+      const {width, height, left, right, top, bottom, xAt, yAt} = layout;
+      ctx.clearRect(0, 0, width, height);
+      const points = exposureCurve.points || [];
+      if (!points.length) { ctx.fillStyle = '#9eacbb'; ctx.font = '12px system-ui'; ctx.fillText('XMPデータなし', left, height / 2); return; }
+      const exposureAt = point => curveDrag && curveDrag.index === point.index ? curveDrag.value : point.exposure;
       ctx.strokeStyle = '#43515f'; ctx.lineWidth = 1;
       const zeroY = yAt(0); ctx.beginPath(); ctx.moveTo(left, zeroY); ctx.lineTo(width - right, zeroY); ctx.stroke();
       ctx.fillStyle = '#9eacbb'; ctx.font = '11px system-ui'; ctx.fillText('0 EV', 4, zeroY + 4);
       ctx.beginPath();
-      points.forEach((point, index) => { const x = xAt(point.index), y = yAt(point.exposure); if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+      points.forEach((point, index) => { const x = xAt(point.index), y = yAt(exposureAt(point)); if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
       ctx.strokeStyle = '#70c3ff'; ctx.lineWidth = 1.8; ctx.stroke();
       if (luminanceCurve && luminanceCurve.directory === directory && luminanceCurve.points.length) {
         ctx.beginPath();
@@ -411,15 +430,27 @@
         ctx.strokeStyle = '#ff9b57'; ctx.lineWidth = 1.8; ctx.stroke();
       }
       for (const point of points) {
-        if (!point.keyframe) continue;
-        const x = xAt(point.index), y = yAt(point.exposure);
-        ctx.beginPath(); ctx.arc(x, y, 3.4, 0, Math.PI * 2);
-        ctx.fillStyle = point.keyframe === 'crop' ? '#ffc857' : point.keyframe === 'default' ? '#80d6ff' : '#c59aff'; ctx.fill();
+        const x = xAt(point.index), y = yAt(exposureAt(point));
+        const isDragged = curveDrag && curveDrag.index === point.index;
+        ctx.beginPath(); ctx.arc(x, y, point.keyframe ? 3.4 : isDragged ? 4 : 1.8, 0, Math.PI * 2);
+        ctx.fillStyle = point.keyframe === 'crop' ? '#ffc857' : point.keyframe === 'default' ? '#80d6ff' : isDragged ? '#ffffff' : '#70c3ff'; ctx.fill();
       }
       ctx.fillStyle = '#9eacbb'; ctx.fillText('1', left, height - 5);
       ctx.fillText(String(exposureCurve.total), width - right - 24, height - 5);
       ctx.fillStyle = '#70c3ff'; ctx.fillText('XMP ΔEV', left, 11);
       if (luminanceCurve && luminanceCurve.directory === directory) { ctx.fillStyle = '#ff9b57'; ctx.fillText('輝度 ΔEV', left + 84, 11); }
+    }
+    function nearestExposurePoint(x, y) {
+      const layout = exposureChartLayout();
+      if (!layout) return null;
+      let nearest = null;
+      for (const point of exposureCurve.points || []) {
+        const dx = layout.xAt(point.index) - x;
+        const dy = layout.yAt(point.exposure) - y;
+        const distance = Math.hypot(dx, dy);
+        if (!nearest || distance < nearest.distance) nearest = {point, distance};
+      }
+      return nearest && nearest.distance <= 12 ? nearest.point : null;
     }
     function invalidateLuminanceCurve(message = 'XMP値または解析条件が変わりました。画像輝度を再解析してください。') {
       if (!luminanceCurve) return;
@@ -548,6 +579,63 @@
     document.addEventListener('visibilitychange', () => { if (document.hidden && playbackRunning) stopSequencePlayback(true); });
     el('crop-edit').addEventListener('change', event => setCropEditing(event.target.checked));
     el('preview').addEventListener('load', positionCropOverlay);
+    async function saveExposureCurveEdit(drag) {
+      ensureActiveDirectory();
+      const exposure = Number((drag.value + drag.baseline).toFixed(3));
+      offset = Math.floor(drag.index / limit) * limit;
+      await loadSequence();
+      const frame = frames.find(item => item.index === drag.index);
+      if (!frame) throw new Error('編集対象フレームを読み込めませんでした。');
+      selectFrame(frame);
+      const query = new URLSearchParams({directory, name:frame.name});
+      const currentPacket = await api('/api/xmp?' + query.toString());
+      const currentExposure = Number((currentPacket.values || {}).Exposure2012 || 0);
+      if (Math.abs(currentExposure - exposure) < 0.0005) {
+        setStatus('Exposure2012に変更はありません。');
+        return;
+      }
+      if (!confirm(frame.name + ' のExposure2012を ' + exposure.toFixed(3) + ' EV に変更し、XMPバックアップを保存しますか？')) return;
+      setStatus('Exposure2012をXMPへ保存しています…');
+      const data = await api('/api/xmp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:frame.name, property:'Exposure2012', value:String(exposure)})});
+      await loadSelectedXMP(frame);
+      invalidateLuminanceCurve();
+      await loadExposureCurve();
+      setStatus(data.output || 'Exposure2012を保存しました。');
+    }
+    el('exposure-curve').addEventListener('pointerdown', event => {
+      if (event.button !== 0 || curveSaving || !exposureCurve.total || exposureCurve.directory !== directory) return;
+      const rect = el('exposure-curve').getBoundingClientRect();
+      const point = nearestExposurePoint(event.clientX - rect.left, event.clientY - rect.top);
+      if (!point) return;
+      curveDrag = {pointerId:event.pointerId, index:point.index, startY:event.clientY, original:point.exposure, value:point.exposure, baseline:Number(exposureCurve.baseline) || 0, moved:false};
+      el('exposure-curve').setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    el('exposure-curve').addEventListener('pointermove', event => {
+      if (!curveDrag || curveDrag.pointerId !== event.pointerId) return;
+      const layout = exposureChartLayout();
+      if (!layout) return;
+      curveDrag.value = layout.valueAtY(event.clientY - layout.rect.top);
+      curveDrag.moved = Math.abs(event.clientY - curveDrag.startY) > 2;
+      drawExposureCurve();
+      event.preventDefault();
+    });
+    el('exposure-curve').addEventListener('pointerup', event => {
+      if (!curveDrag || curveDrag.pointerId !== event.pointerId) return;
+      const drag = curveDrag;
+      curveDrag = null;
+      drawExposureCurve();
+      if (!drag.moved) return;
+      suppressNextCurveClick = true;
+      setTimeout(() => { suppressNextCurveClick = false; }, 0);
+      curveSaving = true;
+      saveExposureCurveEdit(drag).catch(error => setStatus(error.message, true)).finally(() => { curveSaving = false; drawExposureCurve(); });
+    });
+    el('exposure-curve').addEventListener('pointercancel', event => {
+      if (!curveDrag || curveDrag.pointerId !== event.pointerId) return;
+      curveDrag = null;
+      drawExposureCurve();
+    });
     el('crop-overlay').addEventListener('pointerdown', event => {
       if (!el('crop-edit').checked) return;
       const rect = el('crop-overlay').getBoundingClientRect();
@@ -579,7 +667,8 @@
       setStatus('クロップと5★キーフレームを保存しました: ' + data.saved + (data.backup ? ' (backup: ' + data.backup + ')' : ''));
     });
     el('exposure-curve').addEventListener('click', async event => {
-      if (!exposureCurve.total) return;
+      if (suppressNextCurveClick) { suppressNextCurveClick = false; return; }
+      if (!exposureCurve.total || exposureCurve.directory !== directory) return;
       const rect = el('exposure-curve').getBoundingClientRect();
       const plotLeft = 38, plotRight = 12;
       const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left - plotLeft) / Math.max(1, rect.width - plotLeft - plotRight)));
@@ -609,7 +698,7 @@
       luminanceCurve = data;
       drawExposureCurve();
       const sampleText = data.step > 1 ? ' · ' + data.step + 'フレーム間隔で表示' : '';
-      el('curve-info').textContent = data.total + 'フレーム · 青:XMP Exposure2012 ΔEV · 橙:画像輝度 ΔEV' + sampleText + '。輝度は先頭フレームとの差分です。';
+      el('curve-info').textContent = data.total + 'フレーム · 青:XMP Exposure2012 ΔEV · 橙:画像輝度 ΔEV' + sampleText + '。青い点は上下ドラッグでExposure2012を編集できます。輝度は先頭フレームとの差分です。';
       setStatus('画像輝度の解析が完了しました。');
     });
     for (const id of ['analysis-raw-mode', 'analysis-dnglab', 'analysis-xmp-basic', 'analysis-xmp-crop']) {

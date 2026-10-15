@@ -257,11 +257,13 @@ type guiExposurePoint struct {
 }
 
 type guiExposureCurveResponse struct {
-	Directory string             `json:"directory"`
-	Total     int                `json:"total"`
-	Step      int                `json:"step"`
-	XMPErrors int                `json:"xmpErrors"`
-	Points    []guiExposurePoint `json:"points"`
+	Directory     string             `json:"directory"`
+	Total         int                `json:"total"`
+	Step          int                `json:"step"`
+	XMPErrors     int                `json:"xmpErrors"`
+	Baseline      float64            `json:"baseline"`
+	ExposureLimit float64            `json:"exposureLimit"`
+	Points        []guiExposurePoint `json:"points"`
 }
 
 type guiLuminancePoint struct {
@@ -294,6 +296,7 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 	allPoints := make([]guiExposurePoint, len(frames))
 	markerCount := 0
 	xmpErrors := 0
+	exposureLimit := 5.0
 	for index, frame := range frames {
 		point := guiExposurePoint{Index: index}
 		packet, packetErr := PacketForFrame(frame)
@@ -301,6 +304,11 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 			xmpErrors++
 			allPoints[index] = point
 			continue
+		}
+		if index == 0 {
+			if mergedHDR, found, getErr := packet.GetScalar("crs:IsMergedHDR"); getErr == nil && found && strings.EqualFold(strings.TrimSpace(mergedHDR), "true") {
+				exposureLimit = 10
+			}
 		}
 		if value, found, getErr := packet.GetScalar("crs:Exposure2012"); getErr != nil {
 			xmpErrors++
@@ -322,8 +330,9 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 		}
 		allPoints[index] = point
 	}
+	baseline := 0.0
 	if len(allPoints) > 0 {
-		baseline := allPoints[0].Exposure
+		baseline = allPoints[0].Exposure
 		for index := range allPoints {
 			allPoints[index].Exposure -= baseline
 		}
@@ -365,7 +374,8 @@ func serveGUICurve(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(points, func(i, j int) bool { return points[i].Index < points[j].Index })
 	writeGUIJSON(w, http.StatusOK, guiExposureCurveResponse{
-		Directory: directory, Total: len(frames), Step: step, XMPErrors: xmpErrors, Points: points,
+		Directory: directory, Total: len(frames), Step: step, XMPErrors: xmpErrors,
+		Baseline: baseline, ExposureLimit: exposureLimit, Points: points,
 	})
 }
 
