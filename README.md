@@ -19,7 +19,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で回転を含む矩形を画素へ適用し、元と同じ解像度に再サンプル。プレビュー上の構図作成・編集UIとCamera RawのGeometry補正は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`で自然順に一覧表示し、キーフレーム評価を確認可能。選択UI、フィルター、コピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
-| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF/XMP日時・露出・画像向きの読込、XMP数値値の個別編集に対応。メタデータ一括操作や日時シフトUI、Lens Taggerは未対応 | 一部 |
+| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、XMP数値値の個別編集、`timeshift`によるXMP撮影日時の連番一括シフトに対応。日時シフトはXMPサイドカーのみ変更し、埋め込みEXIFは変更しない。メタデータ一括操作やLens Taggerは未対応 | 一部 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で許可した131項目を編集し、全体設定と共通Sync IDを持つローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力（JPEG/PNG/TIFFや指定時のRAWプレビュー/現像画像）のレンダーでは`--apply-xmp-basic`で基本8項目に加え、明示されたマスター/RGBポイントカーブを独自近似で画素反映し、クロップも任意適用。色温度、Camera Raw相当RAW現像、ローカル値・マスクの画素現像は未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | 131個の全体数値項目を補間。初期化済みの共通Sync ID付きローカル補正・マスクの数値パラメーターと基本形状値も補間。ポイントトーンカーブとLook/Preset/PointColorsは先頭フレームから後続へコピー。Tone Curveのコピー元はLRTの説明で確認済み。範囲セレクター、ブラシ描線、ローカルカーブ、IDのないマスクは未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
@@ -73,6 +73,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 10. 長期連番を輝度・コントラスト・色相で分析し、選択した画像だけを動画にする。
 11. カード/フォルダーから写真とXMPを取り込み、必要に応じて日時順へ並べたりJPEGを除外したりする。対応RAWは外部DNGLabでDNGに変換できる。
 12. 動画から全フレームまたは指定fpsのJPG/PNG連番を抽出し、通常の画像列としてレンダーする。
+13. XMPサイドカー上の連番撮影日時を一括で前後にずらす。
 
 動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。キーフレーム間のXMP値も反映する場合は、XMP現像値をまだ焼き込んでいない画像に対して`interpolate --write`後に`render --apply-xmp-basic`を使います。このオプションはExposure2012、Contrast2012、Highlights2012、Shadows2012、Whites2012、Blacks2012、Vibrance、Saturationの8項目と、XMPに明示されたマスター/RGBポイントカーブを表示済みsRGB画像へ独自近似で適用します。Lightroom/Camera Rawと画素値が一致する現像機能ではなく、WB、プリセット名だけのカーブ、色別調整、ローカル補正などは適用しません。既にLightroom/Camera Rawで同じ現像値を焼き込んで書き出したJPEG等には再適用せず、通常の`render`を使ってください。RAW連番を直接レンダーするには外部DNGLabを使う`--raw-develop`を指定します。DNGLabのRAW対応はカメラ形式ごとに異なり、DNGLabはalpha版です。`--raw-preview`は内蔵プレビューを使う別経路です。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`だけをレンダー入力画像に近似適用します。`--apply-xmp-basic`には同じ露出値が含まれるため、両方は同時に指定できません。DNGLabの現像パラメーターはCamera Rawと一致せず、サイドカーにある他の現像値もRAW現像には使いません。Deflickerはレンダー時に出力画素へ適用できます。これらのレンダー操作は元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正をXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。MP4/MOV出力は外部FFmpegを必要とし、入力画像をGoで8-bit RGBへデコードしてから選択したエンコーダーへ渡します。`.mp4`の既定はH.264、`.mov`の既定はProRes 422です。`--codec h265`でH.265、`--codec prores-hq`でProRes 422 HQを選べます。FFmpegにそれぞれ`libx264`、`libx265`、`prores_ks`エンコーダーが必要です。
 
@@ -102,6 +103,8 @@ go build -o lrtl.exe ./cmd/lrtl
 
 `import-video`はFFmpegで動画をJPGまたはPNGの連番へデコードします。既定ではデコード可能な全フレームを保存し、`--fps N`を指定するとその間隔でフレームをサンプリングします。JPEGの圧縮品質は`--quality 1`（高画質）〜`31`（低画質）で指定できます。抽出先は新しいフォルダーでなければならず、既存フォルダーを置き換えません。LRTimelapseの動画取り込みもJPG連番を生成しますが、lrtlではプレビュー生成、シーンごとの自動分割、動画フレームのDNG変換は未実装です。
 
+`timeshift`は`--offset 2h30m`、`--offset=-45s`、`--offset 1d`のような固定時間差で連番の撮影日時をずらします。既定はプレビューで、`--write`を付けるとXMPサイドカーへ保存し、既存ファイルはバックアップします。対象は`DateTimeOriginal`、`DateTimeDigitized`、`CreateDate`で、`ModifyDate`と画像に埋め込まれたEXIF値は変更しません。サイドカーに撮影日時がなく、画像EXIFで読める場合は、ずらした`DateTimeOriginal`をサイドカーへ追加します。
+
 ```powershell
 # 画像列、サイドカー、キーフレームを確認
 lrtl scan "D:\Timelapse\Sequence"
@@ -117,6 +120,10 @@ lrtl import "E:\DCIM" --output "D:\Timelapse\DNGUncompressed" --convert-dng --dn
 
 # 取り込み名も撮影日時へ変更し、実行前に内容を確認
 lrtl import "E:\DCIM" --output "D:\Timelapse\SequenceByDate" --recursive --skip-jpeg --rename-by-date --dry-run
+
+# 撮影日時を1時間戻す（プレビュー後、--writeでXMPに保存）
+lrtl timeshift "D:\Timelapse\Sequence" --offset=-1h
+lrtl timeshift "D:\Timelapse\Sequence" --offset=-1h --write
 
 # 動画の全フレームをJPG連番へ展開（FFmpegが必要）
 lrtl import-video "D:\Clips\source.mp4" --output "D:\Timelapse\ExtractedFrames"

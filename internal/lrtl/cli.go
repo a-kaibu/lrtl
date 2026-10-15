@@ -69,6 +69,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runImport(arguments[1:], stdout, stderr)
 	case "import-video":
 		return runImportVideo(arguments[1:], stdout, stderr)
+	case "timeshift":
+		return runTimeShift(arguments[1:], stdout, stderr)
 	case "mark":
 		return runMark(arguments[1:], stdout, stderr)
 	case "set":
@@ -107,6 +109,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
 	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
+	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
@@ -209,6 +212,34 @@ func runImportVideo(arguments []string, stdout, stderr io.Writer) int {
 		FFmpegPath: *ffmpeg, Format: *format, FPS: *fps, JPEGQuality: *quality,
 	}
 	if err := ImportVideo(set.Arg(0), *output, options, stdout); err != nil {
+		return reportError(stderr, err)
+	}
+	return 0
+}
+
+func runTimeShift(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("timeshift", stderr)
+	offsetValue := set.String("offset", "", "capture time shift, such as 2h30m, -45s, or 1d")
+	write := set.Bool("write", false, "write shifted timestamps to XMP sidecars")
+	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--offset": true, "-offset": true,
+	})); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 || strings.TrimSpace(*offsetValue) == "" {
+		return reportError(stderr, fmt.Errorf("Usage: lrtl timeshift DIRECTORY --offset DURATION [--write] [--no-backup]"))
+	}
+	if *noBackup && !*write {
+		return reportError(stderr, fmt.Errorf("--no-backup requires --write"))
+	}
+	offset, err := parseTimeShiftOffset(*offsetValue)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	if err := TimeShiftSequence(set.Arg(0), offset, *write, !*noBackup, stdout); err != nil {
 		return reportError(stderr, err)
 	}
 	return 0
