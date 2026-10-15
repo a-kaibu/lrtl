@@ -2,7 +2,7 @@
 
 LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。現在はLightroom互換XMPのキーフレーム編集とHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFや一部RAWの埋め込みプレビューからMJPEG AVIを生成できます。
 
-**現状は初期開発版です。RAW現像やCamera Raw設定全体の適用には対応していません。** `render --raw-preview`を指定すると、対応するTIFF系RAWおよびCanon CR3から埋め込みプレビューを使って動画を生成できます。これはカメラ内プレビューを使う近似で、RAW現像ではありません。RAW連番をキーフレーム設定どおりに現像して完成動画を書き出す一連の処理は未対応です。
+**現状は初期開発版です。RAW現像やCamera Raw設定全体の適用には対応していません。** `render --raw-preview`を指定すると、対応するTIFF系RAW、Fuji RAF、Canon CR3から埋め込みプレビューを使って動画を生成できます。これはカメラ内プレビューを使う近似で、RAW現像ではありません。RAW連番をキーフレーム設定どおりに現像して完成動画を書き出す一連の処理は未対応です。
 
 本プロジェクトはLRTimelapseおよびAdobeと無関係です。独自実装であり、それらのコード、画像、同梱ツールを含みません。
 
@@ -24,7 +24,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`の輝度解析結果を`crs:Exposure2012`へ記録可能。両者とも独自の近似方式。LRTのVisual Preview、RAW現像連携、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFをMJPEG AVIに変換。固定サイズの画像列、整数1–240 fps。JPEGは画素処理なしなら入力データを格納し、画素処理時とPNG/TIFFはJPEGに変換 | 一部 |
-| RAW・DNG | RAW処理、DNG変換 | `--raw-preview`でCR2/DNG/NEF/NRW/ARW/PEF/SRWのTIFF内画像とCanon CR3のUUIDプレビューを抽出してレンダー。CR3は既知UUIDのプレビューを含む素材が対象。RAWのデモザイクやCamera Raw現像は未実装。RAF/ORF/RW2は未対応 | 一部 |
+| RAW・DNG | RAW処理、DNG変換 | `--raw-preview`でCR2/DNG/NEF/NRW/ARW/ORF/PEF/SRWのTIFF内画像、Panasonic RW2の埋め込みJPEG、Fuji RAFヘッダー指定JPEG、Canon CR3のUUIDプレビューを抽出してレンダー。CR3は既知UUIDのプレビューを含む素材が対象。RAWのデモザイクやCamera Raw現像は未実装 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | 入力と同じ解像度のみ。中間画像の書き出し工程なし | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | MJPEG AVIのみ。Rec.2020、HDR、音声なし | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | 未実装 | 未実装 |
@@ -65,7 +65,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 5. レンダー時に簡易Deflickerを画素へ適用するか、解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 
-動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--raw-preview`を指定すれば一部TIFF系RAWまたはCanon CR3に保存された埋め込み画像を入力に使えますが、RAWセンサー情報やCamera Raw設定を現像する機能ではありません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
+動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--raw-preview`を指定すれば一部TIFF系RAW、Fuji RAFまたはCanon CR3に保存された埋め込み画像を入力に使えますが、RAWセンサー情報やCamera Raw設定を現像する機能ではありません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
 
 ## インストール
 
@@ -208,6 +208,10 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 - [Pure-Go TIFF decoder/encoder used by lrtl](https://pkg.go.dev/golang.org/x/image@v0.29.0/tiff)
 - [Pure-Go EXIF reader used for Holy Grail exposure analysis](https://github.com/evanoberholster/imagemeta)
 - [ExifTool's public CR3 UUID preview layout notes](https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/QuickTime.pm#L761)
+- [libopenraw's Panasonic RW2 format notes](https://libopenraw.freedesktop.org/formats/rw2/)
+- [ExifTool's Panasonic RAW embedded JPEG tag definition](https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/PanasonicRaw.pm#L193)
+- [libopenraw's Olympus ORF format notes](https://libopenraw.freedesktop.org/formats/orf/)
+- [libopenraw's Fujifilm RAF header and JPEG offsets](https://libopenraw.freedesktop.org/formats/raf/)
 
 ## 開発
 

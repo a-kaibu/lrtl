@@ -25,7 +25,8 @@ const (
 
 var embeddedRawPreviewExtensions = map[string]bool{
 	".arw": true, ".cr2": true, ".cr3": true, ".dng": true, ".nef": true,
-	".nrw": true, ".pef": true, ".srw": true,
+	".nrw": true, ".orf": true, ".pef": true, ".raf": true,
+	".rw2": true, ".srw": true,
 }
 
 var cr3PreviewUUID = []byte{
@@ -87,10 +88,14 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 }
 
 func extractRawPreview(path string, data []byte) ([]byte, error) {
-	if strings.EqualFold(filepath.Ext(path), ".cr3") {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".cr3":
 		return extractCR3Preview(data)
+	case ".raf":
+		return extractRAFPreview(data)
+	default:
+		return extractTIFFPreview(data)
 	}
-	return extractTIFFPreview(data)
 }
 
 func extractCR3Preview(data []byte) ([]byte, error) {
@@ -119,9 +124,6 @@ func extractCR3Preview(data []byte) ([]byte, error) {
 			continue
 		}
 		preview := previewRegion[jpegStart:]
-		if jpegEnd := bytes.Index(preview, []byte{0xff, 0xd9}); jpegEnd >= 0 {
-			preview = preview[:jpegEnd+2]
-		}
 		config, format, err := image.DecodeConfig(bytes.NewReader(preview))
 		if err != nil || format != "jpeg" || config.Width < 1 || config.Height < 1 {
 			continue
@@ -138,9 +140,27 @@ func extractCR3Preview(data []byte) ([]byte, error) {
 	return best, nil
 }
 
+func extractRAFPreview(data []byte) ([]byte, error) {
+	const rafHeaderSize = 92
+	if len(data) < rafHeaderSize || string(data[:16]) != "FUJIFILMCCD-RAW " {
+		return nil, fmt.Errorf("invalid Fujifilm RAF header")
+	}
+	offset := uint64(binary.BigEndian.Uint32(data[84:88]))
+	length := uint64(binary.BigEndian.Uint32(data[88:92]))
+	if length == 0 || length > maxPreviewBytes || !tiffRange(offset, length, uint64(len(data))) {
+		return nil, fmt.Errorf("Fujifilm RAF preview range is invalid")
+	}
+	preview := data[int(offset):int(offset+length)]
+	config, format, err := image.DecodeConfig(bytes.NewReader(preview))
+	if err != nil || format != "jpeg" || config.Width < 1 || config.Height < 1 {
+		return nil, fmt.Errorf("Fujifilm RAF embedded preview is not a decodable JPEG")
+	}
+	return preview, nil
+}
+
 func extractTIFFPreview(data []byte) ([]byte, error) {
 	if len(data) < 8 {
-		return nil, fmt.Errorf("TIFF-based RAW file is too short")
+		return nil, fmt.Errorf("TIFF-layout RAW file is too short")
 	}
 	var order binary.ByteOrder
 	switch string(data[:2]) {
@@ -149,14 +169,15 @@ func extractTIFFPreview(data []byte) ([]byte, error) {
 	case "MM":
 		order = binary.BigEndian
 	default:
-		return nil, fmt.Errorf("RAW preview extraction requires a TIFF-based RAW file")
+		return nil, fmt.Errorf("RAW preview extraction requires a TIFF-layout directory header")
 	}
-	if order.Uint16(data[2:4]) != 42 {
-		return nil, fmt.Errorf("RAW preview extraction currently supports classic TIFF directories only")
+	magic := order.Uint16(data[2:4])
+	if magic != 42 && magic != 85 && magic != 0x4f52 && magic != 0x5352 {
+		return nil, fmt.Errorf("RAW preview extraction currently supports classic TIFF, Olympus ORF, and Panasonic RW2 directories only")
 	}
 	firstIFD := order.Uint32(data[4:8])
 	if firstIFD == 0 {
-		return nil, fmt.Errorf("TIFF-based RAW file has no image directory")
+		return nil, fmt.Errorf("TIFF-layout RAW file has no image directory")
 	}
 
 	scanner := &tiffPreviewScanner{data: data, order: order, visited: make(map[uint32]bool)}
@@ -184,7 +205,7 @@ func extractTIFFPreview(data []byte) ([]byte, error) {
 		}
 	}
 	if len(best) == 0 {
-		return nil, fmt.Errorf("no decodable embedded preview was found in this TIFF-based RAW file")
+		return nil, fmt.Errorf("no decodable embedded preview was found in this TIFF-layout RAW file")
 	}
 	return best, nil
 }
@@ -210,8 +231,17 @@ func (scanner *tiffPreviewScanner) scan(first uint32) error {
 		var stripOffsets, stripLengths []uint64
 		for _, entry := range entries {
 			switch entry.tag {
-			case 273, 279, 330, 34665, 34853, 40965, 513, 514:
+			case 46, 273, 279, 330, 34665, 34853, 40965, 513, 514:
 			default:
+				continue
+			}
+			if entry.tag == 46 {
+				segment, err := scanner.dataSegment(entry)
+				if err == nil {
+					if err := scanner.addSegment(segment); err != nil {
+						return err
+					}
+				}
 				continue
 			}
 			values, err := scanner.values(entry)
@@ -272,6 +302,22 @@ func (scanner *tiffPreviewScanner) addSegment(segment tiffPreviewSegment) error 
 	}
 	scanner.segments = append(scanner.segments, segment)
 	return nil
+}
+
+func (scanner *tiffPreviewScanner) dataSegment(entry tiffPreviewEntry) (tiffPreviewSegment, error) {
+	unitSize := tiffTypeSize(entry.typeID)
+	if unitSize == 0 || entry.count == 0 {
+		return tiffPreviewSegment{}, fmt.Errorf("unsupported TIFF image data field")
+	}
+	byteCount := uint64(unitSize) * uint64(entry.count)
+	if byteCount/uint64(unitSize) != uint64(entry.count) || byteCount <= 4 || byteCount > maxPreviewBytes {
+		return tiffPreviewSegment{}, fmt.Errorf("invalid TIFF image data size")
+	}
+	offset := uint64(scanner.order.Uint32(entry.value))
+	if !tiffRange(offset, byteCount, uint64(len(scanner.data))) {
+		return tiffPreviewSegment{}, fmt.Errorf("TIFF image data is outside the file")
+	}
+	return tiffPreviewSegment{offset: offset, length: byteCount}, nil
 }
 
 type tiffPreviewEntry struct {
