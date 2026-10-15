@@ -129,3 +129,21 @@ func selectKeyframeIndices(logLuminance []float64, count, smoothRadius int) ([]i
 	}
 	return indices[1 : len(indices)-1], nil
 }
+
+func selectEvenlySpacedKeyframeIndices(frameCount, count int) ([]int, error) {
+	if frameCount < 1 {
+		return nil, fmt.Errorf("sequence contains no frames")
+	}
+	interiorCount := frameCount - 2
+	if count < 1 || count > interiorCount {
+		return nil, fmt.Errorf("keyframe count must be between 1 and %d interior frames: %d", max(0, interiorCount), count)
+	}
+
+	indices := make([]int, count)
+	divisions := count + 1
+	for position := 1; position <= count; position++ {
+		numerator := position * (frameCount - 1)
+		indices[position-1] = (numerator + divisions/2) / divisions
+	}
+	return indices, nil
+}

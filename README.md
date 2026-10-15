@@ -14,7 +14,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 |---|---|---|---|
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。出力AVIは約4 GBまで | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
-| キーフレーム | 明るさを解析する自動Keyframes Wizard、手動キーフレーム | 手動マークに加え、JPEG/PNG/TIFFの明るさ曲線から内側の候補を選ぶ`keyframes`コマンドを実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。候補選定は独自ヒューリスティック | 一部 |
+| キーフレーム | 明るさを解析する自動Keyframes Wizard、手動キーフレーム、等間隔配置 | 手動マークに加え、JPEG/PNG/TIFFの輝度曲線から内側の候補を選ぶ`keyframes`と、画像をデコードせずRAWを含む列にも使える`--evenly-spaced`を実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。自動候補選定は独自ヒューリスティック | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。RAW曲線の生成と独立補正レイヤーは未再現。補正を`crs:Exposure2012`へ書く方式 | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星のcrop keyframeマークのみ。構図作成とクロップ値の補間は未実装 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
@@ -100,6 +100,7 @@ lrtl holy-grail "D:\Timelapse\Sequence" --reset --write
 # JPEG/PNG/TIFFの輝度曲線から5つの候補を提案（既定はプレビューのみ）
 lrtl keyframes "D:\Timelapse\Developed" --count 5
 lrtl keyframes "D:\Timelapse\Developed" --count 5 --write
+lrtl keyframes "D:\Timelapse\RAW" --count 5 --evenly-spaced --write
 
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
@@ -122,7 +123,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `--apply-xmp-exposure`は各画像に対応する外部XMPサイドカーから数値の`crs:Exposure2012`を読み、線形sRGB画素に露出倍率を適用します。±32 stopsを超える値や不正な数値はエラーにします。Camera Rawの全現像パイプラインと一致する機能ではなく、露出スライダーだけの近似適用です。JPEGはこの指定で再エンコードされます。
 
-`keyframes`は全フレームの明るさを解析し、内側の候補数を指定できます。両端の画像は曲線を測る基準点として使い、キーフレームにはしません。既定は5候補で、内側のフレームが5未満ならその数まで減らします。明るさ曲線を平滑化したうえで、線形遷移から外れる度合いが大きいフレームを優先します。既存の手動キーフレームを自動で解除しません。`--write`を付けた場合も候補だけをマークし、ほかの評価やマーカーは保持します。入力はJPEG/PNG/TIFFに対応します。
+`keyframes`は内側の候補数を指定できます。既定は5候補で、内側のフレームが5未満ならその数まで減らします。通常モードはJPEG/PNG/TIFFの明るさ曲線を平滑化し、直線遷移から外れるフレームを優先します。`--evenly-spaced`は輝度を見ずに等間隔の候補を選び、RAWを含む対応画像列にも使えます。どちらのモードも最初と最後の画像は候補にしません。既存の手動キーフレームを自動で解除せず、`--write`を付けた場合も候補だけをマークし、ほかの評価やマーカーは保持します。
 
 `unmark --force-rating`はlrtl以外が設定した4つ星/5つ星評価にも使えます。その評価を削除するため、評価がキーフレームマーカーとして使われている場合に限ってください。
 

@@ -92,7 +92,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG/TIFF frames to MJPEG AVI")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N]        suggest luminance-based keyframes")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced]  suggest keyframes")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 }
 
@@ -429,6 +429,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("keyframes", stderr)
 	count := set.Int("count", 5, "number of suggested keyframes (default capped to frame count)")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius in frames")
+	evenlySpaced := set.Bool("evenly-spaced", false, "suggest uniformly spaced interior keyframes without decoding images")
 	write := set.Bool("write", false, "mark the suggested frames in XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{"--count": true, "-count": true, "--smooth": true, "-smooth": true})); err != nil {
@@ -450,11 +451,18 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	curve, err := analyzeLuminanceSequence(frames)
-	if err != nil {
-		return reportError(stderr, err)
+	if *smoothRadius < 0 || *smoothRadius > 1000 {
+		return reportError(stderr, fmt.Errorf("smoothing radius must be between 0 and 1000 frames: %d", *smoothRadius))
 	}
-	maxSuggestions := len(curve) - 2
+	var curve []float64
+	if !*evenlySpaced {
+		curve, err = analyzeLuminanceSequence(frames)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
+	frameCount := len(frames)
+	maxSuggestions := frameCount - 2
 	if maxSuggestions < 1 {
 		return reportError(stderr, fmt.Errorf("keyframe suggestions require at least one interior frame between the sequence endpoints"))
 	}
@@ -462,7 +470,12 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if !countSpecified {
 		suggestionCount = min(suggestionCount, maxSuggestions)
 	}
-	indices, err := selectKeyframeIndices(curve, suggestionCount, *smoothRadius)
+	var indices []int
+	if *evenlySpaced {
+		indices, err = selectEvenlySpacedKeyframeIndices(frameCount, suggestionCount)
+	} else {
+		indices, err = selectKeyframeIndices(curve, suggestionCount, *smoothRadius)
+	}
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -484,7 +497,11 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Frames: %d; suggested keyframes: %d\n", len(frames), len(indices))
 	for _, index := range indices {
 		frame := frames[index]
-		fmt.Fprintf(stdout, "%4d %-42s luminance=%.6f\n", index+1, filepath.Base(frame.Image), math.Exp2(curve[index]))
+		if *evenlySpaced {
+			fmt.Fprintf(stdout, "%4d %-42s evenly spaced\n", index+1, filepath.Base(frame.Image))
+		} else {
+			fmt.Fprintf(stdout, "%4d %-42s luminance=%.6f\n", index+1, filepath.Base(frame.Image), math.Exp2(curve[index]))
+		}
 		if !*write {
 			continue
 		}
