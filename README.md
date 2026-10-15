@@ -34,7 +34,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。8-bit RGB処理のためLRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。画像プレビュー、ロッシーDNG、DNGのサイズ縮小、動画の自動分割は未実装 | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`でDNGLabが対応するRAWをlosslessまたはuncompressed DNGへ変換。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
-| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | 未実装 | 未実装 |
+| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。バッチプレビューとXMP一括補正は未実装 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | CLIのみ | 未実装 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
 
@@ -74,6 +74,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 11. カード/フォルダーから写真とXMPを取り込み、必要に応じて日時順へ並べたりJPEGを除外したりする。対応RAWは外部DNGLabでDNGに変換できる。
 12. 動画から全フレームまたは指定fpsのJPG/PNG連番を抽出し、通常の画像列としてレンダーする。
 13. XMPサイドカー上の連番撮影日時を一括で前後にずらす。
+14. 複数の連番フォルダーを並列に動画化し、レンダー失敗を連番ごとに報告する。
 
 動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。キーフレーム間のXMP値も反映する場合は、XMP現像値をまだ焼き込んでいない画像に対して`interpolate --write`後に`render --apply-xmp-basic`を使います。このオプションはExposure2012、Contrast2012、Highlights2012、Shadows2012、Whites2012、Blacks2012、Vibrance、Saturationの8項目、Temperature/Tint、XMPに明示されたマスター/RGBポイントカーブを表示済みsRGB画像へ独自近似で適用します。ホワイトバランスは推定色温度からRGBゲインを求める近似で、カメラのセンサーデータやプロファイルを使わず、Lightroom/Camera Rawと画素値が一致する現像機能ではありません。プリセット名だけのカーブ、色別調整、ローカル補正などは適用しません。既にLightroom/Camera Rawで同じ現像値を焼き込んで書き出したJPEG等には再適用せず、通常の`render`を使ってください。RAW連番を直接レンダーするには外部DNGLabを使う`--raw-develop`を指定します。DNGLabのRAW対応はカメラ形式ごとに異なり、DNGLabはalpha版です。`--raw-preview`は内蔵プレビューを使う別経路です。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`だけをレンダー入力画像に近似適用します。`--apply-xmp-basic`には同じ露出値が含まれるため、両方は同時に指定できません。DNGLabの現像パラメーターはCamera Rawと一致せず、サイドカーにある他の現像値もRAW現像には使いません。Deflickerはレンダー時に出力画素へ適用できます。これらのレンダー操作は元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正をXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。MP4/MOV出力は外部FFmpegを必要とし、入力画像をGoで8-bit RGBへデコードしてから選択したエンコーダーへ渡します。`.mp4`の既定はH.264、`.mov`の既定はProRes 422です。`--codec h265`でH.265、`--codec prores-hq`でProRes 422 HQを選べます。FFmpegにそれぞれ`libx264`、`libx265`、`prores_ks`エンコーダーが必要です。
 
@@ -82,6 +83,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 `long-term`は画像を最大64×64点のグリッドでサンプリングし、線形sRGB輝度の中央値、輝度log2の90–10パーセンタイル差（EV）、彩度で重み付けした円形平均色相（0–360度）を記録します。`--luminance-range`、`--contrast-range`、`--hue-range`はそれぞれ`MIN,MAX`で指定し、指定した全範囲を満たすフレームをJSONマニフェストに含めます。色相は`MIN>MAX`で0度をまたぐ範囲を表せます。無彩色など平均色相が定まらない画像は色相範囲指定時に除外します。範囲を何も指定しなければ全画像を含めます。`render --selection`は元フォルダー、ファイル名、サイズ、更新時刻を照合してから含まれる画像をレンダーし、画像やXMPを変更しません。LRTimelapseも長期用にLuminance/Contrast/Hueフィルターを提供しますが、lrtlのサンプリングと指標式は独自実装です。
 
 解析コマンドの`--apply-xmp-basic`、`--apply-xmp-exposure`、`--apply-xmp-crop`はlrtl側の画素近似です。`--apply-xmp-basic`は露出、トーン、色、Temperature/Tintをまとめて含み、`--apply-xmp-exposure`とは同時に使えません。既にLightroom等でその補正を焼き込んだJPEG/PNGでは二重適用になるため、主にRAWプレビューやDNGLab現像画像の解析に使ってください。
+
+`batch-render`はROOT自身と直下の各サブフォルダーを調べ、対応画像を含むフォルダーを個別の連番としてレンダーします。`--recursive`を指定すると全階層を検索します。ROOTが連番の場合は`ROOT名.mp4`のように出力し、配下の連番は相対フォルダーを保って出力します。`--format`は`avi`/`mp4`/`mov`（既定`mp4`）、`--workers`は同時処理数（既定1、最大64）です。`--`の後に指定した通常の`render`オプションは全ジョブへ渡されます。各ジョブの成功・失敗をまとめて表示し、失敗した連番があっても他のレンダーを続け、どれかが失敗した場合は終了コード1を返します。これは動画レンダーのバッチ機能で、プレビュー生成やXMP補正の一括適用はまだありません。
 
 ## インストール
 
@@ -204,6 +207,9 @@ lrtl long-term "D:\Timelapse\Developed" --output "D:\Timelapse\selection.json" `
 
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成（FFmpeg不要）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
+
+# 連番をフォルダーから探して並列レンダー（MP4、最大2ジョブ）
+lrtl batch-render "D:\Sequences" --output "D:\Exports" --format mp4 --workers 2 --recursive -- --fps 24 --crf 18 --preset medium
 
 # 長期フィルターで選択した画像だけをレンダー
 lrtl render "D:\Timelapse\Developed" --selection "D:\Timelapse\selection.json" --output "D:\Timelapse\filtered.avi"
