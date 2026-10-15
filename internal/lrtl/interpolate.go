@@ -215,6 +215,15 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		if !registered {
 			continue
 		}
+		if name == "Exposure2012" && len(packets) > 0 {
+			mergedHDR, found, err := packets[0].GetScalar("crs:IsMergedHDR")
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", frames[0].Image, err)
+			}
+			if found && mergedHDR == "true" {
+				spec.min, spec.max = -10, 10
+			}
+		}
 		anchors := make([]lrtSplinePoint, 0, len(keyframes))
 		for _, keyframe := range keyframes {
 			if value, found := numericValues[keyframe][name]; found {
