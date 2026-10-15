@@ -10,20 +10,22 @@ import (
 
 // NumericCRSProperties is the explicit allowlist of scalar Camera Raw controls.
 var NumericCRSProperties = []string{
-	"BlueHue", "BlueSaturation", "Brightness", "ChromaticAberrationB",
-	"ChromaticAberrationR", "Blacks2012", "Clarity2012", "ColorGradeBlending",
-	"ColorGradeGlobalLum", "ColorGradeGlobalSat", "ColorGradeHighlightLum",
-	"ColorGradeMidtoneLum", "ColorGradeMidtoneSat", "ColorGradeShadowLum",
+	"Blacks2012", "BlueHue", "BlueSaturation", "Brightness", "ChromaticAberrationB",
+	"ChromaticAberrationR", "Clarity", "Clarity2012", "ColorGradeBlending",
+	"ColorGradeGlobalHue", "ColorGradeGlobalLum", "ColorGradeGlobalSat", "ColorGradeHighlightLum",
+	"ColorGradeMidtoneHue", "ColorGradeMidtoneLum", "ColorGradeMidtoneSat", "ColorGradeShadowLum",
 	"ColorNoiseReduction", "ColorNoiseReductionDetail", "ColorNoiseReductionSmoothness",
 	"Contrast", "Contrast2012", "CropAngle", "CropBottom", "CropLeft", "CropRight",
 	"CropTop", "CurveRefineSaturation", "Defringe", "DefringeGreenAmount",
-	"DefringePurpleAmount", "Dehaze", "Exposure", "Exposure2012", "GrayMixerAqua",
-	"GrayMixerBlue", "GrayMixerGreen", "GrayMixerMagenta", "GrayMixerOrange",
-	"GrayMixerPurple", "GrayMixerRed", "GrayMixerYellow", "GrainAmount", "GrainFrequency",
-	"GrainSize", "GreenHue", "GreenSaturation", "Highlights2012", "HueAdjustmentAqua",
+	"DefringeGreenHueHi", "DefringeGreenHueLo", "DefringePurpleAmount", "DefringePurpleHueHi",
+	"DefringePurpleHueLo", "Dehaze", "Exposure", "Exposure2012", "FillLight",
+	"GrainAmount", "GrainFrequency", "GrainSize", "GrayMixerAqua", "GrayMixerBlue",
+	"GrayMixerGreen", "GrayMixerMagenta", "GrayMixerOrange", "GrayMixerPurple",
+	"GrayMixerRed", "GrayMixerYellow", "GreenHue", "GreenSaturation", "HDRMaxValue", "HighlightRecovery",
+	"Highlights2012", "HueAdjustmentAqua",
 	"HueAdjustmentBlue", "HueAdjustmentGreen", "HueAdjustmentMagenta", "HueAdjustmentOrange",
-	"HueAdjustmentPurple", "HueAdjustmentRed", "HueAdjustmentYellow", "LensManualDistortionAmount",
-	"LensProfileChromaticAberrationScale", "LensProfileDistortionScale",
+	"HueAdjustmentPurple", "HueAdjustmentRed", "HueAdjustmentYellow", "IncrementalTemperature",
+	"IncrementalTint", "LensManualDistortionAmount", "LensProfileChromaticAberrationScale", "LensProfileDistortionScale",
 	"LensProfileVignettingScale", "LuminanceAdjustmentAqua", "LuminanceAdjustmentBlue",
 	"LuminanceAdjustmentGreen", "LuminanceAdjustmentMagenta", "LuminanceAdjustmentOrange",
 	"LuminanceAdjustmentPurple", "LuminanceAdjustmentRed", "LuminanceAdjustmentYellow",
@@ -37,10 +39,18 @@ var NumericCRSProperties = []string{
 	"SaturationAdjustmentGreen", "SaturationAdjustmentMagenta", "SaturationAdjustmentOrange",
 	"SaturationAdjustmentPurple", "SaturationAdjustmentRed", "SaturationAdjustmentYellow",
 	"ShadowTint", "Shadows", "Shadows2012", "SharpenDetail", "SharpenEdgeMasking",
-	"SharpenRadius", "Sharpness", "SplitToningBalance", "SplitToningHighlightSaturation",
-	"SplitToningShadowSaturation", "Temperature", "Texture", "Tint", "ToneMapStrength",
+	"SharpenRadius", "Sharpness", "SplitToningBalance", "SplitToningHighlightHue",
+	"SplitToningHighlightSaturation", "SplitToningShadowHue", "SplitToningShadowSaturation",
+	"Temperature", "Texture", "Tint", "ToneMapStrength",
 	"UprightCenterNormX", "UprightCenterNormY", "UprightFocalLength35mm", "Vibrance",
 	"VignetteAmount", "VignetteMidpoint", "Whites2012",
+}
+
+var circularCRSProperties = map[string]struct{}{
+	"ColorGradeGlobalHue": {}, "ColorGradeMidtoneHue": {},
+	"DefringeGreenHueHi": {}, "DefringeGreenHueLo": {},
+	"DefringePurpleHueHi": {}, "DefringePurpleHueLo": {},
+	"SplitToningHighlightHue": {}, "SplitToningShadowHue": {},
 }
 
 type ProposedFrame struct {
@@ -104,10 +114,27 @@ func linearValues(targetIndex, startIndex, endIndex int, startValues, endValues 
 		start, startOK := startValues[name]
 		end, endOK := endValues[name]
 		if startOK && endOK {
-			values[name] = start + (end-start)*fraction
+			values[name] = interpolateCRSValue(name, start, end, fraction)
 		}
 	}
 	return values
+}
+
+func interpolateCRSValue(name string, start, end, fraction float64) float64 {
+	if _, circular := circularCRSProperties[name]; !circular {
+		return start + (end-start)*fraction
+	}
+	span := math.Mod(end-start, 360)
+	if span >= 180 {
+		span -= 360
+	} else if span < -180 {
+		span += 360
+	}
+	value := math.Mod(start+span*fraction, 360)
+	if value < 0 {
+		value += 360
+	}
+	return value
 }
 
 func buildPlan(frames []Frame) (*InterpolationPlan, error) {
