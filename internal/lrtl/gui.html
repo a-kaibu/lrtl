@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LumaFrame</title>
+  <style>
+    :root { color-scheme: dark; --bg:#11151b; --panel:#1b222c; --line:#303b48; --text:#e8edf3; --muted:#9eacbb; --accent:#70c3ff; --gold:#ffc857; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui, sans-serif; }
+    header { position:sticky; top:0; z-index:2; display:flex; align-items:center; gap:12px; padding:13px 20px; background:#151b22ee; border-bottom:1px solid var(--line); backdrop-filter:blur(12px); }
+    header strong { font-size:18px; letter-spacing:.02em; }
+    header span { color:var(--muted); }
+    main { max-width:1500px; margin:0 auto; padding:18px; }
+    .pathbar,.toolbar,.panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+    .pathbar { display:flex; gap:8px; margin-bottom:12px; }
+    input,select,button { font:inherit; color:var(--text); background:#111820; border:1px solid #3a4653; border-radius:6px; padding:8px 10px; }
+    input { min-width:0; }
+    input:focus,select:focus,button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+    button { cursor:pointer; background:#263544; }
+    button:hover { background:#31485c; }
+    button.primary { background:#17679b; border-color:#328bc1; }
+    button.warn { background:#493d25; border-color:#80642c; }
+    button:disabled { opacity:.55; cursor:wait; }
+    #directory { flex:1; }
+    .layout { display:grid; grid-template-columns:minmax(0,1fr) 330px; align-items:start; gap:14px; }
+    .toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px; color:var(--muted); }
+    .toolbar div { display:flex; align-items:center; gap:8px; }
+    #grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; }
+    .card { overflow:hidden; border:1px solid var(--line); border-radius:9px; background:var(--panel); cursor:pointer; }
+    .card.selected { outline:2px solid var(--accent); }
+    .card img { display:block; width:100%; aspect-ratio:4/3; object-fit:contain; background:#090b0e; }
+    .card-body { padding:8px; }
+    .filename { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+    .badges { min-height:20px; margin:3px 0 6px; color:var(--gold); font-size:12px; }
+    .card-actions { display:flex; gap:5px; }
+    .card-actions button { flex:1; padding:5px 4px; font-size:12px; }
+    aside { display:grid; gap:12px; position:sticky; top:68px; }
+    .panel h2 { margin:0 0 9px; font-size:15px; }
+    .panel p { color:var(--muted); margin:6px 0 10px; font-size:12px; }
+    .panel label { display:block; margin:9px 0 4px; color:var(--muted); font-size:12px; }
+    .panel input,.panel select { width:100%; }
+    .check { display:flex!important; align-items:center; gap:8px; }
+    .check input { width:auto; }
+    .panel button { width:100%; margin-top:8px; }
+    #preview { display:block; width:100%; max-height:220px; object-fit:contain; background:#090b0e; border-radius:5px; }
+    #status { min-height:20px; margin:10px 2px; color:var(--muted); white-space:pre-wrap; }
+    #status.error { color:#ff9a91; }
+    .empty { grid-column:1/-1; padding:40px 12px; color:var(--muted); text-align:center; border:1px dashed var(--line); border-radius:9px; }
+    @media (max-width:900px) { .layout { grid-template-columns:1fr; } aside { position:static; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); } }
+    @media (max-width:600px) { main { padding:10px; } .pathbar { flex-direction:column; } .toolbar { align-items:stretch; flex-direction:column; } #grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; } header { padding:10px; } }
+  </style>
+</head>
+<body>
+  <header><strong>LumaFrame</strong><span>Local sequence workflow</span></header>
+  <main>
+    <div class="pathbar">
+      <input id="directory" autocomplete="off" spellcheck="false" placeholder="画像連番フォルダー (例: C:\Timelapse\Sequence)">
+      <button id="load" class="primary">連番を開く</button>
+    </div>
+    <div class="layout">
+      <section>
+        <div class="toolbar">
+          <span id="count">フォルダーを指定してください</span>
+          <div><button id="previous">前へ</button><span id="page">-</span><button id="next">次へ</button></div>
+        </div>
+        <div id="grid"><div class="empty">JPEG / PNG / TIFF または対応RAW画像のフォルダーを指定します。</div></div>
+      </section>
+      <aside>
+        <section class="panel">
+          <h2>選択フレーム</h2>
+          <img id="preview" alt="選択フレームのプレビュー">
+          <p id="selected-name">フレームを選択するとプレビューします。</p>
+          <div class="card-actions">
+            <button id="mark4">4★ 編集</button><button id="mark5">5★ クロップ</button><button id="unmark">解除</button>
+          </div>
+        </section>
+        <section class="panel">
+          <h2>キーフレーム</h2>
+          <label for="keyframe-count">追加するキーフレーム数</label>
+          <input id="keyframe-count" type="number" min="1" max="1000" value="5">
+          <label for="keyframe-rating">評価</label>
+          <select id="keyframe-rating"><option value="4">4★ 編集</option><option value="5">5★ クロップ</option></select>
+          <label for="analysis-raw-mode">RAW輝度解析</label>
+          <select id="analysis-raw-mode"><option value="">RAWなし</option><option value="preview">内蔵プレビュー</option><option value="develop">DNGLabで現像</option></select>
+          <label for="analysis-dnglab">DNGLab実行ファイル (現像時)</label>
+          <input id="analysis-dnglab" autocomplete="off" spellcheck="false" placeholder="PATHにあれば空欄">
+          <label class="check"><input id="analysis-xmp-basic" type="checkbox">候補分析にXMP現像値を適用</label>
+          <label class="check"><input id="analysis-xmp-crop" type="checkbox">候補分析にXMPクロップを適用</label>
+          <button id="suggest">輝度から配置して保存</button>
+          <label for="smoothness">補間スムージング (0–100)</label>
+          <input id="smoothness" type="number" min="0" max="100" value="50">
+          <button id="interpolate">XMPを補間して保存</button>
+        </section>
+        <section class="panel">
+          <h2>タイムラプスを書き出す</h2>
+          <label for="output">出力ファイル</label>
+          <input id="output" autocomplete="off" spellcheck="false" placeholder="C:\Timelapse\output.avi">
+          <label for="fps">フレームレート</label>
+          <input id="fps" type="number" min="1" max="240" value="24">
+          <label for="codec">コーデック</label>
+          <select id="codec">
+            <option value="">拡張子の既定</option><option value="h264">H.264</option><option value="h265">H.265</option>
+            <option value="prores">ProRes 422</option><option value="prores-hq">ProRes 422 HQ</option>
+            <option value="dnxhr-lb">DNxHR LB</option><option value="dnxhr-sq">DNxHR SQ</option>
+            <option value="dnxhr-hq">DNxHR HQ</option><option value="dnxhr-hqx">DNxHR HQX</option><option value="dnxhr-444">DNxHR 444</option>
+          </select>
+          <label for="raw-mode">RAW入力</label>
+          <select id="raw-mode"><option value="">RAWなし</option><option value="preview">内蔵プレビュー</option><option value="develop">DNGLabで現像</option></select>
+          <label for="dnglab">DNGLab実行ファイル (現像時)</label>
+          <input id="dnglab" autocomplete="off" spellcheck="false" placeholder="PATHにあれば空欄">
+          <label for="ffmpeg">FFmpeg実行ファイル (任意)</label>
+          <input id="ffmpeg" autocomplete="off" spellcheck="false" placeholder="PATHにあれば空欄">
+          <label class="check"><input id="xmp-basic" type="checkbox">対応するXMP現像値を適用</label>
+          <label class="check"><input id="xmp-crop" type="checkbox">XMPクロップを適用</label>
+          <label class="check"><input id="deflicker" type="checkbox">全体輝度のちらつきを抑える</label>
+          <label class="check"><input id="overwrite" type="checkbox">出力ファイルを上書き</label>
+          <button id="render" class="primary">動画を生成</button>
+          <p>AVIは追加ソフト不要です。MP4/MOVにはFFmpegが必要です。RAWセンサー画像の現像にはDNGLabが必要です。</p>
+        </section>
+      </aside>
+    </div>
+    <div id="status" role="status" aria-live="polite"></div>
+  </main>
+  <script>
+    const el = id => document.getElementById(id);
+    let directory = '';
+    let offset = 0;
+    let total = 0;
+    let limit = 80;
+    let frames = [];
+    let selected = null;
+    const setStatus = (message, error = false) => { el('status').textContent = message; el('status').className = error ? 'error' : ''; };
+    async function api(url, options = {}) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || response.statusText);
+      return data;
+    }
+    function buttonAction(button, work) {
+      button.addEventListener('click', async event => {
+        event.stopPropagation();
+        try { button.disabled = true; await work(); }
+        catch (error) { setStatus(error.message, true); }
+        finally { button.disabled = false; }
+      });
+    }
+    function renderCard(frame) {
+      const card = document.createElement('article');
+      card.className = 'card' + (selected && selected.name === frame.name ? ' selected' : '');
+      card.addEventListener('click', () => selectFrame(frame));
+      const image = document.createElement('img');
+      image.loading = 'lazy'; image.alt = frame.name; image.src = frame.thumbnail;
+      image.onerror = () => { image.onerror = null; image.removeAttribute('src'); image.alt = 'プレビューなし'; };
+      const body = document.createElement('div'); body.className = 'card-body';
+      const name = document.createElement('span'); name.className = 'filename'; name.textContent = String(frame.index + 1).padStart(4, '0') + ' · ' + frame.name;
+      const badge = document.createElement('div'); badge.className = 'badges';
+      badge.textContent = frame.keyframe === 'default' ? '4★ 編集キーフレーム' : frame.keyframe === 'crop' ? '5★ クロップキーフレーム' : frame.hasRating && (frame.rating === 2 || frame.rating === 3) ? frame.rating + '★ Holy Grail' : '';
+      if (frame.xmpError) badge.title = frame.xmpError;
+      const actions = document.createElement('div'); actions.className = 'card-actions';
+      const edit = document.createElement('button'); edit.textContent = '4★'; edit.title = '編集キーフレームに設定';
+      edit.addEventListener('click', event => { event.stopPropagation(); setKeyframe(frame, 'default'); });
+      const crop = document.createElement('button'); crop.textContent = '5★'; crop.title = 'クロップキーフレームに設定';
+      crop.addEventListener('click', event => { event.stopPropagation(); setKeyframe(frame, 'crop'); });
+      const remove = document.createElement('button'); remove.textContent = '解除'; remove.title = '4/5つ星キーフレームを解除';
+      remove.addEventListener('click', event => { event.stopPropagation(); setKeyframe(frame, '', true); });
+      actions.append(edit, crop, remove); body.append(name, badge, actions); card.append(image, body);
+      return card;
+    }
+    async function loadSequence(reset = false) {
+      const value = el('directory').value.trim();
+      if (!value) { setStatus('画像連番フォルダーを入力してください。', true); return; }
+      const newSequence = reset || value !== directory;
+      const requestedOffset = newSequence ? 0 : offset;
+      setStatus('連番を読み込んでいます…');
+      const query = new URLSearchParams({directory:value, offset:String(requestedOffset), limit:String(limit)});
+      const data = await api('/api/sequence?' + query.toString());
+      directory = data.directory; offset = data.offset; total = data.total; frames = data.frames;
+      if (newSequence) selected = null;
+      el('directory').value = directory;
+      el('count').textContent = total + ' frames';
+      el('page').textContent = total ? (offset + 1) + '–' + Math.min(offset + frames.length, total) : '0';
+      el('previous').disabled = offset <= 0; el('next').disabled = offset + frames.length >= total;
+      const grid = el('grid'); grid.replaceChildren();
+      if (!total) { const empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = '対応する画像が見つかりません。'; grid.append(empty); }
+      else frames.forEach(frame => grid.append(renderCard(frame)));
+      const basename = directory.replace(/[\\/]$/, '').split(/[\\/]/).pop() || 'timelapse';
+      if (!el('output').value.trim()) el('output').value = directory.replace(/[\\/]$/, '') + '\\' + basename + '_timelapse.avi';
+      setStatus('連番を読み込みました。XMPへの変更はサイドカーのバックアップを作成して保存します。');
+    }
+    function ensureActiveDirectory() {
+      if (!directory) throw new Error('先に連番を開いてください。');
+      if (el('directory').value.trim() !== directory) throw new Error('入力したフォルダーはまだ開いていません。先に「連番を開く」を押してください。');
+    }
+    function selectFrame(frame) {
+      selected = frame;
+      el('selected-name').textContent = (frame.index + 1) + ' / ' + total + ' · ' + frame.name;
+      el('preview').src = frame.thumbnail;
+      document.querySelectorAll('.card').forEach(card => card.classList.remove('selected'));
+      const card = [...document.querySelectorAll('.card')].find(item => item.querySelector('.filename')?.textContent.endsWith(' · ' + frame.name));
+      if (card) card.classList.add('selected');
+    }
+    async function setKeyframe(frame, kind, remove = false) {
+      ensureActiveDirectory();
+      const action = remove ? '解除' : kind === 'crop' ? '5★クロップ' : '4★編集';
+      const ratingNote = remove && !frame.managedKeyframe ? '（既存の4/5つ星評価も削除されます）' : '';
+      if (!confirm(frame.name + ' を' + action + 'キーフレームとして保存しますか？' + ratingNote)) return;
+      setStatus('XMPを書き込んでいます…');
+      await api('/api/keyframe', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:frame.name, kind, remove})});
+      await loadSequence();
+      setStatus(frame.name + ' のキーフレームを保存しました。');
+    }
+    el('load').addEventListener('click', () => loadSequence(true).catch(error => setStatus(error.message, true)));
+    el('directory').addEventListener('keydown', event => { if (event.key === 'Enter') el('load').click(); });
+    el('previous').addEventListener('click', () => { offset = Math.max(0, offset - limit); loadSequence().catch(error => setStatus(error.message, true)); });
+    el('next').addEventListener('click', () => { offset += limit; loadSequence().catch(error => setStatus(error.message, true)); });
+    buttonAction(el('mark4'), () => selected ? setKeyframe(selected, 'default') : setStatus('先にフレームを選択してください。', true));
+    buttonAction(el('mark5'), () => selected ? setKeyframe(selected, 'crop') : setStatus('先にフレームを選択してください。', true));
+    buttonAction(el('unmark'), () => selected ? setKeyframe(selected, '', true) : setStatus('先にフレームを選択してください。', true));
+    buttonAction(el('suggest'), async () => {
+      ensureActiveDirectory();
+      if (!confirm('輝度推移を分析し、キーフレームXMPを保存しますか？既存マークは既定で保持されます。')) return;
+      setStatus('輝度を解析してキーフレームを保存しています…');
+      const data = await api('/api/keyframes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+        directory, count:Number(el('keyframe-count').value), rating:Number(el('keyframe-rating').value),
+        dngMode:el('analysis-raw-mode').value, dnglab:el('analysis-dnglab').value.trim(),
+        xmpBasic:el('analysis-xmp-basic').checked, xmpCrop:el('analysis-xmp-crop').checked
+      })});
+      await loadSequence(); setStatus(data.output || 'キーフレームを保存しました。');
+    });
+    buttonAction(el('interpolate'), async () => {
+      ensureActiveDirectory();
+      if (!confirm('キーフレーム間のXMP値を補間して保存しますか？既存XMPのバックアップを作成します。')) return;
+      setStatus('XMP値を補間しています…');
+      const data = await api('/api/interpolate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, smoothness:Number(el('smoothness').value)})});
+      await loadSequence(); setStatus(data.output || '補間したXMPを保存しました。');
+    });
+    buttonAction(el('render'), async () => {
+      ensureActiveDirectory();
+      const output = el('output').value.trim();
+      if (!output) throw new Error('出力ファイルを指定してください。');
+      if (!confirm(output + ' に動画を生成しますか？')) return;
+      el('render').textContent = '生成中…'; setStatus('動画を生成しています。フレーム数により時間がかかります…');
+      try {
+        const data = await api('/api/render', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
+          directory, output, fps:Number(el('fps').value), codec:el('codec').value, ffmpeg:el('ffmpeg').value.trim(),
+          dngMode:el('raw-mode').value, dnglab:el('dnglab').value.trim(), xmpBasic:el('xmp-basic').checked,
+          xmpCrop:el('xmp-crop').checked, deflicker:el('deflicker').checked, overwrite:el('overwrite').checked
+        })});
+        setStatus(data.output || '動画の生成が完了しました。');
+      } finally { el('render').textContent = '動画を生成'; }
+    });
+  </script>
+</body>
+</html>

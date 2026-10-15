@@ -97,6 +97,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runHolyGrail(arguments[1:], stdout, stderr)
 	case "snapshot":
 		return runSnapshot(arguments[1:], stdout, stderr)
+	case "gui":
+		return runGUI(arguments[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "lrtl: unknown command %q\n", arguments[0])
 		printUsage(stderr)
@@ -127,6 +129,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
 	fmt.Fprintln(writer, "  snapshot restore DIRECTORY FILE.zip [--write] [--no-backup] [--allow-moved]")
+	fmt.Fprintln(writer, "  gui [--listen 127.0.0.1:8787]           open the local sequence and render UI")
 }
 
 func runImport(arguments []string, stdout, stderr io.Writer) int {
