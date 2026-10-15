@@ -99,7 +99,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render frames; --raw-preview uses embedded RAW images")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --raw-preview uses embedded RAW images")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg   plot brightness, XMP exposure, and keyframe marks")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-preview]  analyze and update XMP exposure")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-preview]")
@@ -445,9 +445,12 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 
 func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
-	output := set.String("output", "", "output MJPEG AVI path")
+	output := set.String("output", "", "output AVI or MP4 path")
 	fps := set.Int("fps", 24, "integer frame rate (1-240)")
-	quality := set.Int("quality", 90, "JPEG quality for PNG/TIFF and deflickered frames (1-100)")
+	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
+	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for H.264 MP4 output; defaults to PATH")
+	crf := set.Int("crf", 18, "H.264 quality for MP4 output (0-51; lower is higher quality)")
+	preset := set.String("preset", "medium", "H.264 speed/size preset for MP4 output")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
 	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
@@ -461,6 +464,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
 		"--quality": true, "-quality": true,
+		"--ffmpeg": true, "-ffmpeg": true,
+		"--crf": true, "-crf": true,
+		"--preset": true, "-preset": true,
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--passes": true, "-passes": true,
@@ -499,6 +505,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	options := RenderOptions{
 		FPS:              *fps,
 		Quality:          *quality,
+		FFmpegPath:       *ffmpeg,
+		CRF:              *crf,
+		Preset:           *preset,
 		Overwrite:        *overwrite,
 		Deflicker:        deflickerEnabled,
 		Reference:        reference,

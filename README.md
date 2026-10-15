@@ -1,6 +1,6 @@
 # LumaFrame (`lrtl`)
 
-LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。現在はLightroom互換XMPのキーフレーム編集とHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFや一部RAWの埋め込みプレビューからMJPEG AVIを生成できます。
+LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。現在はLightroom互換XMPのキーフレーム編集とHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFや一部RAWの埋め込みプレビューからMJPEG AVIまたはH.264 MP4を生成できます。
 
 **現状は初期開発版です。RAW現像やCamera Raw設定全体の適用には対応していません。** `render --raw-preview`を指定すると、対応するTIFF系RAW、Fuji RAF、Canon CR3から埋め込みプレビューを使って動画を生成できます。これはカメラ内プレビューを使う近似で、RAW現像ではありません。RAW連番をキーフレーム設定どおりに現像して完成動画を書き出す一連の処理は未対応です。
 
@@ -12,7 +12,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
-| シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。出力AVIは約4 GBまで | 一部 |
+| シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFFおよび`--raw-preview`で取り出す対応RAW内蔵プレビューの輝度曲線から候補を選ぶ`keyframes`、デコード不要の`--evenly-spaced`を実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。候補選定は独自ヒューリスティック | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。RAW曲線の生成と独立補正レイヤーは未再現。補正を`crs:Exposure2012`へ書く方式 | 一部 |
@@ -23,10 +23,10 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`の輝度解析結果を`crs:Exposure2012`へ記録可能。両者とも独自の近似方式。LRTのVisual Preview、RAW現像連携、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
-| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFをMJPEG AVIに変換。固定サイズの画像列、整数1–240 fps。JPEGは画素処理なしなら入力データを格納し、画素処理時とPNG/TIFFはJPEGに変換 | 一部 |
+| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFと一部RAW内蔵プレビューをMJPEG AVIまたは外部FFmpegを使うH.264 MP4に出力。固定サイズの画像列、整数1–240 fps | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-preview`でCR2/DNG/NEF/NRW/ARW/ORF/PEF/SRWのTIFF内画像、Panasonic RW2の埋め込みJPEG、Fuji RAFヘッダー指定JPEG、Canon CR3のUUIDプレビューを抽出してレンダー。CR3は既知UUIDのプレビューを含む素材が対象。RAWのデモザイクやCamera Raw現像は未実装 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | 入力と同じ解像度のみ。中間画像の書き出し工程なし | 一部 |
-| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | MJPEG AVIのみ。Rec.2020、HDR、音声なし | 一部 |
+| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpeg/libx264経由のH.264 MP4。Rec.2020、HDR、音声なし | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | 未実装 | 未実装 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | 未実装 | 未実装 |
 | 取り込み | メモリーカードからのコピー、プレビュー、リネーム | 未実装 | 未実装 |
@@ -61,18 +61,18 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 1. `.xmp`サイドカーをスキャンし、キーフレームと数値設定を確認する。
 2. JPEG/PNG/TIFF連番、または`--raw-preview`でRAWに埋め込まれた画像の明るさ曲線からキーフレーム候補を表示し、任意でXMPにマークする。
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
-4. 現像済みJPEG/PNG/TIFF、または対応RAW内蔵プレビューをMJPEG AVIにまとめる。
+4. 現像済みJPEG/PNG/TIFF、または対応RAW内蔵プレビューをMJPEG AVIまたはH.264 MP4にまとめる。
 5. レンダー時に簡易Deflickerを画素へ適用するか、解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。
 
-動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--raw-preview`を指定すれば一部TIFF系RAW、Fuji RAFまたはCanon CR3に保存された埋め込み画像を入力に使えますが、RAWセンサー情報やCamera Raw設定を現像する機能ではありません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
+動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--raw-preview`を指定すれば一部TIFF系RAW、Fuji RAFまたはCanon CR3に保存された埋め込み画像を入力に使えますが、RAWセンサー情報やCamera Raw設定を現像する機能ではありません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。H.264 MP4出力は外部FFmpegと`libx264`を必要とし、入力ラスターをGoでデコードしてH.264へ変換します。
 
 `preview`は画像列の線形sRGB輝度を測り、最初のフレームからのEV差、XMPの`Exposure2012`差、キーフレーム評価をSVGグラフに出します。JPEG/PNG/TIFFのほか、`--raw-preview`で対応RAW内のプレビューを解析できます。これは静的な数値グラフで、Lightroom/Camera Rawの現像画像やLRTimelapseの操作可能なVisual Previewは表示しません。
 
 ## インストール
 
-ビルドにはGo 1.23以降が必要です。依存ライブラリはPure Goで、実行時にFFmpegやネイティブDLLは必要ありません。
+ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264 MP4出力には、`libx264`エンコーダーを含む外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。FFmpegはlrtlに同梱しません。
 
 ```powershell
 go install github.com/a-kaibu/lrtl/cmd/lrtl@latest
@@ -133,14 +133,20 @@ lrtl keyframes "D:\Timelapse\RAW" --count 5 --evenly-spaced --write
 # 対応RAWの埋め込みプレビューの輝度曲線から候補を選ぶ
 lrtl keyframes "D:\Timelapse\RAW" --raw-preview --count 5
 
-# 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成
+# 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成（FFmpeg不要）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
+
+# 外部FFmpeg/libx264で24 fpsのH.264 MP4を作成
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.mp4" --fps 24 --crf 18 --preset medium
 
 # 輝度・XMP露出・キーフレームをSVGグラフで確認
 lrtl preview "D:\Timelapse\Developed" --output "D:\Timelapse\brightness.svg"
 
 # 対応RAWの埋め込みプレビューからMJPEG AVIを作成（RAW現像ではない）
 lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-preview.avi" --raw-preview
+
+# 対応RAWの埋め込みプレビューからH.264 MP4を作成（FFmpegが必要、RAW現像ではない）
+lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-preview.mp4" --raw-preview
 
 # XMPサイドカーのExposure2012を適用してレンダー
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\adjusted.avi" --apply-xmp-exposure
@@ -167,7 +173,7 @@ lrtl deflicker "D:\Timelapse\Developed" --reset --write
 lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constant
 ```
 
-`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。画素処理なしのJPEG入力は再圧縮せずAVIに入れます。PNG/TIFF入力、クロップ、露出補正、Deflickerを使う入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bitのMJPEG出力時に失われます。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
+`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。AVIでは画素処理なしのJPEG入力を再圧縮せず格納し、それ以外の入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bit出力時に失われます。MP4ではJPEG/PNG/TIFFをGoでデコードし、H.264エンコーダーにRGBフレームとして渡すため中間JPEG圧縮をしません。`--crf`はH.264品質（0–51、低いほど高品質）、`--preset`は速度と圧縮率の選択です。MP4の画素は8-bit YUV 4:2:0に変換され、奇数幅/高さは右端/下端をパディングします。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
 
 `--apply-xmp-exposure`は各画像に対応する外部XMPサイドカーから数値の`crs:Exposure2012`を読み、線形sRGB画素に露出倍率を適用します。±32 stopsを超える値や不正な数値はエラーにします。Camera Rawの全現像パイプラインと一致する機能ではなく、露出スライダーだけの近似適用です。JPEGはこの指定で再エンコードされます。
 
@@ -192,10 +198,10 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 | 段階 | 目標 | 状況 |
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
-| 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVIに対応。完全なRAW現像は未実装 |
+| 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264 MP4に対応。完全なRAW現像は未実装 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、軸に平行なXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、回転クロップ、マスク別補正は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビューの取り出しを実装。RAWデモザイクとCamera Raw現像の完全再現は未着手 |
-| 5 | H.264等の追加出力、クロップ/オーバーレイ、取り込み、GUI | 未着手 |
+| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.264 MP4は外部FFmpeg経由で実装。その他は未着手 |
 
 ## 機能調査の出典
 
@@ -211,6 +217,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 - [LRTimelapse Import](https://lrtimelapse.com/workflow/lrtimport/)
 - [LRTimelapse 7.2 release notes: Simple Deflicker](https://lrtimelapse.com/updates/lrtimelapse-7-2/)
 - [AVI/MJPEG writer for Go](https://github.com/icza/mjpeg)
+- [FFmpeg documentation: image formats and H.264 encoding](https://ffmpeg.org/ffmpeg.html)
 - [Pure-Go TIFF decoder/encoder used by lrtl](https://pkg.go.dev/golang.org/x/image@v0.29.0/tiff)
 - [Pure-Go EXIF reader used for Holy Grail exposure analysis](https://github.com/evanoberholster/imagemeta)
 - [ExifTool's public CR3 UUID preview layout notes](https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/QuickTime.pm#L761)

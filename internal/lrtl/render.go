@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	_ "golang.org/x/image/tiff"
 	"image"
+	"image/color"
 	"image/jpeg"
 	_ "image/png"
 	"math"
@@ -14,11 +14,15 @@ import (
 	"strings"
 
 	"github.com/icza/mjpeg"
+	_ "golang.org/x/image/tiff"
 )
 
 type RenderOptions struct {
 	FPS              int
 	Quality          int
+	FFmpegPath       string
+	CRF              int
+	Preset           string
 	Overwrite        bool
 	Deflicker        bool
 	Reference        image.Rectangle
@@ -28,6 +32,11 @@ type RenderOptions struct {
 	ApplyXMPExposure bool
 	ApplyXMPCrop     bool
 	RawPreview       bool
+}
+
+type renderFrameWriter interface {
+	AddFrame([]byte) error
+	Close() error
 }
 
 func supportedRasterExtension(path string) bool {
@@ -43,11 +52,76 @@ func supportedRasterFormat(format string) bool {
 	return format == "jpeg" || format == "png" || format == "tiff"
 }
 
-const maxAVIDimension = int64(1<<31 - 1)
+func imageRGB24(img image.Image) ([]byte, error) {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	maxInt := uint64(^uint(0) >> 1)
+	pixels := uint64(width) * uint64(height)
+	if width <= 0 || height <= 0 || pixels > maxInt/3 {
+		return nil, fmt.Errorf("frame dimensions are too large for RGB24 encoding: %dx%d", width, height)
+	}
+	rgb := make([]byte, int(pixels*3))
+	switch source := img.(type) {
+	case *image.YCbCr:
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				sample := source.YCbCrAt(bounds.Min.X+x, bounds.Min.Y+y)
+				r, g, b := color.YCbCrToRGB(sample.Y, sample.Cb, sample.Cr)
+				index := (y*width + x) * 3
+				rgb[index], rgb[index+1], rgb[index+2] = r, g, b
+			}
+		}
+		return rgb, nil
+	case *image.RGBA:
+		sourceOffset := source.PixOffset(bounds.Min.X, bounds.Min.Y)
+		for y := 0; y < height; y++ {
+			row := sourceOffset + y*source.Stride
+			for x := 0; x < width; x++ {
+				src, dst := row+x*4, (y*width+x)*3
+				rgb[dst], rgb[dst+1], rgb[dst+2] = source.Pix[src], source.Pix[src+1], source.Pix[src+2]
+			}
+		}
+		return rgb, nil
+	case *image.NRGBA:
+		sourceOffset := source.PixOffset(bounds.Min.X, bounds.Min.Y)
+		for y := 0; y < height; y++ {
+			row := sourceOffset + y*source.Stride
+			for x := 0; x < width; x++ {
+				src, dst := row+x*4, (y*width+x)*3
+				if source.Pix[src+3] == 255 {
+					rgb[dst], rgb[dst+1], rgb[dst+2] = source.Pix[src], source.Pix[src+1], source.Pix[src+2]
+				} else {
+					r, g, b, _ := source.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+					rgb[dst], rgb[dst+1], rgb[dst+2] = uint8(r>>8), uint8(g>>8), uint8(b>>8)
+				}
+			}
+		}
+		return rgb, nil
+	case *image.Gray:
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				value := source.GrayAt(bounds.Min.X+x, bounds.Min.Y+y).Y
+				index := (y*width + x) * 3
+				rgb[index], rgb[index+1], rgb[index+2] = value, value, value
+			}
+		}
+		return rgb, nil
+	}
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			r, g, b, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+			index := (y*width + x) * 3
+			rgb[index], rgb[index+1], rgb[index+2] = uint8(r>>8), uint8(g>>8), uint8(b>>8)
+		}
+	}
+	return rgb, nil
+}
+
+const maxVideoDimension = int64(1<<31 - 1)
 
 // RenderSequence writes JPEG, PNG, TIFF, or explicitly selected embedded RAW previews
-// to an MJPEG AVI file. It can optionally apply the global XMP Exposure2012 slider and
-// axis-aligned XMP crop bounds, but does not implement full Camera Raw RAW rendering.
+// to MJPEG AVI or H.264 MP4. It can optionally apply the global XMP Exposure2012 slider
+// and axis-aligned XMP crop bounds, but does not implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
@@ -58,8 +132,26 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
-	if strings.ToLower(filepath.Ext(output)) != ".avi" {
-		return fmt.Errorf("output must use the .avi extension: %s", output)
+	outputExtension := strings.ToLower(filepath.Ext(output))
+	if outputExtension != ".avi" && outputExtension != ".mp4" {
+		return fmt.Errorf("output must use the .avi or .mp4 extension: %s", output)
+	}
+	ffmpegPath := ""
+	if outputExtension == ".mp4" {
+		if options.CRF < 0 || options.CRF > 51 {
+			return fmt.Errorf("H.264 CRF must be between 0 and 51: %d", options.CRF)
+		}
+		if options.Preset == "" {
+			options.Preset = "medium"
+		}
+		if !validH264Preset(options.Preset) {
+			return fmt.Errorf("unsupported H.264 preset %q", options.Preset)
+		}
+		resolvedPath, err := resolveFFmpeg(options.FFmpegPath)
+		if err != nil {
+			return err
+		}
+		ffmpegPath = resolvedPath
 	}
 
 	outputDir := filepath.Dir(output)
@@ -104,8 +196,8 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if config.Width <= 0 || config.Height <= 0 {
 		return fmt.Errorf("invalid dimensions in %s: %dx%d", frames[0].Image, config.Width, config.Height)
 	}
-	if int64(config.Width) > maxAVIDimension || int64(config.Height) > maxAVIDimension {
-		return fmt.Errorf("image dimensions exceed AVI limits in %s", frames[0].Image)
+	if int64(config.Width) > maxVideoDimension || int64(config.Height) > maxVideoDimension {
+		return fmt.Errorf("image dimensions exceed supported limits in %s", frames[0].Image)
 	}
 	width, height := config.Width, config.Height
 	var xmpCrops []cropSpec
@@ -166,34 +258,56 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 
-	tempFile, err := os.CreateTemp(outputDir, ".lrtl-*.avi")
+	tempExtension := ".avi"
+	if outputExtension == ".mp4" {
+		tempExtension = ".mp4"
+	}
+	tempFile, err := os.CreateTemp(outputDir, ".lrtl-*"+tempExtension)
 	if err != nil {
-		return fmt.Errorf("create temporary AVI: %w", err)
+		return fmt.Errorf("create temporary video: %w", err)
 	}
 	tempPath := tempFile.Name()
 	if err := tempFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return fmt.Errorf("close temporary AVI: %w", err)
+		return fmt.Errorf("close temporary video: %w", err)
 	}
 	if err := os.Remove(tempPath); err != nil {
-		return fmt.Errorf("prepare temporary AVI: %w", err)
+		return fmt.Errorf("prepare temporary video: %w", err)
 	}
-	indexPath := tempPath + ".idx_"
+	indexPath := ""
+	if outputExtension == ".avi" {
+		indexPath = tempPath + ".idx_"
+	}
 	cleanup := func() {
 		_ = os.Remove(tempPath)
-		_ = os.Remove(indexPath)
+		if indexPath != "" {
+			_ = os.Remove(indexPath)
+		}
 	}
 
-	writer, err := mjpeg.New(tempPath, int32(config.Width), int32(config.Height), int32(options.FPS))
-	if err != nil {
-		cleanup()
-		return fmt.Errorf("create MJPEG AVI: %w", err)
+	var writer renderFrameWriter
+	if outputExtension == ".avi" {
+		writer, err = mjpeg.New(tempPath, int32(config.Width), int32(config.Height), int32(options.FPS))
+		if err != nil {
+			cleanup()
+			return fmt.Errorf("create MJPEG AVI: %w", err)
+		}
+	} else {
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, config.Width, config.Height, options.FPS, len(frames), options.CRF, options.Preset)
+		if err != nil {
+			cleanup()
+			return err
+		}
 	}
 	writerClosed := false
 	completed := false
 	defer func() {
 		if !writerClosed {
-			_ = writer.Close()
+			if aborter, ok := writer.(interface{ Abort() }); ok {
+				aborter.Abort()
+			} else {
+				_ = writer.Close()
+			}
 		}
 		if !completed {
 			cleanup()
@@ -214,6 +328,44 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 
 		applyXMP := xmpExposures != nil && xmpExposures[index] != 0
 		applyCrop := xmpCrops != nil && xmpCrops[index].Active && xmpCrops[index].Bounds != image.Rect(0, 0, width, height)
+		if outputExtension == ".mp4" {
+			img, format, err := image.Decode(bytes.NewReader(data))
+			if err != nil {
+				return fmt.Errorf("decode %s: %w", frame.Image, err)
+			}
+			if !supportedRasterFormat(format) {
+				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
+			}
+			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+			}
+			if applyCrop {
+				img = applyXMPCrop(img, xmpCrops[index])
+			}
+			gain := 1.0
+			if applyXMP {
+				gain *= math.Exp2(xmpExposures[index])
+			}
+			if options.Deflicker {
+				gain *= gains[index]
+			}
+			if applyXMP || options.Deflicker {
+				img = applyExposureGain(img, gain)
+			}
+			rgb, err := imageRGB24(img)
+			if err != nil {
+				return fmt.Errorf("convert %s to RGB24: %w", frame.Image, err)
+			}
+			if err := writer.AddFrame(rgb); err != nil {
+				closeErr := writer.Close()
+				writerClosed = true
+				if closeErr != nil {
+					return fmt.Errorf("add frame %s: %w; %v", frame.Image, err, closeErr)
+				}
+				return fmt.Errorf("add frame %s: %w", frame.Image, err)
+			}
+			continue
+		}
 		jpegData := data
 		if options.Deflicker || applyXMP || applyCrop || format != "jpeg" {
 			img, _, err := image.Decode(bytes.NewReader(data))
@@ -240,12 +392,20 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			jpegData = encoded.Bytes()
 		}
 		if err := writer.AddFrame(jpegData); err != nil {
+			closeErr := writer.Close()
+			writerClosed = true
+			if closeErr != nil {
+				return fmt.Errorf("add frame %s: %w; %v", frame.Image, err, closeErr)
+			}
 			return fmt.Errorf("add frame %s: %w", frame.Image, err)
 		}
 	}
 	if err := writer.Close(); err != nil {
 		writerClosed = true
-		return fmt.Errorf("finalize AVI: %w", err)
+		if outputExtension == ".avi" {
+			return fmt.Errorf("finalize AVI: %w", err)
+		}
+		return fmt.Errorf("finalize H.264 MP4: %w", err)
 	}
 	writerClosed = true
 
@@ -257,7 +417,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 	if err := os.Rename(tempPath, output); err != nil {
-		return fmt.Errorf("save AVI to %s: %w", output, err)
+		return fmt.Errorf("save video to %s: %w", output, err)
 	}
 	completed = true
 	return nil
