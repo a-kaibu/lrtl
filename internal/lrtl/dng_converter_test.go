@@ -19,6 +19,9 @@ import (
 )
 
 func TestMain(main *testing.M) {
+	if os.Getenv("LRTL_TEST_FFMPEG_CAPTURE") != "" && runFFmpegCaptureHelper() {
+		return
+	}
 	if mode := os.Getenv("LRTL_TEST_CONVERTER_HELPER"); mode != "" {
 		// A child copy of the test executable implements the external command
 		// contract. The parent suite needs no Adobe software or native library.

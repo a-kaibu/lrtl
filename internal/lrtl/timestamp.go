@@ -128,17 +128,17 @@ func newTimestampOverlayFace(width, height int) (font.Face, error) {
 	return face, nil
 }
 
-func applyTimestampOverlay(source image.Image, label string, face font.Face) *image.NRGBA {
+func applyTimestampOverlay(source image.Image, label string, face font.Face) image.Image {
 	return applyTextOverlay(source, label, face, "bottom-right")
 }
 
-func applyWatermarkOverlay(source image.Image, label, position string, face font.Face) *image.NRGBA {
+func applyWatermarkOverlay(source image.Image, label, position string, face font.Face) image.Image {
 	return applyTextOverlay(source, label, face, position)
 }
 
-func applyTextOverlay(source image.Image, label string, face font.Face, position string) *image.NRGBA {
+func applyTextOverlay(source image.Image, label string, face font.Face, position string) image.Image {
 	bounds := source.Bounds()
-	result := image.NewNRGBA(bounds)
+	result := newFrameImage(bounds, source)
 	draw.Draw(result, bounds, source, bounds.Min, draw.Src)
 	if label == "" || face == nil {
 		return result

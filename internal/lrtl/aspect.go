@@ -48,7 +48,7 @@ func cropImageToAspect(img image.Image, aspectRatio float64) image.Image {
 	if cropBounds == bounds {
 		return img
 	}
-	cropped := image.NewNRGBA(image.Rect(0, 0, cropBounds.Dx(), cropBounds.Dy()))
+	cropped := newFrameImage(image.Rect(0, 0, cropBounds.Dx(), cropBounds.Dy()), img)
 	xdraw.Draw(cropped, cropped.Bounds(), img, cropBounds.Min, xdraw.Src)
 	return cropped
 }

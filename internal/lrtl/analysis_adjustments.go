@@ -52,9 +52,9 @@ func (adjustments sequenceXMPAdjustments) apply(index int, img image.Image) imag
 		img = applyXMPCrop(img, adjustments.crops[index])
 	}
 	if adjustments.basics != nil && adjustments.basics[index].globalActive() {
-		img = applyXMPBasic(img, adjustments.basics[index])
+		img = applyXMPBasicFrame(img, adjustments.basics[index])
 	} else if adjustments.exposures != nil && adjustments.exposures[index] != 0 {
-		img = applyExposureGain(img, math.Exp2(adjustments.exposures[index]))
+		img = applyExposureGainFrame(img, math.Exp2(adjustments.exposures[index]))
 	}
 	return img
 }

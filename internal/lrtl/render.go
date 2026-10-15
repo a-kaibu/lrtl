@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/color"
 	"image/jpeg"
 	_ "image/png"
 	"math"
@@ -87,82 +86,6 @@ func supportedRasterFormat(format string) bool {
 	return format == "jpeg" || format == "png" || format == "tiff"
 }
 
-func imageRGB24(img image.Image) ([]byte, error) {
-	bounds := img.Bounds()
-	width, height := bounds.Dx(), bounds.Dy()
-	maxInt := uint64(^uint(0) >> 1)
-	pixels := uint64(width) * uint64(height)
-	if width <= 0 || height <= 0 || pixels > maxInt/3 {
-		return nil, fmt.Errorf("frame dimensions are too large for RGB24 encoding: %dx%d", width, height)
-	}
-	rgb := make([]byte, int(pixels*3))
-	switch source := img.(type) {
-	case *image.YCbCr:
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				sample := source.YCbCrAt(bounds.Min.X+x, bounds.Min.Y+y)
-				r, g, b := color.YCbCrToRGB(sample.Y, sample.Cb, sample.Cr)
-				index := (y*width + x) * 3
-				rgb[index], rgb[index+1], rgb[index+2] = r, g, b
-			}
-		}
-		return rgb, nil
-	case *image.RGBA:
-		sourceOffset := source.PixOffset(bounds.Min.X, bounds.Min.Y)
-		for y := 0; y < height; y++ {
-			row := sourceOffset + y*source.Stride
-			for x := 0; x < width; x++ {
-				src, dst := row+x*4, (y*width+x)*3
-				rgb[dst], rgb[dst+1], rgb[dst+2] = source.Pix[src], source.Pix[src+1], source.Pix[src+2]
-			}
-		}
-		return rgb, nil
-	case *image.NRGBA:
-		sourceOffset := source.PixOffset(bounds.Min.X, bounds.Min.Y)
-		for y := 0; y < height; y++ {
-			row := sourceOffset + y*source.Stride
-			for x := 0; x < width; x++ {
-				src, dst := row+x*4, (y*width+x)*3
-				if source.Pix[src+3] == 255 {
-					rgb[dst], rgb[dst+1], rgb[dst+2] = source.Pix[src], source.Pix[src+1], source.Pix[src+2]
-				} else {
-					r, g, b, _ := source.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-					rgb[dst], rgb[dst+1], rgb[dst+2] = uint8(r>>8), uint8(g>>8), uint8(b>>8)
-				}
-			}
-		}
-		return rgb, nil
-	case *image.Gray:
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				value := source.GrayAt(bounds.Min.X+x, bounds.Min.Y+y).Y
-				index := (y*width + x) * 3
-				rgb[index], rgb[index+1], rgb[index+2] = value, value, value
-			}
-		}
-		return rgb, nil
-	}
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			r, g, b, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
-			index := (y*width + x) * 3
-			rgb[index], rgb[index+1], rgb[index+2] = uint8(r>>8), uint8(g>>8), uint8(b>>8)
-		}
-	}
-	return rgb, nil
-}
-
-func imageFromRGB24(rgb []byte, width, height int) *image.RGBA {
-	img := image.NewRGBA(image.Rect(0, 0, width, height))
-	for source, destination := 0, 0; source+2 < len(rgb) && destination+3 < len(img.Pix); source, destination = source+3, destination+4 {
-		img.Pix[destination] = rgb[source]
-		img.Pix[destination+1] = rgb[source+1]
-		img.Pix[destination+2] = rgb[source+2]
-		img.Pix[destination+3] = 255
-	}
-	return img
-}
-
 func lrtMotionBlurWeights(frames int) []float32 {
 	weights := make([]float32, frames)
 	for i := range weights {
@@ -170,38 +93,6 @@ func lrtMotionBlurWeights(frames int) []float32 {
 		weights[i] = float32(math.Round(math.Pow(float64(i+1)/float64(frames), 1.5)*1000) / 1000)
 	}
 	return weights
-}
-
-func weightedRGB24Frames(frames [][]byte, weights []float32) ([]byte, error) {
-	if len(frames) == 0 {
-		return nil, fmt.Errorf("cannot blend an empty frame window")
-	}
-	if len(frames) != len(weights) {
-		return nil, fmt.Errorf("cannot blend %d frames with %d weights", len(frames), len(weights))
-	}
-	frameLength := len(frames[0])
-	for _, frame := range frames[1:] {
-		if len(frame) != frameLength {
-			return nil, fmt.Errorf("cannot blend frames with different RGB24 sizes")
-		}
-	}
-	var weightSum float32
-	for _, weight := range weights {
-		weightSum += weight
-	}
-	if weightSum <= 0 {
-		return nil, fmt.Errorf("cannot blend with a non-positive weight sum")
-	}
-	result := make([]byte, frameLength)
-	inverseWeightSum := 1 / weightSum
-	for i := range result {
-		var sum float32
-		for frameIndex, frame := range frames {
-			sum += float32(frame[i]) * weights[frameIndex]
-		}
-		result[i] = byte(math.RoundToEven(float64(sum * inverseWeightSum)))
-	}
-	return result, nil
 }
 
 func validateLongEdge(longEdge int) error {
@@ -255,7 +146,7 @@ func resizeFrame(img image.Image, width, height int) image.Image {
 	if img.Bounds().Dx() == width && img.Bounds().Dy() == height {
 		return img
 	}
-	resized := image.NewNRGBA(image.Rect(0, 0, width, height))
+	resized := newFrameImage(image.Rect(0, 0, width, height), img)
 	xdraw.CatmullRom.Scale(resized, resized.Bounds(), img, img.Bounds(), xdraw.Src, nil)
 	return resized
 }
@@ -422,7 +313,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if options.MotionBlurFrames > 0 {
 		outputPixels := uint64(outputWidth) * uint64(outputHeight)
 		inputPixels := uint64(width) * uint64(height)
-		bytesPerOutputPixel := uint64(options.MotionBlurFrames*3 + 9)
+		bytesPerOutputPixel := uint64(options.MotionBlurFrames*6 + 24)
 		const maxMotionBlurWorkingSet = uint64(768 * 1024 * 1024)
 		if outputPixels > maxMotionBlurWorkingSet/bytesPerOutputPixel {
 			return fmt.Errorf("motion blur frame-buffer estimate exceeds 768 MiB; reduce --motion-blur or use --long-edge")
@@ -519,10 +410,10 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
 			if xmpBasics != nil && xmpBasics[index].globalActive() {
-				img = applyXMPBasic(img, xmpBasics[index])
+				img = applyXMPBasicFrame(img, xmpBasics[index])
 			}
 			if xmpExposures != nil && xmpExposures[index] != 0 {
-				img = applyExposureGain(img, math.Exp2(xmpExposures[index]))
+				img = applyExposureGainFrame(img, math.Exp2(xmpExposures[index]))
 			}
 			reference := options.Reference
 			if reference.Empty() {
@@ -634,7 +525,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
 			if xmpBasics != nil && xmpBasics[index].globalActive() {
-				img = applyXMPBasic(img, xmpBasics[index])
+				img = applyXMPBasicFrame(img, xmpBasics[index])
 			}
 			gain := 1.0
 			if xmpExposures != nil {
@@ -644,7 +535,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				gain *= gains[index]
 			}
 			if gain != 1 {
-				img = applyExposureGain(img, gain)
+				img = applyExposureGainFrame(img, gain)
 			}
 			if options.AspectRatio > 0 {
 				img = cropImageToAspect(img, options.AspectRatio)
@@ -652,7 +543,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
 			}
-			return imageRGB24(img)
+			return imageRGB48(img)
 		}
 
 		windowFrames := options.MotionBlurFrames
@@ -673,13 +564,16 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				blendWindow[i] = queuedFrames[0]
 			}
 			copy(blendWindow[padding:], queuedFrames)
-			rgb, blendErr := weightedRGB24Frames(blendWindow, weights)
+			rgb, blendErr := weightedRGB48Frames(blendWindow, weights)
 			if blendErr != nil {
 				return blendErr
 			}
 			var img image.Image
 			if overlayFace != nil || outputExtension == ".avi" {
-				img = imageFromRGB24(rgb, outputWidth, outputHeight)
+				img, err = imageFromRGB48(rgb, outputWidth, outputHeight)
+				if err != nil {
+					return err
+				}
 				if options.TimestampOverlay {
 					img = applyTimestampOverlay(img, captureTimes[target].Format(options.TimestampFormat), overlayFace)
 				}
@@ -694,9 +588,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				}
 				rgb = encoded.Bytes()
 			} else if overlayFace != nil {
-				rgb, err = imageRGB24(img)
+				rgb, err = imageRGB48(img)
 				if err != nil {
-					return fmt.Errorf("convert overlaid %s to RGB24: %w", frames[target].Image, err)
+					return fmt.Errorf("convert overlaid %s to RGB48: %w", frames[target].Image, err)
 				}
 			}
 			if err := writer.AddFrame(rgb); err != nil {
@@ -753,7 +647,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
 			if applyBasic && xmpBasics[index].globalActive() {
-				img = applyXMPBasic(img, xmpBasics[index])
+				img = applyXMPBasicFrame(img, xmpBasics[index])
 			}
 			gain := 1.0
 			if applyXMP {
@@ -763,7 +657,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				gain *= gains[index]
 			}
 			if applyXMP || options.Deflicker {
-				img = applyExposureGain(img, gain)
+				img = applyExposureGainFrame(img, gain)
 			}
 			if options.AspectRatio > 0 {
 				img = cropImageToAspect(img, options.AspectRatio)
@@ -777,9 +671,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			if options.Watermark != "" {
 				img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 			}
-			rgb, err := imageRGB24(img)
+			rgb, err := imageRGB48(img)
 			if err != nil {
-				return fmt.Errorf("convert %s to RGB24: %w", frame.Image, err)
+				return fmt.Errorf("convert %s to RGB48: %w", frame.Image, err)
 			}
 			if err := writer.AddFrame(rgb); err != nil {
 				closeErr := writer.Close()
@@ -805,7 +699,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				img = applyXMPCrop(img, xmpCrops[index])
 			}
 			if applyBasic && xmpBasics[index].globalActive() {
-				img = applyXMPBasic(img, xmpBasics[index])
+				img = applyXMPBasicFrame(img, xmpBasics[index])
 			}
 			var encoded bytes.Buffer
 			gain := 1.0
@@ -816,7 +710,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				gain *= gains[index]
 			}
 			if applyXMP || options.Deflicker {
-				img = applyExposureGain(img, gain)
+				img = applyExposureGainFrame(img, gain)
 			}
 			if options.AspectRatio > 0 {
 				img = cropImageToAspect(img, options.AspectRatio)

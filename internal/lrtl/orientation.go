@@ -41,7 +41,7 @@ func applyEXIFOrientation(source image.Image, orientation uint16) image.Image {
 	bounds := source.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
 	outputWidth, outputHeight := orientedDimensions(width, height, orientation)
-	result := image.NewNRGBA(image.Rect(0, 0, outputWidth, outputHeight))
+	result := newFrameImage(image.Rect(0, 0, outputWidth, outputHeight), source)
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			var destinationX, destinationY int

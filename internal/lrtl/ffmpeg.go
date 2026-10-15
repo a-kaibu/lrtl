@@ -75,7 +75,7 @@ func dnxhrProfile(codec string) (string, string, bool) {
 func newFFmpegFrameWriter(executable, output, container, codec string, width, height, fps, frameCount, crf int, preset, audioPath string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
-		"-f", "rawvideo", "-pixel_format", "rgb24",
+		"-f", "rawvideo", "-pixel_format", "rgb48le",
 		"-video_size", fmt.Sprintf("%dx%d", width, height),
 		"-framerate", strconv.Itoa(fps), "-i", "pipe:0",
 	}

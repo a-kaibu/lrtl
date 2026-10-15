@@ -169,12 +169,12 @@ func applyXMPCrop(source image.Image, crop cropSpec) image.Image {
 		if crop.Bounds == source.Bounds() || crop.Bounds == outputBounds {
 			return source
 		}
-		result := image.NewRGBA(outputBounds)
+		result := newFrameImage(outputBounds, source)
 		xdraw.CatmullRom.Scale(result, outputBounds, source, crop.Bounds, xdraw.Src, nil)
 		return result
 	}
 
-	result := image.NewRGBA(outputBounds)
+	result := newFrameImage(outputBounds, source)
 	width, height := float64(outputBounds.Dx()), float64(outputBounds.Dy())
 	cropWidth, cropHeight := crop.Right-crop.Left, crop.Bottom-crop.Top
 	scaleX, scaleY := width/cropWidth, height/cropHeight
