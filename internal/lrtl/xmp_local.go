@@ -16,6 +16,7 @@ const (
 	localMaskGradient localMaskKind = iota + 1
 	localMaskCircularGradient
 	localMaskLuminanceRange
+	localMaskColorRange
 )
 
 type localMaskBlendMode uint8
@@ -43,6 +44,12 @@ type xmpLocalLuminanceRange struct {
 	invert                                   bool
 }
 
+type xmpLocalColorRange struct {
+	samples [][3]float64
+	amount  float64
+	invert  bool
+}
+
 type xmpLocalMask struct {
 	kind                  localMaskKind
 	blendMode             localMaskBlendMode
@@ -54,6 +61,7 @@ type xmpLocalMask struct {
 	angle, feather        float64
 	flipped, maskInverted bool
 	luminanceRange        *xmpLocalLuminanceRange
+	colorRange            *xmpLocalColorRange
 }
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
@@ -247,15 +255,29 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 	}
 	mask.blendMode = localMaskBlendMode(blendMode)
 	if mask.kind == localMaskLuminanceRange {
-		// RangeMask stores its selection in CorrectionRangeMask. In observed
-		// XMP, MaskValue=0 is the empty spatial base that the range selector
-		// refines, so use full coverage for this selector component.
+		// RangeMask is an explicit selector component, not a spatial base.
+		// Camera Raw can store MaskValue=0 on this component while the
+		// selector still refines the neighboring spatial mask.
 		mask.maskValue = 1
-		luminanceRange, supported, err := parseXMPLuminanceRange(element)
-		if err != nil || !supported {
-			return mask, supported, err
+		selectorType, found, err := xmpRangeMaskType(element)
+		if err != nil {
+			return mask, false, err
 		}
-		mask.luminanceRange = luminanceRange
+		if !found {
+			return mask, false, nil
+		}
+		switch selectorType {
+		case 1:
+			mask.kind = localMaskColorRange
+			mask.colorRange, found, err = parseXMPColorRange(element)
+		case 2:
+			mask.luminanceRange, found, err = parseXMPLuminanceRange(element)
+		default:
+			return mask, false, nil
+		}
+		if err != nil || !found {
+			return mask, false, err
+		}
 	} else {
 		mask.maskValue, _, err = xmpLocalNumber(element, "MaskValue", 1, 0, 1)
 		if err != nil {
@@ -270,7 +292,7 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 	if err != nil {
 		return mask, false, err
 	}
-	if mask.kind == localMaskLuminanceRange {
+	if mask.kind == localMaskLuminanceRange || mask.kind == localMaskColorRange {
 		return mask, true, nil
 	}
 	if mask.kind == localMaskGradient {
@@ -329,14 +351,7 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 }
 
 func parseXMPLuminanceRange(element *etree.Element) (*xmpLocalLuminanceRange, bool, error) {
-	var rangeElement *etree.Element
-	for _, token := range element.Child {
-		child, ok := token.(*etree.Element)
-		if ok && child.NamespaceURI() == crsNamespace && child.Tag == "CorrectionRangeMask" {
-			rangeElement = child
-			break
-		}
-	}
+	rangeElement := correctionRangeMaskElement(element)
 	if rangeElement == nil {
 		return nil, false, nil
 	}
@@ -385,6 +400,83 @@ func parseXMPLuminanceRange(element *etree.Element) (*xmpLocalLuminanceRange, bo
 	}, true, nil
 }
 
+func xmpRangeMaskType(element *etree.Element) (int, bool, error) {
+	rangeElement := correctionRangeMaskElement(element)
+	if rangeElement == nil {
+		return 0, false, nil
+	}
+	typeText, found, err := crsElementValue(rangeElement, "Type")
+	if err != nil || !found {
+		return 0, found, err
+	}
+	typeValue, valid := scalarNumber(typeText)
+	if !valid || math.Trunc(typeValue) != typeValue {
+		return 0, false, fmt.Errorf("crs:CorrectionRangeMask Type must be an integer")
+	}
+	return int(typeValue), true, nil
+}
+
+func parseXMPColorRange(element *etree.Element) (*xmpLocalColorRange, bool, error) {
+	rangeElement := correctionRangeMaskElement(element)
+	if rangeElement == nil {
+		return nil, false, nil
+	}
+	selectorType, found, err := xmpRangeMaskType(element)
+	if err != nil || !found || selectorType != 1 {
+		return nil, false, err
+	}
+	amount, _, err := xmpLocalNumber(rangeElement, "ColorAmount", 0.5, 0, 1)
+	if err != nil {
+		return nil, false, err
+	}
+	sampleType, found, err := xmpLocalNumber(rangeElement, "SampleType", 0, 0, 5)
+	if err != nil {
+		return nil, false, err
+	}
+	if found && math.Trunc(sampleType) != sampleType {
+		return nil, false, fmt.Errorf("crs:CorrectionRangeMask SampleType must be an integer")
+	}
+	if found && sampleType != 0 {
+		return nil, false, nil
+	}
+	invert, _, err := xmpLocalBool(rangeElement, "Invert", false)
+	if err != nil {
+		return nil, false, err
+	}
+	pointModels := findCRSDescendant(rangeElement, "PointModels")
+	items := rdfArrayItems(pointModels)
+	if len(items) == 0 {
+		return nil, false, nil
+	}
+	rangeMask := &xmpLocalColorRange{amount: amount, invert: invert}
+	for _, item := range items {
+		text, scalar := scalarElementText(item)
+		if !scalar {
+			return nil, false, fmt.Errorf("crs:CorrectionRangeMask PointModels entries must be strings")
+		}
+		parts := strings.Fields(text)
+		if len(parts) != 6 {
+			return nil, false, fmt.Errorf("crs:CorrectionRangeMask PointModels entries must contain six values")
+		}
+		values := [6]float64{}
+		for index, part := range parts {
+			value, valid := scalarNumber(part)
+			if !valid || value < 0 || value > 1 {
+				return nil, false, fmt.Errorf("crs:CorrectionRangeMask PointModels values must be between 0 and 1")
+			}
+			values[index] = value
+		}
+		// Observed Camera Raw records contain normalized sample coordinates,
+		// three sampled sRGB channels, and a trailing zero-valued discriminator.
+		// This renderer uses the sampled color and does not use the coordinates.
+		if values[5] != 0 {
+			return nil, false, nil
+		}
+		rangeMask.samples = append(rangeMask.samples, [3]float64{values[2], values[3], values[4]})
+	}
+	return rangeMask, true, nil
+}
+
 func xmpLocalNumber(element *etree.Element, name string, fallback, min, max float64) (float64, bool, error) {
 	text, found, err := crsElementValue(element, name)
 	if err != nil || !found {
@@ -418,13 +510,13 @@ func xmpLocalBool(element *etree.Element, name string, fallback bool) (bool, boo
 	}
 }
 
-func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminance float64) float64 {
+func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminance float64, rgb [3]float64) float64 {
 	if len(correction.masks) == 0 {
 		return 0
 	}
 	weight := 0.0
 	for index, mask := range correction.masks {
-		component := mask.maskWeight(x, y, width, height, luminance)
+		component := mask.maskWeight(x, y, width, height, luminance, rgb)
 		if index == 0 {
 			weight = component
 			continue
@@ -440,7 +532,7 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminan
 	return math.Max(0, math.Min(1, weight))
 }
 
-func (mask xmpLocalMask) maskWeight(x, y, width, height int, luminance float64) float64 {
+func (mask xmpLocalMask) maskWeight(x, y, width, height int, luminance float64, rgb [3]float64) float64 {
 	nx := (float64(x) + 0.5) / float64(width)
 	ny := (float64(y) + 0.5) / float64(height)
 	weight := 0.0
@@ -472,6 +564,8 @@ func (mask xmpLocalMask) maskWeight(x, y, width, height int, luminance float64) 
 		}
 	case localMaskLuminanceRange:
 		weight = luminanceRangeWeight(*mask.luminanceRange, luminance)
+	case localMaskColorRange:
+		weight = colorRangeWeight(*mask.colorRange, rgb)
 	}
 	if mask.flipped != mask.maskInverted {
 		weight = 1 - weight
@@ -502,6 +596,55 @@ func luminanceRangeWeight(luminanceRange xmpLocalLuminanceRange, luminance float
 	return weight
 }
 
+func colorRangeWeight(colorRange xmpLocalColorRange, rgb [3]float64) float64 {
+	if len(colorRange.samples) == 0 {
+		return 0
+	}
+	pixelLab := srgbToLab(rgb)
+	// ColorAmount is only known to control the selected range width. This
+	// monotone Delta-E 76 falloff is an independent approximation, not Adobe's
+	// proprietary color selector.
+	radius := 1 + 55*math.Max(0, math.Min(1, colorRange.amount))
+	feather := math.Max(1, radius*0.15)
+	weight := 0.0
+	for _, sample := range colorRange.samples {
+		sampleLab := srgbToLab(sample)
+		deltaL := pixelLab[0] - sampleLab[0]
+		deltaA := pixelLab[1] - sampleLab[1]
+		deltaB := pixelLab[2] - sampleLab[2]
+		distance := math.Sqrt(deltaL*deltaL + deltaA*deltaA + deltaB*deltaB)
+		component := 1 - smoothstep((distance-radius)/feather)
+		weight += component * (1 - weight)
+	}
+	if colorRange.invert {
+		weight = 1 - weight
+	}
+	return math.Max(0, math.Min(1, weight))
+}
+
+func srgbToLab(rgb [3]float64) [3]float64 {
+	linear := [3]float64{}
+	for index, value := range rgb {
+		value = math.Max(0, math.Min(1, value))
+		if value <= 0.04045 {
+			linear[index] = value / 12.92
+		} else {
+			linear[index] = math.Pow((value+0.055)/1.055, 2.4)
+		}
+	}
+	x := (0.4124564*linear[0] + 0.3575761*linear[1] + 0.1804375*linear[2]) / 0.95047
+	y := 0.2126729*linear[0] + 0.7151522*linear[1] + 0.0721750*linear[2]
+	z := (0.0193339*linear[0] + 0.1191920*linear[1] + 0.9503041*linear[2]) / 1.08883
+	f := func(value float64) float64 {
+		if value > 216.0/24389.0 {
+			return math.Cbrt(value)
+		}
+		return (24389.0/27.0*value + 16) / 116
+	}
+	fx, fy, fz := f(x), f(y), f(z)
+	return [3]float64{116*fy - 16, 500 * (fx - fy), 200 * (fy - fz)}
+}
+
 func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection) image.Image {
 	if len(corrections) == 0 {
 		return img
@@ -518,7 +661,8 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				pixel := color.NRGBAModel.Convert(current.At(x, y)).(color.NRGBA)
 				maskLuminance := 0.2126*srgb8ToLinear[pixel.R] + 0.7152*srgb8ToLinear[pixel.G] + 0.0722*srgb8ToLinear[pixel.B]
-				weight := correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance) * correction.amount
+				pixelRGB := [3]float64{float64(pixel.R) / 255, float64(pixel.G) / 255, float64(pixel.B) / 255}
+				weight := correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance, pixelRGB) * correction.amount
 				redGain, greenGain, blueGain := 1.0, 1.0, 1.0
 				if correction.hasWhiteBalance {
 					blend := math.Max(-1, math.Min(1, weight))
