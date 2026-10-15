@@ -25,7 +25,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。RAW内蔵プレビュー/DNGLab現像と、任意でXMPの基本現像値（単一グラデーションのローカル露出/彩度を含む）、露出またはクロップを解析に適用。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`deflicker`解析は`--apply-xmp-basic`（ローカルの単一グラデーション露出/彩度マスクを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
-| 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（単一グラデーションローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。指標は独自定義で、LRTの曲線/UIや現像プレビューとは一致しない | 一部 |
+| 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（単一グラデーションローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/単一グラデーションマスクの露出・彩度/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`で外部DNGLabにより主要RAW形式を現像し、その16-bit sRGB TIFF出力からレンダー可能。`import --convert-dng`で対応RAWを外部DNGLab経由のlossless/uncompressed DNGへ変換可能。`--raw-preview`によるカメラ内プレビュー経路も維持。DNGLabは別途インストールが必要。Camera Raw/Lightroom設定の完全な適用、ロッシーDNGとサイズ縮小は未実装 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。LRTのプリセット/UIや非圧縮TIFF中間画像は未対応 | 一部 |
@@ -80,7 +80,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 `preview`は画像列の線形sRGB輝度を測り、最初のフレームからのEV差、XMPの`Exposure2012`差、キーフレーム評価をSVGグラフに出します。JPEG/PNG/TIFFのほか、`--raw-preview`で対応RAW内のプレビュー、または`--raw-develop`でDNGLab現像画像を解析できます。`--apply-xmp-basic`（`--apply-xmp-exposure`とは排他的）と`--apply-xmp-crop`を指定すると、輝度解析にその値を適用します。これは静的な数値グラフで、Lightroom/Camera Rawの現像画像やLRTimelapseの操作可能なVisual Previewは表示しません。
 
-`long-term`は画像を最大64×64点のグリッドでサンプリングし、線形sRGB輝度の中央値、輝度log2の90–10パーセンタイル差（EV）、彩度で重み付けした円形平均色相（0–360度）を記録します。`--luminance-range`、`--contrast-range`、`--hue-range`はそれぞれ`MIN,MAX`で指定し、指定した全範囲を満たすフレームをJSONマニフェストに含めます。色相は`MIN>MAX`で0度をまたぐ範囲を表せます。無彩色など平均色相が定まらない画像は色相範囲指定時に除外します。範囲を何も指定しなければ全画像を含めます。`render --selection`は元フォルダー、ファイル名、サイズ、更新時刻を照合してから含まれる画像をレンダーし、画像やXMPを変更しません。LRTimelapseも長期用にLuminance/Contrast/Hueフィルターを提供しますが、lrtlのサンプリングと指標式は独自実装です。
+`long-term`は画像を最大64×64点のグリッドでサンプリングし、線形sRGB輝度の中央値、輝度log2の90–10パーセンタイル差（EV）、彩度で重み付けした円形平均色相（0–360度）を記録します。`--luminance-range`、`--contrast-range`、`--hue-range`はそれぞれ`MIN,MAX`で指定し、指定した全範囲を満たすフレームをJSONマニフェストに含めます。色相は`MIN>MAX`で0度をまたぐ範囲を表せます。無彩色など平均色相が定まらない画像は色相範囲指定時に除外します。範囲を何も指定しなければ全画像を含めます。`render --selection`は元フォルダー、ファイル名、サイズ、更新時刻を照合してから含まれる画像をレンダーし、画像やXMPを変更しません。LRTimelapseも長期用にLuminance/Contrast/Hueフィルターを提供します。既定のlrtl指標は独自実装です。`--metric-profile lrt-7.5.5`を選ぶと、インストール済み7.5.5で確認した64×64 bilinear縮小、scale 4のGaussian blur、平均グレースケール輝度、グレースケール標準偏差、平均HSB色相による測定を使います。数値計算は別実装で、LRTの選択構図、時間方向のフィルター/定数補正、曲線UIは再現しません。
 
 解析コマンドの`--apply-xmp-basic`、`--apply-xmp-exposure`、`--apply-xmp-crop`はlrtl側の画素近似です。`--apply-xmp-basic`は露出、トーン、色、Temperature/Tintをまとめて含み、`--apply-xmp-exposure`とは同時に使えません。既にLightroom等でその補正を焼き込んだJPEG/PNGでは二重適用になるため、主にRAWプレビューやDNGLab現像画像の解析に使ってください。
 
@@ -204,6 +204,9 @@ lrtl keyframes "D:\Timelapse\RAW" --raw-develop --dnglab "C:\Tools\dnglab.exe" -
 # 長期連番を測定し、輝度・コントラスト・色相の範囲から選択する
 lrtl long-term "D:\Timelapse\Developed" --output "D:\Timelapse\selection.json" `
   --luminance-range 0.01,0.9 --contrast-range 0.5,12 --hue-range 330,40
+
+# LRTimelapse 7.5.5の長期測定手順に合わせた指標をJSONへ記録
+lrtl long-term "D:\Timelapse\Developed" --output "D:\Timelapse\lrt-metrics.json" --metric-profile lrt-7.5.5
 
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成（FFmpeg不要）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"

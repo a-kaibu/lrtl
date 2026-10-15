@@ -14,24 +14,39 @@ import (
 	"strings"
 )
 
-const selectionManifestVersion = 1
+const selectionManifestVersion = 2
 const maxSelectionManifestSize = 128 << 20
 
+type longTermMetricProfile string
+
+const (
+	longTermMetricProfileLRTL   longTermMetricProfile = "lrtl"
+	longTermMetricProfileLRT755 longTermMetricProfile = "lrt-7.5.5"
+)
+
 type longTermFrameMetrics struct {
-	Image            string   `json:"image"`
-	Included         bool     `json:"included"`
-	SizeBytes        int64    `json:"size_bytes"`
-	ModifiedUnixNano int64    `json:"modified_unix_nano"`
-	Luminance        float64  `json:"median_luminance_linear_srgb"`
-	ContrastEV       float64  `json:"contrast_p90_p10_ev"`
-	HueDegrees       *float64 `json:"mean_hue_degrees,omitempty"`
+	Image            string              `json:"image"`
+	Included         bool                `json:"included"`
+	SizeBytes        int64               `json:"size_bytes"`
+	ModifiedUnixNano int64               `json:"modified_unix_nano"`
+	Luminance        float64             `json:"median_luminance_linear_srgb,omitempty"`
+	ContrastEV       float64             `json:"contrast_p90_p10_ev,omitempty"`
+	HueDegrees       *float64            `json:"mean_hue_degrees,omitempty"`
+	LRTMetrics       *lrtLongTermMetrics `json:"lrt_metrics,omitempty"`
+}
+
+type lrtLongTermMetrics struct {
+	LuminanceMean  float64  `json:"luminance_mean_0_to_1"`
+	ContrastStdDev float64  `json:"contrast_stddev_0_to_1"`
+	HueMeanDegrees *float64 `json:"hue_mean_degrees,omitempty"`
 }
 
 type sequenceSelectionManifest struct {
-	Version   int                    `json:"version"`
-	Directory string                 `json:"directory"`
-	Filters   longTermRanges         `json:"filters"`
-	Frames    []longTermFrameMetrics `json:"frames"`
+	Version       int                    `json:"version"`
+	Directory     string                 `json:"directory"`
+	MetricProfile longTermMetricProfile  `json:"metric_profile,omitempty"`
+	Filters       longTermRanges         `json:"filters"`
+	Frames        []longTermFrameMetrics `json:"frames"`
 }
 
 type metricRange struct {
@@ -64,17 +79,21 @@ func parseMetricRange(value, label string, minimumAllowed, maximumAllowed float6
 	return &metricRange{Minimum: minimum, Maximum: maximum}, nil
 }
 
-func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges longTermRanges) (*sequenceSelectionManifest, error) {
+func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges longTermRanges, profile longTermMetricProfile) (*sequenceSelectionManifest, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
+	}
+	if profile != longTermMetricProfileLRTL && profile != longTermMetricProfileLRT755 {
+		return nil, fmt.Errorf("unsupported long-term metric profile %q", profile)
 	}
 	if err := validateImageInputOptions(options); err != nil {
 		return nil, err
 	}
 	manifest := &sequenceSelectionManifest{
-		Version: selectionManifestVersion,
-		Filters: ranges,
-		Frames:  make([]longTermFrameMetrics, len(frames)),
+		Version:       selectionManifestVersion,
+		MetricProfile: profile,
+		Filters:       ranges,
+		Frames:        make([]longTermFrameMetrics, len(frames)),
 	}
 	width, height := 0, 0
 	var adjustments sequenceXMPAdjustments
@@ -101,10 +120,20 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 			return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
 		img = adjustments.apply(index, img)
-		metrics := measureLongTermFrame(img)
-		included := rangeContains(ranges.Luminance, &metrics.Luminance, false) &&
-			rangeContains(ranges.Contrast, &metrics.ContrastEV, false) &&
-			rangeContains(ranges.Hue, metrics.HueDegrees, true)
+		metrics := longTermFrameMetrics{}
+		luminance, contrast := 0.0, 0.0
+		var hue *float64
+		if profile == longTermMetricProfileLRT755 {
+			measured := measureLRTLongTermFrame(img)
+			metrics.LRTMetrics = &measured
+			luminance, contrast, hue = measured.LuminanceMean, measured.ContrastStdDev, measured.HueMeanDegrees
+		} else {
+			metrics = measureLongTermFrame(img)
+			luminance, contrast, hue = metrics.Luminance, metrics.ContrastEV, metrics.HueDegrees
+		}
+		included := rangeContains(ranges.Luminance, &luminance, false) &&
+			rangeContains(ranges.Contrast, &contrast, false) &&
+			rangeContains(ranges.Hue, hue, true)
 		metrics.Image = filepath.Base(frame.Image)
 		metrics.Included = included
 		fileInfo, err := os.Stat(frame.Image)
@@ -289,7 +318,7 @@ func loadSelectedFrames(frames []Frame, manifestPath, directory string) ([]Frame
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("parse selection manifest: %w", err)
 	}
-	if manifest.Version != selectionManifestVersion {
+	if manifest.Version != 1 && manifest.Version != selectionManifestVersion {
 		return nil, fmt.Errorf("unsupported selection manifest version %d", manifest.Version)
 	}
 	absManifestDir, err := filepath.Abs(manifest.Directory)

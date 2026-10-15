@@ -118,7 +118,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  batch-render ROOT --output DIRECTORY [--format avi|mp4|mov] [--workers N] [--recursive] [-- RENDER_OPTIONS...]")
-	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -949,9 +949,10 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("long-term", stderr)
 	output := set.String("output", "", "write per-frame metrics and an include/exclude selection manifest")
-	luminanceRange := set.String("luminance-range", "", "keep frames with median linear luminance in MIN,MAX (0-1)")
-	contrastRange := set.String("contrast-range", "", "keep frames with 90th-10th percentile contrast in MIN,MAX EV")
-	hueRange := set.String("hue-range", "", "keep frames with circular mean hue in MIN,MAX degrees; MIN>MAX wraps at 360")
+	metricProfileName := set.String("metric-profile", "lrtl", "metric model: lrtl or lrt-7.5.5")
+	luminanceRange := set.String("luminance-range", "", "keep frames with the selected profile's luminance in MIN,MAX (0-1)")
+	contrastRange := set.String("contrast-range", "", "keep frames with the selected profile's contrast in MIN,MAX")
+	hueRange := set.String("hue-range", "", "keep frames with the selected profile's mean hue in MIN,MAX degrees; MIN>MAX wraps at 360")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
@@ -961,6 +962,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	overwrite := set.Bool("overwrite", false, "replace an existing selection manifest")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
+		"--metric-profile": true, "-metric-profile": true,
 		"--luminance-range": true, "-luminance-range": true,
 		"--contrast-range": true, "-contrast-range": true,
 		"--hue-range": true, "-hue-range": true,
@@ -968,12 +970,16 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
-			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
+	}
+	profile := longTermMetricProfile(*metricProfileName)
+	if profile != longTermMetricProfileLRTL && profile != longTermMetricProfileLRT755 {
+		return reportError(stderr, fmt.Errorf("--metric-profile must be lrtl or lrt-7.5.5"))
 	}
 	ranges := longTermRanges{}
 	var err error
@@ -1003,7 +1009,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
-	manifest, err := analyzeLongTermSequence(frames, inputOptions, ranges)
+	manifest, err := analyzeLongTermSequence(frames, inputOptions, ranges, profile)
 	if err != nil {
 		return reportError(stderr, err)
 	}
