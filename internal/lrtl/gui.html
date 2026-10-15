@@ -54,6 +54,8 @@
     #crop-mask { fill:#0008; fill-rule:evenodd; }
     .crop-controls { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
     .crop-controls button { margin-top:0!important; }
+    details { margin-top:10px; padding-top:8px; border-top:1px solid var(--line); }
+    summary { color:var(--accent); cursor:pointer; }
     #status { min-height:20px; margin:10px 2px; color:var(--muted); white-space:pre-wrap; }
     #status.error { color:#ff9a91; }
     .empty { grid-column:1/-1; padding:40px 12px; color:var(--muted); text-align:center; border:1px dashed var(--line); border-radius:9px; }
@@ -143,6 +145,32 @@
             <option value="dnxhr-lb">DNxHR LB</option><option value="dnxhr-sq">DNxHR SQ</option>
             <option value="dnxhr-hq">DNxHR HQ</option><option value="dnxhr-hqx">DNxHR HQX</option><option value="dnxhr-444">DNxHR 444</option>
           </select>
+          <details>
+            <summary>出力の詳細設定</summary>
+            <label for="aspect">出力比率 (例: 16:9)</label>
+            <input id="aspect" autocomplete="off" spellcheck="false" placeholder="入力画像の比率を維持">
+            <label for="output-height">出力高さ (px)</label>
+            <input id="output-height" type="number" min="16" max="32768" placeholder="入力サイズを維持">
+            <label for="long-edge">長辺の上限 (px)</label>
+            <input id="long-edge" type="number" min="16" max="32768" placeholder="縮小しない">
+            <label for="audio">音声ファイル (MP4/MOV)</label>
+            <input id="audio" autocomplete="off" spellcheck="false" placeholder="任意の音声パス">
+            <label for="selection">長期撮影の選択JSON</label>
+            <input id="selection" autocomplete="off" spellcheck="false" placeholder="任意のselection.json">
+            <label for="filename-contains">ファイル名フィルター</label>
+            <input id="filename-contains" autocomplete="off" spellcheck="false" placeholder="名前に含む文字列">
+            <label class="check"><input id="timestamp-overlay" type="checkbox">撮影日時を焼き込む</label>
+            <label for="watermark">透かし文字</label>
+            <input id="watermark" autocomplete="off" spellcheck="false" placeholder="任意のテキスト">
+            <label for="watermark-position">透かし位置</label>
+            <select id="watermark-position"><option value="bottom-left">左下</option><option value="bottom-right">右下</option><option value="top-left">左上</option><option value="top-right">右上</option><option value="center">中央</option></select>
+            <label for="motion-blur">モーションブラー</label>
+            <select id="motion-blur"><option value="0">なし</option><option value="2">2フレーム</option><option value="3">3フレーム</option><option value="4">4フレーム</option><option value="5">5フレーム</option><option value="10">10フレーム</option><option value="15">15フレーム</option><option value="20">20フレーム</option></select>
+            <label for="crf">H.264/H.265品質 CRF (0–51)</label>
+            <input id="crf" type="number" min="0" max="51" value="18">
+            <label for="preset">H.264/H.265速度プリセット</label>
+            <select id="preset"><option>ultrafast</option><option>superfast</option><option>veryfast</option><option>faster</option><option>fast</option><option selected>medium</option><option>slow</option><option>slower</option><option>veryslow</option></select>
+          </details>
           <label for="raw-mode">RAW入力</label>
           <select id="raw-mode"><option value="">RAWなし</option><option value="preview">内蔵プレビュー</option><option value="develop">DNGLabで現像</option></select>
           <label for="dnglab">DNGLab実行ファイル (現像時)</label>
@@ -538,7 +566,11 @@
         const data = await api('/api/render', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
           directory, output, fps:Number(el('fps').value), codec:el('codec').value, ffmpeg:el('ffmpeg').value.trim(),
           dngMode:el('raw-mode').value, dnglab:el('dnglab').value.trim(), xmpBasic:el('xmp-basic').checked,
-          xmpCrop:el('xmp-crop').checked, deflicker:el('deflicker').checked, overwrite:el('overwrite').checked
+          xmpCrop:el('xmp-crop').checked, deflicker:el('deflicker').checked, overwrite:el('overwrite').checked,
+          aspect:el('aspect').value.trim(), outputHeight:Number(el('output-height').value || '0'), longEdge:Number(el('long-edge').value || '0'),
+          audio:el('audio').value.trim(), selection:el('selection').value.trim(), filenameContains:el('filename-contains').value.trim(),
+          timestampOverlay:el('timestamp-overlay').checked, watermark:el('watermark').value, watermarkPosition:el('watermark-position').value,
+          motionBlur:Number(el('motion-blur').value), crf:Number(el('crf').value), preset:el('preset').value
         })});
         setStatus(data.output || '動画の生成が完了しました。');
       } finally { el('render').textContent = '動画を生成'; }

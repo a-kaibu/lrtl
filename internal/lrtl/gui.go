@@ -1007,17 +1007,29 @@ func serveGUIInterpolate(w http.ResponseWriter, r *http.Request) {
 }
 
 type guiRenderRequest struct {
-	Directory string `json:"directory"`
-	Output    string `json:"output"`
-	FPS       int    `json:"fps"`
-	Codec     string `json:"codec"`
-	FFmpeg    string `json:"ffmpeg"`
-	DNGMode   string `json:"dngMode"`
-	DNGLab    string `json:"dnglab"`
-	XMPBasic  bool   `json:"xmpBasic"`
-	XMPCrop   bool   `json:"xmpCrop"`
-	Deflicker bool   `json:"deflicker"`
-	Overwrite bool   `json:"overwrite"`
+	Directory         string `json:"directory"`
+	Output            string `json:"output"`
+	FPS               int    `json:"fps"`
+	Codec             string `json:"codec"`
+	FFmpeg            string `json:"ffmpeg"`
+	DNGMode           string `json:"dngMode"`
+	DNGLab            string `json:"dnglab"`
+	XMPBasic          bool   `json:"xmpBasic"`
+	XMPCrop           bool   `json:"xmpCrop"`
+	Deflicker         bool   `json:"deflicker"`
+	Overwrite         bool   `json:"overwrite"`
+	OutputHeight      int    `json:"outputHeight"`
+	LongEdge          int    `json:"longEdge"`
+	Aspect            string `json:"aspect"`
+	Audio             string `json:"audio"`
+	Selection         string `json:"selection"`
+	FilenameContains  string `json:"filenameContains"`
+	TimestampOverlay  bool   `json:"timestampOverlay"`
+	Watermark         string `json:"watermark"`
+	WatermarkPosition string `json:"watermarkPosition"`
+	MotionBlur        int    `json:"motionBlur"`
+	CRF               *int   `json:"crf"`
+	Preset            string `json:"preset"`
 }
 
 var guiCodecs = map[string]bool{
@@ -1047,6 +1059,25 @@ func serveGUIRender(w http.ResponseWriter, r *http.Request) {
 		writeGUIError(w, http.StatusBadRequest, "fps must be between 1 and 240")
 		return
 	}
+	if err := validateRenderDimensions(request.LongEdge, request.OutputHeight, 0); err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if request.MotionBlur != 0 && !validMotionBlurFrames(request.MotionBlur) {
+		writeGUIError(w, http.StatusBadRequest, "motion blur must be 0, 2, 3, 4, 5, 10, 15, or 20 frames")
+		return
+	}
+	if request.CRF != nil && (*request.CRF < 0 || *request.CRF > 51) {
+		writeGUIError(w, http.StatusBadRequest, "CRF must be between 0 and 51")
+		return
+	}
+	if request.WatermarkPosition == "" {
+		request.WatermarkPosition = "bottom-left"
+	}
+	if request.WatermarkPosition != "top-left" && request.WatermarkPosition != "top-right" && request.WatermarkPosition != "bottom-left" && request.WatermarkPosition != "bottom-right" && request.WatermarkPosition != "center" {
+		writeGUIError(w, http.StatusBadRequest, "unsupported watermark position")
+		return
+	}
 	if request.Codec != "" && !guiCodecs[request.Codec] {
 		writeGUIError(w, http.StatusBadRequest, "unsupported codec")
 		return
@@ -1056,6 +1087,39 @@ func serveGUIRender(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	arguments := []string{"render", directory, "--output", request.Output, "--fps", strconv.Itoa(request.FPS), "--auto-orient"}
+	if request.OutputHeight > 0 {
+		arguments = append(arguments, "--output-height", strconv.Itoa(request.OutputHeight))
+	}
+	if request.LongEdge > 0 {
+		arguments = append(arguments, "--long-edge", strconv.Itoa(request.LongEdge))
+	}
+	if strings.TrimSpace(request.Aspect) != "" {
+		arguments = append(arguments, "--aspect", strings.TrimSpace(request.Aspect))
+	}
+	if strings.TrimSpace(request.Audio) != "" {
+		arguments = append(arguments, "--audio", strings.TrimSpace(request.Audio))
+	}
+	if strings.TrimSpace(request.Selection) != "" {
+		arguments = append(arguments, "--selection", strings.TrimSpace(request.Selection))
+	}
+	if strings.TrimSpace(request.FilenameContains) != "" {
+		arguments = append(arguments, "--filename-contains", strings.TrimSpace(request.FilenameContains))
+	}
+	if request.TimestampOverlay {
+		arguments = append(arguments, "--timestamp-overlay")
+	}
+	if strings.TrimSpace(request.Watermark) != "" {
+		arguments = append(arguments, "--watermark", request.Watermark, "--watermark-position", request.WatermarkPosition)
+	}
+	if request.MotionBlur > 0 {
+		arguments = append(arguments, "--motion-blur", strconv.Itoa(request.MotionBlur))
+	}
+	if request.CRF != nil {
+		arguments = append(arguments, "--crf", strconv.Itoa(*request.CRF))
+	}
+	if strings.TrimSpace(request.Preset) != "" {
+		arguments = append(arguments, "--preset", strings.TrimSpace(request.Preset))
+	}
 	if request.Codec != "" {
 		arguments = append(arguments, "--codec", request.Codec)
 	}
