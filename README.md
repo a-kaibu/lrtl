@@ -25,7 +25,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。RAW内蔵プレビュー/DNGLab現像と、任意でXMP Exposure/cropを解析に適用。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を`crs:Exposure2012`へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
-| 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
+| 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化できる。指標は独自定義で、LRTの曲線/UIや現像プレビューとは一致しない | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。固定サイズの画像列、整数1–240 fps、`--long-edge`によるアスペクト比維持の縮小 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`で外部DNGLabにより主要RAW形式を現像し、その16-bit sRGB TIFF出力からレンダー可能。`--raw-preview`によるカメラ内プレビュー経路も維持。DNGLabは別途インストールが必要。Camera Raw/Lightroom設定の完全な適用やDNG変換は未実装 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--long-edge`で長辺の上限を指定して縮小可能。拡大や16:9等のプリセット、非圧縮TIFF中間画像は未対応 | 一部 |
@@ -70,10 +70,13 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。RAW解析時は内蔵プレビューまたはDNGLab現像を選び、必要に応じてXMP Exposure/cropを反映する。
 8. XMPサイドカーをZIPスナップショットに保存し、一覧表示とプレビュー後の復元を行う。
 9. フレームのEXIF/XMP撮影日時を動画タイミングに合わせたSRT字幕に出力する。
+10. 長期連番を輝度・コントラスト・色相で分析し、選択した画像だけを動画にする。
 
 動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。RAW連番を直接レンダーするには外部DNGLabを使う`--raw-develop`を指定します。DNGLabのRAW対応はカメラ形式ごとに異なり、DNGLabはalpha版です。`--raw-preview`は内蔵プレビューを使う別経路です。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`をレンダー入力画像に近似適用します。DNGLabの現像パラメーターはCamera Rawと一致せず、サイドカーにある他の現像値もRAW現像には使いません。Deflickerはレンダー時に出力画素へ適用できます。これらのレンダー操作は元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正をXMPに保存します。全フレームの幅と高さは同じである必要があります。MJPEG AVIには約4 GBのサイズ上限があります。MP4/MOV出力は外部FFmpegを必要とし、入力画像をGoで8-bit RGBへデコードしてから選択したエンコーダーへ渡します。`.mp4`の既定はH.264、`.mov`の既定はProRes 422です。`--codec h265`でH.265、`--codec prores-hq`でProRes 422 HQを選べます。FFmpegにそれぞれ`libx264`、`libx265`、`prores_ks`エンコーダーが必要です。
 
 `preview`は画像列の線形sRGB輝度を測り、最初のフレームからのEV差、XMPの`Exposure2012`差、キーフレーム評価をSVGグラフに出します。JPEG/PNG/TIFFのほか、`--raw-preview`で対応RAW内のプレビュー、または`--raw-develop`でDNGLab現像画像を解析できます。`--apply-xmp-exposure`と`--apply-xmp-crop`を指定すると、輝度解析にその値を適用します。これは静的な数値グラフで、Lightroom/Camera Rawの現像画像やLRTimelapseの操作可能なVisual Previewは表示しません。
+
+`long-term`は画像を最大64×64点のグリッドでサンプリングし、線形sRGB輝度の中央値、輝度log2の90–10パーセンタイル差（EV）、彩度で重み付けした円形平均色相（0–360度）を記録します。`--luminance-range`、`--contrast-range`、`--hue-range`はそれぞれ`MIN,MAX`で指定し、指定した全範囲を満たすフレームをJSONマニフェストに含めます。色相は`MIN>MAX`で0度をまたぐ範囲を表せます。無彩色など平均色相が定まらない画像は色相範囲指定時に除外します。範囲を何も指定しなければ全画像を含めます。`render --selection`は元フォルダー、ファイル名、サイズ、更新時刻を照合してから含まれる画像をレンダーし、画像やXMPを変更しません。LRTimelapseも長期用にLuminance/Contrast/Hueフィルターを提供しますが、lrtlのサンプリングと指標式は独自実装です。
 
 解析コマンドの`--apply-xmp-exposure`と`--apply-xmp-crop`はlrtl側の画素近似です。既にLightroom等でその補正を焼き込んだJPEG/PNGでは二重適用になるため、主にRAWプレビューやDNGLab現像画像の解析に使ってください。
 
@@ -151,8 +154,15 @@ lrtl keyframes "D:\Timelapse\RAW" --raw-preview --count 5
 # DNGLabでRAWを現像し、その輝度曲線から候補を選ぶ
 lrtl keyframes "D:\Timelapse\RAW" --raw-develop --dnglab "C:\Tools\dnglab.exe" --apply-xmp-exposure --apply-xmp-crop --count 5
 
+# 長期連番を測定し、輝度・コントラスト・色相の範囲から選択する
+lrtl long-term "D:\Timelapse\Developed" --output "D:\Timelapse\selection.json" `
+  --luminance-range 0.01,0.9 --contrast-range 0.5,12 --hue-range 330,40
+
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成（FFmpeg不要）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
+
+# 長期フィルターで選択した画像だけをレンダー
+lrtl render "D:\Timelapse\Developed" --selection "D:\Timelapse\selection.json" --output "D:\Timelapse\filtered.avi"
 
 # 外部FFmpeg/libx264で24 fpsのH.264 MP4を作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.mp4" --fps 24 --crf 18 --preset medium

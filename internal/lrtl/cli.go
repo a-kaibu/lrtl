@@ -77,6 +77,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runRender(arguments[1:], stdout, stderr)
 	case "subtitles":
 		return runSubtitles(arguments[1:], stdout, stderr)
+	case "long-term":
+		return runLongTerm(arguments[1:], stdout, stderr)
 	case "preview":
 		return runPreview(arguments[1:], stdout, stderr)
 	case "deflicker":
@@ -103,7 +105,8 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov render frames; --codec selects H.265 or ProRes")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json]")
+	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -553,6 +556,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
 	output := set.String("output", "", "output AVI, MP4, or MOV path")
+	selectionPath := set.String("selection", "", "use included frames from a long-term selection manifest")
 	codec := set.String("codec", "", "MP4 codec h264|h265 or MOV codec prores|prores-hq; defaults by extension")
 	fps := set.Int("fps", 24, "integer frame rate (1-240)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
@@ -576,6 +580,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
+		"--selection": true, "-selection": true,
 		"--codec": true, "-codec": true,
 		"--fps": true, "-fps": true,
 		"--quality": true, "-quality": true,
@@ -623,6 +628,12 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		return reportError(stderr, err)
+	}
+	if *selectionPath != "" {
+		frames, err = loadSelectedFrames(frames, *selectionPath, directory)
+		if err != nil {
+			return reportError(stderr, err)
+		}
 	}
 	options := RenderOptions{
 		FPS:               *fps,
@@ -680,6 +691,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *longEdge > 0 {
 		features = append(features, fmt.Sprintf("long-edge limit of %d pixels", *longEdge))
+	}
+	if *selectionPath != "" {
+		features = append(features, "long-term selection")
 	}
 	if len(features) > 0 {
 		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)
@@ -752,6 +766,80 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %d fps: %s\n", len(frames), *fps, *output)
+	return 0
+}
+
+func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("long-term", stderr)
+	output := set.String("output", "", "write per-frame metrics and an include/exclude selection manifest")
+	luminanceRange := set.String("luminance-range", "", "keep frames with median linear luminance in MIN,MAX (0-1)")
+	contrastRange := set.String("contrast-range", "", "keep frames with 90th-10th percentile contrast in MIN,MAX EV")
+	hueRange := set.String("hue-range", "", "keep frames with circular mean hue in MIN,MAX degrees; MIN>MAX wraps at 360")
+	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
+	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 in image analysis")
+	applyXMPCrop := set.Bool("apply-xmp-crop", false, "include XMP crop rectangles in image analysis")
+	overwrite := set.Bool("overwrite", false, "replace an existing selection manifest")
+	parseArgs := flagFirst(arguments, map[string]bool{
+		"--output": true, "-output": true,
+		"--luminance-range": true, "-luminance-range": true,
+		"--contrast-range": true, "-contrast-range": true,
+		"--hue-range": true, "-hue-range": true,
+		"--dnglab": true, "-dnglab": true,
+	})
+	if err := set.Parse(parseArgs); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop] [--overwrite]")
+			return code
+		}
+	}
+	if set.NArg() != 1 || *output == "" {
+		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop] [--overwrite]"))
+	}
+	ranges := longTermRanges{}
+	var err error
+	if *luminanceRange != "" {
+		ranges.Luminance, err = parseMetricRange(*luminanceRange, "luminance range", 0, 1, false)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
+	if *contrastRange != "" {
+		ranges.Contrast, err = parseMetricRange(*contrastRange, "contrast range", 0, math.Inf(1), false)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
+	if *hueRange != "" {
+		ranges.Hue, err = parseMetricRange(*hueRange, "hue range", 0, 360, true)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
+	frames, err := DiscoverSequence(set.Arg(0))
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	inputOptions := imageInputOptions{
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		ApplyXMPExposure: *applyXMPExposure, ApplyXMPCrop: *applyXMPCrop,
+	}
+	manifest, err := analyzeLongTermSequence(frames, inputOptions, ranges)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	manifest.Directory = set.Arg(0)
+	if err := writeSelectionManifest(*output, manifest, *overwrite); err != nil {
+		return reportError(stderr, err)
+	}
+	included := 0
+	for _, frame := range manifest.Frames {
+		if frame.Included {
+			included++
+		}
+	}
+	fmt.Fprintf(stdout, "Analyzed %d frames; selected %d and excluded %d: %s\n", len(manifest.Frames), included, len(manifest.Frames)-included, *output)
 	return 0
 }
 
