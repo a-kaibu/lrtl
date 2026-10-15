@@ -1,6 +1,7 @@
 package lrtl
 
 import (
+	"bufio"
 	"bytes"
 	"embed"
 	"encoding/json"
@@ -86,6 +87,7 @@ func newGUIHandler() http.Handler {
 	mux.HandleFunc("/api/crop", serveGUICrop)
 	mux.HandleFunc("/api/keyframe", serveGUIKeyframe)
 	mux.HandleFunc("/api/keyframes", serveGUIKeyframes)
+	mux.HandleFunc("/api/keyframes/apply", serveGUIKeyframeSelection)
 	mux.HandleFunc("/api/interpolate", serveGUIInterpolate)
 	mux.HandleFunc("/api/render", serveGUIRender)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1240,15 +1242,18 @@ func serveGUIKeyframes(w http.ResponseWriter, r *http.Request) {
 		writeGUIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if request.Count < 1 || request.Count > 1000 || (request.Rating != 4 && request.Rating != 5) {
-		writeGUIError(w, http.StatusBadRequest, "count must be 1-1000 and rating must be 4 or 5")
+	if request.Count < 0 || request.Count > 20 || (request.Rating != 4 && request.Rating != 5) {
+		writeGUIError(w, http.StatusBadRequest, "count must be automatic (0), 1-20, and rating must be 4 or 5")
 		return
 	}
 	if request.DNGMode != "" && request.DNGMode != "preview" && request.DNGMode != "develop" {
 		writeGUIError(w, http.StatusBadRequest, "RAW mode must be none, preview, or develop")
 		return
 	}
-	arguments := []string{"keyframes", directory, "--count", strconv.Itoa(request.Count), "--rating", strconv.Itoa(request.Rating), "--write"}
+	arguments := []string{"keyframes", directory, "--rating", strconv.Itoa(request.Rating)}
+	if request.Count > 0 {
+		arguments = append(arguments, "--count", strconv.Itoa(request.Count))
+	}
 	if request.DNGMode == "preview" {
 		arguments = append(arguments, "--raw-preview")
 	}
@@ -1265,7 +1270,134 @@ func serveGUIKeyframes(w http.ResponseWriter, r *http.Request) {
 	if request.XMPCrop {
 		arguments = append(arguments, "--apply-xmp-crop")
 	}
-	writeGUICommandResult(w, arguments, runKeyframes)
+	var output, errorsBuffer bytes.Buffer
+	if code := runKeyframes(arguments, &output, &errorsBuffer); code != 0 {
+		message := strings.TrimSpace(output.String())
+		if message != "" {
+			message += "\n"
+		}
+		message += strings.TrimSpace(errorsBuffer.String())
+		writeGUIJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": message, "exitCode": code})
+		return
+	}
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	indices := parseGUIKeyframeSuggestionIndices(output.String(), len(frames))
+	candidates := make([]map[string]any, 0, len(indices))
+	for _, index := range indices {
+		candidates = append(candidates, map[string]any{"index": index + 1, "name": filepath.Base(frames[index].Image)})
+	}
+	writeGUIJSON(w, http.StatusOK, map[string]any{"output": strings.TrimSpace(output.String()), "candidates": candidates})
+}
+
+func parseGUIKeyframeSuggestionIndices(output string, frameCount int) []int {
+	indices := make([]int, 0)
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, "LRT wizard spacing") && !strings.Contains(line, " luminance=") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		oneBased, err := strconv.Atoi(fields[0])
+		if err == nil && oneBased >= 1 && oneBased <= frameCount {
+			indices = append(indices, oneBased-1)
+		}
+	}
+	return indices
+}
+
+type guiKeyframeSelectionRequest struct {
+	Directory string   `json:"directory"`
+	Names     []string `json:"names"`
+	Rating    int      `json:"rating"`
+}
+
+func serveGUIKeyframeSelection(w http.ResponseWriter, r *http.Request) {
+	if !requireGUIJSONPost(w, r) {
+		return
+	}
+	var request guiKeyframeSelectionRequest
+	if !decodeGUIJSON(w, r, &request) {
+		return
+	}
+	directory, err := canonicalGUIDirectory(request.Directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if request.Rating != 4 && request.Rating != 5 {
+		writeGUIError(w, http.StatusBadRequest, "rating must be 4 or 5")
+		return
+	}
+	if len(request.Names) < 1 || len(request.Names) > 20 {
+		writeGUIError(w, http.StatusBadRequest, "select between 1 and 20 keyframe candidates")
+		return
+	}
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	selected := make(map[string]struct{}, len(request.Names))
+	for _, name := range request.Names {
+		if filepath.Base(name) != name || name == "." || name == ".." {
+			writeGUIError(w, http.StatusBadRequest, "candidate names must be image file names from the sequence")
+			return
+		}
+		if _, duplicate := selected[name]; duplicate {
+			writeGUIError(w, http.StatusBadRequest, "candidate names must be unique")
+			return
+		}
+		selected[name] = struct{}{}
+	}
+	type pendingKeyframe struct {
+		frame  Frame
+		packet *XMPPacket
+	}
+	pending := make([]pendingKeyframe, 0, len(selected))
+	for _, frame := range frames {
+		name := filepath.Base(frame.Image)
+		if _, ok := selected[name]; !ok {
+			continue
+		}
+		packet, err := PacketForFrame(frame)
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, fmt.Sprintf("%s: %v", name, err))
+			return
+		}
+		if packet.IsKeyframe() {
+			writeGUIError(w, http.StatusConflict, fmt.Sprintf("%s already has a 4- or 5-star keyframe mark", name))
+			return
+		}
+		if _, err := MarkKeyframeWithRating(packet, "default", request.Rating); err != nil {
+			writeGUIError(w, http.StatusConflict, fmt.Sprintf("%s: %v", name, err))
+			return
+		}
+		pending = append(pending, pendingKeyframe{frame: frame, packet: packet})
+	}
+	if len(pending) != len(selected) {
+		writeGUIError(w, http.StatusBadRequest, "one or more candidates are not in the sequence")
+		return
+	}
+	backups := make([]string, 0, len(pending))
+	for _, change := range pending {
+		backup, err := WritePacket(change.frame.OutputSidecar(), change.packet, true)
+		if err != nil {
+			writeGUIError(w, http.StatusInternalServerError, fmt.Sprintf("%s: %v", filepath.Base(change.frame.Image), err))
+			return
+		}
+		if backup != "" {
+			backups = append(backups, backup)
+		}
+	}
+	writeGUIJSON(w, http.StatusOK, map[string]any{"marked": len(pending), "rating": request.Rating, "backups": backups})
 }
 
 func serveGUIInterpolate(w http.ResponseWriter, r *http.Request) {

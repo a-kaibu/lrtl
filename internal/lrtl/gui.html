@@ -49,6 +49,9 @@
     .check { display:flex!important; align-items:center; gap:8px; }
     .check input { width:auto; }
     .panel button { width:100%; margin-top:8px; }
+    #keyframe-candidate-list { max-height:180px; overflow:auto; margin-top:8px; padding:5px 8px; border:1px solid var(--line); border-radius:6px; }
+    .keyframe-candidate { display:flex!important; align-items:center; gap:8px; margin:5px 0!important; color:var(--text)!important; }
+    .keyframe-candidate input { width:auto!important; }
     .preview-stage { position:relative; display:flex; align-items:center; justify-content:center; width:100%; height:220px; overflow:hidden; background:#090b0e; border-radius:5px; }
     #preview { display:block; max-width:100%; max-height:100%; object-fit:contain; }
     #crop-overlay { display:none; position:absolute; touch-action:none; }
@@ -138,8 +141,8 @@
         </section>
         <section class="panel">
           <h2>キーフレーム</h2>
-          <label for="keyframe-count">追加するキーフレーム数</label>
-          <input id="keyframe-count" type="number" min="1" max="1000" value="5">
+          <label for="keyframe-count">候補数（0=自動、1–20=指定）</label>
+          <input id="keyframe-count" type="number" min="0" max="20" value="0">
           <label for="keyframe-rating">評価</label>
           <select id="keyframe-rating"><option value="4">4★ 編集</option><option value="5">5★ クロップ</option></select>
           <label for="analysis-raw-mode">RAW輝度解析</label>
@@ -148,7 +151,12 @@
           <input id="analysis-dnglab" autocomplete="off" spellcheck="false" placeholder="PATHにあれば空欄">
           <label class="check"><input id="analysis-xmp-basic" type="checkbox">候補分析にXMP現像値を適用</label>
           <label class="check"><input id="analysis-xmp-crop" type="checkbox">候補分析にXMPクロップを適用</label>
-          <button id="suggest">輝度から配置して保存</button>
+          <button id="suggest" class="primary">候補を分析</button>
+          <div id="keyframe-candidates" hidden>
+            <p id="keyframe-candidate-summary">候補を選んでください。</p>
+            <div id="keyframe-candidate-list"></div>
+            <button id="keyframe-apply" class="primary" disabled>選択した候補を保存</button>
+          </div>
           <label for="smoothness">補間スムージング (0–100)</label>
           <input id="smoothness" type="number" min="0" max="100" value="50">
           <button id="interpolate">XMPを補間して保存</button>
@@ -285,6 +293,7 @@
       directory = data.directory; offset = data.offset; total = data.total; frames = data.frames;
       if (newSequence) {
         selected = null; selectedXMPValues = {};
+        el('keyframe-candidates').hidden = true; el('keyframe-apply').disabled = true;
         toneCurve = {name:'', channel:el('tone-channel').value, property:'ToneCurvePV2012', points:[], editable:false, found:false};
         toneCurveDrag = null; drawToneCurve();
         exposureCurve = {directory, total:0, points:[]};
@@ -696,6 +705,20 @@
         index = (index + 1) % sequence.frames.length;
       }
     }
+    function showKeyframeCandidates(data) {
+      const container = el('keyframe-candidates'), list = el('keyframe-candidate-list');
+      list.replaceChildren();
+      const candidates = data.candidates || [];
+      el('keyframe-candidate-summary').textContent = candidates.length ? candidates.length + '件の候補です。不要な候補を外してから保存できます。' : '候補がありません。画像数、既存マーク、候補数を確認してください。';
+      for (const candidate of candidates) {
+        const label = document.createElement('label'); label.className = 'keyframe-candidate';
+        const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = candidate.name; checkbox.checked = true;
+        const name = document.createElement('span'); name.textContent = candidate.index + '. ' + candidate.name;
+        label.append(checkbox, name); list.append(label);
+      }
+      container.hidden = false;
+      el('keyframe-apply').disabled = candidates.length === 0;
+    }
     async function setKeyframe(frame, kind, remove = false) {
       ensureActiveDirectory();
       const action = remove ? '解除' : kind === 'crop' ? '5★クロップ' : '4★編集';
@@ -874,14 +897,29 @@
     });
     buttonAction(el('suggest'), async () => {
       ensureActiveDirectory();
-      if (!confirm('輝度推移を分析し、キーフレームXMPを保存しますか？既存マークは既定で保持されます。')) return;
-      setStatus('輝度を解析してキーフレームを保存しています…');
+      if (!confirm('連番を解析してキーフレーム候補を表示します。ここではXMPへ書き込みません。')) return;
+      el('keyframe-candidates').hidden = true;
+      el('keyframe-apply').disabled = true;
+      setStatus('輝度を解析して候補を作成しています…');
       const data = await api('/api/keyframes', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({
         directory, count:Number(el('keyframe-count').value), rating:Number(el('keyframe-rating').value),
         dngMode:el('analysis-raw-mode').value, dnglab:el('analysis-dnglab').value.trim(),
         xmpBasic:el('analysis-xmp-basic').checked, xmpCrop:el('analysis-xmp-crop').checked
       })});
-      await loadSequence(); await loadExposureCurve(); setStatus(data.output || 'キーフレームを保存しました。');
+      showKeyframeCandidates(data);
+      setStatus(data.output || 'キーフレーム候補を表示しました。');
+    });
+    buttonAction(el('keyframe-apply'), async () => {
+      ensureActiveDirectory();
+      const names = Array.from(el('keyframe-candidate-list').querySelectorAll('input[type="checkbox"]:checked'), checkbox => checkbox.value);
+      if (!names.length) throw new Error('保存する候補を1件以上選んでください。');
+      const rating = Number(el('keyframe-rating').value);
+      if (!confirm('選択した' + names.length + '枚を' + rating + '★キーフレームとして保存しますか？既存XMPはバックアップされます。')) return;
+      setStatus('選択したキーフレームを保存しています…');
+      const data = await api('/api/keyframes/apply', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, names, rating})});
+      el('keyframe-candidates').hidden = true;
+      await loadSequence(); await loadExposureCurve();
+      setStatus(data.marked + '個の' + rating + '★キーフレームを保存しました。');
     });
     buttonAction(el('interpolate'), async () => {
       ensureActiveDirectory();
