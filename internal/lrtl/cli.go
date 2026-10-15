@@ -1471,6 +1471,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("holy-grail", stderr)
 	write := set.Bool("write", false, "write exposure compensation and 2*/3* jump keyframes to XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
+	lrtInput := set.Bool("lrt-input", false, "use existing lrt:ExternalExposureDefault values and 2*/3*/4* ratings as Holy Grail inputs")
 	ignoreAperture := set.Bool("ignore-aperture", false, "ignore FNumber when aperture remained fixed")
 	forceMarkJumps := set.Bool("mark-jumps", false, "force 2*/3* marks when EXIF does not confirm Manual mode")
 	noMarkJumps := set.Bool("no-mark-jumps", false, "do not mark camera-setting changes as 2*/3* keyframe pairs")
@@ -1492,6 +1493,9 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if *forceMarkJumps && *noMarkJumps {
 		return reportError(stderr, fmt.Errorf("--mark-jumps and --no-mark-jumps cannot be used together"))
 	}
+	if *lrtInput && *forceMarkJumps {
+		return reportError(stderr, fmt.Errorf("--lrt-input uses existing 2*/3*/4* XMP ratings and cannot be combined with --mark-jumps"))
+	}
 	explicitCurveOptions := false
 	set.Visit(func(parsed *flag.Flag) {
 		if parsed.Name == "stretch" || parsed.Name == "rotate" {
@@ -1501,7 +1505,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if *autoShape && explicitCurveOptions {
 		return reportError(stderr, fmt.Errorf("--auto-shape cannot be combined with --stretch or --rotate"))
 	}
-	useCurveOptions := *autoShape || explicitCurveOptions
+	useCurveOptions := *lrtInput || *autoShape || explicitCurveOptions
 	if useCurveOptions && (math.IsNaN(*stretch) || math.IsInf(*stretch, 0) || math.IsNaN(*rotate) || math.IsInf(*rotate, 0) || *stretch < -1.5 || *stretch > 1.5 || *rotate < -4 || *rotate > 4) {
 		return reportError(stderr, fmt.Errorf("--stretch must be between -1.5 and +1.5 and --rotate between -4 and +4"))
 	}
@@ -1515,7 +1519,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	}
 	var curveOptions *HolyGrailCurveOptions
 	if useCurveOptions {
-		curveOptions = &HolyGrailCurveOptions{Stretch: *stretch, Rotate: *rotate, Auto: *autoShape}
+		curveOptions = &HolyGrailCurveOptions{Stretch: *stretch, Rotate: *rotate, Auto: *autoShape, LRTInput: *lrtInput}
 	}
 	plan, err := buildHolyGrailPlanWithCurveOptions(frames, *ignoreAperture, *reset, *forceMarkJumps, *noMarkJumps, curveOptions)
 	if err != nil {
@@ -1525,6 +1529,9 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
 	if plan.CurveOptions != nil {
 		fmt.Fprintf(stdout, "Curve adjustments: stretch=%+.2f rotate=%+.2f\n", plan.CurveOptions.Stretch, plan.CurveOptions.Rotate)
+		if plan.CurveOptions.LRTInput {
+			fmt.Fprintln(stdout, "Curve input: lrt:ExternalExposureDefault / 4 with existing 2*/3*/4* ratings (LRT calculation approximation).")
+		}
 		if plan.AutoCurve {
 			fmt.Fprintln(stdout, "Curve adjustments selected automatically with the LRT-style L1/LOWESS approximation.")
 		}
@@ -1546,6 +1553,8 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if !*reset && plan.MarkJumps {
 		fmt.Fprintf(stdout, "HG jump keyframe marks: %d\n", jumpMarks)
+	} else if !*reset && plan.CurveOptions != nil && plan.CurveOptions.LRTInput {
+		fmt.Fprintln(stdout, "Existing 2*/3*/4* ratings are used as curve anchors; no ratings will be changed.")
 	} else if !*reset && !*noMarkJumps && !plan.ManualMode && !*forceMarkJumps {
 		fmt.Fprintln(stdout, "EXIF does not confirm Manual mode; 2*/3* marks are omitted. Pass --mark-jumps to force them.")
 	}

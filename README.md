@@ -17,7 +17,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量はLRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式。候補位置も同版の整数間隔・端点選択ルールに対応。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。既存マーカーは既定で保持し、選択中の評価だけ数量推定から差し引く。`--replace-existing`では同じ評価を連番から削除し、他の2〜5つ星との衝突を前方9枚以内の空きフレームへ移す。`--evenly-spaced`は輝度解析なしで利用可能。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。選択行のUI、LRT内部の現像輝度値との一致は未対応 | 一部 |
-| Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。LRTの入力曲線は未再現。`#LRT internal use (HG)`またはlegacyマスク署名を検出した場合は該当`LocalExposure2012`へ補正を書き、識別できない場合は`crs:Exposure2012`へフォールバック | 一部 |
+| Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、2*/3*/4*評価をアンカーにするLRT処理経路の近似も選択可能。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の入力生成と正確なスプライン/スムーザーは未再現。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markとCropAngle/Top/Left/Bottom/Rightの数値補間に対応。`render --apply-xmp-crop`で回転を含む矩形を画素へ適用し、元と同じ解像度に再サンプル。プレビュー上の構図作成・編集UIとCamera RawのGeometry補正は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`で自然順に一覧表示し、キーフレーム評価を確認可能。`render --filename-contains TEXT`でファイル名の部分一致（大文字小文字を区別しない）による絞り込みに対応。選択UI、キーフレーム/Visual Preview選択、反転、コピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
@@ -201,6 +201,10 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\transition.mp4" --ap
 lrtl holy-grail "D:\Timelapse\Sequence"
 lrtl holy-grail "D:\Timelapse\Sequence" --write
 
+# LRTimelapseがXMPへ保存した入力値からHG補正を計算する（既定はプレビュー）
+lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input
+lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --write
+
 # 補正曲線の伸縮・回転を調整
 lrtl holy-grail "D:\Timelapse\Sequence" --stretch 0.4 --rotate -0.2
 
@@ -365,11 +369,15 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `snapshot create`は画像をコピーせず、連番に紐づくXMPサイドカーを`.lrtl/snapshots/<name>.zip`へ保存します。名前を省略するとUTC時刻から自動生成します。`snapshot list`はこのフォルダーのアーカイブを検証して一覧表示します。`snapshot restore`は既定で書き込み内容をプレビューし、`--write`を付けるとアーカイブ内のサイドカーだけを復元します。異なる場所へ移動した連番には`--allow-moved`が必要です。置き換える既存XMPは`.lrtl-snapshot-*.bak`としてバックアップします。スナップショット作成後に追加されたXMPサイドカーは削除しません。移動や削除を含むLRTのシーケンス状態スナップショットとは異なる、XMP限定の復元です。
 
-`holy-grail`は各フレームのEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す補正量として`crs:Exposure2012`に加えます。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。F値がない場合は`--ignore-aperture`を指定し、絞りが変化しなかったことを確認してください。`--stretch`はEXIF露出値を最小・最大で正規化した曲線のスケール（-1.5〜+1.5）、`--rotate`はシーケンスに加える直線傾き（-4〜+4）です。`--auto-shape`はLRTで確認したStretch/Rotateの探索刻み・L1評価と、インストール済みアプリから逆解析した三次カーネル重み付き局所線形回帰（LOWESS）を使って値を提案します。EXIF由来の入力曲線などHoly Grailの上流処理は独自の近似です。いずれも指定しない場合は従来のEXIF露出差補正を使います。EXIFが撮影モードをManualと報告する場合、設定変更位置に2*/3*評価のペアを提案します。撮影モードが不明または自動の場合はペアを作らず、`--mark-jumps`で強制できます。設定変更が連続して隣接ペアを作れない場合や、既存評価と衝突する場合は書き込み前にエラーにします。`--no-mark-jumps`でペア付けを無効化できます。補正の再実行では前回分を置き換え、lrtl管理下の元評価も記録するため`--reset --write`で復元できます。既定はプレビューで、書き込み時は既存サイドカーをバックアップします。
+`holy-grail`の既定はEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す独自補正を計算します。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。F値がない場合は`--ignore-aperture`を指定し、絞りが変化しなかったことを確認してください。`--stretch`は露出値を最小・最大で正規化した曲線のスケール（-1.5〜+1.5）、`--rotate`はシーケンスに加える直線傾き（-4〜+4）です。`--auto-shape`はLRTで確認したStretch/Rotateの探索刻み・L1評価を使って値を提案します。
 
-LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キーフレームとは別に扱われます。7.5.5のウィザード計算は2*/3*/4*マークを使ってフレームごとの曲線を作り、シーケンス内のフレーム状態へ値を格納します。保存処理も一部追跡できました。フレーム状態の3つの値は、MaskGroup形式では`CorrectionName`が`#LRT internal use (HG)`、`(Deflicker)`、`(Global)`の既存スロットへ対応付け、従来形式では`GradientBasedCorrections[5]`〜`[7]`の`crs:LocalExposure2012`へ書き戻します。インストール済みJARの`raw_m_1.xmp`では、従来形式の5〜7番目にある`CorrectionMasks`内の`crs:MaskName`要素が`LRT: don't alter!`という文字列を持ちます。`lrt:ExternalExposureDefault`を1/4にして内部値へ取り込み、`crs:Exposure2012`とは別に保つ経路も確認しました。lrtlは`CorrectionName`が`#LRT internal use (HG)`のMaskGroup、または従来形式の5〜7番目全てで`LRT: don't alter!`署名を確認できた場合に5番目の`LocalExposure2012`へ補正を書き、書き込み先を記録して`--reset`で戻します。いずれの識別条件も満たさないXMPでは`crs:Exposure2012`を使います。LRTのWizardにはRotate（-4〜+4）、Stretch（-1.5〜+1.5）、`holyGrailReduceDeflicker`を使う調整・探索があります。lrtlの`--stretch`と`--rotate`はEXIF曲線に調整を加え、`--auto-shape`は確認できた2段階L1探索とLOWESS平滑化を使います。LRTの入力曲線生成と3つの補正値の単位・算出式はまだ再現していません。逆解析で確認した式と保存経路は[リバースエンジニアリングノート](docs/reverse-engineering.md)に記録しています。
+`--lrt-input`は、各フレームのXMPにある数値`lrt:ExternalExposureDefault`を読み、LRTのフレーム内部値と同じく4で割ります。既存の2*/3*/4*評価をアンカーとして使い、隣接アンカーのカメラ設定差、曲線の中央寄せ/範囲制限、Stretch/Rotateを適用してHG補正を作ります。このモードでは全フレームに同プロパティと有効な撮影露出EXIFが必要で、少なくとも1つの2*/3*/4*評価が必要です。評価は新規作成・変更しません。LRTが`ExternalExposureDefault`を生成する測光処理、アンカー間の正確な補間、`holyGrailReduceDeflicker`の値とスムーザーの数値対応はまだ再現していないため、LRT Wizardとの数値一致は保証しません。`--auto-shape`はこの近似モデル上で探索します。
 
-この計算は記録されたカメラ設定による露出差を補う近似です。LRTimelapse公式ワークフローのHoly Grail Wizardも撮影中に変更したシャッター速度/ISOの補正曲線を作ります。lrtlの曲線回転・伸縮はEXIFから作った曲線への追加調整です。`--auto-shape`は確認できた探索式とLOWESS平滑化を使います。LRT内部HGレコードがあればそこへ値を保存しますが、LRTの入力曲線生成と数値は再現していません。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
+両モードともHG専用のCamera Raw `LocalExposure2012`スロットがXMPにあればそこへ書き、見つからなければ全体`crs:Exposure2012`を使います。既定はプレビューで、書き込み時は既存サイドカーをバックアップします。EXIFモードでは撮影モードがManualの場合に設定変更位置へ2*/3*評価を提案します。`--lrt-input`では既存のLRT評価をアンカーとして使うため、新しい評価を付けません。補正の再実行では前回分を置き換え、lrtl管理下の元評価も記録するため`--reset --write`で復元できます。
+
+LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キーフレームとは別に扱われます。7.5.5のウィザード計算は2*/3*/4*マークを使ってフレームごとの曲線を作り、シーケンス内のフレーム状態へ値を格納します。保存処理も一部追跡できました。フレーム状態の3つの値は、MaskGroup形式では`CorrectionName`が`#LRT internal use (HG)`、`(Deflicker)`、`(Global)`の既存スロットへ対応付け、従来形式では`GradientBasedCorrections[5]`〜`[7]`の`crs:LocalExposure2012`へ書き戻します。インストール済みJARの`raw_m_1.xmp`では、従来形式の5〜7番目にある`CorrectionMasks`内の`crs:MaskName`要素が`LRT: don't alter!`という文字列を持ちます。`lrt:ExternalExposureDefault`を1/4にして内部値へ取り込み、`crs:Exposure2012`とは別に保つ経路も確認しました。lrtlは`CorrectionName`が`#LRT internal use (HG)`のMaskGroup、または従来形式の5〜7番目全てで`LRT: don't alter!`署名を確認できた場合に5番目の`LocalExposure2012`へ補正を書き、書き込み先を記録して`--reset`で戻します。いずれの識別条件も満たさないXMPでは`crs:Exposure2012`を使います。LRTのWizardにはRotate（-4〜+4）、Stretch（-1.5〜+1.5）、`holyGrailReduceDeflicker`を使う調整・探索があります。lrtlは`--lrt-input`で`ExternalExposureDefault`と既存評価を読み、確認した隣接フレーム式と曲線の中央寄せ・制限、Stretch/Rotate経路を近似実装しました。アンカー間補間とLOWESS幅は推定で、入力値をLRTと同じく生成する部分も未対応です。逆解析で確認した式と保存経路は[リバースエンジニアリングノート](docs/reverse-engineering.md)に記録しています。
+
+EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用しますが、その生成処理、アンカー間の正確な補間、`holyGrailReduceDeflicker`の反映は未対応です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
 
 ## 今後の実装順
 

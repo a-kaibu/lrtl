@@ -24,6 +24,7 @@ var namespacePrefixes = map[string]string{
 	"rdf":       rdfNamespace,
 	"xmp":       xmpNamespace,
 	"crs":       crsNamespace,
+	"lrt":       "http://lrtimelapse.com/",
 	"ol":        openLRTLNamespace,
 	"exif":      "http://ns.adobe.com/exif/1.0/",
 	"tiff":      "http://ns.adobe.com/tiff/1.0/",
