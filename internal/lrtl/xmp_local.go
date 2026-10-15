@@ -20,15 +20,18 @@ const (
 // xmpLocalCorrection is the renderable subset of a Camera Raw local correction.
 // The geometry is evaluated in normalized, oriented image coordinates.
 type xmpLocalCorrection struct {
-	kind                 localMaskKind
-	exposure, saturation float64
-	amount, maskValue    float64
-	zeroX, zeroY         float64
-	fullX, fullY         float64
-	left, top            float64
-	right, bottom        float64
-	angle, feather       float64
-	flipped              bool
+	kind                                    localMaskKind
+	exposure, contrast, highlights, shadows float64
+	whites, blacks, saturation              float64
+	whiteBalance                            [3]float64
+	hasWhiteBalance                         bool
+	amount, maskValue                       float64
+	zeroX, zeroY                            float64
+	fullX, fullY                            float64
+	left, top                               float64
+	right, bottom                           float64
+	angle, feather                          float64
+	flipped                                 bool
 }
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
@@ -83,11 +86,36 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 	if err != nil {
 		return correction, false, err
 	}
-	correction.saturation, _, err = xmpLocalNumber(element, "LocalSaturation", 0, -100, 100)
+	for _, property := range []struct {
+		name   string
+		target *float64
+	}{
+		{name: "LocalContrast2012", target: &correction.contrast},
+		{name: "LocalHighlights2012", target: &correction.highlights},
+		{name: "LocalShadows2012", target: &correction.shadows},
+		{name: "LocalWhites2012", target: &correction.whites},
+		{name: "LocalBlacks2012", target: &correction.blacks},
+		{name: "LocalSaturation", target: &correction.saturation},
+	} {
+		*property.target, _, err = xmpLocalNumber(element, property.name, 0, -100, 100)
+		if err != nil {
+			return correction, false, err
+		}
+	}
+	temperature, _, err := xmpLocalNumber(element, "LocalTemperature", 0, -100, 100)
 	if err != nil {
 		return correction, false, err
 	}
-	if correction.exposure == 0 && correction.saturation == 0 {
+	tint, _, err := xmpLocalNumber(element, "LocalTint", 0, -100, 100)
+	if err != nil {
+		return correction, false, err
+	}
+	if temperature != 0 || tint != 0 {
+		correction.whiteBalance = approximateWhiteBalanceGains(6500+temperature*40, tint)
+		correction.hasWhiteBalance = true
+	}
+	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
+		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && !correction.hasWhiteBalance {
 		return correction, false, nil
 	}
 
@@ -279,17 +307,41 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				pixel := color.NRGBAModel.Convert(current.At(x, y)).(color.NRGBA)
 				weight := correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height) * correction.amount
-				red, green, blue := srgb8ToLinear[pixel.R], srgb8ToLinear[pixel.G], srgb8ToLinear[pixel.B]
+				redGain, greenGain, blueGain := 1.0, 1.0, 1.0
+				if correction.hasWhiteBalance {
+					blend := math.Max(-1, math.Min(1, weight))
+					redGain += (correction.whiteBalance[0] - 1) * blend
+					greenGain += (correction.whiteBalance[1] - 1) * blend
+					blueGain += (correction.whiteBalance[2] - 1) * blend
+				}
+				red := srgb8ToLinear[pixel.R] * redGain
+				green := srgb8ToLinear[pixel.G] * greenGain
+				blue := srgb8ToLinear[pixel.B] * blueGain
 				if correction.exposure != 0 {
 					gain := math.Exp2(correction.exposure * weight)
 					red, green, blue = red*gain, green*gain, blue*gain
 				}
+				luminance := 0.2126*red + 0.7152*green + 0.0722*blue
+				localTone := xmpBasicAdjustments{
+					contrast: correction.contrast * weight, highlights: correction.highlights * weight,
+					shadows: correction.shadows * weight, whites: correction.whites * weight,
+					blacks: correction.blacks * weight,
+				}
+				adjustedLuminance := luminance
+				if localTone.contrast != 0 || localTone.highlights != 0 || localTone.shadows != 0 || localTone.whites != 0 || localTone.blacks != 0 {
+					adjustedLuminance = basicAdjustedLuminance(luminance, localTone)
+					if luminance > 1e-12 {
+						scale := adjustedLuminance / luminance
+						red, green, blue = red*scale, green*scale, blue*scale
+					} else {
+						red, green, blue = adjustedLuminance, adjustedLuminance, adjustedLuminance
+					}
+				}
 				if correction.saturation != 0 {
-					luminance := 0.2126*red + 0.7152*green + 0.0722*blue
 					factor := 1 + correction.saturation/100*weight
-					red = luminance + (red-luminance)*factor
-					green = luminance + (green-luminance)*factor
-					blue = luminance + (blue-luminance)*factor
+					red = adjustedLuminance + (red-adjustedLuminance)*factor
+					green = adjustedLuminance + (green-adjustedLuminance)*factor
+					blue = adjustedLuminance + (blue-adjustedLuminance)*factor
 				}
 				result.SetNRGBA(x, y, color.NRGBA{
 					R: encodeLinearSRGB(red), G: encodeLinearSRGB(green), B: encodeLinearSRGB(blue), A: pixel.A,
