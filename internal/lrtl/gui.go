@@ -73,6 +73,7 @@ func newGUIHandler() http.Handler {
 	mux.HandleFunc("/api/sequence", serveGUISequence)
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
 	mux.HandleFunc("/api/preview", serveGUIPreview)
+	mux.HandleFunc("/api/xmp", serveGUIXMP)
 	mux.HandleFunc("/api/keyframe", serveGUIKeyframe)
 	mux.HandleFunc("/api/keyframes", serveGUIKeyframes)
 	mux.HandleFunc("/api/interpolate", serveGUIInterpolate)
@@ -437,6 +438,99 @@ func guiFrameByName(directory, name string) (Frame, error) {
 		return Frame{}, err
 	}
 	return Frame{Image: path, Sidecar: sidecar}, nil
+}
+
+type guiXMPResponse struct {
+	Name       string            `json:"name"`
+	Properties []string          `json:"properties"`
+	Values     map[string]string `json:"values"`
+}
+
+func serveGUIXMP(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		serveGUIXMPRead(w, r)
+	case http.MethodPost:
+		serveGUIXMPWrite(w, r)
+	default:
+		writeGUIError(w, http.StatusMethodNotAllowed, "GET or POST required")
+	}
+}
+
+func serveGUIXMPRead(w http.ResponseWriter, r *http.Request) {
+	directory, err := canonicalGUIDirectory(r.URL.Query().Get("directory"))
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	frame, err := guiFrameByName(directory, r.URL.Query().Get("name"))
+	if err != nil {
+		writeGUIError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	packet, err := PacketForSidecar(frame.OutputSidecar())
+	if err != nil {
+		writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	values := make(map[string]string)
+	for _, property := range NumericCRSProperties {
+		value, found, getErr := packet.GetScalar("crs:" + property)
+		if getErr != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, getErr.Error())
+			return
+		}
+		if found {
+			if _, valid := scalarNumber(value); valid {
+				values[property] = strings.TrimSpace(value)
+			}
+		}
+	}
+	writeGUIJSON(w, http.StatusOK, guiXMPResponse{Name: filepath.Base(frame.Image), Properties: NumericCRSProperties, Values: values})
+}
+
+type guiXMPWriteRequest struct {
+	Directory string `json:"directory"`
+	Name      string `json:"name"`
+	Property  string `json:"property"`
+	Value     string `json:"value"`
+}
+
+func serveGUIXMPWrite(w http.ResponseWriter, r *http.Request) {
+	if !requireGUIJSONPost(w, r) {
+		return
+	}
+	var request guiXMPWriteRequest
+	if !decodeGUIJSON(w, r, &request) {
+		return
+	}
+	directory, err := canonicalGUIDirectory(request.Directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	frame, err := guiFrameByName(directory, request.Name)
+	if err != nil {
+		writeGUIError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	allowed := false
+	for _, property := range NumericCRSProperties {
+		if property == request.Property {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		writeGUIError(w, http.StatusBadRequest, "property is not an editable numeric Camera Raw control")
+		return
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(request.Value), 64)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, "value must be a finite number")
+		return
+	}
+	writeGUICommandResult(w, []string{"set", frame.Image, request.Property, strconv.FormatFloat(value, 'g', 12, 64)}, runSet)
 }
 
 type guiKeyframeRequest struct {

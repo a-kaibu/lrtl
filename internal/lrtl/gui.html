@@ -79,6 +79,15 @@
           </div>
         </section>
         <section class="panel">
+          <h2>選択フレームのXMP値</h2>
+          <label for="xmp-property">Camera Raw数値プロパティ</label>
+          <select id="xmp-property"></select>
+          <label for="xmp-value">値</label>
+          <input id="xmp-value" type="number" step="any" value="0">
+          <button id="xmp-save">XMPへ保存</button>
+          <p>選んだフレームのサイドカーだけを編集します。既存XMPはバックアップされます。</p>
+        </section>
+        <section class="panel">
           <h2>キーフレーム</h2>
           <label for="keyframe-count">追加するキーフレーム数</label>
           <input id="keyframe-count" type="number" min="1" max="1000" value="5">
@@ -133,6 +142,7 @@
     let limit = 80;
     let frames = [];
     let selected = null;
+    let selectedXMPValues = {};
     let previewObjectURL = '';
     const setStatus = (message, error = false) => { el('status').textContent = message; el('status').className = error ? 'error' : ''; };
     async function api(url, options = {}) {
@@ -180,7 +190,12 @@
       const query = new URLSearchParams({directory:value, offset:String(requestedOffset), limit:String(limit)});
       const data = await api('/api/sequence?' + query.toString());
       directory = data.directory; offset = data.offset; total = data.total; frames = data.frames;
-      if (newSequence) selected = null;
+      if (newSequence) {
+        selected = null; selectedXMPValues = {};
+        el('xmp-property').replaceChildren(); el('xmp-value').value = '';
+        el('preview').removeAttribute('src'); el('selected-name').textContent = 'フレームを選択するとプレビューします。';
+        if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = ''; }
+      }
       el('directory').value = directory;
       el('count').textContent = total + ' frames';
       el('page').textContent = total ? (offset + 1) + '–' + Math.min(offset + frames.length, total) : '0';
@@ -200,9 +215,30 @@
       selected = frame;
       el('selected-name').textContent = (frame.index + 1) + ' / ' + total + ' · ' + frame.name;
       showOriginalPreview();
+      loadSelectedXMP(frame).catch(error => setStatus(error.message, true));
       document.querySelectorAll('.card').forEach(card => card.classList.remove('selected'));
       const card = [...document.querySelectorAll('.card')].find(item => item.querySelector('.filename')?.textContent.endsWith(' · ' + frame.name));
       if (card) card.classList.add('selected');
+    }
+    async function loadSelectedXMP(frame) {
+      const requestedDirectory = directory;
+      const query = new URLSearchParams({directory:requestedDirectory, name:frame.name});
+      const data = await api('/api/xmp?' + query.toString());
+      if (directory !== requestedDirectory || !selected || selected.name !== frame.name) return;
+      selectedXMPValues = data.values || {};
+      const propertySelect = el('xmp-property');
+      const previous = propertySelect.value;
+      propertySelect.replaceChildren();
+      for (const property of data.properties || []) {
+        const option = document.createElement('option'); option.value = property; option.textContent = 'crs:' + property; propertySelect.append(option);
+      }
+      if ((data.properties || []).includes(previous)) propertySelect.value = previous;
+      else if ((data.properties || []).includes('Exposure2012')) propertySelect.value = 'Exposure2012';
+      updateXMPValueInput();
+    }
+    function updateXMPValueInput() {
+      const property = el('xmp-property').value;
+      el('xmp-value').value = Object.prototype.hasOwnProperty.call(selectedXMPValues, property) ? selectedXMPValues[property] : '0';
     }
     function showOriginalPreview() {
       if (!selected) return;
@@ -245,6 +281,19 @@
     buttonAction(el('unmark'), () => selected ? setKeyframe(selected, '', true) : setStatus('先にフレームを選択してください。', true));
     el('preview-original').addEventListener('click', showOriginalPreview);
     buttonAction(el('preview-adjusted'), showAdjustedPreview);
+    el('xmp-property').addEventListener('change', updateXMPValueInput);
+    buttonAction(el('xmp-save'), async () => {
+      ensureActiveDirectory();
+      if (!selected) throw new Error('先にフレームを選択してください。');
+      const property = el('xmp-property').value;
+      const value = el('xmp-value').value.trim();
+      if (!property || value === '' || !Number.isFinite(Number(value))) throw new Error('有限の数値を入力してください。');
+      if (!confirm(selected.name + ' の crs:' + property + ' を ' + value + ' に変更し、XMPバックアップを保存しますか？')) return;
+      const data = await api('/api/xmp', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:selected.name, property, value})});
+      const frame = selected;
+      await loadSelectedXMP(frame);
+      setStatus(data.output || 'XMP値を保存しました。');
+    });
     buttonAction(el('suggest'), async () => {
       ensureActiveDirectory();
       if (!confirm('輝度推移を分析し、キーフレームXMPを保存しますか？既存マークは既定で保持されます。')) return;
@@ -261,7 +310,9 @@
       if (!confirm('キーフレーム間のXMP値を補間して保存しますか？既存XMPのバックアップを作成します。')) return;
       setStatus('XMP値を補間しています…');
       const data = await api('/api/interpolate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, smoothness:Number(el('smoothness').value)})});
-      await loadSequence(); setStatus(data.output || '補間したXMPを保存しました。');
+      await loadSequence();
+      if (selected) await loadSelectedXMP(selected);
+      setStatus(data.output || '補間したXMPを保存しました。');
     });
     buttonAction(el('render'), async () => {
       ensureActiveDirectory();
