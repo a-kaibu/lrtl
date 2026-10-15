@@ -36,6 +36,11 @@ type xmpBasicAdjustments struct {
 	colorNoise           float64
 	colorNoiseDetail     float64
 	colorNoiseSmoothness float64
+	vignetteAmount       float64
+	vignetteMidpoint     float64
+	vignetteRoundness    float64
+	vignetteFeather      float64
+	vignetteHighlights   float64
 	parametric           xmpParametricCurve
 	vibrance             float64
 	saturation           float64
@@ -103,6 +108,8 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 	adjustments.lumaNoiseDetail = 50
 	adjustments.colorNoiseDetail = 50
 	adjustments.colorNoiseSmoothness = 50
+	adjustments.vignetteMidpoint = 50
+	adjustments.vignetteFeather = 50
 	properties := []struct {
 		name   string
 		target *float64
@@ -124,6 +131,11 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		{"ColorNoiseReduction", &adjustments.colorNoise, 0, 100},
 		{"ColorNoiseReductionDetail", &adjustments.colorNoiseDetail, 0, 100},
 		{"ColorNoiseReductionSmoothness", &adjustments.colorNoiseSmoothness, 0, 100},
+		{"PostCropVignetteAmount", &adjustments.vignetteAmount, -100, 100},
+		{"PostCropVignetteMidpoint", &adjustments.vignetteMidpoint, 0, 100},
+		{"PostCropVignetteRoundness", &adjustments.vignetteRoundness, -100, 100},
+		{"PostCropVignetteFeather", &adjustments.vignetteFeather, 0, 100},
+		{"PostCropVignetteHighlightContrast", &adjustments.vignetteHighlights, 0, 100},
 		{"ParametricShadows", &adjustments.parametric.shadows, -100, 100},
 		{"ParametricDarks", &adjustments.parametric.darks, -100, 100},
 		{"ParametricLights", &adjustments.parametric.lights, -100, 100},
@@ -547,7 +559,7 @@ func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.dehaze != 0 || adjustments.sharpness != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
-		adjustments.luminanceNoise != 0 || adjustments.colorNoise != 0 ||
+		adjustments.luminanceNoise != 0 || adjustments.colorNoise != 0 || adjustments.vignetteAmount != 0 ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
 }
 
@@ -715,6 +727,11 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 	}
 	if adjustments.sharpness != 0 {
 		result = xmpApplyImageSharpness(result, adjustments.sharpness, adjustments.sharpenRadius, adjustments.sharpenDetail, adjustments.sharpenMasking)
+	}
+	if adjustments.vignetteAmount != 0 {
+		result = xmpApplyPostCropVignette(result,
+			adjustments.vignetteAmount, adjustments.vignetteMidpoint, adjustments.vignetteRoundness,
+			adjustments.vignetteFeather, adjustments.vignetteHighlights)
 	}
 	return result
 }

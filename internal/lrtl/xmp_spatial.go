@@ -205,6 +205,48 @@ func xmpLinearLumaChroma(pixel color.NRGBA) (luminance, blueDifference, redDiffe
 	return luminance, blue - luminance, red - luminance
 }
 
+// xmpApplyPostCropVignette approximates Lightroom's crop-relative radial exposure effect.
+func xmpApplyPostCropVignette(img *image.NRGBA, amount, midpoint, roundness, feather, highlightContrast float64) *image.NRGBA {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return img
+	}
+	aspect := float64(width) / float64(height)
+	xScale, yScale := 1.0, 1.0
+	if aspect >= 1 {
+		xScale = math.Pow(aspect, roundness/100)
+	} else {
+		yScale = math.Pow(1/aspect, roundness/100)
+	}
+	outerRadius := math.Hypot(xScale, yScale)
+	startRadius := outerRadius * (0.18 + 0.66*math.Max(0, math.Min(100, midpoint))/100)
+	featherWidth := outerRadius * (0.02 + 0.48*math.Max(0, math.Min(100, feather))/100)
+	amount = math.Max(-100, math.Min(100, amount))
+	highlightContrast = math.Max(0, math.Min(100, highlightContrast)) / 100
+	result := image.NewNRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		normalizedY := (2*(float64(y-bounds.Min.Y)+0.5)/float64(height) - 1) * yScale
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			normalizedX := (2*(float64(x-bounds.Min.X)+0.5)/float64(width) - 1) * xScale
+			radius := math.Hypot(normalizedX, normalizedY)
+			coverage := smoothstep((radius - startRadius) / featherWidth)
+			gain := math.Exp2(amount / 100 * 1.5 * coverage)
+			pixel := img.NRGBAAt(x, y)
+			red, green, blue := srgb8ToLinear[pixel.R], srgb8ToLinear[pixel.G], srgb8ToLinear[pixel.B]
+			if amount < 0 && highlightContrast > 0 {
+				luminance := 0.2126*red + 0.7152*green + 0.0722*blue
+				highlightWeight := smoothstep((luminance - 0.35) / 0.65)
+				gain = 1 + (gain-1)*(1-highlightContrast*highlightWeight)
+			}
+			result.SetNRGBA(x, y, color.NRGBA{
+				R: encodeLinearSRGB(red * gain), G: encodeLinearSRGB(green * gain), B: encodeLinearSRGB(blue * gain), A: pixel.A,
+			})
+		}
+	}
+	return result
+}
+
 func xmpTextureRadius(width, height int) int {
 	return max(1, min(3, min(width, height)/600))
 }
