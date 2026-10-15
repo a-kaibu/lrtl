@@ -1,2 +1,4 @@
 github.com/beevik/etree v1.8.1 h1:MchsAnqPGCGsfQezhwcouHPlAHlcAOqWpyCVZoyWfjU=
 github.com/beevik/etree v1.8.1/go.mod h1:bh4zJxiIr62SOf9pRzN7UUYaEDa9HEKafK25+sLc0Gc=
+github.com/icza/mjpeg v0.0.0-20230330134156-38318e5ab8f4 h1:NUuR3iigoVwstgE2Ahn1O4OuRSK/kYS6YMmrscfbYOs=
+github.com/icza/mjpeg v0.0.0-20230330134156-38318e5ab8f4/go.mod h1:4x2PXnxyG6DTZMYpoV0JgU0y1eZvAfxW/YALnA8E2B0=

@@ -1,0 +1,165 @@
+package lrtl
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"image"
+	"image/jpeg"
+	_ "image/png"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/icza/mjpeg"
+)
+
+type RenderOptions struct {
+	FPS       int
+	Quality   int
+	Overwrite bool
+}
+
+const maxAVIDimension = int64(1<<31 - 1)
+
+// RenderSequence writes a sequence of already-developed JPEG or PNG frames to
+// an MJPEG AVI file. It does not apply Camera Raw XMP settings or decode RAWs.
+func RenderSequence(frames []Frame, output string, options RenderOptions) error {
+	if len(frames) == 0 {
+		return errors.New("sequence contains no images")
+	}
+	if options.FPS < 1 || options.FPS > 240 {
+		return fmt.Errorf("fps must be between 1 and 240: %d", options.FPS)
+	}
+	if options.Quality < 1 || options.Quality > 100 {
+		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
+	}
+	if strings.ToLower(filepath.Ext(output)) != ".avi" {
+		return fmt.Errorf("output must use the .avi extension: %s", output)
+	}
+
+	outputDir := filepath.Dir(output)
+	if info, err := os.Stat(outputDir); err != nil {
+		return fmt.Errorf("output directory: %w", err)
+	} else if !info.IsDir() {
+		return fmt.Errorf("output parent is not a directory: %s", outputDir)
+	}
+	if !options.Overwrite {
+		if _, err := os.Lstat(output); err == nil {
+			return fmt.Errorf("output already exists (pass --overwrite to replace it): %s", output)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("check output: %w", err)
+		}
+	}
+
+	for _, frame := range frames {
+		ext := strings.ToLower(filepath.Ext(frame.Image))
+		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
+			return fmt.Errorf("render supports JPEG and PNG only; unsupported frame: %s", filepath.Base(frame.Image))
+		}
+	}
+
+	first, err := os.ReadFile(frames[0].Image)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", frames[0].Image, err)
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(first))
+	if err != nil {
+		return fmt.Errorf("decode %s: %w", frames[0].Image, err)
+	}
+	if config.Width <= 0 || config.Height <= 0 {
+		return fmt.Errorf("invalid dimensions in %s: %dx%d", frames[0].Image, config.Width, config.Height)
+	}
+	if int64(config.Width) > maxAVIDimension || int64(config.Height) > maxAVIDimension {
+		return fmt.Errorf("image dimensions exceed AVI limits in %s", frames[0].Image)
+	}
+	width, height := config.Width, config.Height
+
+	tempFile, err := os.CreateTemp(outputDir, ".lrtl-*.avi")
+	if err != nil {
+		return fmt.Errorf("create temporary AVI: %w", err)
+	}
+	tempPath := tempFile.Name()
+	if err := tempFile.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("close temporary AVI: %w", err)
+	}
+	if err := os.Remove(tempPath); err != nil {
+		return fmt.Errorf("prepare temporary AVI: %w", err)
+	}
+	indexPath := tempPath + ".idx_"
+	cleanup := func() {
+		_ = os.Remove(tempPath)
+		_ = os.Remove(indexPath)
+	}
+
+	writer, err := mjpeg.New(tempPath, int32(config.Width), int32(config.Height), int32(options.FPS))
+	if err != nil {
+		cleanup()
+		return fmt.Errorf("create MJPEG AVI: %w", err)
+	}
+	writerClosed := false
+	completed := false
+	defer func() {
+		if !writerClosed {
+			_ = writer.Close()
+		}
+		if !completed {
+			cleanup()
+		}
+	}()
+
+	for index, frame := range frames {
+		data := first
+		if index > 0 {
+			data, err = os.ReadFile(frame.Image)
+			if err != nil {
+				return fmt.Errorf("read %s: %w", frame.Image, err)
+			}
+		}
+		config, format, decodeErr := image.DecodeConfig(bytes.NewReader(data))
+		if decodeErr != nil {
+			return fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
+		}
+		if format != "jpeg" && format != "png" {
+			return fmt.Errorf("render supports JPEG and PNG data only: %s", frame.Image)
+		}
+		if config.Width != width || config.Height != height {
+			return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+		}
+
+		jpegData := data
+		if format == "png" {
+			img, _, err := image.Decode(bytes.NewReader(data))
+			if err != nil {
+				return fmt.Errorf("decode %s: %w", frame.Image, err)
+			}
+			var encoded bytes.Buffer
+			if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
+				return fmt.Errorf("encode %s as JPEG: %w", frame.Image, err)
+			}
+			jpegData = encoded.Bytes()
+		}
+		if err := writer.AddFrame(jpegData); err != nil {
+			return fmt.Errorf("add frame %s: %w", frame.Image, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		writerClosed = true
+		return fmt.Errorf("finalize AVI: %w", err)
+	}
+	writerClosed = true
+
+	if !options.Overwrite {
+		if _, err := os.Lstat(output); err == nil {
+			return fmt.Errorf("output appeared while rendering (pass --overwrite to replace it): %s", output)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("check output: %w", err)
+		}
+	}
+	if err := os.Rename(tempPath, output); err != nil {
+		return fmt.Errorf("save AVI to %s: %w", output, err)
+	}
+	completed = true
+	return nil
+}

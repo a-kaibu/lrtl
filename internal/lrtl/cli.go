@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const version = "0.2.0"
+const version = "0.3.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
 	flags := make([]string, 0, len(arguments))
@@ -68,6 +68,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runUnmark(arguments[1:], stdout, stderr)
 	case "interpolate":
 		return runInterpolate(arguments[1:], stdout, stderr)
+	case "render":
+		return runRender(arguments[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "lrtl: unknown command %q\n", arguments[0])
 		printUsage(stderr)
@@ -83,6 +85,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG frames to MJPEG AVI")
 }
 
 func newFlagSet(name string, stderr io.Writer) *flag.FlagSet {
@@ -332,6 +335,41 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		written++
 	}
 	fmt.Fprintf(stdout, "Updated %d sidecar(s).\n", written)
+	return 0
+}
+
+func runRender(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("render", stderr)
+	output := set.String("output", "", "output MJPEG AVI path")
+	fps := set.Int("fps", 24, "integer frame rate (1-240)")
+	quality := set.Int("quality", 90, "JPEG quality for PNG frames (1-100)")
+	overwrite := set.Bool("overwrite", false, "replace an existing output file")
+	parseArgs := flagFirst(arguments, map[string]bool{
+		"--output": true, "-output": true,
+		"--fps": true, "-fps": true,
+		"--quality": true, "-quality": true,
+	})
+	if err := set.Parse(parseArgs); err != nil {
+		if done, code := finishFlagParse(set, err); done {
+			return code
+		}
+	}
+	if set.NArg() != 1 {
+		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
+	}
+	if *output == "" {
+		return reportError(stderr, fmt.Errorf("--output is required"))
+	}
+	directory := set.Arg(0)
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	options := RenderOptions{FPS: *fps, Quality: *quality, Overwrite: *overwrite}
+	if err := RenderSequence(frames, *output, options); err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
 	return 0
 }
 
