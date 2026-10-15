@@ -150,6 +150,16 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 		if supported {
 			values["RangeMaskColorAmount"] = colorAmount
 		}
+	} else {
+		// Lightroom Classic 7.x serialized range-mask data directly on the
+		// correction, before it moved the selector into CorrectionMasks.
+		colorAmount, supported, err := parseXMPColorRangeAmount(element)
+		if err != nil {
+			return nil, err
+		}
+		if supported {
+			values["RangeMaskColorAmount"] = colorAmount
+		}
 	}
 	return values, nil
 }
@@ -175,7 +185,11 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 				if err != nil {
 					return fmt.Errorf("correction %q: %w", correctionID, err)
 				}
-				indexed[key] = maskTransitionNode{element: element, values: values}
+				indexed[key] = maskTransitionNode{
+					element:      element,
+					values:       values,
+					colorSamples: parseXMPColorRangePointModels(element),
+				}
 			}
 			if maskID, found, err := crsElementValue(element, "MaskSyncID"); err != nil {
 				return err
