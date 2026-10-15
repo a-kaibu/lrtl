@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lrtl-xmp"
+version = "0.1.0"
+description = "Open XMP sidecar and keyframe tools for timelapse photo sequences"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "LumaFrame contributors" }]
+dependencies = []
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Graphics :: Editors",
+]
+
+[project.scripts]
+lrtl = "lrtl.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
