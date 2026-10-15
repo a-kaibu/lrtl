@@ -75,6 +75,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runInterpolate(arguments[1:], stdout, stderr)
 	case "render":
 		return runRender(arguments[1:], stdout, stderr)
+	case "preview":
+		return runPreview(arguments[1:], stdout, stderr)
 	case "deflicker":
 		return runDeflicker(arguments[1:], stdout, stderr)
 	case "keyframes":
@@ -98,6 +100,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render frames; --raw-preview uses embedded RAW images")
+	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg   plot brightness, XMP exposure, and keyframe marks")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-preview]  analyze and update XMP exposure")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-preview]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
@@ -524,6 +527,32 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	} else {
 		fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
 	}
+	return 0
+}
+
+func runPreview(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("preview", stderr)
+	output := set.String("output", "", "write an SVG brightness preview")
+	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
+	overwrite := set.Bool("overwrite", false, "replace an existing SVG preview")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true})); err != nil {
+		help, code := finishFlagParse(set, err)
+		if help {
+			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview] [--overwrite]")
+		}
+		return code
+	}
+	if set.NArg() != 1 || *output == "" {
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview] [--overwrite]"))
+	}
+	frames, err := DiscoverSequence(set.Arg(0))
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	if err := writeSequencePreview(frames, *output, *rawPreview, *overwrite); err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Wrote brightness preview for %d frames: %s\n", len(frames), *output)
 	return 0
 }
 

@@ -20,7 +20,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で数値を編集し、許可したグローバル設定を線形補間。レンダー時に`Exposure2012`と軸に平行なクロップ矩形を任意適用。他のCamera Raw現像値、RAW現像、ローカルマスクは未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間 | 数値のグローバルCamera Raw項目を補間。ローカル補正、カーブ、マスク、色相環などの補間なし | 一部 |
-| 視覚プレビュー | 露出や遷移を画像・グラフで確認 | 未実装 | 未実装 |
+| 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。画像サムネイル、インタラクティブ操作、LRTの現像結果プレビューは未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`の輝度解析結果を`crs:Exposure2012`へ記録可能。両者とも独自の近似方式。LRTのVisual Preview、RAW現像連携、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFをMJPEG AVIに変換。固定サイズの画像列、整数1–240 fps。JPEGは画素処理なしなら入力データを格納し、画素処理時とPNG/TIFFはJPEGに変換 | 一部 |
@@ -64,8 +64,11 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 4. 現像済みJPEG/PNG/TIFF、または対応RAW内蔵プレビューをMJPEG AVIにまとめる。
 5. レンダー時に簡易Deflickerを画素へ適用するか、解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
+7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。
 
 動画生成の最短経路は、Lightroom等でJPEG/PNG/TIFFを書き出してから`lrtl render`を実行する方法です。`render`は既定ではXMPを読まず、画像の現像もしません。`--raw-preview`を指定すれば一部TIFF系RAW、Fuji RAFまたはCanon CR3に保存された埋め込み画像を入力に使えますが、RAWセンサー情報やCamera Raw設定を現像する機能ではありません。`--apply-xmp-exposure`を指定すると、サイドカーの`crs:Exposure2012`を線形sRGB上で近似適用し、Deflickerもその後の明るさに対して解析します。レンダー時のDeflickerとXMP露出補正は出力画素だけに適用するため、元画像やXMPを変更しません。別コマンドの`lrtl deflicker --write`は、解析した補正を現像値としてXMPに保存します。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
+
+`preview`は画像列の線形sRGB輝度を測り、最初のフレームからのEV差、XMPの`Exposure2012`差、キーフレーム評価をSVGグラフに出します。JPEG/PNG/TIFFのほか、`--raw-preview`で対応RAW内のプレビューを解析できます。これは静的な数値グラフで、Lightroom/Camera Rawの現像画像やLRTimelapseの操作可能なVisual Previewは表示しません。
 
 ## インストール
 
@@ -133,6 +136,9 @@ lrtl keyframes "D:\Timelapse\RAW" --raw-preview --count 5
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
 
+# 輝度・XMP露出・キーフレームをSVGグラフで確認
+lrtl preview "D:\Timelapse\Developed" --output "D:\Timelapse\brightness.svg"
+
 # 対応RAWの埋め込みプレビューからMJPEG AVIを作成（RAW現像ではない）
 lrtl render "D:\Timelapse\RAW" --output "D:\Timelapse\raw-preview.avi" --raw-preview
 
@@ -179,7 +185,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キーフレームとは別レイヤーとして使われます。lrtlはこの評価マーカーを互換目的で扱いますが、補正値は現時点で通常の`crs:Exposure2012`に書き込むため、LRTの独立した背景補正レイヤーと同じ動作ではありません。LRTのWizardにはRotate（-4〜+4）、Stretch（-1.5〜+1.5）、`holyGrailReduceDeflicker`を使う調整・探索があります。lrtlの`--stretch`と`--rotate`はEXIF曲線に調整を加え、`--auto-shape`は確認できた2段階L1探索とLOWESS平滑化を使います。Holy Grailの上流曲線生成、Lightroom編集値との合成、独立補正レイヤーは未実装です。逆解析で確認した式と探索範囲は[リバースエンジニアリングノート](docs/reverse-engineering.md)に記録しています。
 
-この計算は記録されたカメラ設定による露出差を補う近似です。LRTimelapse公式ワークフローのHoly Grail Wizardも撮影中に変更したシャッター速度/ISOの補正曲線を作ります。lrtlの曲線回転・伸縮はEXIFから作った曲線への追加調整です。`--auto-shape`は確認できた評価式とLOWESS平滑化を使いますが、入力曲線やLRTの独立補正レイヤーは再現しておらず、画像プレビューも未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
+この計算は記録されたカメラ設定による露出差を補う近似です。LRTimelapse公式ワークフローのHoly Grail Wizardも撮影中に変更したシャッター速度/ISOの補正曲線を作ります。lrtlの曲線回転・伸縮はEXIFから作った曲線への追加調整です。`--auto-shape`は確認できた評価式とLOWESS平滑化を使いますが、入力曲線やLRTの独立補正レイヤーは再現していません。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
 
 ## 今後の実装順
 
@@ -187,7 +193,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 手動設定、輝度ベース候補提案、限定的な数値補間を実装 |
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVIに対応。完全なRAW現像は未実装 |
-| 3 | 画像解析、プレビュー、Deflicker | 単一参照領域・全体露出補正をレンダー時またはXMPへ適用。軸に平行なXMPクロップも実装。LRT形式のVisual Preview、曲線UI、XMPロスレス適用、回転クロップ、マスク別補正は未実装 |
+| 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、軸に平行なXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、回転クロップ、マスク別補正は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビューの取り出しを実装。RAWデモザイクとCamera Raw現像の完全再現は未着手 |
 | 5 | H.264等の追加出力、クロップ/オーバーレイ、取り込み、GUI | 未着手 |
 
