@@ -168,11 +168,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if err := validateLongEdge(options.LongEdge); err != nil {
 		return err
 	}
-	if options.RawPreview && options.RawDevelop {
-		return fmt.Errorf("--raw-preview and --raw-develop cannot be used together")
-	}
-	if strings.TrimSpace(options.DNGLabPath) != "" && !options.RawDevelop {
-		return fmt.Errorf("--dnglab requires --raw-develop")
+	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath}
+	if err := validateImageInputOptions(inputOptions); err != nil {
+		return err
 	}
 	outputExtension := strings.ToLower(filepath.Ext(output))
 	if outputExtension != ".avi" && outputExtension != ".mp4" {
@@ -228,8 +226,6 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 		return fmt.Errorf("RAW input %s requires --raw-preview or --raw-develop with DNGLab", filepath.Base(frame.Image))
 	}
-	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath}
-
 	var xmpExposures []float64
 	if options.ApplyXMPExposure {
 		xmpExposures = make([]float64, len(frames))

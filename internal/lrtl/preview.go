@@ -20,8 +20,15 @@ type previewFrameMark struct {
 }
 
 func writeSequencePreview(frames []Frame, output string, useRawPreview, overwrite bool) error {
+	return writeSequencePreviewWithOptions(frames, output, imageInputOptions{RawPreview: useRawPreview}, overwrite)
+}
+
+func writeSequencePreviewWithOptions(frames []Frame, output string, options imageInputOptions, overwrite bool) error {
 	if len(frames) == 0 {
 		return fmt.Errorf("sequence contains no images")
+	}
+	if err := validateImageInputOptions(options); err != nil {
+		return err
 	}
 	if strings.ToLower(filepath.Ext(output)) != ".svg" {
 		return fmt.Errorf("preview output must use the .svg extension: %s", output)
@@ -42,7 +49,7 @@ func writeSequencePreview(frames []Frame, output string, useRawPreview, overwrit
 		}
 	}
 
-	luminance, err := analyzeLuminanceSequenceWithRawPreview(frames, useRawPreview)
+	luminance, err := analyzeLuminanceSequenceWithInputOptions(frames, options)
 	if err != nil {
 		return err
 	}

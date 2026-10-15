@@ -78,6 +78,16 @@ type imageInputOptions struct {
 	DNGLabPath string
 }
 
+func validateImageInputOptions(options imageInputOptions) error {
+	if options.RawPreview && options.RawDevelop {
+		return fmt.Errorf("--raw-preview and --raw-develop cannot be used together")
+	}
+	if strings.TrimSpace(options.DNGLabPath) != "" && !options.RawDevelop {
+		return fmt.Errorf("--dnglab requires --raw-develop")
+	}
+	return nil
+}
+
 func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte, image.Config, string, error) {
 	path := frame.Image
 	var data []byte

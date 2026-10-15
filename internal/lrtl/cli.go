@@ -99,10 +99,10 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-		fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --long-edge downsizes, --raw-develop uses DNGLab")
-	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg   plot brightness, XMP exposure, and keyframe marks")
-	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-preview]  analyze and update XMP exposure")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-preview]")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --long-edge downsizes, --raw-develop uses DNGLab")
+	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] plot brightness and XMP marks")
+	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-develop] analyze and update XMP exposure")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 }
 
@@ -557,22 +557,25 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("preview", stderr)
 	output := set.String("output", "", "write an SVG brightness preview")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
+	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
 	overwrite := set.Bool("overwrite", false, "replace an existing SVG preview")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true})); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true, "--dnglab": true, "-dnglab": true})); err != nil {
 		help, code := finishFlagParse(set, err)
 		if help {
-			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--overwrite]")
 		}
 		return code
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	if err := writeSequencePreview(frames, *output, *rawPreview, *overwrite); err != nil {
+	inputOptions := imageInputOptions{RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab}
+	if err := writeSequencePreviewWithOptions(frames, *output, inputOptions, *overwrite); err != nil {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Wrote brightness preview for %d frames: %s\n", len(frames), *output)
@@ -589,10 +592,13 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	passes := set.Int("passes", 1, "deflicker passes (1-8)")
 	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
+	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--passes": true, "-passes": true,
+		"--dnglab": true, "-dnglab": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -612,7 +618,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "passes", "constant", "raw-preview":
+			case "reference", "smooth", "passes", "constant", "raw-preview", "raw-develop", "dnglab":
 				analysisOption = true
 			}
 		})
@@ -632,8 +638,9 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	var luminances []float64
+	inputOptions := imageInputOptions{RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab}
 	if !*reset {
-		luminances, err = analyzeDeflickerSequence(frames, reference, *rawPreview)
+		luminances, err = analyzeDeflickerSequenceWithOptions(frames, reference, inputOptions)
 		if err != nil {
 			return reportError(stderr, err)
 		}
@@ -699,9 +706,14 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius in frames")
 	evenlySpaced := set.Bool("evenly-spaced", false, "suggest uniformly spaced interior keyframes without decoding images")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
+	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
+	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
 	write := set.Bool("write", false, "mark the suggested frames in XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--count": true, "-count": true, "--smooth": true, "-smooth": true})); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--count": true, "-count": true, "--smooth": true, "-smooth": true,
+		"--dnglab": true, "-dnglab": true,
+	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}
@@ -723,9 +735,16 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if *smoothRadius < 0 || *smoothRadius > 1000 {
 		return reportError(stderr, fmt.Errorf("smoothing radius must be between 0 and 1000 frames: %d", *smoothRadius))
 	}
+	inputOptions := imageInputOptions{RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab}
+	if err := validateImageInputOptions(inputOptions); err != nil {
+		return reportError(stderr, err)
+	}
+	if *evenlySpaced && (*rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "") {
+		return reportError(stderr, fmt.Errorf("RAW image options cannot be combined with --evenly-spaced because that mode does not decode images"))
+	}
 	var curve []float64
 	if !*evenlySpaced {
-		curve, err = analyzeLuminanceSequenceWithRawPreview(frames, *rawPreview)
+		curve, err = analyzeLuminanceSequenceWithInputOptions(frames, inputOptions)
 		if err != nil {
 			return reportError(stderr, err)
 		}

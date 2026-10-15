@@ -21,13 +21,20 @@ type DeflickerChange struct {
 }
 
 func analyzeDeflickerSequence(frames []Frame, reference image.Rectangle, useRawPreview bool) ([]float64, error) {
+	return analyzeDeflickerSequenceWithOptions(frames, reference, imageInputOptions{RawPreview: useRawPreview})
+}
+
+func analyzeDeflickerSequenceWithOptions(frames []Frame, reference image.Rectangle, options imageInputOptions) ([]float64, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
+	}
+	if err := validateImageInputOptions(options); err != nil {
+		return nil, err
 	}
 	luminances := make([]float64, len(frames))
 	width, height := 0, 0
 	for index, frame := range frames {
-		data, _, _, err := readRenderInput(frame, useRawPreview)
+		data, _, _, err := readRenderInputWithOptions(frame, options)
 		if err != nil {
 			return nil, fmt.Errorf("deflicker analysis: %w", err)
 		}

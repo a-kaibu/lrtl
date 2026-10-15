@@ -8,20 +8,27 @@ import (
 	"sort"
 )
 
-// analyzeLuminanceSequence returns one log2 luminance measurement per frame.
-// It intentionally supports developed JPEG/PNG/TIFF inputs only.
+// analyzeLuminanceSequence returns one log2 luminance measurement per frame
+// from already-developed JPEG/PNG/TIFF inputs.
 func analyzeLuminanceSequence(frames []Frame) ([]float64, error) {
 	return analyzeLuminanceSequenceWithRawPreview(frames, false)
 }
 
 func analyzeLuminanceSequenceWithRawPreview(frames []Frame, useRawPreview bool) ([]float64, error) {
+	return analyzeLuminanceSequenceWithInputOptions(frames, imageInputOptions{RawPreview: useRawPreview})
+}
+
+func analyzeLuminanceSequenceWithInputOptions(frames []Frame, options imageInputOptions) ([]float64, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
+	}
+	if err := validateImageInputOptions(options); err != nil {
+		return nil, err
 	}
 	curve := make([]float64, len(frames))
 	width, height := 0, 0
 	for index, frame := range frames {
-		data, _, _, err := readRenderInput(frame, useRawPreview)
+		data, _, _, err := readRenderInputWithOptions(frame, options)
 		if err != nil {
 			return nil, fmt.Errorf("luminance analysis: %w", err)
 		}
