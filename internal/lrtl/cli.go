@@ -108,7 +108,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--auto-orient] [--apply-xmp-basic]")
+	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -623,6 +623,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	autoOrient := set.Bool("auto-orient", false, "apply EXIF orientation before crop, analysis, and rendering")
 	timestampOverlay := set.Bool("timestamp-overlay", false, "burn each frame's EXIF/XMP capture time into the video")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
+	motionBlurFrames := set.Int("motion-blur", 0, "blend this many adjacent frames (0 off; 2-20)")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop supported RAW files with DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
@@ -642,6 +643,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true,
 		"--timestamp-format": true, "-timestamp-format": true,
+		"--motion-blur": true, "-motion-blur": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -707,6 +709,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		AutoOrient:        *autoOrient,
 		TimestampOverlay:  timestampOverlayEnabled,
 		TimestampFormat:   *timestampFormat,
+		MotionBlurFrames:  *motionBlurFrames,
 		RawPreview:        *rawPreview,
 		RawDevelop:        *rawDevelop,
 		DNGLabPath:        *dnglab,
@@ -741,6 +744,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if timestampOverlayEnabled {
 		features = append(features, "EXIF/XMP timestamp overlay")
+	}
+	if *motionBlurFrames > 0 {
+		features = append(features, fmt.Sprintf("%d-frame temporal blend", *motionBlurFrames))
 	}
 	if *rawPreview {
 		features = append(features, "embedded RAW previews")

@@ -31,7 +31,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--long-edge`で長辺の上限を指定して縮小可能。拡大や16:9等のプリセット、非圧縮TIFF中間画像は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks経由のH.264/H.265 MP4、ProRes 422/422 HQ MOV。Rec.2020、HDR、音声なし。入力画素はRGB 8-bitなのでProRes 10-bit出力も16-bit RAW精度を保持しない | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --timestamp-overlay`で撮影日時を各動画フレームへ焼き込み、`subtitles`で同じ日時情報からSRT字幕を出力。フレームレートと表示形式を指定可能。任意テキストの透かしは未実装 | 一部 |
-| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | 未実装 | 未実装 |
+| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`で2〜20枚の隣接フレームを時間方向に平均合成。境界では存在するフレームだけを使う。LRTの内部重み付けやプリセット値との数値一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、dry-runに対応。撮影動画からの静止画取り込みとDNG変換は未実装 | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | 未実装 | 未実装 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | 未実装 | 未実装 |
@@ -179,6 +179,9 @@ lrtl render "D:\Timelapse\Developed" --selection "D:\Timelapse\selection.json" -
 # 外部FFmpeg/libx264で24 fpsのH.264 MP4を作成
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.mp4" --fps 24 --crf 18 --preset medium
 
+# 5枚の隣接フレームを平均合成し、動きを滑らかにした動画を作る（合成前に画素調整、後に日時文字を重ねる）
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\smooth.mp4" --motion-blur 5
+
 # H.265 MP4またはProRes 422 / ProRes 422 HQ MOVを書き出す
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview-h265.mp4" --codec h265 --crf 20 --preset medium
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\master.mov" --codec prores
@@ -254,6 +257,8 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `--auto-orient`は入力画像、RAW内蔵プレビュー、またはDNGLab出力のEXIF Orientationを読み、回転と鏡像を画素へ適用してからXMPクロップ、色調補正、Deflicker、リサイズを行います。向き情報がないフレームはそのままです。向きを適用した後の全フレームは同じ幅と高さである必要があります。この処理は入力ファイルとメタデータを変更しません。
 
+`--motion-blur N`は出力直前に各フレームと前後の隣接画像を均等平均します。`N`は2〜20で、0は無効です。偶数窓は未来側へ1枚多く取り、先頭・末尾ではシーケンス内にある画像だけを平均します。XMP/露出補正、クロップ、リサイズを先に行い、指定時刻の文字焼き込みは合成後に行います。これはGoで行う8-bit RGBの時間方向ボックス平均で、LRTimelapseのLow/Medium/Highプリセットや内部重み付けとの数値一致は未確認です。一時フレームバッファーの推定量が768 MiBを超える場合は処理を開始しません。大きなフレームでは`--long-edge`または窓幅を下げてください。
+
 `--timestamp-overlay`と`subtitles`は、各サイドカーの`exif:DateTimeOriginal`、`xmp:CreateDate`、`xmp:ModifyDate`の順で日時を探し、なければ画像内EXIFの撮影/作成/更新日時を使います。全フレームの日時が必要です。`subtitles`は各画像の撮影日時を、そのフレームが動画上に表示される区間のSRT字幕として書き出します。`--fps`は動画のフレームレートと合わせてください。既定の表示形式は`2006-01-02 15:04:05`で、`--timestamp-format`へGoの日時レイアウトを渡して変更できます。`render --timestamp-overlay`は日時を右下に焼き込み、埋め込みGoフォントを使うため外部フォントは不要です。任意テキストの透かしは未実装です。
 
 `deflicker`はJPEG/PNG/TIFF、`--raw-preview`の内蔵画像、または`--raw-develop`でDNGLabが現像した画像の輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。既定の`--smoother gaussian`はGaussian平滑化を使い、`--smoother lowess`はtricube重み付き局所線形回帰を使います。LOWESSの近傍数は`--smooth`の半径から`2×半径+1`へ換算します。LRT 7.5.5のVisual Deflickerも局所線形回帰型スムーザーを呼びますが、lrtlの測光、近傍数、補正パスは独自実装です。`--apply-xmp-exposure`と`--apply-xmp-crop`を指定すると、解析前にサイドカーの値を画素へ近似適用します。既定はプレビューだけです。`--write`は求めた補正量を各フレームの`crs:Exposure2012`へ加算し、前回lrtlが加えた量を`ol:DeflickerCorrection2012`に記録します。再実行ではlrtl管理分を置き換え、`--reset --write`ではその分だけを戻します。Holy Grail補正やユーザーが後から加えたExposure値は差し引かずに残します。Camera Rawの現像パイプラインやLRTimelapseのVisual Deflickerと数値が一致する機能ではなく、画像列から露出差を推定する近似です。
@@ -280,7 +285,7 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNG/TIFFと一部RAWの埋め込みプレビューからMJPEG AVI、外部FFmpeg経由でH.264/H.265 MP4とProRes MOVに対応。`--long-edge`で縮小可能。完全なRAW現像は未実装 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVGの輝度/露出グラフ、単一参照領域・全体露出補正のレンダー時またはXMP適用、回転を含むXMPクロップを実装。LRT形式の画像付きVisual Preview、インタラクティブ曲線UI、XMPロスレス適用、Geometry補正、マスク補正値の画素現像は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF設定ベースのHoly Grail露出補正、現像済みラスターへのExposure2012近似適用、一部RAW内蔵プレビュー、外部DNGLabによるRAW現像を実装。Camera Raw現像の完全再現と他のXMP値のRAW画素への反映は未実装 |
-| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProRes、日時オーバーレイ、写真フォルダーからの画像/XMP取り込みを実装。動画からのフレーム取り込み、DNxHR、モーションブラー、GUIは未着手 |
+| 5 | ProRes/H.265等の追加コーデック、オーバーレイ、取り込み、GUI | H.265/ProRes、日時オーバーレイ、写真フォルダーからの画像/XMP取り込み、Goによる時間方向フレーム平均を実装。動画からのフレーム取り込み、DNxHR、LRT互換のモーションブラー重み、GUIは未着手 |
 
 ## 機能調査の出典
 

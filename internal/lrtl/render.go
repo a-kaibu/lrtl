@@ -41,6 +41,7 @@ type RenderOptions struct {
 	AutoOrient        bool
 	TimestampOverlay  bool
 	TimestampFormat   string
+	MotionBlurFrames  int
 	RawPreview        bool
 	RawDevelop        bool
 	DNGLabPath        string
@@ -136,6 +137,47 @@ func imageRGB24(img image.Image) ([]byte, error) {
 	return rgb, nil
 }
 
+func imageFromRGB24(rgb []byte, width, height int) *image.RGBA {
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for source, destination := 0, 0; source+2 < len(rgb) && destination+3 < len(img.Pix); source, destination = source+3, destination+4 {
+		img.Pix[destination] = rgb[source]
+		img.Pix[destination+1] = rgb[source+1]
+		img.Pix[destination+2] = rgb[source+2]
+		img.Pix[destination+3] = 255
+	}
+	return img
+}
+
+func averageRGB24Frames(frames [][]byte) ([]byte, error) {
+	if len(frames) == 0 {
+		return nil, fmt.Errorf("cannot blend an empty frame window")
+	}
+	frameLength := len(frames[0])
+	for _, frame := range frames[1:] {
+		if len(frame) != frameLength {
+			return nil, fmt.Errorf("cannot blend frames with different RGB24 sizes")
+		}
+	}
+	if len(frames) == 1 {
+		return frames[0], nil
+	}
+	result := make([]byte, frameLength)
+	sums := make([]uint16, frameLength/3)
+	window := uint32(len(frames))
+	for channel := 0; channel < 3; channel++ {
+		clear(sums)
+		for _, frame := range frames {
+			for pixel := range sums {
+				sums[pixel] += uint16(frame[pixel*3+channel])
+			}
+		}
+		for pixel, sum := range sums {
+			result[pixel*3+channel] = byte((uint32(sum) + window/2) / window)
+		}
+	}
+	return result, nil
+}
+
 func validateLongEdge(longEdge int) error {
 	if longEdge < 0 || longEdge > 32768 || (longEdge > 0 && longEdge < 16) {
 		return fmt.Errorf("long edge must be 0 or between 16 and 32768 pixels: %d", longEdge)
@@ -183,6 +225,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}
 	if err := validateLongEdge(options.LongEdge); err != nil {
 		return err
+	}
+	if options.MotionBlurFrames == 1 || options.MotionBlurFrames < 0 || options.MotionBlurFrames > 20 {
+		return fmt.Errorf("motion blur frame window must be 0 (disabled) or between 2 and 20: %d", options.MotionBlurFrames)
 	}
 	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath}
 	if err := validateImageInputOptions(inputOptions); err != nil {
@@ -310,6 +355,19 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge)
 	if err != nil {
 		return err
+	}
+	if options.MotionBlurFrames > 0 {
+		outputPixels := uint64(outputWidth) * uint64(outputHeight)
+		inputPixels := uint64(width) * uint64(height)
+		bytesPerOutputPixel := uint64(options.MotionBlurFrames*3 + 9)
+		const maxMotionBlurWorkingSet = uint64(768 * 1024 * 1024)
+		if outputPixels > maxMotionBlurWorkingSet/bytesPerOutputPixel {
+			return fmt.Errorf("motion blur frame-buffer estimate exceeds 768 MiB; reduce --motion-blur or use --long-edge")
+		}
+		estimatedBytes := outputPixels * bytesPerOutputPixel
+		if inputPixels > (maxMotionBlurWorkingSet-estimatedBytes)/8 {
+			return fmt.Errorf("motion blur frame-buffer estimate exceeds 768 MiB; reduce --motion-blur or use --long-edge")
+		}
 	}
 	resizeFrames := outputWidth != width || outputHeight != height
 	if options.TimestampOverlay {
@@ -452,6 +510,122 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			cleanup()
 		}
 	}()
+
+	if options.MotionBlurFrames > 0 {
+		prepareMotionBlurFrame := func(index int) ([]byte, error) {
+			frame := frames[index]
+			data, frameConfig := first, config
+			if index > 0 {
+				var readErr error
+				data, frameConfig, _, readErr = readRenderInputWithOptions(frame, inputOptions)
+				if readErr != nil {
+					return nil, readErr
+				}
+			}
+			orientation := uint16(1)
+			if options.AutoOrient {
+				var orientErr error
+				orientation, orientErr = readEXIFOrientation(data)
+				if orientErr != nil {
+					return nil, fmt.Errorf("%s: %w", filepath.Base(frame.Image), orientErr)
+				}
+			}
+			frameWidth, frameHeight := orientedDimensions(frameConfig.Width, frameConfig.Height, orientation)
+			if frameWidth != width || frameHeight != height {
+				return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+			}
+			img, format, decodeErr := image.Decode(bytes.NewReader(data))
+			if decodeErr != nil {
+				return nil, fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
+			}
+			if !supportedRasterFormat(format) {
+				return nil, fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
+			}
+			img = applyEXIFOrientation(img, orientation)
+			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+				return nil, fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
+			}
+			if xmpCrops != nil && xmpCrops[index].Active && (xmpCrops[index].Bounds != image.Rect(0, 0, width, height) || math.Abs(xmpCrops[index].Angle) > 1e-9) {
+				img = applyXMPCrop(img, xmpCrops[index])
+			}
+			if xmpBasics != nil && xmpBasics[index].active() {
+				img = applyXMPBasic(img, xmpBasics[index])
+			}
+			gain := 1.0
+			if xmpExposures != nil {
+				gain *= math.Exp2(xmpExposures[index])
+			}
+			if options.Deflicker {
+				gain *= gains[index]
+			}
+			if gain != 1 {
+				img = applyExposureGain(img, gain)
+			}
+			if resizeFrames {
+				img = resizeFrame(img, outputWidth, outputHeight)
+			}
+			return imageRGB24(img)
+		}
+
+		windowFrames := options.MotionBlurFrames
+		leftRadius := (windowFrames - 1) / 2
+		rightRadius := windowFrames - 1 - leftRadius
+		queuedFrames := make([][]byte, 0, windowFrames)
+		queuedStart, nextRead := 0, 0
+		for target := range frames {
+			start := max(0, target-leftRadius)
+			end := min(len(frames)-1, target+rightRadius)
+			if start > queuedStart {
+				drop := start - queuedStart
+				queuedFrames = queuedFrames[drop:]
+				queuedStart = start
+			}
+			for nextRead <= end {
+				rgb, prepareErr := prepareMotionBlurFrame(nextRead)
+				if prepareErr != nil {
+					return fmt.Errorf("prepare %s: %w", filepath.Base(frames[nextRead].Image), prepareErr)
+				}
+				queuedFrames = append(queuedFrames, rgb)
+				nextRead++
+			}
+			windowCount := end - start + 1
+			if windowCount > len(queuedFrames) {
+				return fmt.Errorf("internal motion blur window is incomplete at frame %d", target+1)
+			}
+			rgb, blendErr := averageRGB24Frames(queuedFrames[:windowCount])
+			if blendErr != nil {
+				return blendErr
+			}
+			var img image.Image
+			if timestampFace != nil || outputExtension == ".avi" {
+				img = imageFromRGB24(rgb, outputWidth, outputHeight)
+				if timestampFace != nil {
+					img = applyTimestampOverlay(img, captureTimes[target].Format(options.TimestampFormat), timestampFace)
+				}
+			}
+			if outputExtension == ".avi" {
+				var encoded bytes.Buffer
+				if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
+					return fmt.Errorf("encode %s as JPEG: %w", frames[target].Image, err)
+				}
+				rgb = encoded.Bytes()
+			} else if timestampFace != nil {
+				rgb, err = imageRGB24(img)
+				if err != nil {
+					return fmt.Errorf("convert timestamped %s to RGB24: %w", frames[target].Image, err)
+				}
+			}
+			if err := writer.AddFrame(rgb); err != nil {
+				closeErr := writer.Close()
+				writerClosed = true
+				if closeErr != nil {
+					return fmt.Errorf("add frame %s: %w; %v", frames[target].Image, err, closeErr)
+				}
+				return fmt.Errorf("add frame %s: %w", frames[target].Image, err)
+			}
+		}
+		frames = nil
+	}
 
 	for index, frame := range frames {
 		data, config, format := first, config, firstFormat
