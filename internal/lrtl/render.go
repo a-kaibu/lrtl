@@ -15,9 +15,14 @@ import (
 )
 
 type RenderOptions struct {
-	FPS       int
-	Quality   int
-	Overwrite bool
+	FPS             int
+	Quality         int
+	Overwrite       bool
+	Deflicker       bool
+	Reference       image.Rectangle
+	SmoothRadius    int
+	DeflickerPasses int
+	Constant        bool
 }
 
 const maxAVIDimension = int64(1<<31 - 1)
@@ -75,6 +80,50 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	}
 	width, height := config.Width, config.Height
 
+	var gains []float64
+	if options.Deflicker {
+		if !options.Reference.Empty() {
+			bounds := image.Rect(0, 0, width, height)
+			if bounds.Intersect(options.Reference) != options.Reference {
+				return fmt.Errorf("reference area %v is outside frame dimensions %dx%d", options.Reference, width, height)
+			}
+		}
+		luminances := make([]float64, len(frames))
+		for index, frame := range frames {
+			data := first
+			if index > 0 {
+				data, err = os.ReadFile(frame.Image)
+				if err != nil {
+					return fmt.Errorf("read %s: %w", frame.Image, err)
+				}
+			}
+			img, format, decodeErr := image.Decode(bytes.NewReader(data))
+			if decodeErr != nil {
+				return fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
+			}
+			if format != "jpeg" && format != "png" {
+				return fmt.Errorf("render supports JPEG and PNG data only: %s", frame.Image)
+			}
+			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+			}
+			reference := options.Reference
+			if reference.Empty() {
+				reference = img.Bounds()
+			} else {
+				reference = reference.Add(img.Bounds().Min)
+			}
+			luminances[index], err = frameLuminance(img, reference)
+			if err != nil {
+				return fmt.Errorf("analyze %s: %w", frame.Image, err)
+			}
+		}
+		gains, err = deflickerGains(luminances, options.SmoothRadius, options.DeflickerPasses, options.Constant)
+		if err != nil {
+			return err
+		}
+	}
+
 	tempFile, err := os.CreateTemp(outputDir, ".lrtl-*.avi")
 	if err != nil {
 		return fmt.Errorf("create temporary AVI: %w", err)
@@ -129,12 +178,15 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 
 		jpegData := data
-		if format == "png" {
+		if options.Deflicker || format == "png" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
 			}
 			var encoded bytes.Buffer
+			if options.Deflicker {
+				img = applyExposureGain(img, gains[index])
+			}
 			if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
 				return fmt.Errorf("encode %s as JPEG: %w", frame.Image, err)
 			}

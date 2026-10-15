@@ -115,7 +115,10 @@ func TestRenderCLIParsesOptionsAfterDirectory(t *testing.T) {
 	writeRenderFrame(t, filepath.Join(directory, "frame1.jpg"), "jpeg", 16, 16)
 	var stdout, stderr bytes.Buffer
 	output := filepath.Join(directory, "cli.avi")
-	code := Main([]string{"render", directory, "--output", output, "--fps", "30"}, &stdout, &stderr)
+	code := Main([]string{
+		"render", directory, "--output", output, "--fps", "30",
+		"--reference", "0,0,16,16", "--smooth", "2", "--passes", "2",
+	}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("render exit=%d stderr=%s", code, stderr.String())
 	}

@@ -18,7 +18,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。明示的に許可した数値のグローバル設定を線形補間。XMP値を画素に適用する現像機能なし | 一部 |
 | Auto-Transition | キーフレーム間を自動補間 | 数値のグローバルCamera Raw項目を補間。ローカル補正、カーブ、マスク、色相環などの補間なし | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | 未実装 | 未実装 |
-| Deflicker | 視覚/複数パスのちらつき補正、領域選択 | 未実装 | 未実装 |
+| Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス | `render --deflicker`がJPEG/PNGを解析し、任意の参照矩形内の中央値から全画面への露出補正を計算。平滑化幅・パス数・一定輝度モードを指定可能。独自の近似方式で、LRTのVisual PreviewやXMPへのロスレス記録は未対応 | 一部 |
 | 長期撮影補正 | 明るさ・コントラスト・色相の変化を検出して外れ画像を除外 | 未実装 | 未実装 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNGをMJPEG AVIに変換。固定サイズの画像列、整数1–240 fps。PNGはJPEGに変換し、JPEGは入力データをそのまま格納 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | 未実装。JPEG/PNG以外をrenderに渡すとエラー | 未実装 |
@@ -33,8 +33,9 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 1. `.xmp`サイドカーをスキャンし、キーフレームと数値設定を確認する。
 2. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
 3. 現像済みJPEG/PNG連番をMJPEG AVIにまとめる。
+4. レンダー時に、参照領域と平滑化曲線を使った簡易Deflickerを適用する。
 
-動画生成の最短経路は、Lightroom等で画像を書き出してから`lrtl render`を実行する方法です。`lrtl render`はXMPを読まず、画像の現像もしません。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
+動画生成の最短経路は、Lightroom等で画像を書き出してから`lrtl render`を実行する方法です。`lrtl render`はXMPを読まず、画像の現像もしません。Deflickerは出力時に全体露出を画素へ適用する近似処理で、元画像やXMPは変更しません。全フレームの幅と高さは同じである必要があります。AVIコンテナのサイズには約4 GBの上限があります。
 
 ## インストール
 
@@ -70,9 +71,16 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
 
 # FPSとPNG入力のJPEG品質を指定
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi" --fps 30 --quality 95
+
+# 指定領域で明るさを測り、近傍6フレームの変動を3パスで抑える
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\smooth.avi" `
+  --deflicker --reference 200,100,600,300 --smooth 6 --passes 3
+
+# 露出変化を残さず、一定の明るさへ寄せる（定常光のシーン向け）
+lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constant
 ```
 
-`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。JPEG入力は再圧縮せずAVIに入れます。PNG入力は指定品質のJPEGに変換します。
+`render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。DeflickerなしのJPEG入力は再圧縮せずAVIに入れます。PNG入力とDeflickerを使う入力は指定品質のJPEGに変換します。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
 
 `unmark --force-rating`はlrtl以外が設定した4つ星/5つ星評価にも使えます。その評価を削除するため、評価がキーフレームマーカーとして使われている場合に限ってください。
 
@@ -82,7 +90,7 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi" --fps 3
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | 基本実装済み。補間対象は限定的 |
 | 2 | 画像連番から最初の動画を生成 | JPEG/PNGからMJPEG AVIに対応 |
-| 3 | 画像解析、プレビュー、Deflicker | 未着手 |
+| 3 | 画像解析、プレビュー、Deflicker | レンダー時の単一参照領域・全体露出補正を実装。LRT形式のVisual Preview、曲線UI、XMPロスレス適用、マスク別補正は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | 未着手 |
 | 5 | H.264等の追加出力、クロップ/オーバーレイ、取り込み、GUI | 未着手 |
 
@@ -96,6 +104,7 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi" --fps 3
 - [Export and Render](https://lrtimelapse.com/workflow/export-and-render/)
 - [Long Term / Construction](https://lrtimelapse.com/workflow/long-term-construction/)
 - [LRTimelapse Import](https://lrtimelapse.com/workflow/lrtimport/)
+- [LRTimelapse 7.2 release notes: Simple Deflicker](https://lrtimelapse.com/updates/lrtimelapse-7-2/)
 - [AVI/MJPEG writer for Go](https://github.com/icza/mjpeg)
 
 ## 開発

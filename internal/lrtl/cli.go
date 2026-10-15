@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"image"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 	"strings"
 )
 
-const version = "0.3.0"
+const version = "0.4.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
 	flags := make([]string, 0, len(arguments))
@@ -344,10 +345,18 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	fps := set.Int("fps", 24, "integer frame rate (1-240)")
 	quality := set.Int("quality", 90, "JPEG quality for PNG frames (1-100)")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
+	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
+	referenceValue := set.String("reference", "", "reference area x,y,width,height; defaults to the full frame")
+	smoothRadius := set.Int("smooth", 5, "deflicker smoothing radius in frames")
+	passes := set.Int("passes", 1, "deflicker passes (1-8)")
+	constant := set.Bool("constant", false, "deflicker toward constant luminance")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
 		"--quality": true, "-quality": true,
+		"--reference": true, "-reference": true,
+		"--smooth": true, "-smooth": true,
+		"--passes": true, "-passes": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -360,12 +369,36 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if *output == "" {
 		return reportError(stderr, fmt.Errorf("--output is required"))
 	}
+	var reference image.Rectangle
+	if *referenceValue != "" {
+		var err error
+		reference, err = parseReferenceArea(*referenceValue)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+	}
+	deflickerEnabled := *deflicker
+	set.Visit(func(parsed *flag.Flag) {
+		switch parsed.Name {
+		case "reference", "smooth", "passes", "constant":
+			deflickerEnabled = true
+		}
+	})
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	options := RenderOptions{FPS: *fps, Quality: *quality, Overwrite: *overwrite}
+	options := RenderOptions{
+		FPS:             *fps,
+		Quality:         *quality,
+		Overwrite:       *overwrite,
+		Deflicker:       deflickerEnabled,
+		Reference:       reference,
+		SmoothRadius:    *smoothRadius,
+		DeflickerPasses: *passes,
+		Constant:        *constant,
+	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
