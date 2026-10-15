@@ -25,6 +25,7 @@ type xmpBasicAdjustments struct {
 	blacks          float64
 	texture         float64
 	clarity         float64
+	dehaze          float64
 	parametric      xmpParametricCurve
 	vibrance        float64
 	saturation      float64
@@ -103,6 +104,7 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		{"Blacks2012", &adjustments.blacks, -100, 100},
 		{"Texture", &adjustments.texture, -100, 100},
 		{"Clarity2012", &adjustments.clarity, -100, 100},
+		{"Dehaze", &adjustments.dehaze, -100, 100},
 		{"ParametricShadows", &adjustments.parametric.shadows, -100, 100},
 		{"ParametricDarks", &adjustments.parametric.darks, -100, 100},
 		{"ParametricLights", &adjustments.parametric.lights, -100, 100},
@@ -504,7 +506,7 @@ func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
 func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
-		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
+		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.dehaze != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
 }
 
@@ -587,7 +589,11 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 	result := image.NewNRGBA(bounds)
 	exposure := math.Exp2(adjustments.exposure)
 	saturation := 1 + adjustments.saturation/100
-	var textureDetail, clarityDetail []int8
+	dehazeSaturation := 1 + adjustments.dehaze/100*0.15
+	var textureDetail, clarityDetail, dehazeDetail []int8
+	if adjustments.dehaze != 0 {
+		dehazeDetail = xmpLuminanceDetail(img, xmpDehazeRadius(width, height))
+	}
 	if adjustments.texture != 0 {
 		textureDetail = xmpLuminanceDetail(img, xmpTextureRadius(width, height))
 	}
@@ -606,6 +612,10 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			blue := srgb8ToLinear[pixel.B] * blueGain * exposure
 			luminance := 0.2126*red + 0.7152*green + 0.0722*blue
 			adjustedLuminance := basicAdjustedLuminance(luminance, adjustments)
+			if adjustments.dehaze != 0 {
+				index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
+				adjustedLuminance = xmpApplyDehaze(adjustedLuminance, adjustments.dehaze, dehazeDetail[index])
+			}
 			if adjustments.texture != 0 || adjustments.clarity != 0 {
 				index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
 				var fineDetail, broadDetail int8
@@ -623,10 +633,10 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			} else {
 				red, green, blue = adjustedLuminance, adjustedLuminance, adjustedLuminance
 			}
-			if adjustments.vibrance != 0 || adjustments.saturation != 0 {
+			if adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.dehaze != 0 {
 				chroma := math.Max(red, math.Max(green, blue)) - math.Min(red, math.Min(green, blue))
 				vibrance := 1 + adjustments.vibrance/100*(1-math.Min(1, chroma))
-				scale := saturation * vibrance
+				scale := saturation * vibrance * dehazeSaturation
 				red = adjustedLuminance + (red-adjustedLuminance)*scale
 				green = adjustedLuminance + (green-adjustedLuminance)*scale
 				blue = adjustedLuminance + (blue-adjustedLuminance)*scale

@@ -32,7 +32,7 @@ const (
 type xmpLocalCorrection struct {
 	exposure, contrast, highlights, shadows float64
 	whites, blacks, saturation, texture     float64
-	clarity                                 float64
+	clarity, dehaze                         float64
 	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
@@ -134,6 +134,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		{name: "LocalSaturation", target: &correction.saturation},
 		{name: "LocalTexture", target: &correction.texture},
 		{name: "LocalClarity2012", target: &correction.clarity},
+		{name: "LocalDehaze", target: &correction.dehaze},
 	} {
 		*property.target, _, err = xmpLocalSlider(element, property.name)
 		if err != nil {
@@ -193,7 +194,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		}
 	}
 	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
-		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.texture == 0 && correction.clarity == 0 && correction.toningSaturation == 0 &&
+		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.texture == 0 && correction.clarity == 0 && correction.dehaze == 0 && correction.toningSaturation == 0 &&
 		!correction.hasWhiteBalance && !correction.colorGrading.active && !correction.hasMainCurve &&
 		!correction.hasChannelCurve[0] && !correction.hasChannelCurve[1] && !correction.hasChannelCurve[2] {
 		return correction, false, nil
@@ -687,7 +688,10 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 	}
 	current := img
 	for _, correction := range corrections {
-		var textureDetail, clarityDetail []int8
+		var textureDetail, clarityDetail, dehazeDetail []int8
+		if correction.dehaze != 0 {
+			dehazeDetail = xmpLuminanceDetail(current, xmpDehazeRadius(width, height))
+		}
 		if correction.texture != 0 {
 			textureDetail = xmpLuminanceDetail(current, xmpTextureRadius(width, height))
 		}
@@ -749,8 +753,20 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 					}
 					adjustedLuminance = spatialLuminance
 				}
-				if correction.saturation != 0 {
-					factor := 1 + correction.saturation/100*weight
+				if correction.dehaze != 0 {
+					index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
+					spatialLuminance := xmpApplyDehaze(adjustedLuminance, correction.dehaze*weight, dehazeDetail[index])
+					if adjustedLuminance > 1e-12 {
+						scale := spatialLuminance / adjustedLuminance
+						red, green, blue = red*scale, green*scale, blue*scale
+					} else {
+						red, green, blue = spatialLuminance, spatialLuminance, spatialLuminance
+					}
+					adjustedLuminance = spatialLuminance
+				}
+				if correction.saturation != 0 || correction.dehaze != 0 {
+					dehazeAmount := math.Max(-100, math.Min(100, correction.dehaze*weight))
+					factor := (1 + correction.saturation/100*weight) * (1 + dehazeAmount/100*0.15)
 					red = adjustedLuminance + (red-adjustedLuminance)*factor
 					green = adjustedLuminance + (green-adjustedLuminance)*factor
 					blue = adjustedLuminance + (blue-adjustedLuminance)*factor

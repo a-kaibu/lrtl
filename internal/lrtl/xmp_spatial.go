@@ -8,7 +8,7 @@ import (
 
 // xmpLuminanceDetail extracts a signed high-pass luminance layer with a
 // separable box blur. It is used as a bounded sRGB-domain approximation for
-// Camera Raw Texture and Clarity controls.
+// Camera Raw Texture, Clarity, and Dehaze controls.
 func xmpLuminanceDetail(img image.Image, radius int) []int8 {
 	bounds := img.Bounds()
 	width, height := bounds.Dx(), bounds.Dy()
@@ -69,6 +69,21 @@ func xmpLuminanceByteAt(img image.Image, x, y int) uint8 {
 	return encodeLinearSRGB(luminance)
 }
 
+func xmpDehazeRadius(width, height int) int {
+	return max(4, min(48, min(width, height)/40))
+}
+
+// xmpApplyDehaze uses stable display-referred contrast and veil adjustments rather than estimating atmospheric light per frame.
+func xmpApplyDehaze(luminance, amount float64, detail int8) float64 {
+	amount = math.Max(-100, math.Min(100, amount)) / 100
+	if amount < 0 {
+		haze := -amount * 0.18
+		luminance = luminance*(1-haze) + 0.78*haze
+	} else {
+		luminance = 0.18 + (luminance-0.18)*(1+0.20*amount) + float64(detail)/127*amount*0.6
+	}
+	return math.Max(0, math.Min(1, luminance))
+}
 func xmpTextureRadius(width, height int) int {
 	return max(1, min(3, min(width, height)/600))
 }
