@@ -73,9 +73,11 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 }
 
 type imageInputOptions struct {
-	RawPreview bool
-	RawDevelop bool
-	DNGLabPath string
+	RawPreview       bool
+	RawDevelop       bool
+	DNGLabPath       string
+	ApplyXMPExposure bool
+	ApplyXMPCrop     bool
 }
 
 func validateImageInputOptions(options imageInputOptions) error {

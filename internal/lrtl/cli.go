@@ -100,9 +100,9 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4 render frames; --long-edge downsizes, --raw-develop uses DNGLab")
-	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] plot brightness and XMP marks")
-	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-develop] analyze and update XMP exposure")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop]")
+	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
 }
 
@@ -559,22 +559,27 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP during analysis")
+	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP during analysis")
 	overwrite := set.Bool("overwrite", false, "replace an existing SVG preview")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true, "--dnglab": true, "-dnglab": true})); err != nil {
 		help, code := finishFlagParse(set, err)
 		if help {
-			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--apply-xmp-exposure] [--apply-xmp-crop] [--overwrite]")
 		}
 		return code
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dnglab PATH] [--apply-xmp-exposure] [--apply-xmp-crop] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	inputOptions := imageInputOptions{RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab}
+	inputOptions := imageInputOptions{
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		ApplyXMPExposure: *applyXMPExposure, ApplyXMPCrop: *applyXMPCrop,
+	}
 	if err := writeSequencePreviewWithOptions(frames, *output, inputOptions, *overwrite); err != nil {
 		return reportError(stderr, err)
 	}
@@ -594,6 +599,8 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 from sidecar XMP in luminance analysis")
+	applyXMPCrop := set.Bool("apply-xmp-crop", false, "include XMP crop rectangles in luminance analysis")
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
@@ -618,7 +625,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "passes", "constant", "raw-preview", "raw-develop", "dnglab":
+			case "reference", "smooth", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "apply-xmp-exposure", "apply-xmp-crop":
 				analysisOption = true
 			}
 		})
@@ -638,7 +645,10 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	var luminances []float64
-	inputOptions := imageInputOptions{RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab}
+	inputOptions := imageInputOptions{
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		ApplyXMPExposure: *applyXMPExposure, ApplyXMPCrop: *applyXMPCrop,
+	}
 	if !*reset {
 		luminances, err = analyzeDeflickerSequenceWithOptions(frames, reference, inputOptions)
 		if err != nil {
@@ -708,6 +718,8 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW files developed by DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
+	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 from sidecar XMP in luminance analysis")
+	applyXMPCrop := set.Bool("apply-xmp-crop", false, "include XMP crop rectangles in luminance analysis")
 	write := set.Bool("write", false, "mark the suggested frames in XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
@@ -735,12 +747,15 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if *smoothRadius < 0 || *smoothRadius > 1000 {
 		return reportError(stderr, fmt.Errorf("smoothing radius must be between 0 and 1000 frames: %d", *smoothRadius))
 	}
-	inputOptions := imageInputOptions{RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab}
+	inputOptions := imageInputOptions{
+		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab,
+		ApplyXMPExposure: *applyXMPExposure, ApplyXMPCrop: *applyXMPCrop,
+	}
 	if err := validateImageInputOptions(inputOptions); err != nil {
 		return reportError(stderr, err)
 	}
-	if *evenlySpaced && (*rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "") {
-		return reportError(stderr, fmt.Errorf("RAW image options cannot be combined with --evenly-spaced because that mode does not decode images"))
+	if *evenlySpaced && (*rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "" || *applyXMPExposure || *applyXMPCrop) {
+		return reportError(stderr, fmt.Errorf("image processing options cannot be combined with --evenly-spaced because that mode does not decode images"))
 	}
 	var curve []float64
 	if !*evenlySpaced {

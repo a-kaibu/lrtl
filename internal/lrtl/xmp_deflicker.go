@@ -33,6 +33,7 @@ func analyzeDeflickerSequenceWithOptions(frames []Frame, reference image.Rectang
 	}
 	luminances := make([]float64, len(frames))
 	width, height := 0, 0
+	var adjustments sequenceXMPAdjustments
 	for index, frame := range frames {
 		data, _, _, err := readRenderInputWithOptions(frame, options)
 		if err != nil {
@@ -48,9 +49,15 @@ func analyzeDeflickerSequenceWithOptions(frames []Frame, reference image.Rectang
 		}
 		if index == 0 {
 			width, height = bounds.Dx(), bounds.Dy()
+			adjustments, err = readSequenceXMPAdjustments(frames, width, height, options)
+			if err != nil {
+				return nil, err
+			}
 		} else if bounds.Dx() != width || bounds.Dy() != height {
 			return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
+		img = adjustments.apply(index, img)
+		bounds = img.Bounds()
 		area := reference
 		if area.Empty() {
 			area = bounds
