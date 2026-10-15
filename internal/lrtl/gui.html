@@ -95,6 +95,10 @@
           </div>
           <p id="selected-name">フレームを選択するとプレビューします。</p>
           <div class="card-actions"><button id="preview-original">元画像</button><button id="preview-adjusted">XMPプレビュー</button></div>
+          <div class="card-actions"><button id="playback-start" class="primary">連番を再生</button><button id="playback-stop" disabled>停止</button></div>
+          <label for="playback-fps">再生速度 (fps)</label>
+          <input id="playback-fps" type="number" min="1" max="30" value="8">
+          <p id="playback-info">連番を順番に再生します。対応するXMP値やRAWプレビューも反映できます。</p>
           <label class="check"><input id="preview-basic" type="checkbox">対応するXMP現像値を適用</label>
           <label class="check"><input id="preview-crop" type="checkbox">XMPクロップを適用</label>
           <label class="check"><input id="crop-edit" type="checkbox">プレビュー上で構図を編集</label>
@@ -207,6 +211,8 @@
     let exposureCurve = {total:0, points:[], xmpErrors:0};
     let luminanceCurve = null;
     let previewObjectURL = '';
+    let playbackToken = 0;
+    let playbackRunning = false;
     let cropBounds = {left:0, top:0, right:1, bottom:1};
     let cropDragStart = null;
     const lensApertures = ['1.0','1.1','1.2','1.4','1.6','1.8','2.0','2.2','2.5','2.8','3.2','3.5','4.0','4.5','5.0','5.6','6.3','7.1','8.0','9.0','10.0','11.0','13.0','14.0','16.0','18.0','20.0','22.0','25.0','29.0','32.0','36.0','40.0','45.0','51.0','57.0','64.0','72.0','80.0','90.0'];
@@ -252,6 +258,7 @@
       return card;
     }
     async function loadSequence(reset = false) {
+      stopSequencePlayback(true);
       const value = el('directory').value.trim();
       if (!value) { setStatus('画像連番フォルダーを入力してください。', true); return; }
       const newSequence = reset || value !== directory;
@@ -286,6 +293,7 @@
       if (el('directory').value.trim() !== directory) throw new Error('入力したフォルダーはまだ開いていません。先に「連番を開く」を押してください。');
     }
     function selectFrame(frame) {
+      stopSequencePlayback(false);
       selected = frame;
       el('selected-name').textContent = (frame.index + 1) + ' / ' + total + ' · ' + frame.name;
       showOriginalPreview();
@@ -420,11 +428,13 @@
       el('curve-info').textContent = message;
     }
     function showOriginalPreview() {
+      stopSequencePlayback(false);
       if (!selected) return;
       if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = ''; }
       el('preview').src = selected.thumbnail;
     }
     async function showAdjustedPreview() {
+      stopSequencePlayback(false);
       if (!selected) throw new Error('先にフレームを選択してください。');
       ensureActiveDirectory();
       const query = new URLSearchParams({directory, name:selected.name, basic:String(el('preview-basic').checked), crop:String(el('preview-crop').checked)});
@@ -441,6 +451,77 @@
       el('preview').src = objectURL;
       el('crop-edit').checked = false; setCropEditing(false);
       setStatus('対応するXMP現像値を適用したプレビューです。RAW現像やAdobe画素値との一致は保証しません。');
+    }
+    function stopSequencePlayback(restore = false) {
+      playbackRunning = false;
+      playbackToken++;
+      el('playback-start').disabled = false;
+      el('playback-stop').disabled = true;
+      if (restore) {
+        if (selected) showOriginalPreview();
+        else el('preview').removeAttribute('src');
+        el('playback-info').textContent = '停止中';
+      }
+    }
+    function loadPlaybackImage(url, token) {
+      return new Promise(resolve => {
+        const image = new Image();
+        let settled = false;
+        const complete = loaded => {
+          if (settled) return;
+          settled = true;
+          image.removeEventListener('load', onLoad);
+          image.removeEventListener('error', onError);
+          const active = loaded && token === playbackToken && playbackRunning;
+          if (active) el('preview').src = url;
+          resolve(active);
+        };
+        const onLoad = () => complete(true);
+        const onError = () => complete(false);
+        image.addEventListener('load', onLoad, {once:true});
+        image.addEventListener('error', onError, {once:true});
+        image.src = url;
+        if (image.complete) queueMicrotask(() => complete(image.naturalWidth > 0));
+      });
+    }
+    async function startSequencePlayback() {
+      if (playbackRunning) return;
+      ensureActiveDirectory();
+      const fps = Number(el('playback-fps').value);
+      if (!Number.isInteger(fps) || fps < 1 || fps > 30) throw new Error('再生速度は1〜30 fpsで指定してください。');
+      stopSequencePlayback(false);
+      const token = playbackToken;
+      playbackRunning = true;
+      el('playback-start').disabled = true;
+      el('playback-stop').disabled = false;
+      el('crop-edit').checked = false; setCropEditing(false);
+      if (previewObjectURL) { URL.revokeObjectURL(previewObjectURL); previewObjectURL = ''; }
+      setStatus('連番を準備しています…');
+      const query = new URLSearchParams({directory});
+      const sequence = await api('/api/playback?' + query.toString());
+      if (token !== playbackToken || !playbackRunning) return;
+      if (!sequence.frames || sequence.frames.length === 0) throw new Error('再生できる画像がありません。');
+      const interval = 1000 / fps;
+      const rawMode = el('raw-mode').value;
+      const dnglab = el('dnglab').value.trim();
+      const basic = el('preview-basic').checked;
+      const crop = el('preview-crop').checked;
+      let index = 0;
+      setStatus(sequence.total + '枚を再生します。');
+      while (token === playbackToken && playbackRunning) {
+        const frame = sequence.frames[index];
+        el('playback-info').textContent = (frame.index + 1) + ' / ' + sequence.total + ' · ' + frame.name;
+        const frameQuery = new URLSearchParams({directory, name:frame.name, basic:String(basic), crop:String(crop), 'max-side':'640', quality:'78'});
+        if (rawMode) frameQuery.set('raw', rawMode);
+        if (dnglab) frameQuery.set('dnglab', dnglab);
+        const started = performance.now();
+        const loaded = await loadPlaybackImage('/api/preview?' + frameQuery.toString(), token);
+        if (token !== playbackToken || !playbackRunning) return;
+        if (!loaded) el('playback-info').textContent = (frame.index + 1) + ' / ' + sequence.total + ' · 読み込み失敗: ' + frame.name;
+        const remaining = interval - (performance.now() - started);
+        if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+        index = (index + 1) % sequence.frames.length;
+      }
     }
     async function setKeyframe(frame, kind, remove = false) {
       ensureActiveDirectory();
@@ -462,6 +543,9 @@
     buttonAction(el('unmark'), () => selected ? setKeyframe(selected, '', true) : setStatus('先にフレームを選択してください。', true));
     el('preview-original').addEventListener('click', showOriginalPreview);
     buttonAction(el('preview-adjusted'), showAdjustedPreview);
+    el('playback-start').addEventListener('click', () => startSequencePlayback().catch(error => { stopSequencePlayback(true); setStatus(error.message, true); }));
+    el('playback-stop').addEventListener('click', () => { stopSequencePlayback(true); setStatus('連番再生を停止しました。'); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && playbackRunning) stopSequencePlayback(true); });
     el('crop-edit').addEventListener('change', event => setCropEditing(event.target.checked));
     el('preview').addEventListener('load', positionCropOverlay);
     el('crop-overlay').addEventListener('pointerdown', event => {

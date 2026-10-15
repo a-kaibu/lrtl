@@ -75,6 +75,7 @@ func newGUIHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", serveGUIIndex)
 	mux.HandleFunc("/api/sequence", serveGUISequence)
+	mux.HandleFunc("/api/playback", serveGUIPlayback)
 	mux.HandleFunc("/api/curve", serveGUICurve)
 	mux.HandleFunc("/api/luminance", serveGUILuminanceCurve)
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
@@ -163,6 +164,17 @@ type guiSequenceResponse struct {
 	Frames    []guiFrame `json:"frames"`
 }
 
+type guiPlaybackFrame struct {
+	Index int    `json:"index"`
+	Name  string `json:"name"`
+}
+
+type guiPlaybackResponse struct {
+	Directory string             `json:"directory"`
+	Total     int                `json:"total"`
+	Frames    []guiPlaybackFrame `json:"frames"`
+}
+
 func serveGUISequence(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeGUIError(w, http.StatusMethodNotAllowed, "GET required")
@@ -202,18 +214,38 @@ func serveGUISequence(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, frame := range frames[start:end] {
 		row := guiFrame{Index: frame.Index, Name: filepath.Base(frame.Image), Thumbnail: thumbnailURL(directory, filepath.Base(frame.Image))}
-		if frame.Sidecar != "" {
-			row.HasSidecar = true
-			packet, packetErr := loadPacket(frame)
-			if packetErr != nil {
-				row.XMPError = packetErr.Error()
-			} else if packet != nil {
-				row.Keyframe = packet.KeyframeKind()
-				row.ManagedKeyframe, _ = packet.HasProperty("ol:KeyframeKind")
-				row.Rating, row.HasRating = packet.Rating()
-			}
+		row.HasSidecar = frame.Sidecar != ""
+		packet, packetErr := loadPacket(frame)
+		if packetErr != nil {
+			row.XMPError = packetErr.Error()
+		} else if packet != nil {
+			row.Keyframe = packet.KeyframeKind()
+			row.ManagedKeyframe, _ = packet.HasProperty("ol:KeyframeKind")
+			row.Rating, row.HasRating = packet.Rating()
 		}
 		response.Frames = append(response.Frames, row)
+	}
+	writeGUIJSON(w, http.StatusOK, response)
+}
+
+func serveGUIPlayback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeGUIError(w, http.StatusMethodNotAllowed, "GET required")
+		return
+	}
+	directory, err := canonicalGUIDirectory(r.URL.Query().Get("directory"))
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	frames, err := DiscoverSequence(directory)
+	if err != nil {
+		writeGUIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response := guiPlaybackResponse{Directory: directory, Total: len(frames), Frames: make([]guiPlaybackFrame, 0, len(frames))}
+	for _, frame := range frames {
+		response.Frames = append(response.Frames, guiPlaybackFrame{Index: frame.Index, Name: filepath.Base(frame.Image)})
 	}
 	writeGUIJSON(w, http.StatusOK, response)
 }
@@ -577,7 +609,17 @@ func serveGUIPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	img = adjustments.apply(0, img)
-	encoded, err := encodeGUIJPEG(img, 1920, 90)
+	maxSide, err := parseNonnegativeQuery(r, "max-side", 1920)
+	if err != nil || maxSide < 160 || maxSide > 1920 {
+		http.Error(w, "max-side must be between 160 and 1920", http.StatusBadRequest)
+		return
+	}
+	quality, err := parseNonnegativeQuery(r, "quality", 90)
+	if err != nil || quality < 40 || quality > 95 {
+		http.Error(w, "quality must be between 40 and 95", http.StatusBadRequest)
+		return
+	}
+	encoded, err := encodeGUIJPEG(img, maxSide, quality)
 	if err != nil {
 		http.Error(w, "could not encode adjusted preview", http.StatusInternalServerError)
 		return
