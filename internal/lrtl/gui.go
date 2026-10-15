@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/jpeg"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -79,6 +80,7 @@ func newGUIHandler() http.Handler {
 	mux.HandleFunc("/api/thumbnail", serveGUIThumbnail)
 	mux.HandleFunc("/api/preview", serveGUIPreview)
 	mux.HandleFunc("/api/xmp", serveGUIXMP)
+	mux.HandleFunc("/api/crop", serveGUICrop)
 	mux.HandleFunc("/api/keyframe", serveGUIKeyframe)
 	mux.HandleFunc("/api/keyframes", serveGUIKeyframes)
 	mux.HandleFunc("/api/interpolate", serveGUIInterpolate)
@@ -720,6 +722,159 @@ func serveGUIXMPWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeGUICommandResult(w, []string{"set", frame.Image, request.Property, strconv.FormatFloat(value, 'g', 12, 64)}, runSet)
+}
+
+type guiCropValues struct {
+	Left   float64 `json:"left"`
+	Top    float64 `json:"top"`
+	Right  float64 `json:"right"`
+	Bottom float64 `json:"bottom"`
+	Angle  float64 `json:"angle"`
+	Active bool    `json:"active"`
+}
+
+func readGUICrop(packet *XMPPacket) (guiCropValues, error) {
+	crop := guiCropValues{Right: 1, Bottom: 1}
+	for _, property := range []struct {
+		name string
+		dest *float64
+	}{
+		{name: "CropLeft", dest: &crop.Left},
+		{name: "CropTop", dest: &crop.Top},
+		{name: "CropRight", dest: &crop.Right},
+		{name: "CropBottom", dest: &crop.Bottom},
+		{name: "CropAngle", dest: &crop.Angle},
+	} {
+		text, found, err := packet.GetScalar("crs:" + property.name)
+		if err != nil {
+			return guiCropValues{}, err
+		}
+		if !found {
+			continue
+		}
+		value, valid := scalarNumber(text)
+		if !valid {
+			return guiCropValues{}, fmt.Errorf("crs:%s must be a finite number", property.name)
+		}
+		*property.dest = value
+	}
+	activeText, found, err := packet.GetScalar("crs:HasCrop")
+	if err != nil {
+		return guiCropValues{}, err
+	}
+	if found {
+		crop.Active, err = parseCameraRawBool(activeText)
+		if err != nil {
+			return guiCropValues{}, err
+		}
+	} else {
+		crop.Active = crop.Left != 0 || crop.Top != 0 || crop.Right != 1 || crop.Bottom != 1 || crop.Angle != 0
+	}
+	if crop.Left < 0 || crop.Left > 1 || crop.Top < 0 || crop.Top > 1 || crop.Right < 0 || crop.Right > 1 || crop.Bottom < 0 || crop.Bottom > 1 {
+		return guiCropValues{}, fmt.Errorf("XMP crop bounds must be between 0 and 1")
+	}
+	return crop, nil
+}
+
+func serveGUICrop(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		directory, err := canonicalGUIDirectory(r.URL.Query().Get("directory"))
+		if err != nil {
+			writeGUIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		frame, err := guiFrameByName(directory, r.URL.Query().Get("name"))
+		if err != nil {
+			writeGUIError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		crop, err := readGUICrop(packet)
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		writeGUIJSON(w, http.StatusOK, crop)
+	case http.MethodPost:
+		if !requireGUIJSONPost(w, r) {
+			return
+		}
+		var request struct {
+			Directory string  `json:"directory"`
+			Name      string  `json:"name"`
+			Left      float64 `json:"left"`
+			Top       float64 `json:"top"`
+			Right     float64 `json:"right"`
+			Bottom    float64 `json:"bottom"`
+			Angle     float64 `json:"angle"`
+		}
+		if !decodeGUIJSON(w, r, &request) {
+			return
+		}
+		if math.IsNaN(request.Left) || math.IsInf(request.Left, 0) || math.IsNaN(request.Top) || math.IsInf(request.Top, 0) || math.IsNaN(request.Right) || math.IsInf(request.Right, 0) || math.IsNaN(request.Bottom) || math.IsInf(request.Bottom, 0) || math.IsNaN(request.Angle) || math.IsInf(request.Angle, 0) {
+			writeGUIError(w, http.StatusBadRequest, "crop values must be finite numbers")
+			return
+		}
+		if request.Left < 0 || request.Left > 1 || request.Top < 0 || request.Top > 1 || request.Right < 0 || request.Right > 1 || request.Bottom < 0 || request.Bottom > 1 || request.Right-request.Left < 0.01 || request.Bottom-request.Top < 0.01 {
+			writeGUIError(w, http.StatusBadRequest, "crop bounds must be within the image and at least 1% wide and high")
+			return
+		}
+		if request.Angle < -180 || request.Angle > 180 {
+			writeGUIError(w, http.StatusBadRequest, "crop angle must be between -180 and 180 degrees")
+			return
+		}
+		directory, err := canonicalGUIDirectory(request.Directory)
+		if err != nil {
+			writeGUIError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		frame, err := guiFrameByName(directory, request.Name)
+		if err != nil {
+			writeGUIError(w, http.StatusNotFound, err.Error())
+			return
+		}
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		for _, property := range []struct {
+			name  string
+			value float64
+		}{
+			{name: "CropLeft", value: request.Left},
+			{name: "CropTop", value: request.Top},
+			{name: "CropRight", value: request.Right},
+			{name: "CropBottom", value: request.Bottom},
+			{name: "CropAngle", value: request.Angle},
+		} {
+			if err := packet.SetScalar("crs:"+property.name, formatNumber(property.value)); err != nil {
+				writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+				return
+			}
+		}
+		if err := packet.SetScalar("crs:HasCrop", "True"); err != nil {
+			writeGUIError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+		if _, err := MarkKeyframe(packet, "crop"); err != nil {
+			writeGUIError(w, http.StatusConflict, err.Error())
+			return
+		}
+		backup, err := WritePacket(frame.OutputSidecar(), packet, true)
+		if err != nil {
+			writeGUIError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeGUIJSON(w, http.StatusOK, map[string]any{"saved": frame.OutputSidecar(), "backup": backup, "crop": guiCropValues{Left: request.Left, Top: request.Top, Right: request.Right, Bottom: request.Bottom, Angle: request.Angle, Active: true}})
+	default:
+		writeGUIError(w, http.StatusMethodNotAllowed, "GET or POST required")
+	}
 }
 
 type guiKeyframeRequest struct {

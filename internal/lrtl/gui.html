@@ -45,7 +45,15 @@
     .check { display:flex!important; align-items:center; gap:8px; }
     .check input { width:auto; }
     .panel button { width:100%; margin-top:8px; }
-    #preview { display:block; width:100%; max-height:220px; object-fit:contain; background:#090b0e; border-radius:5px; }
+    .preview-stage { position:relative; display:flex; align-items:center; justify-content:center; width:100%; height:220px; overflow:hidden; background:#090b0e; border-radius:5px; }
+    #preview { display:block; max-width:100%; max-height:100%; object-fit:contain; }
+    #crop-overlay { display:none; position:absolute; touch-action:none; }
+    #crop-overlay.enabled { display:block; cursor:crosshair; }
+    #crop-box { fill:transparent; stroke:#ffc857; stroke-width:4; vector-effect:non-scaling-stroke; }
+    #crop-grid { fill:none; stroke:#fff9; stroke-width:1.5; vector-effect:non-scaling-stroke; }
+    #crop-mask { fill:#0008; fill-rule:evenodd; }
+    .crop-controls { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+    .crop-controls button { margin-top:0!important; }
     #status { min-height:20px; margin:10px 2px; color:var(--muted); white-space:pre-wrap; }
     #status.error { color:#ff9a91; }
     .empty { grid-column:1/-1; padding:40px 12px; color:var(--muted); text-align:center; border:1px dashed var(--line); border-radius:9px; }
@@ -77,11 +85,21 @@
       <aside>
         <section class="panel">
           <h2>選択フレーム</h2>
-          <img id="preview" alt="選択フレームのプレビュー">
+          <div id="preview-stage" class="preview-stage">
+            <img id="preview" alt="選択フレームのプレビュー">
+            <svg id="crop-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-label="ドラッグしてクロップ範囲を指定">
+              <path id="crop-mask"></path><rect id="crop-box"></rect><path id="crop-grid"></path>
+            </svg>
+          </div>
           <p id="selected-name">フレームを選択するとプレビューします。</p>
           <div class="card-actions"><button id="preview-original">元画像</button><button id="preview-adjusted">XMPプレビュー</button></div>
           <label class="check"><input id="preview-basic" type="checkbox">対応するXMP現像値を適用</label>
           <label class="check"><input id="preview-crop" type="checkbox">XMPクロップを適用</label>
+          <label class="check"><input id="crop-edit" type="checkbox">プレビュー上で構図を編集</label>
+          <label for="crop-angle">クロップ回転角度 (度)</label>
+          <input id="crop-angle" type="number" min="-180" max="180" step="0.1" value="0">
+          <div class="crop-controls"><button id="crop-full">全体に戻す</button><button id="crop-save" class="primary">クロップを保存</button></div>
+          <p>元画像上をドラッグして矩形を選びます。保存するとXMPクロップ値と5★キーフレームをバックアップ付きで記録します。</p>
           <div class="card-actions">
             <button id="mark4">4★ 編集</button><button id="mark5">5★ クロップ</button><button id="unmark">解除</button>
           </div>
@@ -154,6 +172,8 @@
     let exposureCurve = {total:0, points:[], xmpErrors:0};
     let luminanceCurve = null;
     let previewObjectURL = '';
+    let cropBounds = {left:0, top:0, right:1, bottom:1};
+    let cropDragStart = null;
     const setStatus = (message, error = false) => { el('status').textContent = message; el('status').className = error ? 'error' : ''; };
     async function api(url, options = {}) {
       const response = await fetch(url, options);
@@ -203,6 +223,7 @@
       if (newSequence) {
         selected = null; selectedXMPValues = {};
         luminanceCurve = null;
+        el('crop-edit').checked = false; setCropEditing(false); setCropBounds(0,0,1,1); el('crop-angle').value = 0;
         el('xmp-property').replaceChildren(); el('xmp-value').value = '';
         el('preview').removeAttribute('src'); el('selected-name').textContent = 'フレームを選択するとプレビューします。';
         el('analyze-luminance').disabled = data.total === 0;
@@ -229,6 +250,7 @@
       el('selected-name').textContent = (frame.index + 1) + ' / ' + total + ' · ' + frame.name;
       showOriginalPreview();
       loadSelectedXMP(frame).catch(error => setStatus(error.message, true));
+      loadSelectedCrop(frame).catch(error => setStatus(error.message, true));
       document.querySelectorAll('.card').forEach(card => card.classList.remove('selected'));
       const card = [...document.querySelectorAll('.card')].find(item => item.querySelector('.filename')?.textContent.endsWith(' · ' + frame.name));
       if (card) card.classList.add('selected');
@@ -248,6 +270,50 @@
       if ((data.properties || []).includes(previous)) propertySelect.value = previous;
       else if ((data.properties || []).includes('Exposure2012')) propertySelect.value = 'Exposure2012';
       updateXMPValueInput();
+    }
+    async function loadSelectedCrop(frame) {
+      const requestedDirectory = directory;
+      const query = new URLSearchParams({directory:requestedDirectory, name:frame.name});
+      const crop = await api('/api/crop?' + query.toString());
+      if (directory !== requestedDirectory || !selected || selected.name !== frame.name) return;
+      cropBounds = crop.active ? {left:crop.left, top:crop.top, right:crop.right, bottom:crop.bottom} : {left:0, top:0, right:1, bottom:1};
+      el('crop-angle').value = crop.active ? crop.angle : 0;
+      drawCropOverlay();
+    }
+    function clampUnit(value) { return Math.max(0, Math.min(1, value)); }
+    function setCropBounds(left, top, right, bottom) {
+      cropBounds = {left:clampUnit(left), top:clampUnit(top), right:clampUnit(right), bottom:clampUnit(bottom)};
+      drawCropOverlay();
+    }
+    function drawCropOverlay() {
+      const {left, top, right, bottom} = cropBounds;
+      const x = left * 1000, y = top * 1000, width = (right-left) * 1000, height = (bottom-top) * 1000;
+      const angle = Number(el('crop-angle').value) || 0, centerX = x + width/2, centerY = y + height/2;
+      const radians = angle * Math.PI / 180, cosine = Math.cos(radians), sine = Math.sin(radians);
+      const corners = [[x,y], [x+width,y], [x+width,y+height], [x,y+height]].map(([cornerX,cornerY]) => {
+        const dx = cornerX-centerX, dy = cornerY-centerY;
+        return [centerX+cosine*dx-sine*dy, centerY+sine*dx+cosine*dy];
+      });
+      const polygon = corners.map(([cornerX,cornerY]) => cornerX + ' ' + cornerY).join('L');
+      el('crop-mask').setAttribute('d', 'M0 0H1000V1000H0Z M' + polygon + 'Z');
+      el('crop-box').setAttribute('x', x); el('crop-box').setAttribute('y', y);
+      el('crop-box').setAttribute('width', width); el('crop-box').setAttribute('height', height);
+      el('crop-grid').setAttribute('d', 'M' + (x+width/3) + ' ' + y + 'V' + (y+height) + ' M' + (x+width*2/3) + ' ' + y + 'V' + (y+height) + ' M' + x + ' ' + (y+height/3) + 'H' + (x+width) + ' M' + x + ' ' + (y+height*2/3) + 'H' + (x+width));
+      const transform = 'rotate(' + angle + ' ' + centerX + ' ' + centerY + ')';
+      el('crop-box').setAttribute('transform', transform); el('crop-grid').setAttribute('transform', transform);
+      positionCropOverlay();
+    }
+    function positionCropOverlay() {
+      const stage = el('preview-stage'), image = el('preview'), overlay = el('crop-overlay');
+      if (!image.naturalWidth || !image.naturalHeight) return;
+      const imageWidth = image.clientWidth, imageHeight = image.clientHeight;
+      overlay.style.width = imageWidth + 'px'; overlay.style.height = imageHeight + 'px';
+      overlay.style.left = ((stage.clientWidth - imageWidth) / 2) + 'px';
+      overlay.style.top = ((stage.clientHeight - imageHeight) / 2) + 'px';
+    }
+    function setCropEditing(enabled) {
+      el('crop-overlay').classList.toggle('enabled', enabled);
+      if (enabled) showOriginalPreview();
     }
     function updateXMPValueInput() {
       const property = el('xmp-property').value;
@@ -333,6 +399,7 @@
       if (previewObjectURL) URL.revokeObjectURL(previewObjectURL);
       previewObjectURL = objectURL;
       el('preview').src = objectURL;
+      el('crop-edit').checked = false; setCropEditing(false);
       setStatus('対応するXMP現像値を適用したプレビューです。RAW現像やAdobe画素値との一致は保証しません。');
     }
     async function setKeyframe(frame, kind, remove = false) {
@@ -355,6 +422,38 @@
     buttonAction(el('unmark'), () => selected ? setKeyframe(selected, '', true) : setStatus('先にフレームを選択してください。', true));
     el('preview-original').addEventListener('click', showOriginalPreview);
     buttonAction(el('preview-adjusted'), showAdjustedPreview);
+    el('crop-edit').addEventListener('change', event => setCropEditing(event.target.checked));
+    el('preview').addEventListener('load', positionCropOverlay);
+    el('crop-overlay').addEventListener('pointerdown', event => {
+      if (!el('crop-edit').checked) return;
+      const rect = el('crop-overlay').getBoundingClientRect();
+      const x = clampUnit((event.clientX-rect.left)/rect.width), y = clampUnit((event.clientY-rect.top)/rect.height);
+      cropDragStart = {x, y}; el('crop-overlay').setPointerCapture(event.pointerId); setCropBounds(x, y, x, y);
+    });
+    el('crop-overlay').addEventListener('pointermove', event => {
+      if (!cropDragStart || !el('crop-edit').checked) return;
+      const rect = el('crop-overlay').getBoundingClientRect();
+      const x = clampUnit((event.clientX-rect.left)/rect.width), y = clampUnit((event.clientY-rect.top)/rect.height);
+      setCropBounds(Math.min(x,cropDragStart.x), Math.min(y,cropDragStart.y), Math.max(x,cropDragStart.x), Math.max(y,cropDragStart.y));
+    });
+    for (const eventName of ['pointerup', 'pointercancel']) el('crop-overlay').addEventListener(eventName, () => { cropDragStart = null; });
+    el('crop-full').addEventListener('click', () => { setCropBounds(0,0,1,1); el('crop-angle').value = 0; });
+    el('crop-angle').addEventListener('input', drawCropOverlay);
+    buttonAction(el('crop-save'), async () => {
+      ensureActiveDirectory();
+      if (!selected) throw new Error('先にフレームを選択してください。');
+      const angle = Number(el('crop-angle').value);
+      if (!Number.isFinite(angle) || angle < -180 || angle > 180) throw new Error('クロップ角度は-180〜180度で指定してください。');
+      if (cropBounds.right-cropBounds.left < 0.01 || cropBounds.bottom-cropBounds.top < 0.01) throw new Error('クロップ範囲をドラッグして指定してください。');
+      if (!confirm(selected.name + ' のクロップを保存し、5★クロップキーフレームにしますか？既存XMPのバックアップを作成します。')) return;
+      const frame = selected;
+      const data = await api('/api/crop', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({directory, name:frame.name, ...cropBounds, angle})});
+      await loadSequence();
+      const updated = frames.find(item => item.name === frame.name);
+      if (updated) { selectFrame(updated); await loadSelectedCrop(updated); }
+      invalidateLuminanceCurve(); await loadExposureCurve();
+      setStatus('クロップと5★キーフレームを保存しました: ' + data.saved + (data.backup ? ' (backup: ' + data.backup + ')' : ''));
+    });
     el('exposure-curve').addEventListener('click', async event => {
       if (!exposureCurve.total) return;
       const rect = el('exposure-curve').getBoundingClientRect();
@@ -369,6 +468,7 @@
       } catch (error) { setStatus(error.message, true); }
     });
     window.addEventListener('resize', drawExposureCurve);
+    window.addEventListener('resize', positionCropOverlay);
     buttonAction(el('analyze-luminance'), async () => {
       ensureActiveDirectory();
       if (!confirm('連番の全画像を読み込んで輝度を測定します。画像数や解像度によって時間がかかります。続けますか？')) return;
