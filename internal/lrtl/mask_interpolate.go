@@ -11,10 +11,16 @@ import (
 
 var maskTransitionCollections = []string{
 	"CircularGradientBasedCorrections",
-	"DepthBasedCorrections",
 	"GradientBasedCorrections",
 	"MaskGroupBasedCorrections",
 	"PaintBasedCorrections",
+}
+
+var maskTransitionCorrectionIndexes = map[string]map[int]struct{}{
+	"CircularGradientBasedCorrections": transitionIndexes(1, 2),
+	"GradientBasedCorrections":         transitionIndexes(1, 2, 3, 4),
+	"MaskGroupBasedCorrections":        transitionIndexes(1, 2, 3, 4, 8, 9, 10, 11),
+	"PaintBasedCorrections":            transitionIndexes(1, 2),
 }
 
 var maskGeometryProperties = map[string]struct{}{
@@ -26,9 +32,11 @@ var maskGeometryProperties = map[string]struct{}{
 }
 
 type maskTransitionKey struct {
-	collection   string
-	correctionID string
-	maskID       string
+	collection      string
+	correctionID    string
+	maskID          string
+	correctionIndex int
+	maskIndex       int
 }
 
 type maskTransitionNode struct {
@@ -50,6 +58,14 @@ func localCorrectionProperty(name string) bool {
 	}
 	_, registered := maskTransitionSpecs[name]
 	return registered && strings.HasPrefix(name, "Local")
+}
+
+func transitionIndexes(indexes ...int) map[int]struct{} {
+	result := make(map[int]struct{}, len(indexes))
+	for _, index := range indexes {
+		result[index] = struct{}{}
+	}
+	return result
 }
 
 func crsElementValue(element *etree.Element, name string) (string, bool, error) {
@@ -157,59 +173,162 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 		if property.element == nil {
 			continue
 		}
-		var walk func(*etree.Element, string) error
-		walk = func(element *etree.Element, correctionID string) error {
-			if value, found, err := crsElementValue(element, "CorrectionSyncID"); err != nil {
-				return err
-			} else if found && strings.TrimSpace(value) != "" {
-				correctionID = strings.TrimSpace(value)
-				key := maskTransitionKey{collection: collection, correctionID: correctionID}
-				if _, exists := indexed[key]; exists {
-					return xmpError("duplicate CorrectionSyncID %q in crs:%s", correctionID, collection)
-				}
-				values, err := maskNodeValues(element, false)
-				if err != nil {
-					return fmt.Errorf("correction %q: %w", correctionID, err)
-				}
-				luminanceRange, hasLuminanceRange, err := parseXMPRangeMaskLumRange(element)
-				if err != nil {
-					return fmt.Errorf("correction %q: %w", correctionID, err)
-				}
-				indexed[key] = maskTransitionNode{values: values, luminanceRange: luminanceRange, hasLuminanceRange: hasLuminanceRange}
+		corrections := rdfArrayItems(property.element)
+		if len(corrections) == 0 {
+			if err := indexMaskTransitionNodesByID(property.element, collection, indexed); err != nil {
+				return nil, err
 			}
-			if maskID, found, err := crsElementValue(element, "MaskSyncID"); err != nil {
-				return err
-			} else if found && strings.TrimSpace(maskID) != "" && correctionID != "" {
-				maskID = strings.TrimSpace(maskID)
-				key := maskTransitionKey{collection: collection, correctionID: correctionID, maskID: maskID}
-				if _, exists := indexed[key]; exists {
-					return xmpError("duplicate MaskSyncID %q in crs:%s correction %q", maskID, collection, correctionID)
-				}
-				values, err := maskNodeValues(element, true)
-				if err != nil {
-					return fmt.Errorf("mask %q: %w", maskID, err)
-				}
-				luminanceRange, hasLuminanceRange, err := parseXMPRangeMaskLumRange(element)
-				if err != nil {
-					return fmt.Errorf("mask %q: %w", maskID, err)
-				}
-				indexed[key] = maskTransitionNode{values: values, luminanceRange: luminanceRange, hasLuminanceRange: hasLuminanceRange}
-			}
-			for _, token := range element.Child {
-				child, ok := token.(*etree.Element)
-				if ok {
-					if err := walk(child, correctionID); err != nil {
-						return err
-					}
-				}
-			}
-			return nil
+			continue
 		}
-		if err := walk(property.element, ""); err != nil {
-			return nil, err
+		registeredIndexes := maskTransitionCorrectionIndexes[collection]
+		for correctionIndex, item := range corrections {
+			position := correctionIndex + 1
+			if _, registered := registeredIndexes[position]; !registered {
+				continue
+			}
+			correction := unwrapRDFArrayItem(item)
+			correctionKey := maskTransitionKey{collection: collection, correctionIndex: position}
+			correctionValues, err := maskNodeValues(correction, false)
+			if err != nil {
+				return nil, fmt.Errorf("crs:%s[%d]: %w", collection, position, err)
+			}
+			correctionRange, hasCorrectionRange, err := parseXMPRangeMaskLumRange(correction)
+			if err != nil {
+				return nil, fmt.Errorf("crs:%s[%d]: %w", collection, position, err)
+			}
+			indexed[correctionKey] = maskTransitionNode{
+				values: correctionValues, luminanceRange: correctionRange,
+				hasLuminanceRange: hasCorrectionRange,
+			}
+
+			maskProperty := findCRSDescendant(correction, "CorrectionMasks")
+			if maskProperty == nil {
+				continue
+			}
+			masks := rdfArrayItems(maskProperty)
+			for maskIndex, maskItem := range masks {
+				maskPosition := maskIndex + 1
+				if maskPosition != 1 {
+					continue
+				}
+				mask := unwrapRDFArrayItem(maskItem)
+				maskKey := maskTransitionKey{
+					collection: collection, correctionIndex: position, maskIndex: maskPosition,
+				}
+				maskValues, err := maskNodeValues(mask, true)
+				if err != nil {
+					return nil, fmt.Errorf("crs:%s[%d]/crs:CorrectionMasks[%d]: %w", collection, position, maskPosition, err)
+				}
+				maskRange, hasMaskRange, err := parseXMPRangeMaskLumRange(mask)
+				if err != nil {
+					return nil, fmt.Errorf("crs:%s[%d]/crs:CorrectionMasks[%d]: %w", collection, position, maskPosition, err)
+				}
+				indexed[maskKey] = maskTransitionNode{
+					values: maskValues, luminanceRange: maskRange,
+					hasLuminanceRange: hasMaskRange,
+				}
+			}
 		}
 	}
 	return indexed, nil
+}
+
+func indexMaskTransitionNodesByID(root *etree.Element, collection string, indexed map[maskTransitionKey]maskTransitionNode) error {
+	var walk func(*etree.Element, string) error
+	walk = func(element *etree.Element, correctionID string) error {
+		if value, found, err := crsElementValue(element, "CorrectionSyncID"); err != nil {
+			return err
+		} else if found && strings.TrimSpace(value) != "" {
+			correctionID = strings.TrimSpace(value)
+			key := maskTransitionKey{collection: collection, correctionID: correctionID}
+			if _, exists := indexed[key]; exists {
+				return xmpError("duplicate CorrectionSyncID %q in crs:%s", correctionID, collection)
+			}
+			values, err := maskNodeValues(element, false)
+			if err != nil {
+				return fmt.Errorf("correction %q: %w", correctionID, err)
+			}
+			luminanceRange, hasLuminanceRange, err := parseXMPRangeMaskLumRange(element)
+			if err != nil {
+				return fmt.Errorf("correction %q: %w", correctionID, err)
+			}
+			indexed[key] = maskTransitionNode{values: values, luminanceRange: luminanceRange, hasLuminanceRange: hasLuminanceRange}
+		}
+		if maskID, found, err := crsElementValue(element, "MaskSyncID"); err != nil {
+			return err
+		} else if found && strings.TrimSpace(maskID) != "" && correctionID != "" {
+			maskID = strings.TrimSpace(maskID)
+			key := maskTransitionKey{collection: collection, correctionID: correctionID, maskID: maskID}
+			if _, exists := indexed[key]; exists {
+				return xmpError("duplicate MaskSyncID %q in crs:%s correction %q", maskID, collection, correctionID)
+			}
+			values, err := maskNodeValues(element, true)
+			if err != nil {
+				return fmt.Errorf("mask %q: %w", maskID, err)
+			}
+			luminanceRange, hasLuminanceRange, err := parseXMPRangeMaskLumRange(element)
+			if err != nil {
+				return fmt.Errorf("mask %q: %w", maskID, err)
+			}
+			indexed[key] = maskTransitionNode{values: values, luminanceRange: luminanceRange, hasLuminanceRange: hasLuminanceRange}
+		}
+		for _, token := range element.Child {
+			child, ok := token.(*etree.Element)
+			if ok {
+				if err := walk(child, correctionID); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return walk(root, "")
+}
+
+func rdfArrayItems(property *etree.Element) []*etree.Element {
+	if property == nil {
+		return nil
+	}
+	for _, token := range property.Child {
+		container, ok := token.(*etree.Element)
+		if !ok || container.NamespaceURI() != rdfNamespace || (container.Tag != "Seq" && container.Tag != "Bag" && container.Tag != "Alt") {
+			continue
+		}
+		var items []*etree.Element
+		for _, itemToken := range container.Child {
+			item, ok := itemToken.(*etree.Element)
+			if ok && item.NamespaceURI() == rdfNamespace && item.Tag == "li" {
+				items = append(items, item)
+			}
+		}
+		return items
+	}
+	return nil
+}
+
+func unwrapRDFArrayItem(item *etree.Element) *etree.Element {
+	for _, token := range item.Child {
+		child, ok := token.(*etree.Element)
+		if ok && child.NamespaceURI() == rdfNamespace && child.Tag == "Description" {
+			return child
+		}
+	}
+	return item
+}
+
+func findCRSDescendant(element *etree.Element, local string) *etree.Element {
+	if element.NamespaceURI() == crsNamespace && element.Tag == local {
+		return element
+	}
+	for _, token := range element.Child {
+		child, ok := token.(*etree.Element)
+		if ok {
+			if found := findCRSDescendant(child, local); found != nil {
+				return found
+			}
+		}
+	}
+	return nil
 }
 
 func correctionRangeMaskElement(element *etree.Element) *etree.Element {
@@ -290,7 +409,7 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 				series[target] = make(map[string]float64)
 			}
 			value := adjustTransitionValue(values[target], spec)
-			if name == "Angle" && lrtNormalizesMaskAngle(key.collection) {
+			if name == "Angle" && lrtNormalizesMaskAngle(key) {
 				value = normalizeLRTMaskAngle(value)
 			}
 			series[target][name] = value
@@ -299,8 +418,15 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 	return series
 }
 
-func lrtNormalizesMaskAngle(collection string) bool {
-	return collection == "CircularGradientBasedCorrections" || collection == "MaskGroupBasedCorrections"
+func lrtNormalizesMaskAngle(key maskTransitionKey) bool {
+	switch key.collection {
+	case "CircularGradientBasedCorrections":
+		return key.correctionIndex == 0 || key.correctionIndex == 1 || key.correctionIndex == 2
+	case "MaskGroupBasedCorrections":
+		return key.correctionIndex == 0 || key.correctionIndex == 8 || key.correctionIndex == 9
+	default:
+		return false
+	}
 }
 
 // normalizeLRTMaskAngle mirrors the installed LRTimelapse post-transition
@@ -361,6 +487,12 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 			if keys[i].collection != keys[j].collection {
 				return keys[i].collection < keys[j].collection
 			}
+			if keys[i].correctionIndex != keys[j].correctionIndex {
+				return keys[i].correctionIndex < keys[j].correctionIndex
+			}
+			if keys[i].maskIndex != keys[j].maskIndex {
+				return keys[i].maskIndex < keys[j].maskIndex
+			}
 			if keys[i].correctionID != keys[j].correctionID {
 				return keys[i].correctionID < keys[j].correctionID
 			}
@@ -374,7 +506,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 				}
 			}
 			current := indexes[target][key].values
-			if lrtNormalizesMaskAngle(key.collection) {
+			if lrtNormalizesMaskAngle(key) {
 				if angle, found := current["Angle"]; found {
 					_, hasInterpolatedAngle := proposed["Angle"]
 					if keyframeSet[target] || !hasInterpolatedAngle {
@@ -433,48 +565,64 @@ func firstMaskLuminanceRange(indexes []map[maskTransitionKey]maskTransitionNode,
 func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 	property := packet.findRootProperty(crsNamespace, change.key.collection)
 	if property.element == nil {
-		return xmpError("missing crs:%s for correction %q", change.key.collection, change.key.correctionID)
+		return xmpError("missing crs:%s for local-correction transition", change.key.collection)
 	}
 	var correction *etree.Element
 	var mask *etree.Element
-	var walk func(*etree.Element, string) error
-	walk = func(element *etree.Element, correctionID string) error {
-		if value, found, err := crsElementValue(element, "CorrectionSyncID"); err != nil {
-			return err
-		} else if found && strings.TrimSpace(value) != "" {
-			correctionID = strings.TrimSpace(value)
-			if correctionID == change.key.correctionID {
-				if correction != nil {
-					return xmpError("duplicate CorrectionSyncID %q in crs:%s", change.key.correctionID, change.key.collection)
-				}
-				correction = element
-			}
+	if change.key.correctionIndex > 0 {
+		corrections := rdfArrayItems(property.element)
+		if change.key.correctionIndex > len(corrections) {
+			return xmpError("crs:%s has no correction at registered position %d", change.key.collection, change.key.correctionIndex)
 		}
-		if change.key.maskID != "" && correctionID == change.key.correctionID {
-			if value, found, err := crsElementValue(element, "MaskSyncID"); err != nil {
+		correction = unwrapRDFArrayItem(corrections[change.key.correctionIndex-1])
+		if change.key.maskIndex > 0 {
+			maskProperty := findCRSDescendant(correction, "CorrectionMasks")
+			masks := rdfArrayItems(maskProperty)
+			if change.key.maskIndex > len(masks) {
+				return xmpError("crs:%s[%d] has no correction mask at position %d", change.key.collection, change.key.correctionIndex, change.key.maskIndex)
+			}
+			mask = unwrapRDFArrayItem(masks[change.key.maskIndex-1])
+		}
+	} else {
+		var walk func(*etree.Element, string) error
+		walk = func(element *etree.Element, correctionID string) error {
+			if value, found, err := crsElementValue(element, "CorrectionSyncID"); err != nil {
 				return err
-			} else if found && strings.TrimSpace(value) == change.key.maskID {
-				if mask != nil {
-					return xmpError("duplicate MaskSyncID %q in correction %q", change.key.maskID, change.key.correctionID)
+			} else if found && strings.TrimSpace(value) != "" {
+				correctionID = strings.TrimSpace(value)
+				if correctionID == change.key.correctionID {
+					if correction != nil {
+						return xmpError("duplicate CorrectionSyncID %q in crs:%s", change.key.correctionID, change.key.collection)
+					}
+					correction = element
 				}
-				mask = element
 			}
-		}
-		for _, token := range element.Child {
-			child, ok := token.(*etree.Element)
-			if ok {
-				if err := walk(child, correctionID); err != nil {
+			if change.key.maskID != "" && correctionID == change.key.correctionID {
+				if value, found, err := crsElementValue(element, "MaskSyncID"); err != nil {
 					return err
+				} else if found && strings.TrimSpace(value) == change.key.maskID {
+					if mask != nil {
+						return xmpError("duplicate MaskSyncID %q in correction %q", change.key.maskID, change.key.correctionID)
+					}
+					mask = element
 				}
 			}
+			for _, token := range element.Child {
+				child, ok := token.(*etree.Element)
+				if ok {
+					if err := walk(child, correctionID); err != nil {
+						return err
+					}
+				}
+			}
+			return nil
 		}
-		return nil
-	}
-	if err := walk(property.element, ""); err != nil {
-		return err
+		if err := walk(property.element, ""); err != nil {
+			return err
+		}
 	}
 	target := correction
-	if change.key.maskID != "" {
+	if change.key.maskIndex > 0 || change.key.maskID != "" {
 		target = mask
 	}
 	if target == nil {
@@ -505,4 +653,19 @@ func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 		}
 	}
 	return nil
+}
+
+func maskTransitionKeyLabel(key maskTransitionKey) string {
+	label := "crs:" + key.collection
+	if key.correctionIndex > 0 {
+		label += fmt.Sprintf("[%d]", key.correctionIndex)
+	} else if key.correctionID != "" {
+		label += "/" + key.correctionID
+	}
+	if key.maskIndex > 0 {
+		label += fmt.Sprintf("/crs:CorrectionMasks[%d]", key.maskIndex)
+	} else if key.maskID != "" {
+		label += "/" + key.maskID
+	}
+	return label
 }

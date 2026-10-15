@@ -662,18 +662,10 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 			names = append(names, change.StructuredProperties...)
 			for _, transition := range change.MaskTransitions {
 				for name := range transition.values {
-					label := "crs:" + transition.key.collection + "/" + transition.key.correctionID + "." + name
-					if transition.key.maskID != "" {
-						label = "crs:" + transition.key.collection + "/" + transition.key.correctionID + "/" + transition.key.maskID + "." + name
-					}
-					names = append(names, label)
+					names = append(names, maskTransitionKeyLabel(transition.key)+"."+name)
 				}
 				if transition.hasLuminanceRange {
-					label := "crs:" + transition.key.collection + "/" + transition.key.correctionID + ".RangeMaskLumRange"
-					if transition.key.maskID != "" {
-						label = "crs:" + transition.key.collection + "/" + transition.key.correctionID + "/" + transition.key.maskID + ".RangeMaskLumRange"
-					}
-					names = append(names, label)
+					names = append(names, maskTransitionKeyLabel(transition.key)+".RangeMaskLumRange")
 				}
 			}
 			sort.Strings(names)
