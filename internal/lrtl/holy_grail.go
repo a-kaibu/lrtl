@@ -6,9 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
-	"github.com/beevik/etree"
 	"github.com/evanoberholster/imagemeta"
 )
 
@@ -18,180 +16,6 @@ const holyGrailKeyframeProperty = "ol:HolyGrailKeyframeKind"
 const holyGrailPreviousRatingProperty = "ol:HolyGrailPreviousRating"
 const legacyLRTInternalMaskName = "LRT: don't alter!"
 const maxRenderXMPExposureStops = 32
-
-type holyGrailXMPTarget struct {
-	Collection string
-	Index      int
-}
-
-type holyGrailXMPWrite struct {
-	Target holyGrailXMPTarget
-	Value  float64
-}
-
-func globalHolyGrailTarget() holyGrailXMPTarget {
-	return holyGrailXMPTarget{}
-}
-
-func (target holyGrailXMPTarget) String() string {
-	if target.Collection == "" {
-		return "global"
-	}
-	return fmt.Sprintf("%s:%d", target.Collection, target.Index)
-}
-
-func parseHolyGrailXMPTarget(value string) (holyGrailXMPTarget, error) {
-	if value == "global" {
-		return globalHolyGrailTarget(), nil
-	}
-	separator := strings.LastIndexByte(value, ':')
-	if separator <= 0 {
-		return holyGrailXMPTarget{}, fmt.Errorf("invalid Holy Grail XMP target %q", value)
-	}
-	collection := value[:separator]
-	if collection != "MaskGroupBasedCorrections" && collection != "GradientBasedCorrections" {
-		return holyGrailXMPTarget{}, fmt.Errorf("unsupported Holy Grail XMP target %q", value)
-	}
-	index, err := strconv.Atoi(value[separator+1:])
-	if err != nil || index < 1 {
-		return holyGrailXMPTarget{}, fmt.Errorf("invalid Holy Grail XMP target %q", value)
-	}
-	return holyGrailXMPTarget{Collection: collection, Index: index}, nil
-}
-
-func findHolyGrailXMPTarget(packet *XMPPacket) holyGrailXMPTarget {
-	maskGroups := packet.findRootProperty(crsNamespace, "MaskGroupBasedCorrections")
-	maskGroupItems := rdfArrayItems(maskGroups.element)
-	gradients := packet.findRootProperty(crsNamespace, "GradientBasedCorrections")
-	gradientItems := rdfArrayItems(gradients.element)
-	for _, candidate := range []struct {
-		collection string
-		items      []*etree.Element
-	}{
-		{collection: "MaskGroupBasedCorrections", items: maskGroupItems},
-		{collection: "GradientBasedCorrections", items: gradientItems},
-	} {
-		for index, item := range candidate.items {
-			correction := unwrapRDFArrayItem(item)
-			name, found, err := crsElementValue(correction, "CorrectionName")
-			if err == nil && found && strings.TrimSpace(name) == "#LRT internal use (HG)" {
-				return holyGrailXMPTarget{Collection: candidate.collection, Index: index + 1}
-			}
-		}
-	}
-	if len(gradientItems) >= 7 &&
-		isLegacyLRTInternalGradient(gradientItems[4]) &&
-		isLegacyLRTInternalGradient(gradientItems[5]) &&
-		isLegacyLRTInternalGradient(gradientItems[6]) {
-		return holyGrailXMPTarget{Collection: "GradientBasedCorrections", Index: 5}
-	}
-	return globalHolyGrailTarget()
-}
-
-func isLegacyLRTInternalGradient(item *etree.Element) bool {
-	correction := unwrapRDFArrayItem(item)
-	masks := findCRSDescendant(correction, "CorrectionMasks")
-	maskItems := rdfArrayItems(masks)
-	if len(maskItems) != 1 {
-		return false
-	}
-	mask := unwrapRDFArrayItem(maskItems[0])
-	name, found, err := crsElementValue(mask, "MaskName")
-	return err == nil && found && strings.TrimSpace(name) == legacyLRTInternalMaskName
-}
-
-func holyGrailTargetElement(packet *XMPPacket, target holyGrailXMPTarget) (*etree.Element, error) {
-	if target.Collection == "" {
-		return nil, nil
-	}
-	if target.Index < 1 {
-		return nil, fmt.Errorf("invalid Holy Grail XMP array index %d", target.Index)
-	}
-	property := packet.findRootProperty(crsNamespace, target.Collection)
-	items := rdfArrayItems(property.element)
-	if target.Index > len(items) {
-		return nil, fmt.Errorf("crs:%s[%d] no longer exists", target.Collection, target.Index)
-	}
-	return unwrapRDFArrayItem(items[target.Index-1]), nil
-}
-
-func getHolyGrailTargetValue(packet *XMPPacket, target holyGrailXMPTarget) (float64, bool, error) {
-	if target.Collection == "" {
-		text, found, err := packet.GetScalar("crs:Exposure2012")
-		if err != nil || !found {
-			return 0, found, err
-		}
-		value, valid := scalarNumber(text)
-		if !valid {
-			return 0, true, fmt.Errorf("crs:Exposure2012 is not numeric")
-		}
-		return value, true, nil
-	}
-	element, err := holyGrailTargetElement(packet, target)
-	if err != nil {
-		return 0, false, err
-	}
-	text, found, err := crsElementValue(element, "LocalExposure2012")
-	if err != nil || !found {
-		return 0, found, err
-	}
-	value, valid := scalarNumber(text)
-	if !valid {
-		return 0, true, fmt.Errorf("crs:%s[%d]/crs:LocalExposure2012 is not numeric", target.Collection, target.Index)
-	}
-	return value, true, nil
-}
-
-func readHolyGrailRenderCorrection(packet *XMPPacket) (float64, *etree.Element, error) {
-	correctionText, hasCorrection, err := packet.GetScalar(holyGrailCorrectionProperty)
-	if err != nil {
-		return 0, nil, err
-	}
-	targetText, hasTarget, err := packet.GetScalar(holyGrailTargetProperty)
-	if err != nil {
-		return 0, nil, err
-	}
-	if hasTarget && !hasCorrection {
-		return 0, nil, fmt.Errorf("orphaned lrtl property %s", holyGrailTargetProperty)
-	}
-	if !hasCorrection || !hasTarget {
-		return 0, nil, nil
-	}
-	target, err := parseHolyGrailXMPTarget(targetText)
-	if err != nil {
-		return 0, nil, err
-	}
-	if target.Collection == "" {
-		return 0, nil, nil
-	}
-	correction, valid := scalarNumber(correctionText)
-	if !valid || math.Abs(correction) > maxRenderXMPExposureStops {
-		return 0, nil, fmt.Errorf("%s must be a finite number between -%d and +%d stops", holyGrailCorrectionProperty, maxRenderXMPExposureStops, maxRenderXMPExposureStops)
-	}
-	element, err := holyGrailTargetElement(packet, target)
-	if err != nil {
-		return 0, nil, err
-	}
-	return correction, element, nil
-}
-
-func setHolyGrailTargetValue(packet *XMPPacket, target holyGrailXMPTarget, value float64) error {
-	if target.Collection == "" {
-		return packet.SetScalar("crs:Exposure2012", formatNumber(value))
-	}
-	element, err := holyGrailTargetElement(packet, target)
-	if err != nil {
-		return err
-	}
-	return setCRSElementValue(element, "LocalExposure2012", formatNumber(value))
-}
-
-func holyGrailTargetLabel(target holyGrailXMPTarget) string {
-	if target.Collection == "" {
-		return "Exposure2012"
-	}
-	return fmt.Sprintf("%s[%d].LocalExposure2012", target.Collection, target.Index)
-}
 
 type CameraExposure struct {
 	ExposureTime float64
@@ -213,8 +37,8 @@ type HolyGrailChange struct {
 	Frame            Frame
 	Packet           *XMPPacket
 	Camera           CameraExposure
-	Target           holyGrailXMPTarget
-	XMPWrites        []holyGrailXMPWrite
+	Target           xmpExposureTarget
+	XMPWrites        []xmpExposureWrite
 	Compensation     float64
 	ExposureBefore   float64
 	ExposureAfter    float64
@@ -439,8 +263,11 @@ func lrtHolyGrailLowess(values []float64, smoothing float64) []float64 {
 	}
 	neighbors := int(smoothing * float64(len(values)))
 	if smoothing > 1 {
-		// eA's fallback for the observed 1.5 auto-shape call resolves to n-1.
-		neighbors = len(values) - 1
+		// LRT retries an out-of-range bandwidth after dividing it by the
+		// rejected value plus a float32 0.001 promoted to double. This is
+		// nearly n-1 for short sequences, but differs on long sequences.
+		bandwidth := smoothing / (smoothing + float64(float32(0.001)))
+		neighbors = int(bandwidth * float64(len(values)))
 	}
 	if neighbors < 2 {
 		return result
@@ -759,9 +586,9 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 		if hadPreviousTarget && !hadPrevious {
 			return nil, fmt.Errorf("%s: orphaned lrtl property %s", frame.OutputSidecar(), holyGrailTargetProperty)
 		}
-		previousTarget := globalHolyGrailTarget()
+		previousTarget := globalXMPExposureTarget()
 		if hadPreviousTarget {
-			previousTarget, err = parseHolyGrailXMPTarget(previousTargetText)
+			previousTarget, err = parseXMPExposureTarget(previousTargetText)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 			}
@@ -770,7 +597,7 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 		if !reset {
 			target = findHolyGrailXMPTarget(packet)
 		}
-		previousTargetValue, _, err := getHolyGrailTargetValue(packet, previousTarget)
+		previousTargetValue, _, err := getXMPExposureTargetValue(packet, previousTarget)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
@@ -781,21 +608,21 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 		}
 		before := previousBase
 		if !hadPrevious || target != previousTarget {
-			before, _, err = getHolyGrailTargetValue(packet, target)
+			before, _, err = getXMPExposureTargetValue(packet, target)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 			}
 		}
 		after := before + compensation
-		writes := make([]holyGrailXMPWrite, 0, 2)
+		writes := make([]xmpExposureWrite, 0, 2)
 		if hadPrevious {
 			if reset || target != previousTarget {
-				writes = append(writes, holyGrailXMPWrite{Target: previousTarget, Value: previousBase})
+				writes = append(writes, xmpExposureWrite{Target: previousTarget, Value: previousBase})
 			}
 		}
 		if !reset && ((!hadPrevious && math.Abs(compensation) > 1e-12) ||
 			(hadPrevious && (target != previousTarget || math.Abs(compensation-previous) > 1e-12))) {
-			writes = append(writes, holyGrailXMPWrite{Target: target, Value: after})
+			writes = append(writes, xmpExposureWrite{Target: target, Value: after})
 		}
 		exposureChanged := len(writes) > 0
 		keyframeRating, restoreKeyframe, previousRating := 0, false, ""
@@ -827,7 +654,7 @@ func applyHolyGrailPlan(changes []HolyGrailChange) error {
 	for _, change := range changes {
 		if change.ExposureChanged {
 			for _, write := range change.XMPWrites {
-				if err := setHolyGrailTargetValue(change.Packet, write.Target, write.Value); err != nil {
+				if err := setXMPExposureTargetValue(change.Packet, write.Target, write.Value); err != nil {
 					return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 				}
 			}
@@ -898,6 +725,11 @@ func readXMPExposure(frame Frame) (float64, error) {
 		return 0, err
 	}
 	exposure += holyGrailCorrection
+	deflickerCorrection, _, err := readDeflickerRenderCorrection(packet)
+	if err != nil {
+		return 0, err
+	}
+	exposure += deflickerCorrection
 	if math.Abs(exposure) > maxRenderXMPExposureStops {
 		return 0, fmt.Errorf("combined XMP exposure must be between -%d and +%d stops", maxRenderXMPExposureStops, maxRenderXMPExposureStops)
 	}

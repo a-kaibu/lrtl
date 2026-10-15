@@ -165,6 +165,11 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		return xmpBasicAdjustments{}, err
 	}
 	adjustments.exposure += holyGrailCorrection
+	deflickerCorrection, _, err := readDeflickerRenderCorrection(packet)
+	if err != nil {
+		return xmpBasicAdjustments{}, err
+	}
+	adjustments.exposure += deflickerCorrection
 	if math.Abs(adjustments.exposure) > maxRenderXMPExposureStops {
 		return xmpBasicAdjustments{}, fmt.Errorf("combined XMP exposure must be between -%d and +%d stops", maxRenderXMPExposureStops, maxRenderXMPExposureStops)
 	}

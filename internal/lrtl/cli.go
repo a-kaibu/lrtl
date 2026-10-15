@@ -1234,7 +1234,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 			return reportError(stderr, err)
 		}
 	}
-	changes, err := buildDeflickerChangesWithSmoother(frames, luminances, *smoothRadius, *passes, *constant, *reset, *smoother)
+	changes, err := buildDeflickerChangesForInput(frames, luminances, *smoothRadius, *passes, *constant, *reset, *smoother, *applyXMPExposure || *applyXMPBasic)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -1252,10 +1252,10 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	for _, change := range changes {
 		fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))
 		if *reset {
-			fmt.Fprintf(stdout, " Exposure2012 %+.4f -> %+.4f EV (remove lrtl correction)", change.ExposureBefore, change.ExposureAfter)
+			fmt.Fprintf(stdout, " %s %+.4f -> %+.4f EV (remove lrtl correction)", xmpExposureTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter)
 		} else {
-			fmt.Fprintf(stdout, " luminance=%.6g correction=%+.4f EV Exposure2012=%+.4f EV",
-				change.Luminance, change.Correction, change.ExposureAfter)
+			fmt.Fprintf(stdout, " luminance=%.6g correction=%+.4f EV %s=%+.4f EV",
+				change.Luminance, change.Correction, xmpExposureTargetLabel(change.Target), change.ExposureAfter)
 		}
 		fmt.Fprintln(stdout)
 	}
@@ -1263,7 +1263,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		if *reset {
 			fmt.Fprintln(stdout, "No lrtl-managed deflicker corrections to reset.")
 		} else {
-			fmt.Fprintln(stdout, "No Exposure2012 changes are needed.")
+			fmt.Fprintln(stdout, "No exposure changes are needed.")
 		}
 		return 0
 	}
@@ -1685,7 +1685,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 		if *reset {
 			fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))
 			if change.ExposureChanged {
-				fmt.Fprintf(stdout, " %s %+.4f -> %+.4f EV", holyGrailTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter)
+				fmt.Fprintf(stdout, " %s %+.4f -> %+.4f EV", xmpExposureTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter)
 			}
 			if change.RestoreKeyframe {
 				fmt.Fprint(stdout, " restore HG rating")
@@ -1696,7 +1696,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 				filepath.Base(change.Frame.Image), change.Camera.ExposureTime,
 				change.Camera.FNumber, change.Camera.ISO)
 			if change.ExposureChanged {
-				fmt.Fprintf(stdout, " correction=%+.4f EV %s=%+.4f EV", change.Compensation, holyGrailTargetLabel(change.Target), change.ExposureAfter)
+				fmt.Fprintf(stdout, " correction=%+.4f EV %s=%+.4f EV", change.Compensation, xmpExposureTargetLabel(change.Target), change.ExposureAfter)
 			}
 			if change.KeyframeRating != 0 {
 				fmt.Fprintf(stdout, " HG keyframe=%d*", change.KeyframeRating)

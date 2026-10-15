@@ -8,10 +8,13 @@ import (
 )
 
 const deflickerCorrectionProperty = "ol:DeflickerCorrection2012"
+const deflickerTargetProperty = "ol:DeflickerXMPTarget"
 
 type DeflickerChange struct {
 	Frame            Frame
 	Packet           *XMPPacket
+	Target           xmpExposureTarget
+	XMPWrites        []xmpExposureWrite
 	Luminance        float64
 	Correction       float64
 	ExposureBefore   float64
@@ -77,6 +80,12 @@ func buildDeflickerChanges(frames []Frame, luminances []float64, smoothingRadius
 }
 
 func buildDeflickerChangesWithSmoother(frames []Frame, luminances []float64, smoothingRadius, passes int, constant, reset bool, smoother string) ([]DeflickerChange, error) {
+	return buildDeflickerChangesForInput(frames, luminances, smoothingRadius, passes, constant, reset, smoother, false)
+}
+
+// Developed input already contains our previous correction. Add the measured
+// residual in that case; measurements of untouched input replace the old delta.
+func buildDeflickerChangesForInput(frames []Frame, luminances []float64, smoothingRadius, passes int, constant, reset bool, smoother string, includesCorrection bool) ([]DeflickerChange, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
 	}
@@ -103,44 +112,76 @@ func buildDeflickerChangesWithSmoother(frames []Frame, luminances []float64, smo
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
-		currentText, found, err := packet.GetScalar("crs:Exposure2012")
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
-		}
-		current := 0.0
-		if found {
-			current, found = scalarNumber(currentText)
-			if !found {
-				return nil, fmt.Errorf("%s: crs:Exposure2012 is not numeric", frame.OutputSidecar())
-			}
-		}
 		previousText, hasPrevious, err := packet.GetScalar(deflickerCorrectionProperty)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
 		previous := 0.0
 		if hasPrevious {
-			previous, found = scalarNumber(previousText)
-			if !found {
+			var valid bool
+			previous, valid = scalarNumber(previousText)
+			if !valid || math.Abs(previous) > maxRenderXMPExposureStops {
 				return nil, fmt.Errorf("%s: %s is not numeric", frame.OutputSidecar(), deflickerCorrectionProperty)
+			}
+		}
+		previousTargetText, hasTarget, err := packet.GetScalar(deflickerTargetProperty)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+		}
+		if hasTarget && !hasPrevious {
+			return nil, fmt.Errorf("%s: orphaned lrtl property %s", frame.OutputSidecar(), deflickerTargetProperty)
+		}
+		previousTarget := globalXMPExposureTarget()
+		if hasTarget {
+			previousTarget, err = parseXMPExposureTarget(previousTargetText)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 			}
 		}
 		if reset && !hasPrevious {
 			continue
 		}
-
+		target := previousTarget
+		if !reset {
+			target = findLRTExposureTarget(packet, "Deflicker", 6)
+		}
+		before := 0.0
+		writes := make([]xmpExposureWrite, 0, 2)
+		if hasPrevious {
+			current, _, err := getXMPExposureTargetValue(packet, previousTarget)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+			}
+			before = current - previous
+			if reset || target != previousTarget {
+				writes = append(writes, xmpExposureWrite{Target: previousTarget, Value: before})
+			}
+		}
+		if !hasPrevious || target != previousTarget {
+			before, _, err = getXMPExposureTargetValue(packet, target)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+			}
+		}
 		correction := corrections[index]
-		before := current - previous
+		if includesCorrection && !reset {
+			correction += previous
+		}
+		if math.Abs(correction) > maxRenderXMPExposureStops {
+			return nil, fmt.Errorf("%s: accumulated deflicker correction exceeds supported range", frame.OutputSidecar())
+		}
 		after := before + correction
-		changed := math.Abs(correction-previous) > 1e-12
-		if !changed {
+		if !reset && (math.Abs(correction-previous) > 1e-12 || (hasPrevious && target != previousTarget)) {
+			writes = append(writes, xmpExposureWrite{Target: target, Value: after})
+		}
+		if len(writes) == 0 {
 			continue
 		}
 		if math.IsNaN(before) || math.IsInf(before, 0) || math.IsNaN(after) || math.IsInf(after, 0) {
 			return nil, fmt.Errorf("%s: deflicker would produce a non-finite Exposure2012 value", frame.OutputSidecar())
 		}
 		change := DeflickerChange{
-			Frame: frame, Packet: packet, Correction: correction,
+			Frame: frame, Packet: packet, Correction: correction, Target: target, XMPWrites: writes,
 			ExposureBefore: before, ExposureAfter: after,
 			ExposureChanged: true, RemoveCorrection: reset || math.Abs(correction) < 1e-12,
 		}
@@ -154,14 +195,21 @@ func buildDeflickerChangesWithSmoother(frames []Frame, luminances []float64, smo
 
 func applyDeflickerChanges(changes []DeflickerChange) error {
 	for _, change := range changes {
-		if err := change.Packet.SetScalar("crs:Exposure2012", formatNumber(change.ExposureAfter)); err != nil {
-			return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+		for _, write := range change.XMPWrites {
+			if err := setXMPExposureTargetValue(change.Packet, write.Target, write.Value); err != nil {
+				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+			}
 		}
 		if change.RemoveCorrection {
 			if err := change.Packet.RemoveProperty(deflickerCorrectionProperty); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
+			if err := change.Packet.RemoveProperty(deflickerTargetProperty); err != nil {
+				return err
+			}
 		} else if err := change.Packet.SetScalar(deflickerCorrectionProperty, formatNumber(change.Correction)); err != nil {
+			return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
+		} else if err := change.Packet.SetScalar(deflickerTargetProperty, change.Target.String()); err != nil {
 			return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 		}
 	}

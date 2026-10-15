@@ -77,6 +77,10 @@ func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
 	if err != nil {
 		return nil, err
 	}
+	_, managedDeflickerElement, err := readDeflickerRenderCorrection(packet)
+	if err != nil {
+		return nil, err
+	}
 	for _, collection := range []string{"MaskGroupBasedCorrections", "GradientBasedCorrections", "CircularGradientBasedCorrections"} {
 		property := packet.findRootProperty(crsNamespace, collection)
 		if property.element == nil {
@@ -84,7 +88,7 @@ func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
 		}
 		var walk func(*etree.Element) error
 		walk = func(element *etree.Element) error {
-			if element == managedHolyGrailElement {
+			if element == managedHolyGrailElement || element == managedDeflickerElement {
 				return nil
 			}
 			what, found, err := crsElementValue(element, "What")

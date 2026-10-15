@@ -3,9 +3,8 @@ package lrtl
 import "math"
 
 // lowessSmooth applies a tricube-weighted local linear regression using a
-// fixed number of nearest samples. LRT's Holy Grail interpolation path feeds
-// Pia a bandwidth that resolves to len(values)-1 samples for the observed
-// reduce-deflicker setting.
+// fixed number of nearest samples. The Holy Grail caller translates LRT's
+// bandwidth setting and retry behavior into this sample count.
 func lowessSmooth(values []float64, neighbors int) []float64 {
 	result := append([]float64(nil), values...)
 	if len(values) < 3 || neighbors < 2 {
