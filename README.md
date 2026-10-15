@@ -16,9 +16,9 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。手動設定と等間隔配置も可能 | 手動マークに加え、JPEG/PNG/TIFFの輝度曲線から内側の候補を選ぶ`keyframes`と、画像をデコードせずRAWを含む列にも使える`--evenly-spaced`を実装。LRT互換の2*/3* HGマーカーも`scan`で表示し、通常の4*/5*マークとの重複を防ぐ。候補選定は独自ヒューリスティック | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEG/TIFF/CR2/CR3/DNG/RW2のEXIF露出設定から補正を計算。EXIFがManualを示す場合に2*/3*ペアを提案・記録。`--stretch`/`--rotate`とLRTの探索範囲・L1評価・LOWESS平滑化を使う`--auto-shape`に対応。RAW曲線の生成と独立補正レイヤーは未再現。補正を`crs:Exposure2012`へ書く方式 | 一部 |
-| 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星のcrop keyframeマークのみ。構図作成とクロップ値の補間は未実装 | 一部 |
+| 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | 5つ星crop markと、CropAngle/Top/Left/Bottom/Rightの数値補間に対応。プレビュー上の構図作成・編集UIは未実装 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | 未実装 | 未実装 |
-| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。明示的に許可した数値のグローバル設定を線形補間。レンダー時に`Exposure2012`のみ任意適用。他のCamera Raw値、RAW現像、ローカルマスクは未対応 | 一部 |
+| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。`set`で数値を編集し、許可したグローバル設定を線形補間。レンダー時に`Exposure2012`のみ任意適用。他のCamera Raw値、RAW現像、ローカルマスクは未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間 | 数値のグローバルCamera Raw項目を補間。ローカル補正、カーブ、マスク、色相環などの補間なし | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | 未実装 | 未実装 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス | `render --deflicker`がJPEG/PNG/TIFFを解析し、任意の参照矩形内の中央値から全画面への露出補正を計算。平滑化幅・パス数・一定輝度モードを指定可能。独自の近似方式で、LRTのVisual PreviewやXMPへのロスレス記録は未対応 | 一部 |
@@ -88,13 +88,17 @@ go build -o lrtl.exe ./cmd/lrtl
 lrtl scan "D:\Timelapse\Sequence"
 
 # キーフレームの設定・解除（既存XMPは既定でバックアップ）
-lrtl mark "D:\Timelapse\Sequence\IMG_0005.CR3" --kind default
-lrtl mark "D:\Timelapse\Sequence\IMG_0012.CR3" --kind crop
-lrtl unmark "D:\Timelapse\Sequence\IMG_0005.CR3"
+lrtl mark "D:\Timelapse\Developed\IMG_0005.jpg" --kind default
+lrtl mark "D:\Timelapse\Developed\IMG_0012.jpg" --kind crop
+lrtl unmark "D:\Timelapse\Developed\IMG_0005.jpg"
+
+# 数値のCamera Raw設定をキーフレームのXMPに書き込む（既存XMPは既定でバックアップ）
+lrtl set "D:\Timelapse\Developed\IMG_0005.jpg" crs:Exposure2012 -1.0
+lrtl set "D:\Timelapse\Developed\IMG_0012.jpg" crs:Exposure2012 0.5
 
 # キーフレーム間の数値設定をプレビューし、明示して書き込む
-lrtl interpolate "D:\Timelapse\Sequence"
-lrtl interpolate "D:\Timelapse\Sequence" --write
+lrtl interpolate "D:\Timelapse\Developed"
+lrtl interpolate "D:\Timelapse\Developed" --write
 
 # EXIFの撮影露出設定を逆補正し、XMPへの変更案を表示
 lrtl holy-grail "D:\Timelapse\Sequence"
@@ -143,6 +147,8 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 `render`は出力ファイルが既にある場合は停止します。置き換えるときは`--overwrite`を指定します。DeflickerなしのJPEG入力は再圧縮せずAVIに入れます。PNG/TIFF入力とDeflickerを使う入力は指定品質のJPEGに変換します。TIFFの16-bit階調は8-bitのMJPEG出力時に失われます。`--reference`の形式は`x,y,width,height`で、指定しない場合は画面全体を測定します。`--smooth`は平滑化の半径（フレーム数）、`--passes`は補正反復数です。動く被写体や雲など輝度が変わる要素を避けた領域を指定してください。`--constant`は長期的な明るさの変化も抑えるため、照明条件が一定のシーンに向いています。
 
 `--apply-xmp-exposure`は各画像に対応する外部XMPサイドカーから数値の`crs:Exposure2012`を読み、線形sRGB画素に露出倍率を適用します。±32 stopsを超える値や不正な数値はエラーにします。Camera Rawの全現像パイプラインと一致する機能ではなく、露出スライダーだけの近似適用です。JPEGはこの指定で再エンコードされます。
+
+`set`は`NumericCRSProperties`にある数値のCamera RawプロパティだけをXMPサイドカーに書き込みます。プロパティ名には`crs:`を付けても省いても構いません。`mark`でキーフレームを設定し、`set`でキーフレームの値を入力し、`interpolate --write`で間のフレームを補間してから、JPEG/PNG/TIFFでは`render --apply-xmp-exposure`でExposure2012を画素へ適用できます。既定では既存XMPをバックアップし、`--dry-run`で書き込み内容を確認、`--no-backup`でバックアップを省略できます。これはLightroom/Camera Rawの現像エンジンを置き換える機能ではなく、他のCamera Raw値はXMPに記録・補間しても現在のレンダー画素には反映されません。数値が各Camera Rawスライダーの範囲内かは`set`では検証しません。
 
 `keyframes`は追加する内側の候補数を指定できます。既定は5候補で、未マークの内側フレームが5未満ならその数まで減らします。通常モードはJPEG/PNG/TIFFの明るさ曲線を平滑化し、直線遷移から外れるフレームを優先します。`--evenly-spaced`は輝度を見ずに等間隔の候補を選び、RAWを含む対応画像列にも使えます。どちらのモードも最初と最後の画像は候補にしません。既存の4/5つ星キーフレームと2/3つ星のHoly Grailマーカーは固定アンカーとして扱い、候補から除外します。`--write`でも既存評価やマーカーを上書きしません。
 

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -66,6 +67,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runScan(arguments[1], stdout, stderr)
 	case "mark":
 		return runMark(arguments[1:], stdout, stderr)
+	case "set":
+		return runSet(arguments[1:], stdout, stderr)
 	case "unmark":
 		return runUnmark(arguments[1:], stdout, stderr)
 	case "interpolate":
@@ -89,6 +92,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
+	fmt.Fprintln(writer, "  set IMAGE CRS_PROPERTY VALUE           set a numeric Camera Raw XMP value")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi    render JPEG/PNG/TIFF frames to MJPEG AVI")
@@ -226,6 +230,87 @@ func runMark(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	backup, err := WritePacket(sidecar, packet, !*noBackup)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	if backup != "" {
+		fmt.Fprintf(stdout, "Backup: %s\n", backup)
+	}
+	fmt.Fprintf(stdout, "Saved: %s\n", sidecar)
+	return 0
+}
+
+func runSet(arguments []string, stdout, stderr io.Writer) int {
+	if len(arguments) == 1 && (arguments[0] == "--help" || arguments[0] == "-h") {
+		fmt.Fprintln(stdout, "Usage: lrtl set IMAGE_OR_XMP CRS_PROPERTY VALUE [--dry-run] [--no-backup]")
+		return 0
+	}
+	dryRun, noBackup := false, false
+	operands := make([]string, 0, 3)
+	for index := 0; index < len(arguments); index++ {
+		argument := arguments[index]
+		if argument == "--" {
+			operands = append(operands, arguments[index+1:]...)
+			break
+		}
+		switch argument {
+		case "--dry-run":
+			dryRun = true
+		case "--no-backup":
+			noBackup = true
+		default:
+			if strings.HasPrefix(argument, "-") {
+				if _, err := strconv.ParseFloat(argument, 64); err != nil {
+					return reportError(stderr, fmt.Errorf("unknown set option %q", argument))
+				}
+			}
+			operands = append(operands, argument)
+		}
+	}
+	if len(operands) != 3 {
+		return reportError(stderr, fmt.Errorf("expected IMAGE_OR_XMP, CRS_PROPERTY, and VALUE"))
+	}
+	image, sidecar := inputPaths(operands[0])
+	imageExists, imageErr := osStat(image)
+	sidecarExists, sidecarErr := osStat(sidecar)
+	if imageErr != nil && sidecarErr != nil {
+		return reportError(stderr, imageErr)
+	}
+	if !imageExists && !sidecarExists {
+		return reportError(stderr, fmt.Errorf("image and XMP sidecar do not exist: %s", image))
+	}
+	property := strings.TrimPrefix(operands[1], "crs:")
+	if strings.Contains(property, ":") {
+		return reportError(stderr, fmt.Errorf("property must be a numeric Camera Raw control, with optional crs: prefix: %s", operands[1]))
+	}
+	allowed := false
+	for _, candidate := range NumericCRSProperties {
+		if property == candidate {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return reportError(stderr, fmt.Errorf("unsupported numeric Camera Raw property: %s", operands[1]))
+	}
+	value, err := strconv.ParseFloat(operands[2], 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
+		return reportError(stderr, fmt.Errorf("value must be a finite number: %s", operands[2]))
+	}
+	packet, err := PacketForSidecar(sidecar)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	property = "crs:" + property
+	if err := packet.SetScalar(property, formatNumber(value)); err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "%s: set %s=%s\n", filepath.Base(image), property, formatNumber(value))
+	if dryRun {
+		fmt.Fprintf(stdout, "Dry run. Would write %s\n", sidecar)
+		return 0
+	}
+	backup, err := WritePacket(sidecar, packet, !noBackup)
 	if err != nil {
 		return reportError(stderr, err)
 	}
