@@ -54,6 +54,15 @@ func (options RenderOptions) deflickerSmoother() string {
 	return options.DeflickerSmoother
 }
 
+func validMotionBlurFrames(frames int) bool {
+	switch frames {
+	case 2, 3, 4, 5, 10, 15, 20:
+		return true
+	default:
+		return false
+	}
+}
+
 type renderFrameWriter interface {
 	AddFrame([]byte) error
 	Close() error
@@ -226,8 +235,8 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if err := validateLongEdge(options.LongEdge); err != nil {
 		return err
 	}
-	if options.MotionBlurFrames == 1 || options.MotionBlurFrames < 0 || options.MotionBlurFrames > 20 {
-		return fmt.Errorf("motion blur frame window must be 0 (disabled) or between 2 and 20: %d", options.MotionBlurFrames)
+	if options.MotionBlurFrames != 0 && !validMotionBlurFrames(options.MotionBlurFrames) {
+		return fmt.Errorf("motion blur window must be 0 (disabled) or one of 2, 3, 4, 5, 10, 15, or 20 frames: %d", options.MotionBlurFrames)
 	}
 	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath}
 	if err := validateImageInputOptions(inputOptions); err != nil {

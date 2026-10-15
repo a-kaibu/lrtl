@@ -623,7 +623,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	autoOrient := set.Bool("auto-orient", false, "apply EXIF orientation before crop, analysis, and rendering")
 	timestampOverlay := set.Bool("timestamp-overlay", false, "burn each frame's EXIF/XMP capture time into the video")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
-	motionBlurFrames := set.Int("motion-blur", 0, "blend this many adjacent frames (0 off; 2-20)")
+	motionBlurFrames := set.Int("motion-blur", 0, "blend this many adjacent frames (0 off; 2, 3, 4, 5, 10, 15, 20)")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop supported RAW files with DNGLab")
 	dnglab := set.String("dnglab", "", "DNGLab executable for --raw-develop; defaults to PATH")
