@@ -75,6 +75,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runInterpolate(arguments[1:], stdout, stderr)
 	case "render":
 		return runRender(arguments[1:], stdout, stderr)
+	case "subtitles":
+		return runSubtitles(arguments[1:], stdout, stderr)
 	case "preview":
 		return runPreview(arguments[1:], stdout, stderr)
 	case "deflicker":
@@ -102,6 +104,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov render frames; --codec selects H.265 or ProRes")
+	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--evenly-spaced] [--raw-develop] [--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -717,6 +720,38 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Wrote brightness preview for %d frames: %s\n", len(frames), *output)
+	return 0
+}
+
+func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
+	set := newFlagSet("subtitles", stderr)
+	output := set.String("output", "", "write timestamp subtitles to an SRT file")
+	fps := set.Int("fps", 24, "video frame rate used for subtitle timing (1-240)")
+	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used for subtitle text")
+	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--output": true, "-output": true,
+		"--fps": true, "-fps": true,
+		"--timestamp-format": true, "-timestamp-format": true,
+	})); err != nil {
+		if help, code := finishFlagParse(set, err); help {
+			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--timestamp-format LAYOUT] [--overwrite]")
+			return code
+		} else {
+			return code
+		}
+	}
+	if set.NArg() != 1 || *output == "" {
+		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--timestamp-format LAYOUT] [--overwrite]"))
+	}
+	frames, err := DiscoverSequence(set.Arg(0))
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	if err := writeSequenceSubtitles(frames, *output, *fps, *timestampFormat, *overwrite); err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %d fps: %s\n", len(frames), *fps, *output)
 	return 0
 }
 
