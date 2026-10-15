@@ -23,6 +23,8 @@ type xmpBasicAdjustments struct {
 	shadows         float64
 	whites          float64
 	blacks          float64
+	texture         float64
+	clarity         float64
 	vibrance        float64
 	saturation      float64
 	masterCurve     [256]uint8
@@ -89,6 +91,8 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 		{"Shadows2012", &adjustments.shadows, -100, 100},
 		{"Whites2012", &adjustments.whites, -100, 100},
 		{"Blacks2012", &adjustments.blacks, -100, 100},
+		{"Texture", &adjustments.texture, -100, 100},
+		{"Clarity2012", &adjustments.clarity, -100, 100},
 		{"Vibrance", &adjustments.vibrance, -100, 100},
 		{"Saturation", &adjustments.saturation, -100, 100},
 	}
@@ -483,7 +487,7 @@ func makeToneCurveTable(points []toneCurvePoint) [256]uint8 {
 func (adjustments xmpBasicAdjustments) globalActive() bool {
 	return adjustments.exposure != 0 || adjustments.hasWhiteBalance || adjustments.contrast != 0 || adjustments.highlights != 0 ||
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
-		adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
+		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
 }
 
@@ -531,9 +535,17 @@ func encodeLinearSRGB(value float64) uint8 {
 
 func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGBA {
 	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
 	result := image.NewNRGBA(bounds)
 	exposure := math.Exp2(adjustments.exposure)
 	saturation := 1 + adjustments.saturation/100
+	var textureDetail, clarityDetail []int8
+	if adjustments.texture != 0 {
+		textureDetail = xmpLuminanceDetail(img, xmpTextureRadius(width, height))
+	}
+	if adjustments.clarity != 0 {
+		clarityDetail = xmpLuminanceDetail(img, xmpClarityRadius(width, height))
+	}
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 		for x := bounds.Min.X; x < bounds.Max.X; x++ {
 			pixel := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
@@ -546,6 +558,17 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			blue := srgb8ToLinear[pixel.B] * blueGain * exposure
 			luminance := 0.2126*red + 0.7152*green + 0.0722*blue
 			adjustedLuminance := basicAdjustedLuminance(luminance, adjustments)
+			if adjustments.texture != 0 || adjustments.clarity != 0 {
+				index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
+				var fineDetail, broadDetail int8
+				if textureDetail != nil {
+					fineDetail = textureDetail[index]
+				}
+				if clarityDetail != nil {
+					broadDetail = clarityDetail[index]
+				}
+				adjustedLuminance = xmpApplyDetail(adjustedLuminance, adjustments.texture, adjustments.clarity, fineDetail, broadDetail)
+			}
 			if luminance > 1e-12 {
 				scale := adjustedLuminance / luminance
 				red, green, blue = red*scale, green*scale, blue*scale

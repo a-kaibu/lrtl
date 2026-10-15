@@ -31,7 +31,8 @@ const (
 // The geometry is evaluated in normalized, oriented image coordinates.
 type xmpLocalCorrection struct {
 	exposure, contrast, highlights, shadows float64
-	whites, blacks, saturation              float64
+	whites, blacks, saturation, texture     float64
+	clarity                                 float64
 	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
@@ -131,6 +132,8 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		{name: "LocalWhites2012", target: &correction.whites},
 		{name: "LocalBlacks2012", target: &correction.blacks},
 		{name: "LocalSaturation", target: &correction.saturation},
+		{name: "LocalTexture", target: &correction.texture},
+		{name: "LocalClarity2012", target: &correction.clarity},
 	} {
 		*property.target, _, err = xmpLocalSlider(element, property.name)
 		if err != nil {
@@ -190,7 +193,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		}
 	}
 	if correction.exposure == 0 && correction.contrast == 0 && correction.highlights == 0 && correction.shadows == 0 &&
-		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.toningSaturation == 0 &&
+		correction.whites == 0 && correction.blacks == 0 && correction.saturation == 0 && correction.texture == 0 && correction.clarity == 0 && correction.toningSaturation == 0 &&
 		!correction.hasWhiteBalance && !correction.colorGrading.active && !correction.hasMainCurve &&
 		!correction.hasChannelCurve[0] && !correction.hasChannelCurve[1] && !correction.hasChannelCurve[2] {
 		return correction, false, nil
@@ -684,6 +687,13 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 	}
 	current := img
 	for _, correction := range corrections {
+		var textureDetail, clarityDetail []int8
+		if correction.texture != 0 {
+			textureDetail = xmpLuminanceDetail(current, xmpTextureRadius(width, height))
+		}
+		if correction.clarity != 0 {
+			clarityDetail = xmpLuminanceDetail(current, xmpClarityRadius(width, height))
+		}
 		result := image.NewNRGBA(bounds)
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
@@ -720,6 +730,24 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 					} else {
 						red, green, blue = adjustedLuminance, adjustedLuminance, adjustedLuminance
 					}
+				}
+				if correction.texture != 0 || correction.clarity != 0 {
+					index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
+					var fineDetail, broadDetail int8
+					if textureDetail != nil {
+						fineDetail = textureDetail[index]
+					}
+					if clarityDetail != nil {
+						broadDetail = clarityDetail[index]
+					}
+					spatialLuminance := xmpApplyDetail(adjustedLuminance, correction.texture*weight, correction.clarity*weight, fineDetail, broadDetail)
+					if adjustedLuminance > 1e-12 {
+						scale := spatialLuminance / adjustedLuminance
+						red, green, blue = red*scale, green*scale, blue*scale
+					} else {
+						red, green, blue = spatialLuminance, spatialLuminance, spatialLuminance
+					}
+					adjustedLuminance = spatialLuminance
 				}
 				if correction.saturation != 0 {
 					factor := 1 + correction.saturation/100*weight
