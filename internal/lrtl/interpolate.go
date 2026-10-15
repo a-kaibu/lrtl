@@ -278,7 +278,11 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 			}
 		}
 	}
-	maskTransitions, err := planMaskTransitions(packets, keyframes)
+	aspect := 0.0
+	if len(frames) > 0 {
+		aspect = sequenceImageAspect(frames[0])
+	}
+	maskTransitions, err := planMaskTransitions(packets, keyframes, aspect)
 	if err != nil {
 		return nil, err
 	}

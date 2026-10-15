@@ -265,7 +265,31 @@ func interpolateMaskNumber(name string, start, end, fraction float64) float64 {
 	return value
 }
 
-func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int) ([][]maskTransitionChange, error) {
+func isCircularGradientNode(node maskTransitionNode) bool {
+	what, found, err := crsElementValue(node.element, "What")
+	return err == nil && found && strings.TrimSpace(what) == "Mask/CircularGradient"
+}
+
+func radialTransitionForTarget(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, target int, key maskTransitionKey, aspect float64) (map[string]float64, bool) {
+	if len(keyframes) < 2 || key.maskID == "" || aspect <= 0 || target <= keyframes[0] || target >= keyframes[len(keyframes)-1] {
+		return nil, false
+	}
+	for segment := 0; segment < len(keyframes)-1; segment++ {
+		left, right := keyframes[segment], keyframes[segment+1]
+		if target <= right {
+			start, startFound := indexes[left][key]
+			end, endFound := indexes[right][key]
+			if !startFound || !endFound || !isCircularGradientNode(start) || !isCircularGradientNode(end) {
+				return nil, false
+			}
+			fraction := float64(target-left) / float64(right-left)
+			return interpolateRadialGradient(start.values, end.values, fraction, aspect)
+		}
+	}
+	return nil, false
+}
+
+func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, aspect float64) ([][]maskTransitionChange, error) {
 	changes := make([][]maskTransitionChange, len(packets))
 	indexes := make([]map[maskTransitionKey]maskTransitionNode, len(packets))
 	for index, packet := range packets {
@@ -307,6 +331,11 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int) ([][]maskT
 			proposed := maskTransitionSource(keyframeIndices, indexes, target, key)
 			if len(proposed) == 0 {
 				continue
+			}
+			if radial, ok := radialTransitionForTarget(keyframeIndices, indexes, target, key, aspect); ok {
+				for name, value := range radial {
+					proposed[name] = value
+				}
 			}
 			current := indexes[target][key].values
 			values := make(map[string]string)

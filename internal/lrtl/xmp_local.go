@@ -212,7 +212,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 	if err != nil {
 		return correction, false, err
 	}
-	if !haveLeft || !haveTop || !haveRight || !haveBottom || correction.right <= correction.left || correction.bottom <= correction.top {
+	if !haveLeft || !haveTop || !haveRight || !haveBottom || math.Abs(correction.right-correction.left) <= 1e-12 || math.Abs(correction.bottom-correction.top) <= 1e-12 {
 		return correction, false, nil
 	}
 	correction.angle, _, err = xmpLocalNumber(mask, "Angle", 0, -3600, 3600)
@@ -268,14 +268,17 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int) float64
 		position := ((nx-correction.fullX)*dx + (ny-correction.fullY)*dy) / lengthSquared
 		weight = 1 - math.Max(0, math.Min(1, position))
 	case localMaskCircularGradient:
-		centerX, centerY := (correction.left+correction.right)/2, (correction.top+correction.bottom)/2
-		halfWidth := (correction.right - correction.left) * float64(width) / 2
-		halfHeight := (correction.bottom - correction.top) * float64(height) / 2
-		dx, dy := (nx-centerX)*float64(width), (ny-centerY)*float64(height)
-		angle := correction.angle * math.Pi / 180
-		rotatedX := dx*math.Cos(angle) + dy*math.Sin(angle)
-		rotatedY := -dx*math.Sin(angle) + dy*math.Cos(angle)
-		radius := math.Sqrt((rotatedX/halfWidth)*(rotatedX/halfWidth) + (rotatedY/halfHeight)*(rotatedY/halfHeight))
+		radius, decoded := radialMaskWeight(correction.left, correction.top, correction.right, correction.bottom, correction.angle, x, y, width, height)
+		if !decoded {
+			centerX, centerY := (correction.left+correction.right)/2, (correction.top+correction.bottom)/2
+			halfWidth := math.Abs(correction.right-correction.left) * float64(width) / 2
+			halfHeight := math.Abs(correction.bottom-correction.top) * float64(height) / 2
+			dx, dy := (nx-centerX)*float64(width), (ny-centerY)*float64(height)
+			angle := correction.angle * math.Pi / 180
+			rotatedX := dx*math.Cos(angle) + dy*math.Sin(angle)
+			rotatedY := -dx*math.Sin(angle) + dy*math.Cos(angle)
+			radius = math.Sqrt((rotatedX/halfWidth)*(rotatedX/halfWidth) + (rotatedY/halfHeight)*(rotatedY/halfHeight))
+		}
 		feather := math.Abs(correction.feather) / 100
 		if feather < 1e-6 {
 			if radius < 1 {
