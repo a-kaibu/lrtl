@@ -20,6 +20,7 @@ import (
 )
 
 type RenderOptions struct {
+	LRTPreview        string
 	FPS               int
 	Quality           int
 	FFmpegPath        string
@@ -179,7 +180,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if options.MotionBlurFrames != 0 && !validMotionBlurFrames(options.MotionBlurFrames) {
 		return fmt.Errorf("motion blur window must be 0 (disabled) or one of 2, 3, 4, 5, 10, 15, or 20 frames: %d", options.MotionBlurFrames)
 	}
-	inputOptions := imageInputOptions{RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath, DNGConverterPath: options.DNGConverterPath}
+	inputOptions := imageInputOptions{LRTPreview: options.LRTPreview, RawPreview: options.RawPreview, RawDevelop: options.RawDevelop, DNGLabPath: options.DNGLabPath, DNGConverterPath: options.DNGConverterPath}
 	if err := validateImageInputOptions(inputOptions); err != nil {
 		return err
 	}
@@ -266,7 +267,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 
 	for _, frame := range frames {
-		if supportedRasterExtension(frame.Image) {
+		if options.LRTPreview != "" || supportedRasterExtension(frame.Image) {
 			continue
 		}
 		if !supportsRawDevelopment(frame.Image) {

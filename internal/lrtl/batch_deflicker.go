@@ -17,6 +17,7 @@ type batchDeflickerResult struct {
 
 func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("batch-deflicker", stderr)
+	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	recursive := set.Bool("recursive", false, "find sequence directories at any depth")
 	workers := set.Int("workers", 1, "number of sequences to analyze concurrently (1-64)")
 	write := set.Bool("write", false, "save final corrections after all sequences pass content validation")
@@ -36,6 +37,7 @@ func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "include XMP crop in analysis")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--workers": true, "-workers": true, "--reference": true, "-reference": true,
+		"--lrt-preview": true, "-lrt-preview": true,
 		"--smooth": true, "-smooth": true, "--smoother": true, "-smoother": true,
 		"--passes": true, "-passes": true, "--dnglab": true, "-dnglab": true,
 		"--dng-converter": true, "-dng-converter": true,
@@ -75,7 +77,7 @@ func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 			return reportError(stderr, err)
 		}
 	}
-	input := imageInputOptions{RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+	input := imageInputOptions{LRTPreview: *lrtPreview, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop}
 	if err := validateImageInputOptions(input); err != nil {
 		return reportError(stderr, err)

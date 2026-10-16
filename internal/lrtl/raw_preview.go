@@ -75,6 +75,7 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 }
 
 type imageInputOptions struct {
+	LRTPreview       string
 	RawPreview       bool
 	RawDevelop       bool
 	DNGLabPath       string
@@ -85,6 +86,14 @@ type imageInputOptions struct {
 }
 
 func validateImageInputOptions(options imageInputOptions) error {
+	if options.LRTPreview != "" {
+		if options.LRTPreview != "camera" && options.LRTPreview != "visual" {
+			return fmt.Errorf("--lrt-preview must be camera or visual")
+		}
+		if options.RawPreview || options.RawDevelop {
+			return fmt.Errorf("--lrt-preview cannot be combined with --raw-preview or --raw-develop")
+		}
+	}
 	if options.RawPreview && options.RawDevelop {
 		return fmt.Errorf("--raw-preview and --raw-develop cannot be used together")
 	}
@@ -110,7 +119,10 @@ func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte,
 	path := frame.Image
 	var data []byte
 	var err error
-	if supportedRasterExtension(path) {
+	if options.LRTPreview != "" {
+		path = lrtPreviewPath(path, options.LRTPreview)
+		data, err = os.ReadFile(path)
+	} else if supportedRasterExtension(path) {
 		data, err = os.ReadFile(path)
 	} else if supportsRawDevelopment(path) {
 		if options.RawDevelop {

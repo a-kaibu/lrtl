@@ -36,6 +36,7 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 	applyExposure := set.Bool("apply-xmp-exposure", false, "apply XMP Exposure2012")
 	applyCrop := set.Bool("apply-xmp-crop", previews, "apply XMP crop rectangles and angles")
 	autoOrient := set.Bool("auto-orient", true, "apply EXIF orientation")
+	lrtPreview := set.String("lrt-preview", "", "read existing LRT camera or visual preview cache")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop RAW using Adobe DNG Converter or explicit DNGLab")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
@@ -52,7 +53,7 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 	timestamp := set.Bool("timestamp-overlay", false, "burn frame capture time into exported pixels")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout for timestamp overlay")
 	values := map[string]bool{}
-	for _, name := range []string{"output", "selection", "filename-contains", "long-edge", "output-height", "aspect", "dnglab", "dng-converter", "reference", "smooth", "deflicker-smoother", "passes", "motion-blur", "watermark", "watermark-position", "timestamp-format"} {
+	for _, name := range []string{"output", "selection", "filename-contains", "long-edge", "output-height", "aspect", "dnglab", "dng-converter", "reference", "smooth", "deflicker-smoother", "passes", "motion-blur", "watermark", "watermark-position", "timestamp-format", "lrt-preview"} {
 		values["--"+name] = true
 		values["-"+name] = true
 	}
@@ -83,6 +84,19 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 		})
 		if !basicSpecified {
 			*applyBasic = false
+		}
+	}
+	if *lrtPreview != "" {
+		specified := make(map[string]bool)
+		set.Visit(func(f *flag.Flag) { specified[f.Name] = true })
+		if !specified["apply-xmp-basic"] {
+			*applyBasic = false
+		}
+		if !specified["apply-xmp-crop"] {
+			*applyCrop = false
+		}
+		if !specified["auto-orient"] {
+			*autoOrient = false
 		}
 	}
 	var ratio float64
@@ -137,6 +151,7 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 		frames = matched
 	}
 	options := RenderOptions{LongEdge: *longEdge, OutputHeight: *height, AspectRatio: ratio, ApplyXMPBasic: *applyBasic, ApplyXMPExposure: *applyExposure, ApplyXMPCrop: *applyCrop, AutoOrient: *autoOrient, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *converter, Deflicker: deflickerEnabled, Reference: area, SmoothRadius: *smooth, DeflickerSmoother: *smoother, DeflickerPasses: *passes, Constant: *constant, MotionBlurFrames: *motionBlur, Watermark: *watermark, WatermarkPosition: strings.ToLower(strings.TrimSpace(*watermarkPosition)), TimestampOverlay: timestampEnabled, TimestampFormat: *timestampFormat}
+	options.LRTPreview = *lrtPreview
 	if previews {
 		var packets []*XMPPacket
 		if *writeEV {

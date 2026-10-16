@@ -902,6 +902,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	applyXMPBasic := set.Bool("apply-xmp-basic", false, "apply supported global Camera Raw tone and color controls from sidecar XMP")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP")
 	autoOrient := set.Bool("auto-orient", false, "apply EXIF orientation before crop, analysis, and rendering")
+	lrtPreview := set.String("lrt-preview", "", "read existing LRT camera or visual preview cache")
 	timestampOverlay := set.Bool("timestamp-overlay", false, "burn each frame's EXIF/XMP capture time into the video")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
 	watermark := set.String("watermark", "", "burn fixed text into every frame")
@@ -912,6 +913,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	parseArgs := flagFirst(arguments, map[string]bool{
+		"--lrt-preview": true, "-lrt-preview": true,
 		"--output": true, "-output": true,
 		"--selection": true, "-selection": true,
 		"--filename-contains": true, "-filename-contains": true,
@@ -1021,6 +1023,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		ApplyXMPBasic:     *applyXMPBasic,
 		ApplyXMPCrop:      *applyXMPCrop,
 		AutoOrient:        *autoOrient,
+		LRTPreview:        *lrtPreview,
 		TimestampOverlay:  timestampOverlayEnabled,
 		TimestampFormat:   *timestampFormat,
 		Watermark:         *watermark,
@@ -1256,6 +1259,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 
 func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("deflicker", stderr)
+	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	write := set.Bool("write", false, "write exposure corrections to XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
 	reset := set.Bool("reset", false, "remove lrtl-managed deflicker exposure corrections")
@@ -1275,6 +1279,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--smoother": true, "-smoother": true,
+		"--lrt-preview": true, "-lrt-preview": true,
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})
@@ -1296,7 +1301,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop":
+			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview":
 				analysisOption = true
 			}
 		})
@@ -1319,6 +1324,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
+	inputOptions.LRTPreview = *lrtPreview
 	var changes []DeflickerChange
 	measuredPasses := 0
 	if *reset {

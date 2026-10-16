@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `--lrt-preview camera|visual`で、既存のLRTプレビューキャッシュを画像入力として使えます。`render`、`export`、`preview-images`、`preview-ev`、`deflicker`、`batch-deflicker`に対応します。LRT 7.5.5のパス生成・JPEGエンコードを実行して形式を確認し、TIFF画素保持、AVIの無再圧縮、測光値の元XMP保存、個別/一括Deflickerの一致をテストしています。キャッシュの鮮度判定やAdobe現像の再生成は行いません。
+
 - `--apply-xmp-basic`で`ConvertToGrayscale`と8色の`GrayMixer`を画像へ反映します。従来は保存・補間だけで、プレビュー・動画がカラーのままになる処理の抜けを修正しました。16-bit階調、色別調整、無彩色保持、露出/WBとの順序、後段のカラーグレーディング、出力TIFF/JPEG/AVIとエラー時の保持をテストしています。Adobe Monochromeプロファイルとの画素一致は未対応です。
 
 - `batch-preview-images`で複数連番のJPEGプレビューを並列生成できます。個別生成との一致、選択フレームの保存、元ファイルの保持、生成・保存途中の失敗をテストしています。
@@ -116,7 +118,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。JPEGは外部サイドカーがなければ画像内の標準/拡張XMP、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRはtag 700、RAFは埋め込みJPEG、CR3はISO BMFFのAdobe XMP UUIDから読み取る。編集結果はサイドカーへ保存し画像を変更しない。`set`で許可した131項目とPreview EVを選択フレーム単位で編集し、局所補正/マスクは`masks`で確認した配列パスを`set`へ渡して編集できます。`preview-ev`でRGBヒストグラムからPreview EVを算出してXMPへ書き込める。CLIの`curve`で全体／局所のマスター/R/G/Bポイントを単一画像や連番へ編集し、属性/単純テキスト/RDF Seq表現をバックアップ付きで保存。全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、ConvertToGrayscaleと8色GrayMixer、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度で16-bit PCHIPカーブ出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を最初の4つ星（なければ先頭）から均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入、近接アンカーの直線化・等値区間の平坦化を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。アスペクト比を使う円形グラデーションの専用形状補正、Camera Rawのマスク描画との一致は未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
-| 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`preview-images`で対応RAW/XMPからJPEG連番と測光マニフェストを生成し、任意で元XMPへPreview EVを保存。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/Adobe DNG Converterによる現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/Adobe DNG Converterによる現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
+| 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`preview-images`で対応RAW/XMPからJPEG連番と測光マニフェストを生成し、任意で元XMPへPreview EVを保存。`--lrt-preview camera|visual`でLRTの既存JPEGキャッシュを明示的に読み、測光・動画・TIFF・個別/一括Deflickerの入力として使える。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/Adobe DNG Converterによる現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/Adobe DNG Converterによる現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を識別可能なDeflicker専用LocalExposureスロット（なければ`crs:Exposure2012`）へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
@@ -768,6 +770,30 @@ lrtl batch-holy-grail C:\photos\sequences --recursive --reset --write
 
 個別実行とのXMP・AVIフレーム/索引の一致、並列数1/4、EXIF/LRT入力の自動形状、専用補正スロット、LRT 7.5.5で観測した補正値、バックアップ、再実行での重複防止、評価の作成・解除をテストしています。破損した撮影値・XMP・LRT入力・補正記録や評価衝突による全体保存の中止、画像EXIFを読めない場合の補正解除も検査します。LRTのバッチキュー自体の再現やCamera Rawとの画素一致を示すものではありません。
 
+## LRTの既存プレビューキャッシュを使う
+
+```powershell
+# LRTで生成済みのVisual Previewを使って動画化
+lrtl render C:\photos\sequence --output C:\photos\visual.avi --lrt-preview visual
+
+# 通常プレビューのPreview EVを測り、元の連番のXMPへ保存
+lrtl preview-ev C:\photos\sequence --lrt-preview camera --write
+
+# Visual Previewの画像からDeflicker補正を計算（--writeで保存）
+lrtl deflicker C:\photos\sequence --lrt-preview visual --smoother lowess
+
+# Visual PreviewをTIFF連番に展開
+lrtl export C:\photos\sequence --output C:\photos\visual-tiff --lrt-preview visual
+```
+
+`camera`は`画像フォルダー/.lrt/previews/拡張子を除いた名前.lrtpreview`、`visual`は`.lrt/visual/拡張子を除いた名前.lrtpreview`を使います。例えば`frame.001.NEF`は`frame.001.lrtpreview`になります。これはインストール済みLRT 7.5.5のパス生成メソッドを呼び出して確認した配置です。同版のプレビューエンコーダーが生成したファイルは通常のJPEGであり、本プロジェクトが用意したグラデーションを同エンコーダーで保存したテスト画像で読込を検査しています。
+
+元画像の連番順・選択・XMPとの対応を維持して、画素だけを選択したキャッシュから読みます。RAW本体のデコードや外部コンバーターは不要です。`render`、`export`、`preview-images`、`preview-ev`、`deflicker`、`batch-deflicker`で指定できます。`batch-render`と`batch-preview-images`は`--`以降に同じオプションを渡します。`--raw-preview`、`--raw-develop`との併用はエラーです。選択したキャッシュが欠けている場合や壊れている場合もエラーとし、元画像・別の種類のキャッシュへフォールバックしません。
+
+キャッシュには処理が適用済みの場合があるため、`export`と`preview-images`では、この入力モードを選ぶと既定のEXIF向き・XMP基本現像・クロップ適用を無効にします。必要な場合はそれぞれのフラグを明示できますが、適用済みの処理を重ねることになります。無加工のMJPEG AVIはキャッシュJPEGを無再圧縮で格納し、TIFFはGoで復号したRGB画素を16-bitコンテナーに保持します。JPEG由来の階調が16-bit相当に増えるものではありません。
+
+通常の解析と同様に`preview-ev --write`は元画像のXMPへ`lrt:ExternalExposureDefault`を保存します。Deflickerは既存の独自測光・補正経路を使い、複数パスではキャッシュを基にしたGo側の補正を再測定します。Camera Rawを再実行する機能ではありません。キャッシュは変更しません。LRTの操作後やXMP編集後にキャッシュが古くなっていても日時等から自動判定しないため、必要なプレビューをLRTで生成してから明示的に選択してください。ROI・ICC色管理・Visual Deflickerの数値全体がLRTと一致することは未確認です。
+
 ## 白黒現像とGrayMixer
 
 ```powershell
@@ -809,7 +835,7 @@ lrtl render C:\photos\preview --output C:\photos\preview.avi
 
 元画像とXMPは既定では変更しません。`--write-preview-ev`は生成した画像の測光値を元XMPの`lrt:ExternalExposureDefault`へ保存し、`--no-backup`でバックアップを省略できます。選択フィルターを使った場合は選択画像だけが対象です。XMPを読み取れない場合や画像生成に失敗した場合はXMPを書きません。全プレビュー生成・最終XMPの内容検証後に保存します。保存中のOSエラーでは保存済み枚数を報告し、生成済みプレビューは残します。画像と複数XMPを一括でロールバックする機能ではありません。
 
-これはCLIから再生・測光に使う独立したプレビュー画像を作る機能です。XMP反映済み画像を測った値は、未調整RAWの測光値とは異なります。LRT/Camera Rawの縮小・ROI・現像と同じ画像を作る検証ではなく、自動キャッシュ判定・再利用、LRT固有のプレビューファイル形式は未対応です。生成画像には現像値が焼き込まれるので、再生時に元画像のXMPを重ねて適用する必要はありません。
+これはCLIから再生・測光に使う独立したプレビュー画像を作る機能です。XMP反映済み画像を測った値は、未調整RAWの測光値とは異なります。LRT/Camera Rawの縮小・ROI・現像と同じ画像を作る検証ではなく、自動キャッシュ判定・再利用、LRTキャッシュへの書き出しは未対応です。既存キャッシュの明示的な読込は`--lrt-preview camera|visual`で指定できます。生成画像には現像値が焼き込まれるので、再生時に元画像のXMPを重ねて適用する必要はありません。
 
 ## JPEGプレビューの一括生成
 
