@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- RAWプロファイルの`BaselineExposureOffset`を適用します。正負のSRATIONAL値をBaselineExposureへEVで加算し、Hue/Sat補正後・Look/トーンカーブ前の露出段階へ反映します。両バイト順の分数684ケース、露出の相殺で全65,536入力を保持すること、プロファイルとの適用順序、ルートIFDからの継承と主画像による上書き、合成RAW→XMP→TIFF→AVI、異常入力とファズテストで検証しています。
+
 - RAWプロファイルの`ProfileHueSatMapData1/2`と`ProfileLookTableData`を適用します。線形ProPhoto RGB上でHSVを補正し、色相の循環・3次元補間・2次元テーブル・彩度ゼロ行の省略・Vのlinear/sRGB符号化に対応します。2光源のテーブルは既存の色温度推定から混合します。独立した格子計算、光源順の反転、補正順、異常入力、合成RAW→XMP→TIFF→AVI、ファズテストで検証しています。3光源・HDR・Camera Rawとの画素一致は未対応です。
 
 - RAWの埋め込みDNGプロファイルにある`ProfileToneCurve`を画素へ反映します。線形ProPhoto RGB上で自然3次スプラインと色相を保つRGB補間を使い、最後にsRGBへ変換します。解析解・不等間隔の制御点・RGBの全並び順・恒等カーブの全65,536入力・異常入力・合成RAW→XMP露出→TIFF→AVIをテストしています。外部プロファイルの選択、Camera Rawとの画素一致は未対応です。
@@ -104,7 +106,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を識別可能なDeflicker専用LocalExposureスロット（なければ`crs:Exposure2012`）へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
-| RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurveを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed DNG取り込みに対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現、ロッシーDNGとサイズ縮小は未対応 | 一部 |
+| RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed DNG取り込みに対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現、ロッシーDNGとサイズ縮小は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
@@ -553,7 +555,7 @@ lrtl preview-ev "D:\Timelapse\RAW" --raw-develop
 lrtl import "E:\DCIM" --output "D:\Timelapse\DNG" --convert-dng
 ```
 
-Converterを`-u -l -p0 -dng1.4`で呼び、一時フォルダーにデモザイク済み・未圧縮Linear DNGを生成します。その実画素から黒/白レベル、AsShotホワイトバランス、CameraCalibration/AnalogBalance、ForwardMatrixまたはColorMatrix、BaselineExposureを使ってGoで16-bit sRGBを生成します。ストリップ/タイル、DefaultCrop/ActiveArea、DefaultScaleに対応します。`--raw-preview`は従来どおりカメラ内蔵プレビューを使う別の入力モードです。元RAWと隣接XMPは現像処理で変更しません。
+Converterを`-u -l -p0 -dng1.4`で呼び、一時フォルダーにデモザイク済み・未圧縮Linear DNGを生成します。その実画素から黒/白レベル、AsShotホワイトバランス、CameraCalibration/AnalogBalance、ForwardMatrixまたはColorMatrix、BaselineExposureとプロファイルのBaselineExposureOffsetを使ってGoで16-bit sRGBを生成します。ストリップ/タイル、DefaultCrop/ActiveArea、DefaultScaleに対応します。`--raw-preview`は従来どおりカメラ内蔵プレビューを使う別の入力モードです。元RAWと隣接XMPは現像処理で変更しません。
 
 この現像はAdobeのデモザイクと独自の色変換を組み合わせたものです。デュアル光源の色温度推定、色域外のクリップ、画素端のクロップ丸めは近似です。DNG `OpcodeList2/3`のWarpRectilinear/MapTable/MapPolynomial/GainMap/DeltaPerRow/DeltaPerColumn/ScalePerRow/ScalePerColumnと、埋め込みプロファイルのHue/Sat・Lookテーブル・ProfileToneCurveを適用します。その他のOpcodeやCamera Rawの全現像工程は再現しません。未対応の必須Opcodeはエラーにし、オプション指定された未対応Opcodeだけスキップします。追加XMPは`--apply-xmp-basic`/`--apply-xmp-crop`を指定した場合に既存のlrtl近似処理で適用します。対応カメラはインストール済みConverterに依存し、変換失敗時は内蔵JPEGへ自動フォールバックせずエラーを返します。Converterの出力と1枚分の復号画像にはそれぞれ1 GiBの上限を設け、Converter実行は5分でタイムアウトします。
 
@@ -817,9 +819,15 @@ WarpRectilinearはActiveAreaの整数画素座標を使います。中心は幅�
 
 処理は[Adobe DNG仕様の第7章](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)とSDKを参照した独立実装です。LUT全65,536入力、多項式と独立したべき乗和、座標・色面・混在する補正順・飽和、両バイト順、破損データ、合成RAWからXMP露出・TIFF・AVIへの画素をテストし、ファズテストも追加しています。Adobeの画素処理全体や、SDKの中間16-bit量子化・走査最適化を含むビット単位の一致を示すものではありません。
 
+### RAWプロファイルの露出オフセット
+
+埋め込み`BaselineExposureOffset`（tag 51109）は1個のSRATIONALとして読み、BaselineExposure（50730）へEV値で加算します。省略時は0です。合計に対する`2^EV`を既存の線形露出段階で適用し、XMP露出はその後のレンダーパイプラインで処理します。プロファイルの色テーブルやトーンカーブがない場合も適用します。
+
+分母0、非有限値、形式・個数の不一致はエラーです。現像エンジンの範囲として、BaselineExposure・オフセット・合計のそれぞれを−16〜+16 EVに制限します（DNG仕様の値域を表すものではありません）。両バイト順・正負の分母を含む684ケースでEVと画素を独立計算し、全65,536入力での正負露出の相殺、色テーブル・カーブとの順序、IFD継承と上書き、XMP露出→TIFF→AVI、失敗時の出力取り消し・元データの保持をテストしています。分数の専用ファズテストとDNGファイル全体のファズテストもあります。Adobeのシャドウ・露出ランプやCamera Raw全体との画素一致は未対応です。
+
 ### RAWプロファイルのHue/Sat・Lookテーブル
 
-`ProfileHueSatMapDims/Data1/Data2`（tag 50937〜50939）と`ProfileLookTableDims/Data`（50981/50982）を読み、埋め込みプロファイルを線形ProPhoto RGB上で適用します。Hue/Sat→BaselineExposureの線形ゲイン→Look→ProfileToneCurve→sRGB変換の順です。トーンカーブがなくてもテーブルを適用します。
+`ProfileHueSatMapDims/Data1/Data2`（tag 50937〜50939）と`ProfileLookTableDims/Data`（50981/50982）を読み、埋め込みプロファイルを線形ProPhoto RGB上で適用します。Hue/Sat→BaselineExposure + BaselineExposureOffsetの線形ゲイン→Look→ProfileToneCurve→sRGB変換の順です。トーンカーブがなくてもテーブルを適用します。
 
 テーブルはV→H→Sの順に格納された色相シフト（度）・彩度倍率・明度倍率です。Hは循環し、S/Vの端点を含めて三線形補間します。Vが1の2次元テーブル、V省略/ゼロの旧形式も読みます。彩度ゼロでは明度倍率を1に補正します。彩度ゼロ行の省略形式では最初の彩度行から色相・彩度倍率を補い、明度倍率を1にします。`ProfileHueSatMapEncoding`/`ProfileLookTableEncoding`の0（linear）と1（sRGB）に対応し、sRGBの場合はVを符号化して参照・倍率補正し、復号してRGBへ戻します。浮動小数点の直接演算を使い、SDKの補間テーブル量子化との一致は保証しません。
 
@@ -835,7 +843,7 @@ WarpRectilinearはActiveAreaの整数画素座標を使います。中心は幅�
 
 自然スプラインの解析解、不等間隔の制御点、RGBの全6順列と同値、色域外の出力、両バイト順、BaselineExposureとの順序、恒等カーブの全65,536入力（行列の丸めによる差は16-bitで最大1）、合成RAW→Opcode→プロファイルカーブ→XMP露出→TIFF→AVI、失敗時の後始末をテストしています。プロファイルカーブとDNGファイルのファズテストも追加しています。
 
-処理は[DNG仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)とSDKを参照した独立実装です。外部DCP・追加カメラプロファイルの選択、3光源テーブル、RGBTables、HDRの拡張値・プロファイル符号化、BaselineExposureOffset、Adobe既定のシャドウ・露出ランプは未対応です。BaselineExposureは既存の単純な線形ゲインを使います。SDKの補間テーブルの量子化やCamera Raw全体との画素一致を検証したものではありません。
+処理は[DNG仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)とSDKを参照した独立実装です。外部DCP・追加カメラプロファイルの選択、3光源テーブル、RGBTables、HDRの拡張値・プロファイル符号化、Adobe既定のシャドウ・露出ランプは未対応です。BaselineExposure + BaselineExposureOffsetは既存の単純な線形ゲインを使います。SDKの補間テーブルの量子化やCamera Raw全体との画素一致を検証したものではありません。
 
 ### XMPの画素処理
 

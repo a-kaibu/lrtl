@@ -319,9 +319,9 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		profileWeight = 0
 	}
 	hueMap := profileMaps.hueMap(profileWeight)
-	exposure := fields.scalar(50730, 0)
-	if math.Abs(exposure) > 16 {
-		return nil, fmt.Errorf("Linear DNG baseline exposure is outside supported range")
+	exposure, err := readDNGBaselineExposure(fields)
+	if err != nil {
+		return nil, err
 	}
 	scale := fields.values(50718)
 	if fields.err != nil {
