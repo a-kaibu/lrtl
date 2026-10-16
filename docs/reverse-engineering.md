@@ -57,6 +57,16 @@ Regression tests compare actual nonlinear XMP feedback against the earlier scala
 
 A local three-frame Nikon NEF smoke run completed Adobe-backed XMP-basic analysis with three feedback passes, then rendered with output-gain Deflicker and a 640 px long-edge limit to MJPEG AVI. The command used preview-only XMP planning; source sidecars were not written. The camera sample and generated video remain local, outside the repository's tracked files.
 
+## CLI composition editing (2026-10-16)
+
+`crop IMAGE_OR_XMP|DIRECTORY` provides an explicit CLI path for the existing composition workflow. `--rect L,T,R,B` writes the four normalized crop fields, and `--angle` writes CropAngle; both enable HasCrop. Newly supplied angles are constrained to the installed numeric registry's -45..45 range. This observes XMP vocabulary and bounds, not the product's composition interaction or exact rendering. `--enable` changes the active flag alone. `--clear` restores the default bounds/angle and disables crop while preserving ratings and keyframe metadata. `--mark` is limited to one image/packet and delegates to the existing 5-star crop-keyframe operation, including HG keyframe protection.
+
+The command preflights all selected packets and resulting metadata in memory, then writes changed sidecars using the existing atomic writer and backups. Identical edits do not write again. It supports embedded-XMP fallback and conventional sidecar names; neither image decoding nor RAW development is needed to edit metadata. Read-only text/JSON inspection is available without edit flags. Existing numeric interpolation retains HasCrop, so the documented animation workflow enables the sequence explicitly before editing endpoint crop keyframes. Boolean flag transition parity with LRT has not been established.
+
+Tests exercise complete/partial edits, zero angles, -45/+45 boundaries, malformed/NaN/infinite/inverted bounds, unchanged originals and original-content backups, no-op writes, dry runs, no-backup, HG protection, preflight failures on later packets, clear/reset, legacy flag inference, JSON, embedded vendor data, conventional/standalone sidecars, and a three-frame CLI crop/interpolation/render workflow whose actual decoded AVI pixels show the expected pan. Rendering still uses lrtl's approximate crop transform; automatic fitting and Camera Raw pixel parity are not implemented.
+
+A local three-frame Nikon NEF sequence completed `crop --enable`, two endpoint rectangle edits with `--mark`, numeric interpolation, Adobe-backed RAW development and crop rendering to 640x426, 24 fps MJPEG AVI. ffprobe reports three frames. The first source RAW's SHA-256 still matches the original fixture. Sample images and the generated video are local ignored files.
+
 ## High precision frame transport (2026-10-16)
 
 The renderer now sends little-endian 16-bit-per-channel RGB (`rgb48le`) to FFmpeg for MP4/MOV, rather than quantizing decoded TIFF/DNG/PNG to RGB24. The codec's final pixel format remains explicit: H.264/H.265 use 8-bit yuv420p; ProRes uses yuv422p10le; DNxHR HQX/444 use their 10-bit formats. This is SDR sRGB input transport, not HDR, ICC profile interpretation or verified LRT color management.

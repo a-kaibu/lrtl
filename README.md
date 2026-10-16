@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `crop IMAGE_OR_XMP|DIRECTORY`で構図をCLIから確認・編集できます。`--rect L,T,R,B`、`--angle`、`--enable`、`--clear`に対応し、単一画像では`--mark`で5つ星クロップキーフレームも同時に保存できます。`--dry-run`、JSON表示、既存XMPバックアップ、連番全体の事前検証に対応します。
+
 - `deflicker --passes N`と`render --deflicker --passes N`は、補正した画素を毎パス再測定します。XMP基本現像を使う場合はトーン処理も再計算し、16-bitの測光精度を保持します。XMPは計算完了後の最終結果だけを書き込みます。RAW現像結果は一時ファイルに最大512 MiBまでキャッシュし、上限を超えるフレームは再現像します。
 - Deflickerのテストに、非線形XMPでの収束、出力AVIの実画素、最終XMPとバックアップ、途中失敗時の保持、CorrectionAmount、16-bit測光、RAWキャッシュの上限と後始末を追加しました。測光・70%の補正応答・現像エンジンは独自実装で、LRT/Camera Rawとの画素一致は未対応です。
 
@@ -50,7 +52,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量は、`set IMAGE PreviewEV VALUE`またはGUIで編集できるLRT値`lrt:ExternalExposureDefault / 4`が全フレームで有効なら使い、値が揃わない場合は画像輝度へフォールバックして、LRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式で算出。候補位置も同版の整数間隔・端点選択ルールに対応。GUIでは候補一覧から保存対象を選べる。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。既存マーカーは既定で保持し、選択中の評価だけ数量推定から差し引く。`--replace-existing`では同じ評価を連番から削除し、他の2〜5つ星との衝突を前方9枚以内の空きフレームへ移す。`--evenly-spaced`は輝度解析なしで利用可能。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。`preview-ev --write`で復元したヒストグラム測光値をXMPへ生成できる。LRT本体のプレビュー縮小/ROIと同じ画像入力、および数量スライダーは未対応 | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEGおよびTIFFベース画像/RAW（依存ライブラリの実RAWサンプルでNEF/ARWも確認）、CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`で参照する画像内XMPはJPEG/TIFF/DNG/CR2/RW2に加えてNEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRからもタグ700を読み、CR3はAdobe XMP UUID boxから読む。FNumberがない場合は`lrt:Aperture`を参照。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、LRT同様に最大10件のフレーム差平均と2*/3*/4*隣接ペア補正を適用する近似経路も選択可能。`--lrt-reduce-deflicker`で0〜1の平滑化設定を指定できる。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の画像入力生成は未再現。LOWESS単体は実LRTの53ケースで比較済み。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
-| 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | GUIで元画像上をドラッグしてクロップ範囲を指定し、角度を調整してXMPへ保存できる。保存時は`HasCrop`とCropAngle/Top/Left/Bottom/Rightを書き、5つ星crop markと既存XMPバックアップも作成。`interpolate`は値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。Camera RawのGeometry/遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
+| 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | `crop`で単一画像/XMPまたは連番全体の構図をCLIから確認・編集。矩形と角度、HasCropの有効化、解除、単一画像の5つ星crop markをバックアップ付きで保存できる。`interpolate`は数値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。GUIのドラッグ編集も既存機能として残る。Camera RawのGeometry/遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。反転選択、画像のコピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
 | メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`init`による不足マスク/内部補正スロットの初期化、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。画像内XMPを読むのは外部サイドカーがない場合で、編集結果はXMPサイドカーへ保存し画像本体は変更しない。その他のRAWコンテナー内XMP、メタデータ全消去/リセットや全設定のコピー/貼付は未対応 | 一部 |
@@ -562,6 +564,35 @@ lrtl set "D:\Timelapse\RAW\frame001.nef" 'MaskGroupBasedCorrections[8].Correctio
 キーフレーム上の局所値や形状を編集して`interpolate --write`を実行し、`render --apply-xmp-basic`で動画に反映できます。一覧の`transition=true`は数値XMP補間の登録位置を表し、レンダー対応の印ではありません。補間対象の配列位置は実装状況表のAuto-Transition行を参照してください。CorrectionMasksは1番目が補間対象で、2番目以降はフレームごとに保持されます。真偽値は数値補間せず、そのフレームだけの設定です。ブラシ/AI等の画素現像や、複雑なAggregate内部をたどるパス編集、範囲マスクのサンプル点編集は未対応です。
 
 旧/新形式の両方で、初期化→キーフレーム→局所露出/グラデーション位置の編集→補間→AVI出力までをテストし、マスク外の画素を保ちながら局所露出がフレームごとに変化することを確認しています。実NEF3フレームでも同じ局所編集・補間を行い、640×426・10-bit ProResを生成できました。これはlrtlの処理連携の検証で、LRT/Camera Rawとの画素一致は未確認です。
+
+## CLIで構図を編集・アニメーション化
+
+```powershell
+# 現在のXMP構図を確認（RAWの現像は不要）
+lrtl crop C:\photos\sequence\frame001.nef --json
+
+# 連番の既存の矩形を有効化する。数値・星評価は維持
+lrtl crop C:\photos\sequence --enable
+
+# 始点と終点の矩形を設定し、5つ星クロップキーフレームとして保存
+lrtl crop C:\photos\sequence\frame001.nef --rect 0,0,0.7,1 --angle 0 --mark
+lrtl crop C:\photos\sequence\frame300.nef --rect 0.3,0,1,1 --angle 0 --mark
+lrtl interpolate C:\photos\sequence --write
+lrtl render C:\photos\sequence --output pan.mp4 --raw-develop --apply-xmp-crop
+
+# 書き込み前の確認、角度だけの変更、全画面への解除
+lrtl crop C:\photos\sequence\frame001.nef --angle -5 --dry-run
+lrtl crop C:\photos\sequence\frame001.nef --angle -5
+lrtl crop C:\photos\sequence --clear
+```
+
+`--rect`はXMPのLeft,Top,Right,Bottomに対応する0〜1の正規化座標です。Left < Right、Top < Bottomが必要で、新しく指定する角度はLRT 7.5.5の登録範囲に合わせて−45〜+45度です。矩形や角度を指定すると`HasCrop=True`も保存します。省略した値は維持します。`--enable`は既存の矩形を保って有効化し、`--clear`は矩形を0,0,1,1、角度を0、`HasCrop=False`へ戻します。解除しても星評価やキーフレームマークは残ります。
+
+`--mark`は単一画像/XMPだけに指定でき、HG用2/3つ星の上書きを拒否します。通常の編集は星評価を変更しません。`interpolate`は4/5つ星の数値を補間し、`HasCrop`の真偽値は保持します。連番内に明示的な`HasCrop=False`がある場合は、上記の`--enable`を先に実行してください。`--json`は編集を伴わない確認用で、常に画像ごとの配列を返します。
+
+編集は既定でサイドカーへ保存し、既存XMPをバックアップします。`--dry-run`で保存せずに確認でき、`--no-backup`でバックアップを省略できます。同じ編集の再実行では変更のないXMPを書き直しません。連番では全フレームのパケットと候補を検証した後、各サイドカーを原子的に保存します。画像内XMPからの読み込み、通常のbasename.xmp、画像のないXMP単体にも対応します。元画像は変更しません。
+
+合成画像列の回帰テストでは、端点の構図設定→補間→MJPEG AVIの画素を検査してパンの進行を確認しています。既存の回転クロップ描画を利用する独自実装で、Camera Rawとの画素一致や回転後の自動フィット、遠近補正は未対応です。
 
 ## XMP現像の精度
 

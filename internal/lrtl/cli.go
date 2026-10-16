@@ -85,6 +85,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runInitialize(arguments[1:], stdout, stderr)
 	case "masks":
 		return runMasks(arguments[1:], stdout, stderr)
+	case "crop":
+		return runCrop(arguments[1:], stdout, stderr)
 	case "render":
 		return runRender(arguments[1:], stdout, stderr)
 	case "batch-render":
@@ -126,6 +128,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
 	fmt.Fprintln(writer, "  set IMAGE PROPERTY|MASK_PATH VALUE    edit global/local Camera Raw values or LRT Preview EV")
 	fmt.Fprintln(writer, "  masks IMAGE_OR_XMP [--json]            inspect correction paths and mask values")
+	fmt.Fprintln(writer, "  crop IMAGE_OR_XMP|DIRECTORY [--rect L,T,R,B] [--angle DEGREES] [--enable|--clear] [--mark] [--dry-run] [--no-backup] [--json]")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  init DIRECTORY [--mask-format auto|modern|legacy] [--write] [--no-backup] initialize correction slots")
