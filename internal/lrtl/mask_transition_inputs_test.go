@@ -26,7 +26,9 @@ func localMissingPacket(t *testing.T, collection string, local, geometry map[str
 	if err != nil {
 		t.Fatal(err)
 	}
-	correction := unwrapRDFArrayItem(item)
+	// Attribute-form resources use rdf:Description, matching Adobe XMP RDF.
+	item.RemoveAttr("rdf:parseType")
+	correction := item.CreateElement("rdf:Description")
 	for name, value := range map[string]string{"What": "Correction", "CorrectionActive": "True", "CorrectionAmount": "1", "CorrectionSyncID": "correction"} {
 		if err := setCRSElementValue(correction, name, value); err != nil {
 			t.Fatal(err)
@@ -49,7 +51,8 @@ func localMissingPacket(t *testing.T, collection string, local, geometry map[str
 	if err != nil {
 		t.Fatal(err)
 	}
-	mask := unwrapRDFArrayItem(maskItem)
+	maskItem.RemoveAttr("rdf:parseType")
+	mask := maskItem.CreateElement("rdf:Description")
 	for name, value := range map[string]string{"What": "Mask/Gradient", "MaskSyncID": "selector", "MaskValue": "1"} {
 		if err := setCRSElementValue(mask, name, value); err != nil {
 			t.Fatal(err)
@@ -179,14 +182,36 @@ func TestLocalMissingFieldsReachSelectedKeysWithoutReplacingIDs(t *testing.T) {
 	}
 }
 
-func TestLocalMissingDoesNotCreateSelectedMissingStructure(t *testing.T) {
+func TestLocalMissingMaterializesSelectedCorrectionWithoutCloning(t *testing.T) {
 	packets := []*XMPPacket{localMissingPacket(t, "GradientBasedCorrections", map[string]string{"LocalExposure2012": ".4"}, nil), EmptyXMPPacket(), localMissingPacket(t, "GradientBasedCorrections", map[string]string{"LocalExposure2012": ".8"}, nil)}
 	changes, err := planMaskTransitions(packets, []int{0, 1, 2}, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes[1]) != 0 {
-		t.Fatalf("created selected-frame structure: %+v", changes[1])
+	if len(changes[1]) == 0 {
+		t.Fatal("missing selected-frame correction was not filled")
+	}
+	for _, change := range changes[1] {
+		if change.templateCorrection != nil || change.templateMask != nil || change.key.maskIndex != 0 {
+			t.Fatal("missing selected-frame resource cloned a template/selector")
+		}
+		if err := applyMaskTransition(packets[1], change); err != nil {
+			t.Fatal(err)
+		}
+	}
+	nodes, err := indexMaskTransitionNodes(packets[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := maskTransitionKey{collection: "GradientBasedCorrections", correctionIndex: 1}
+	if nodes[key].values["LocalExposure2012"] != .4 {
+		t.Fatalf("missing keyframe values: %v", nodes[key].values)
+	}
+	if _, exists := nodes[maskTransitionKey{collection: key.collection, correctionIndex: 1, maskIndex: 1}]; exists {
+		t.Fatal("cloned missing selector")
+	}
+	if _, found, err := crsElementValue(unwrapRDFArrayItem(nodes[key].correctionItem), "CorrectionSyncID"); err != nil || found {
+		t.Fatal("cloned source correction ID")
 	}
 }
 

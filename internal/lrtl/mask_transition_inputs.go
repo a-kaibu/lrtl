@@ -10,8 +10,8 @@ type maskTransitionInputs struct {
 	Missing []map[maskTransitionKey]map[string]float64
 }
 
-// Fill registered numeric paths only where their correction/selector resource
-// already exists. Missing-resource cloning keeps its separate transition policy.
+// Root correction columns can materialize missing array resources when saved,
+// including keyframes. Selector/range resources retain their separate policy.
 func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionNode) maskTransitionInputs {
 	plan := maskTransitionInputs{Indexes: make([]map[maskTransitionKey]maskTransitionNode, len(indexes)), Missing: make([]map[maskTransitionKey]map[string]float64, len(indexes))}
 	properties := map[maskTransitionKey]map[string]bool{}
@@ -50,7 +50,10 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 			filled := fillMissingTransitionScalars(input)
 			for i, value := range filled {
 				node, found := plan.Indexes[i][key]
-				if !found || !maskTransitionNodeHasTemplate(node, key) || input[i].present || !value.present {
+				if input[i].present || !value.present {
+					continue
+				}
+				if (!found || !maskTransitionNodeHasTemplate(node, key)) && (key.maskIndex != 0 || strings.HasPrefix(name, "RangeMask")) {
 					continue
 				}
 				if strings.HasPrefix(name, "RangeMask") {
@@ -63,6 +66,10 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 					}
 				}
 				number, _ := scalarNumber(value.value)
+				if node.values == nil {
+					node.values = map[string]float64{}
+					plan.Indexes[i][key] = node
+				}
 				node.values[name] = number
 				if plan.Missing[i] == nil {
 					plan.Missing[i] = map[maskTransitionKey]map[string]float64{}

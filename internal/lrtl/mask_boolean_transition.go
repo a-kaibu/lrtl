@@ -72,7 +72,7 @@ func planMaskBooleanTransitions(indexes []map[maskTransitionKey]maskTransitionNo
 					continue
 				}
 				node, found := indexes[i][key]
-				if ratings[i] == 4 && (!found || !maskTransitionNodeHasTemplate(node, key)) {
+				if ratings[i] == 4 && key.maskIndex > 0 && (!found || !maskTransitionNodeHasTemplate(node, key)) {
 					continue
 				}
 				if changes[i] == nil {

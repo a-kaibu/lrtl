@@ -2,6 +2,32 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Missing correction resources and RDF validity
+
+The installed missing-column helper and frame-to-XMP writer were exercised on
+synthetic columns whose middle frame had no correction array. Sixteen
+observations cover four correction collections, slots 1/2, and separate numeric
+LocalExposure2012 and boolean CorrectionActive columns. Both values materialize
+in an RDF Bag without cloning source IDs or unrelated trees. Details and the
+probe's metadata-stamping tail failure are documented in
+`internal/lrtl/testdata/lrt-missing-correction-7.5.5.md`; these component
+observations do not establish a complete native Auto-Transition/save workflow.
+
+lrtl now fills missing selected root corrections as well as fields on existing
+resources. Filled numbers become anchors before interpolation; missing selected
+selectors/ranges remain excluded. Tests compare all sixteen observed property
+values and array sizes, check a CLI sequence against an independently prefilled
+keyframe, and verify dry runs, original backups, own IDs, unrelated metadata,
+and no-op repeats.
+
+During the probe, Adobe's XMP parser rejected property attributes combined with
+`rdf:parseType="Resource"`. lrtl's new-field writer now emits property children
+on such elements. Normal tests check generated RDF shape; the optional
+`TestGeneratedMaskResourcesAdobeParser` uses Java/javac and `LRTL_NATIVE_JAR`
+to parse six generated packets in the installed runtime: modern/legacy
+initialization and four missing-correction collections. The runtime probe and
+parser are development checks only, with no Java dependency in the Go CLI.
+
 ## Saved Deflicker controls
 
 `--lrt-deflicker-settings` imports the modern numerical controls from each
@@ -163,11 +189,11 @@ Regression tests cover mixed 2/3/4/5 ratings, a stale lrtl marker with a non-edi
 
 `NumericMissingOracle.java` now accepts an optional registered property path. A second normally completed nine-case probe uses `GradientBasedCorrections[1]/crs:LocalExposure2012`; its input/output measurements are stored in `lrt-7.5.5-local-numeric-missing.json`. This establishes the same forward-fill/leading-backfill behavior for a local numeric column, including zero and precise doubles. It is a preflight component test, not a mask-rendering or XMP-writer oracle. Values outside the normal slider range in this synthetic fixture test the raw copy helper only.
 
-lrtl prepares separate copies of indexed numeric maps before local interpolation. Registered positional corrections and the first selector participate only where a nonempty correction/selector resource already exists. Numeric fields can be supplied by non-keyframes; filled values then participate in the normal 4-star anchor selection, and missing scalar fields on existing selected keyframe resources are proposed for writing. The original index and RDF trees are not mutated during preparation. Known original values are compared against proposed values, preserving the packet's own IDs, active flags and unrelated data. LocalTemperature/LocalTint are ordinary local numeric columns; the global WB preflight exclusions do not apply to them.
+lrtl prepares separate copies of indexed numeric maps before local interpolation. Registered root correction numbers can fill absent resources (including selected keyframes); the first selector still requires its own existing resource. Numeric fields can be supplied by non-keyframes; filled values then participate in the normal 4-star anchor selection, and missing scalar fields on existing selected keyframe resources are proposed for writing. The original index and RDF trees are not mutated during preparation. Known original values are compared against proposed values, preserving the packet's own IDs, active flags and unrelated data. LocalTemperature/LocalTint are ordinary local numeric columns; the global WB preflight exclusions do not apply to them.
 
-Missing complete resources, empty RDF items, ID-fallback records, unregistered positions and selector components after index 1 are not materialized by this preflight. Non-keyframe structure cloning remains a separate existing policy. RangeMask fields are filled only when that nested resource exists. Malformed/non-finite/structured registered numbers fail instead of being silently treated as missing and overwritten by a neighbor. This validation is lrtl behavior; malformed product-input parity is not established. Filled radial angles receive the observed post-normalization once before serialization; explicit activity flags remain independent.
+Missing root correction resources and empty root RDF items now materialize registered scalar values; missing selectors/ranges, ID-fallback records, unregistered positions and selector components after index 1 retain their exclusions. Non-keyframe structure cloning remains a separate existing policy. RangeMask fields are filled only when that nested resource exists. Malformed/non-finite/structured registered numbers fail instead of being silently treated as missing and overwritten by a neighbor. This validation is lrtl behavior; malformed product-input parity is not established. Filled radial angles receive the observed post-normalization once before serialization; explicit activity flags remain independent.
 
-Eight regression tests include nine measured local-column cases, old/modern positional layouts, precise selected-keyframe writes, selector coordinates, own IDs and unrelated metadata, no implicit selected-frame resource creation, ID/reserved/second-selector exclusions, malformed input without writes/backups, normalized radial angles with repeat idempotence, and absent RangeMask resources. A five-frame CLI integration previews, writes, verifies original-content backups/no-op repeats, and renders actual MJPEG AVI pixels against an independent sRGB exposure formula while preserving source images. It uses a uniform source to avoid confusing JPEG chroma artifacts with the exposure calculation. Complete local structural parity, unsupported mask types and Adobe pixel equivalence remain outside this measurement.
+Eight regression tests include nine measured local-column cases, old/modern positional layouts, precise selected-keyframe writes, selector coordinates, own IDs and unrelated metadata, minimal selected root-resource creation without template cloning, ID/reserved/second-selector exclusions, malformed input without writes/backups, normalized radial angles with repeat idempotence, and absent RangeMask resources. A five-frame CLI integration previews, writes, verifies original-content backups/no-op repeats, and renders actual MJPEG AVI pixels against an independent sRGB exposure formula while preserving source images. It uses a uniform source to avoid confusing JPEG chroma artifacts with the exposure calculation. Complete local structural parity, unsupported mask types and Adobe pixel equivalence remain outside this measurement.
 
 ## Numeric missing-value preflight (2026-10-16)
 
@@ -199,7 +225,7 @@ Fresh editable controls are neutral, correction amount is one, and selectors are
 
 Tests cover both layouts, per-slot supported selector shapes, IDs, repeat idempotence, retaining user edits and unknown metadata, adoption of existing IDs for new frames, conflict preflight across the sequence, embedded-JPEG metadata, preview-only operation and backups. An integration test runs init, keyframes, set, interpolate, deflicker and MJPEG AVI rendering while preserving original images; Deflicker remains separate from Exposure2012. Internal full-frame gradient coverage is checked at opposite image corners. A local real-NEF run completed init, keyframes, Holy Grail, interpolate and Adobe-backed RAW rendering to a two-frame 640x426 yuv422p10le ProRes MOV. The unchanged camera settings needed no HG compensation in that probe.
 
-This initializes missing mask structures and a few format headers. It does not clear/reset all metadata, remove existing edits, create workflow-state files, select keyframes or validate an LRT/Camera Raw read/write round trip. Mixed old/new packet formats are preserved rather than converted, and cross-format mask animation is not established. It is a documented portion of metadata initialization, not a claim of full product initialization parity.
+This initializes missing mask structures and a few format headers. It does not clear/reset all metadata, remove existing edits, create workflow-state files, select keyframes or validate a complete LRT/Camera Raw read/write round trip. Generated modern/legacy packets are now also checked with the installed Adobe XMP parser (see the RDF resource tests). Mixed old/new packet formats are preserved rather than converted, and cross-format mask animation is not established. It is a documented portion of metadata initialization, not a claim of full product initialization parity.
 
 ## CLI local correction editing (2026-10-16)
 
@@ -392,7 +418,7 @@ columns entering a numeric worker or the SyncID fallback. The previous local
 overflow test now uses differing selected values to exercise that worker.
 
 Existing structure policies remain: missing non-keyframe positional resources
-can be cloned, missing selected resources are not invented, and IDs/other
+can be cloned; missing selected root corrections receive registered scalars without cloning selectors/IDs, and IDs/other
 fields on existing targets survive numeric writes. Tests compare the component
 fixtures at smoothness 0/50/100, exercise missing non-keyframe resources across
 all four collections, and exclude unregistered positions/SyncID/second

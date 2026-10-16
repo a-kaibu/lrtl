@@ -126,6 +126,14 @@ func setCRSElementValue(element *etree.Element, name, value string) error {
 		return nil
 	}
 	prefix := ensurePrefix(element, "crs", crsNamespace)
+	// RDF parseType="Resource" permits property elements, not property
+	// attributes. Adobe's XMP parser rejects their combination.
+	for _, attribute := range element.Attr {
+		if attributeMatches(&attribute, rdfNamespace, "parseType") && attribute.Value == "Resource" {
+			element.CreateElement(prefix + ":" + name).SetText(value)
+			return nil
+		}
+	}
 	element.CreateAttr(prefix+":"+name, value)
 	return nil
 }
@@ -814,6 +822,9 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		for key := range booleanChanges[index] {
 			keysByTarget[index][key] = true
 		}
+		for key := range prepared.Missing[index] {
+			keysByTarget[index][key] = true
+		}
 	}
 	seriesByKey := make(map[maskTransitionKey][]map[string]float64, len(allKeys))
 	copiesByKey := make(map[maskTransitionKey]map[string]float64, len(allKeys))
@@ -933,6 +944,9 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 			}
 			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
 			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
+			if keyframeSet[target] && (!present || !maskTransitionNodeHasTemplate(currentNode, key)) {
+				hasLuminanceRangeChange = false
+			}
 			if len(values) > 0 || hasLuminanceRangeChange {
 				templateCorrection, templateMask := (*etree.Element)(nil), (*etree.Element)(nil)
 				if !keyframeSet[target] && (!present || !maskTransitionNodeHasTemplate(currentNode, key)) {
@@ -1013,9 +1027,15 @@ func ensureMaskTransitionStructure(packet *XMPPacket, change maskTransitionChang
 	if change.key.correctionIndex < 1 {
 		return nil
 	}
+	property := packet.findRootProperty(crsNamespace, change.key.collection)
+	nativeEmptyRoot := property.element == nil && property.attribute == nil && change.templateCorrection == nil && change.key.maskIndex == 0
 	_, corrections, err := ensurePacketCRSArray(packet, change.key.collection)
 	if err != nil {
 		return err
+	}
+	if nativeEmptyRoot {
+		// The observed native scalar writer creates an unordered correction bag.
+		corrections.Tag = "Bag"
 	}
 	correctionItem, err := ensureRDFArrayPosition(corrections, change.key.correctionIndex, change.templateCorrection)
 	if err != nil {
