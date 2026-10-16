@@ -233,6 +233,8 @@ func TestLinearDNGCameraWhiteBalanceAndColorMatrix(t *testing.T) {
 }
 
 func FuzzLinearDNG(f *testing.F) {
+	f.Add(profileMapDNGFixture(binary.LittleEndian))
+	f.Add(profileMapDNGFixture(binary.BigEndian))
 	f.Add(profileToneDNGFixture(binary.LittleEndian, 0))
 	f.Add(profileToneDNGFixture(binary.BigEndian, 1))
 	f.Add(warpDNGFixture(binary.LittleEndian))

@@ -283,10 +283,16 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 	if err != nil {
 		return nil, err
 	}
+	profileMaps, err := readDNGProfileMaps(fields)
+	if err != nil {
+		return nil, err
+	}
+	hasProfile := profileTone != nil || profileMaps.first != nil || profileMaps.look != nil
+	profileWeight := 0.0
 	transform := dngIdentityMatrix
 	finalTransform := dngIdentityMatrix
 	xyzToRGB := dngXYZD50ToSRGB
-	if profileTone != nil {
+	if hasProfile {
 		xyzToRGB, err = dngProPhotoToXYZ.inverse()
 		if err != nil {
 			return nil, err
@@ -294,11 +300,25 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		finalTransform = dngXYZD50ToSRGB.multiply(dngProPhotoToXYZ)
 	}
 	if channels == 3 {
-		transform, err = dngCameraToSpace(fields, xyzToRGB)
+		transform, profileWeight, err = dngCameraToSpace(fields, xyzToRGB)
 		if err != nil {
 			return nil, err
 		}
 	}
+	for _, row := range transform {
+		for _, coefficient := range row {
+			if math.IsNaN(coefficient) || math.IsInf(coefficient, 0) {
+				return nil, fmt.Errorf("non-finite DNG color transform")
+			}
+		}
+	}
+	// Unknown or equal calibration temperatures use the first hue table.
+	t1 := dngIlluminantTemperature(fields.integer(50778, 0))
+	t2 := dngIlluminantTemperature(fields.integer(50779, 0))
+	if t1 <= 0 || t2 <= 0 || t1 == t2 {
+		profileWeight = 0
+	}
+	hueMap := profileMaps.hueMap(profileWeight)
 	exposure := fields.scalar(50730, 0)
 	if math.Abs(exposure) > 16 {
 		return nil, fmt.Errorf("Linear DNG baseline exposure is outside supported range")
@@ -387,11 +407,26 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 				camera[1], camera[2] = camera[0], camera[0]
 			}
 			rgb := transform.vector(camera)
-			if profileTone != nil {
+			if hasProfile {
 				for channel := range rgb {
-					rgb[channel] = min(1, max(0, rgb[channel])) * gain
+					if math.IsNaN(rgb[channel]) {
+						return nil, fmt.Errorf("non-finite DNG profile input")
+					}
+					rgb[channel] = min(1, max(0, rgb[channel]))
 				}
-				rgb = finalTransform.vector(profileTone.apply(rgb))
+				if hueMap != nil {
+					rgb = hueMap.apply(rgb)
+				}
+				for channel := range rgb {
+					rgb[channel] = min(1, max(0, rgb[channel]*gain))
+				}
+				if profileMaps.look != nil {
+					rgb = profileMaps.look.apply(rgb)
+				}
+				if profileTone != nil {
+					rgb = profileTone.apply(rgb)
+				}
+				rgb = finalTransform.vector(rgb)
 			} else {
 				for channel := range rgb {
 					rgb[channel] *= gain

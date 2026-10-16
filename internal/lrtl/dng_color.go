@@ -141,7 +141,7 @@ func dngChromaticAdaptation(source, destination [3]float64) (dngMatrix, error) {
 	return inverse.multiply(dngDiagonal(gains)).multiply(bradford), nil
 }
 
-func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, error) {
+func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, float64, error) {
 	color1, hasColor1 := fields.matrix(50721, dngIdentityMatrix)
 	color2, hasColor2 := fields.matrix(50722, color1)
 	calibration1, _ := fields.matrix(50723, dngIdentityMatrix)
@@ -155,44 +155,44 @@ func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, error) 
 		forward1 = forward2
 	}
 	if !hasColor1 && !hasColor2 && !hasForward1 && !hasForward2 {
-		return dngMatrix{}, fmt.Errorf("Linear DNG has no supported camera color matrix")
+		return dngMatrix{}, 0, fmt.Errorf("Linear DNG has no supported camera color matrix")
 	}
 	analog := [3]float64{1, 1, 1}
 	if values := fields.values(50727); len(values) != 0 {
 		if len(values) != 3 {
-			return dngMatrix{}, fmt.Errorf("DNG AnalogBalance must have three values")
+			return dngMatrix{}, 0, fmt.Errorf("DNG AnalogBalance must have three values")
 		}
 		copy(analog[:], values)
 	}
 	for _, value := range analog {
 		if value <= 0 {
-			return dngMatrix{}, fmt.Errorf("DNG AnalogBalance must be positive")
+			return dngMatrix{}, 0, fmt.Errorf("DNG AnalogBalance must be positive")
 		}
 	}
 	neutralValues := fields.values(50728)
 	whiteXY := fields.values(50729)
 	if len(neutralValues) != 3 && len(whiteXY) != 2 {
-		return dngMatrix{}, fmt.Errorf("Linear DNG requires AsShotNeutral or AsShotWhiteXY")
+		return dngMatrix{}, 0, fmt.Errorf("Linear DNG requires AsShotNeutral or AsShotWhiteXY")
 	}
 	var neutral [3]float64
 	if len(neutralValues) == 3 {
 		copy(neutral[:], neutralValues)
 	} else {
 		if whiteXY[0] <= 0 || whiteXY[1] <= 0 || whiteXY[0]+whiteXY[1] >= 1 || (!hasColor1 && !hasColor2) {
-			return dngMatrix{}, fmt.Errorf("invalid DNG AsShotWhiteXY")
+			return dngMatrix{}, 0, fmt.Errorf("invalid DNG AsShotWhiteXY")
 		}
 		xyz := [3]float64{whiteXY[0] / whiteXY[1], 1, (1 - whiteXY[0] - whiteXY[1]) / whiteXY[1]}
 		neutral = dngDiagonal(analog).multiply(calibration2).multiply(color2).vector(xyz)
 	}
 	for _, value := range neutral {
 		if value <= 0 {
-			return dngMatrix{}, fmt.Errorf("DNG AsShotNeutral must be positive")
+			return dngMatrix{}, 0, fmt.Errorf("DNG AsShotNeutral must be positive")
 		}
 	}
 	firstTemperature := dngIlluminantTemperature(fields.integer(50778, 0))
 	secondTemperature := dngIlluminantTemperature(fields.integer(50779, 0))
 	if fields.err != nil {
-		return dngMatrix{}, fields.err
+		return dngMatrix{}, 0, fields.err
 	}
 	weight := 0.0
 	if hasColor2 || hasForward2 {
@@ -208,7 +208,7 @@ func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, error) 
 			matrix := dngDiagonal(analog).multiply(calibration).multiply(mixDNGMatrix(color1, color2, weight))
 			inverse, err := matrix.inverse()
 			if err != nil {
-				return dngMatrix{}, err
+				return dngMatrix{}, 0, err
 			}
 			temperature := dngWhiteTemperature(inverse.vector(neutral))
 			weight = min(1, max(0, (1/temperature-1/firstTemperature)/(1/secondTemperature-1/firstTemperature)))
@@ -216,27 +216,27 @@ func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, error) 
 	}
 	nativeToReference, err := dngDiagonal(analog).multiply(mixDNGMatrix(calibration1, calibration2, weight)).inverse()
 	if err != nil {
-		return dngMatrix{}, err
+		return dngMatrix{}, 0, err
 	}
 	if hasForward1 || hasForward2 {
 		referenceNeutral := nativeToReference.vector(neutral)
 		var whiteBalance [3]float64
 		for channel, value := range referenceNeutral {
 			if value <= 0 {
-				return dngMatrix{}, fmt.Errorf("invalid calibrated DNG neutral")
+				return dngMatrix{}, 0, fmt.Errorf("invalid calibrated DNG neutral")
 			}
 			whiteBalance[channel] = 1 / value
 		}
 		forward := mixDNGMatrix(forward1, forward2, weight)
-		return xyzToRGB.multiply(forward).multiply(dngDiagonal(whiteBalance)).multiply(nativeToReference), nil
+		return xyzToRGB.multiply(forward).multiply(dngDiagonal(whiteBalance)).multiply(nativeToReference), weight, nil
 	}
 	xyzFromCamera, err := dngDiagonal(analog).multiply(mixDNGMatrix(calibration1, calibration2, weight)).multiply(mixDNGMatrix(color1, color2, weight)).inverse()
 	if err != nil {
-		return dngMatrix{}, err
+		return dngMatrix{}, 0, err
 	}
 	white := xyzFromCamera.vector(neutral)
 	if white[1] <= 0 {
-		return dngMatrix{}, fmt.Errorf("invalid DNG scene white")
+		return dngMatrix{}, 0, fmt.Errorf("invalid DNG scene white")
 	}
 	for row := range xyzFromCamera {
 		for column := range xyzFromCamera[row] {
@@ -246,7 +246,7 @@ func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, error) 
 	white = [3]float64{white[0] / white[1], 1, white[2] / white[1]}
 	adaptation, err := dngChromaticAdaptation(white, dngWhiteD50)
 	if err != nil {
-		return dngMatrix{}, err
+		return dngMatrix{}, 0, err
 	}
-	return xyzToRGB.multiply(adaptation).multiply(xyzFromCamera), nil
+	return xyzToRGB.multiply(adaptation).multiply(xyzFromCamera), weight, nil
 }
