@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `--apply-xmp-basic`で`ConvertToGrayscale`と8色の`GrayMixer`を画像へ反映します。従来は保存・補間だけで、プレビュー・動画がカラーのままになる処理の抜けを修正しました。16-bit階調、色別調整、無彩色保持、露出/WBとの順序、後段のカラーグレーディング、出力TIFF/JPEG/AVIとエラー時の保持をテストしています。Adobe Monochromeプロファイルとの画素一致は未対応です。
+
 - `batch-preview-images`で複数連番のJPEGプレビューを並列生成できます。個別生成との一致、選択フレームの保存、元ファイルの保持、生成・保存途中の失敗をテストしています。
 
 - `preview-images DIRECTORY --output NEW_DIRECTORY`でJPEG連番プレビューと測光結果を生成できます。既定は長辺1280px・品質90で、対応XMP基本現像・クロップ・向きを適用します。RAW現像、選択フィルター、Deflicker/Motion Blurにも対応します。表示するJPEGを復号してPreview EVと輝度を測り、`--write-preview-ev`で元XMPへ記録できます。既存TIFF/動画処理との画素一致、選択フレームだけの保存、失敗時の保持、実NEF/CR2をテストしています。Camera Raw/LRT Visual Previewとの画素一致や自動キャッシュ再利用は未対応です。
@@ -111,7 +113,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。反転選択、画像のコピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
 | メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`init`による不足マスク/内部補正スロットの初期化、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。画像内XMPを読むのは外部サイドカーがない場合で、編集結果はXMPサイドカーへ保存し画像本体は変更しない。その他のRAWコンテナー内XMP、メタデータ全消去/リセットや全設定のコピー/貼付は未対応 | 一部 |
-| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。JPEGは外部サイドカーがなければ画像内の標準/拡張XMP、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRはtag 700、RAFは埋め込みJPEG、CR3はISO BMFFのAdobe XMP UUIDから読み取る。編集結果はサイドカーへ保存し画像を変更しない。`set`で許可した131項目とPreview EVを選択フレーム単位で編集し、局所補正/マスクは`masks`で確認した配列パスを`set`へ渡して編集できます。`preview-ev`でRGBヒストグラムからPreview EVを算出してXMPへ書き込める。CLIの`curve`で全体／局所のマスター/R/G/Bポイントを単一画像や連番へ編集し、属性/単純テキスト/RDF Seq表現をバックアップ付きで保存。全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度で16-bit PCHIPカーブ出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
+| XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。JPEGは外部サイドカーがなければ画像内の標準/拡張XMP、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRはtag 700、RAFは埋め込みJPEG、CR3はISO BMFFのAdobe XMP UUIDから読み取る。編集結果はサイドカーへ保存し画像を変更しない。`set`で許可した131項目とPreview EVを選択フレーム単位で編集し、局所補正/マスクは`masks`で確認した配列パスを`set`へ渡して編集できます。`preview-ev`でRGBヒストグラムからPreview EVを算出してXMPへ書き込める。CLIの`curve`で全体／局所のマスター/R/G/Bポイントを単一画像や連番へ編集し、属性/単純テキスト/RDF Seq表現をバックアップ付きで保存。全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、ConvertToGrayscaleと8色GrayMixer、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度で16-bit PCHIPカーブ出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を最初の4つ星（なければ先頭）から均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入、近接アンカーの直線化・等値区間の平坦化を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。アスペクト比を使う円形グラデーションの専用形状補正、Camera Rawのマスク描画との一致は未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`preview-images`で対応RAW/XMPからJPEG連番と測光マニフェストを生成し、任意で元XMPへPreview EVを保存。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/Adobe DNG Converterによる現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/Adobe DNG Converterによる現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
@@ -765,6 +767,25 @@ lrtl batch-holy-grail C:\photos\sequences --recursive --reset --write
 既定は変更予定の表示で、`--write`でバックアップ付き保存、`--no-backup`でバックアップを省略します。全連番の撮影値・XMP・補正記録・ジャンプ評価・最終パケットを検証し、どれかが不正なら全体を書き込まず終了コード1を返します。ジャンプ評価は既存の明示的な評価を上書きしません。衝突時の扱いも個別コマンドと同じです。保存中のOSエラーは保存済み枚数を報告して中断します。複数ファイルの一括ロールバックには対応しません。
 
 個別実行とのXMP・AVIフレーム/索引の一致、並列数1/4、EXIF/LRT入力の自動形状、専用補正スロット、LRT 7.5.5で観測した補正値、バックアップ、再実行での重複防止、評価の作成・解除をテストしています。破損した撮影値・XMP・LRT入力・補正記録や評価衝突による全体保存の中止、画像EXIFを読めない場合の補正解除も検査します。LRTのバッチキュー自体の再現やCamera Rawとの画素一致を示すものではありません。
+
+## 白黒現像とGrayMixer
+
+```powershell
+# 元XMPで白黒設定された連番を現像して動画化
+lrtl render C:\photos\sequence --output C:\photos\monochrome.avi --apply-xmp-basic
+
+# RAWのXMP白黒設定を反映したJPEGプレビュー
+lrtl preview-images C:\photos\raw --output C:\photos\monochrome-preview --raw-develop
+
+# 白黒ミキサーの値は従来のset/interpolateでも編集・補間可能
+lrtl set C:\photos\sequence\frame0001.nef GrayMixerBlue -30
+```
+
+`crs:ConvertToGrayscale=True`（`1`も可）の場合、8色の`GrayMixerRed/Orange/Yellow/Green/Aqua/Blue/Purple/Magenta`を適用します。各値は-100〜100で、不正な真偽値・非有限値・範囲外は画像生成前にエラーにします。False・0・未指定の場合、GrayMixerだけでカラー画像を変更しません。白黒モードの切り替えは元XMPで指定します。
+
+[Adobeの白黒ミックスの説明](https://helpx.adobe.com/lightroom-classic/help/image-tone-color.html)にある、元の色ごとにグレーの明るさを調整するワークフローに対応する独自実装です。既定の変換は線形sRGBのRec.709輝度を使用します。ミキサー値は既存HSL処理の8色の色相中心間で補間し、±100を最大±2段の露出変化へ写像します。彩度の低い画素ほど効果を弱め、無彩色・黒・白を保持します。露出とWBの後、トーン処理の前に変換し、白黒モードでは全体Saturation/Vibrance/HSLミキサーを省略します。後段のRGBカーブ・カラーグレーディング・局所補正は色を付けられます。
+
+16-bit画素・アルファを保持する共通処理を使うため、`render`、`export`、`preview-images`とXMP基本現像を指定した解析に反映されます。GrayMixerの数値補間は既存のLRT登録値の処理を使います。画像の変換式とAdobe Monochrome/カメラ別白黒プロファイル、Adobeの自動白黒ミックス、Camera Rawの演算順・色管理との一致は未検証です。自動ミックスやプロファイル名だけによる白黒切り替えは行いません。実NEF/CR2からの白黒JPEG生成・画像内容の保持・元RAW保持も検証しました。
 
 ## JPEG連番プレビュー
 

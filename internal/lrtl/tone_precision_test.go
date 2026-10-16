@@ -30,6 +30,7 @@ func tonePrecisionCases() map[string]xmpBasicAdjustments {
 		"neutral": {}, "exposure": {exposure: .2}, "white balance": {hasWhiteBalance: true, whiteBalance: [3]float64{1.1, 1, .9}},
 		"contrast": {contrast: -20}, "highlights": {highlights: -20}, "shadows": {shadows: 20}, "whites": {whites: -20}, "blacks": {blacks: 10},
 		"saturation": {saturation: 20}, "vibrance": {vibrance: 20},
+		"grayscale": {grayscale: true}, "gray mixer": {grayscale: true, grayMix: [8]float64{20, 0, 0, 0, 0, -20}},
 		"parametric":   {parametric: xmpParametricCurve{shadows: 10, darks: 10, lights: 10, highlights: 10, shadowSplit: 25, midtoneSplit: 50, highlightSplit: 75}},
 		"master curve": {hasMaster: true, masterCurve: identity}, "channel curves": {hasChannel: [3]bool{true, true, true}, channelCurve: [3]toneCurveTable{identity, identity, identity}},
 		"HSL":     {hasColorMix: true, colorMix: [8]xmpHSLColorAdjustment{{hue: 10, saturation: 5, luminance: 2}}},

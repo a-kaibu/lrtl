@@ -50,6 +50,8 @@ type xmpBasicAdjustments struct {
 	hasChannel           [3]bool
 	colorMix             [8]xmpHSLColorAdjustment
 	hasColorMix          bool
+	grayscale            bool
+	grayMix              [8]float64
 	colorGrading         xmpColorGrading
 	local                []xmpLocalCorrection
 	geometry             xmpGeometry
@@ -110,6 +112,9 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 
 func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 	adjustments := xmpBasicAdjustments{parametric: xmpParametricCurve{shadowSplit: 25, midtoneSplit: 50, highlightSplit: 75}}
+	if err := readXMPGrayscale(packet, &adjustments); err != nil {
+		return xmpBasicAdjustments{}, err
+	}
 	adjustments.lumaNoiseDetail = 50
 	adjustments.colorNoiseDetail = 50
 	adjustments.colorNoiseSmoothness = 50
@@ -690,7 +695,7 @@ func (adjustments xmpBasicAdjustments) globalActive() bool {
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.dehaze != 0 || adjustments.sharpness != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.luminanceNoise != 0 || adjustments.colorNoise != 0 || adjustments.vignetteAmount != 0 ||
-		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active
+		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active || adjustments.grayscale
 }
 
 func (adjustments xmpBasicAdjustments) active() bool {
@@ -794,6 +799,10 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			green := srgb16ToLinear[pixel.G] * greenGain * exposure
 			blue := srgb16ToLinear[pixel.B] * blueGain * exposure
 			luminance := 0.2126*red + 0.7152*green + 0.0722*blue
+			if adjustments.grayscale {
+				luminance = xmpGrayscaleLuminance(red, green, blue, adjustments.grayMix)
+				red, green, blue = luminance, luminance, luminance
+			}
 			adjustedLuminance := basicAdjustedLuminance(luminance, adjustments)
 			if adjustments.dehaze != 0 {
 				index := (y-bounds.Min.Y)*width + (x - bounds.Min.X)
@@ -816,7 +825,7 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			} else {
 				red, green, blue = adjustedLuminance, adjustedLuminance, adjustedLuminance
 			}
-			if adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.dehaze != 0 {
+			if !adjustments.grayscale && (adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.dehaze != 0) {
 				chroma := math.Max(red, math.Max(green, blue)) - math.Min(red, math.Min(green, blue))
 				vibrance := 1 + adjustments.vibrance/100*(1-math.Min(1, chroma))
 				scale := saturation * vibrance * dehazeSaturation
@@ -839,7 +848,7 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 			if adjustments.hasChannel[2] {
 				blue16 = adjustments.channelCurve[2].sample(blue16)
 			}
-			if adjustments.hasColorMix {
+			if adjustments.hasColorMix && !adjustments.grayscale {
 				red16, green16, blue16 = applyXMPHSLColorMix(red16, green16, blue16, adjustments.colorMix)
 			}
 			if adjustments.colorGrading.active {
