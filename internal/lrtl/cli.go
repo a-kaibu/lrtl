@@ -94,6 +94,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runRender(arguments[1:], stdout, stderr)
 	case "export":
 		return runExport(arguments[1:], stdout, stderr)
+	case "preview-images":
+		return runImageExport(arguments[1:], stdout, stderr, true)
 	case "batch-render":
 		return runBatchRender(arguments[1:], stdout, stderr)
 	case "batch-interpolate":
@@ -150,6 +152,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  batch-deflicker ROOT [--recursive] [--workers N] [DEFLICKER_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  batch-holy-grail ROOT [--recursive] [--workers N] [HOLY_GRAIL_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  export DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--apply-xmp-basic] [--apply-xmp-crop] [--long-edge N] export RGB16 TIFF frames")
+	fmt.Fprintln(writer, "  preview-images DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--long-edge N] [--quality 1-100] [--write-preview-ev] [--no-backup]")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")

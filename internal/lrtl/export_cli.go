@@ -10,16 +10,31 @@ import (
 )
 
 func runExport(arguments []string, stdout, stderr io.Writer) int {
-	set := newFlagSet("export", stderr)
-	output := set.String("output", "", "new output directory for uncompressed 16-bit RGB TIFF frames")
+	return runImageExport(arguments, stdout, stderr, false)
+}
+
+func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool) int {
+	name, outputDescription, defaultLongEdge := "export", "new output directory for uncompressed 16-bit RGB TIFF frames", 0
+	if previews {
+		name, outputDescription, defaultLongEdge = "preview-images", "new output directory for JPEG previews and measurements", 1280
+	}
+	set := newFlagSet(name, stderr)
+	quality, writeEV, noBackup := new(int), new(bool), new(bool)
+	*quality = 90
+	if previews {
+		quality = set.Int("quality", 90, "preview JPEG quality (1-100)")
+		writeEV = set.Bool("write-preview-ev", false, "write measurements to source XMP after preview images are published")
+		noBackup = set.Bool("no-backup", false, "omit XMP backups with --write-preview-ev")
+	}
+	output := set.String("output", "", outputDescription)
 	selection := set.String("selection", "", "use included frames from a long-term selection manifest")
 	contains := set.String("filename-contains", "", "export only filenames containing this text (case-insensitive)")
-	longEdge := set.Int("long-edge", 0, "downscale so the longest side is at most this many pixels")
+	longEdge := set.Int("long-edge", defaultLongEdge, "downscale so the longest side is at most this many pixels")
 	height := set.Int("output-height", 0, "set output height while preserving aspect ratio")
 	aspect := set.String("aspect", "", "center-crop to WIDTH:HEIGHT aspect ratio")
-	applyBasic := set.Bool("apply-xmp-basic", false, "apply supported XMP tone, color, local and spatial adjustments")
+	applyBasic := set.Bool("apply-xmp-basic", previews, "apply supported XMP tone, color, local and spatial adjustments")
 	applyExposure := set.Bool("apply-xmp-exposure", false, "apply XMP Exposure2012")
-	applyCrop := set.Bool("apply-xmp-crop", false, "apply XMP crop rectangles and angles")
+	applyCrop := set.Bool("apply-xmp-crop", previews, "apply XMP crop rectangles and angles")
 	autoOrient := set.Bool("auto-orient", true, "apply EXIF orientation")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop RAW using Adobe DNG Converter or explicit DNGLab")
@@ -41,6 +56,9 @@ func runExport(arguments []string, stdout, stderr io.Writer) int {
 		values["--"+name] = true
 		values["-"+name] = true
 	}
+	if previews {
+		values["--quality"], values["-quality"] = true, true
+	}
 	if err := set.Parse(flagFirst(arguments, values)); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
@@ -52,6 +70,20 @@ func runExport(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if strings.TrimSpace(*output) == "" {
 		return reportError(stderr, fmt.Errorf("--output is required"))
+	}
+	if *noBackup && !*writeEV {
+		return reportError(stderr, fmt.Errorf("--no-backup requires --write-preview-ev"))
+	}
+	if previews && *applyExposure {
+		basicSpecified := false
+		set.Visit(func(f *flag.Flag) {
+			if f.Name == "apply-xmp-basic" {
+				basicSpecified = true
+			}
+		})
+		if !basicSpecified {
+			*applyBasic = false
+		}
 	}
 	var ratio float64
 	if strings.TrimSpace(*aspect) != "" {
@@ -70,14 +102,20 @@ func runExport(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	deflickerEnabled, timestampEnabled := *deflicker, *timestamp
+	longEdgeSpecified := false
 	set.Visit(func(parsed *flag.Flag) {
 		switch parsed.Name {
 		case "reference", "smooth", "deflicker-smoother", "passes", "constant":
 			deflickerEnabled = true
 		case "timestamp-format":
 			timestampEnabled = true
+		case "long-edge":
+			longEdgeSpecified = true
 		}
 	})
+	if previews && *height > 0 && !longEdgeSpecified {
+		*longEdge = 0
+	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
 		return reportError(stderr, err)
@@ -99,6 +137,49 @@ func runExport(arguments []string, stdout, stderr io.Writer) int {
 		frames = matched
 	}
 	options := RenderOptions{LongEdge: *longEdge, OutputHeight: *height, AspectRatio: ratio, ApplyXMPBasic: *applyBasic, ApplyXMPExposure: *applyExposure, ApplyXMPCrop: *applyCrop, AutoOrient: *autoOrient, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *converter, Deflicker: deflickerEnabled, Reference: area, SmoothRadius: *smooth, DeflickerSmoother: *smoother, DeflickerPasses: *passes, Constant: *constant, MotionBlurFrames: *motionBlur, Watermark: *watermark, WatermarkPosition: strings.ToLower(strings.TrimSpace(*watermarkPosition)), TimestampOverlay: timestampEnabled, TimestampFormat: *timestampFormat}
+	if previews {
+		var packets []*XMPPacket
+		if *writeEV {
+			for _, frame := range frames {
+				packet, err := PacketForFrame(frame)
+				if err != nil {
+					return reportError(stderr, err)
+				}
+				if err := packet.SetScalar("lrt:ExternalExposureDefault", "0"); err != nil {
+					return reportError(stderr, err)
+				}
+				if _, err := packet.Serialize(); err != nil {
+					return reportError(stderr, err)
+				}
+				packets = append(packets, packet)
+			}
+		}
+		options.Quality = *quality
+		manifest, err := GeneratePreviewImages(frames, *output, options)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		for i, packet := range packets {
+			if err := packet.SetScalar("lrt:ExternalExposureDefault", formatNumber(manifest.Frames[i].ExternalExposureDefault)); err != nil {
+				return reportError(stderr, err)
+			}
+			if _, err := packet.Serialize(); err != nil {
+				return reportError(stderr, fmt.Errorf("previews remain at %s; could not prepare XMP for %s: %w", *output, frames[i].Image, err))
+			}
+		}
+		for i, packet := range packets {
+			backup, err := WritePacket(frames[i].OutputSidecar(), packet, !*noBackup)
+			if err != nil {
+				return reportError(stderr, fmt.Errorf("previews remain at %s; stopped after %d saved XMP files: %w", *output, i, err))
+			}
+			if backup != "" {
+				fmt.Fprintf(stdout, "Backup: %s\n", backup)
+			}
+			fmt.Fprintf(stdout, "Saved: %s\n", frames[i].OutputSidecar())
+		}
+		fmt.Fprintf(stdout, "Generated %d JPEG previews (%dx%d): %s\n", len(frames), manifest.Width, manifest.Height, *output)
+		return 0
+	}
 	if err := ExportTIFFSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
