@@ -170,6 +170,12 @@ func findLinearDNG(data []byte) (*dngFields, error) {
 	for tag, entry := range selected {
 		merged[tag] = entry
 	}
+	// Opcode lists belong to their own image IFD, not to a root preview IFD.
+	for _, tag := range []uint16{51008, 51009, 51022} {
+		if _, found := selected[tag]; !found {
+			delete(merged, tag)
+		}
+	}
 	return &dngFields{scanner: scanner, entries: merged}, nil
 }
 
@@ -250,6 +256,11 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 	if err != nil {
 		return nil, err
 	}
+	activeArea := crop
+	gainMaps, err := readDNGGainMaps(fields)
+	if err != nil {
+		return nil, err
+	}
 	origin, size := fields.values(50719), fields.values(50720)
 	if len(origin) == 0 && len(size) == 2 {
 		origin = []float64{0, 0}
@@ -312,6 +323,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 				}
 				camera[channel] = blackModel.normalize(raw, x, y, channel)
 			}
+			applyDNGGainMaps(gainMaps, &camera, x-activeArea.Min.X, y-activeArea.Min.Y, channels, activeArea.Dx(), activeArea.Dy())
 			if channels == 1 {
 				camera[1], camera[2] = camera[0], camera[0]
 			}
