@@ -170,7 +170,7 @@ func discoverBatchSequences(root, outputRoot string, recursive bool) ([]string, 
 	var sequences []string
 	var scan func(string, bool) error
 	scan = func(directory string, descend bool) error {
-		if pathWithin(outputRoot, directory) {
+		if outputRoot != "" && pathWithin(outputRoot, directory) {
 			return nil
 		}
 		entries, err := os.ReadDir(directory)
@@ -214,7 +214,7 @@ func discoverBatchSequences(root, outputRoot string, recursive bool) ([]string, 
 				continue
 			}
 			child := filepath.Join(root, entry.Name())
-			if pathWithin(outputRoot, child) {
+			if outputRoot != "" && pathWithin(outputRoot, child) {
 				continue
 			}
 			if err := scan(child, false); err != nil {

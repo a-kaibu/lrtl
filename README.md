@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `batch-interpolate ROOT`で複数の連番のXMPをCLIから一括補間できます。既定は変更予定の表示だけで、`--recursive`・並列解析・smoothness設定に対応します。`--write`では全連番の内容検証後にバックアップ付きで保存します。個別補間との一致、エラー時の書き込み防止と、一括動画生成までテストしています。
+
 - `holy-grail --lrt-input`で、ExposureTime/FNumberがない画像のAPEX形式（ShutterSpeedValue/ApertureValue）にも対応しました。同梱ExifTool→実LRTパーサーの112ケースで、符号・通常タグとの優先順位・ゼロ値を比較しています。APEXだけの撮影情報からXMP保存・AVI生成まで、実LRTコントローラーの12ケースと比較しました。
 
 - `holy-grail --lrt-input`でEXIFのシャッター・絞りをLRTの入力文字列に整形してから計算します。同梱ExifTool→実LRTパーサーの94ケースと比較し、分数精度も保持します。シャッター・絞り・ISOが変化する実LRTコントローラーの12ケースでは、合成EXIF→CLI保存→17フレームAVI画素まで検証しています。
@@ -95,7 +97,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。16-bit RGB処理。LRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。画像プレビュー、ロッシーDNG、DNGのサイズ縮小、動画の自動分割は未実装 | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed DNGと隣接XMPを取り込む。`--dnglab PATH`でDNGLabを明示選択可能。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
-| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。バッチプレビューとXMP一括補正は未実装 | 一部 |
+| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。バッチプレビュー、Deflicker/Holy Grailの一括補正は未実装 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
 
@@ -159,7 +161,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 解析コマンドの`--apply-xmp-basic`、`--apply-xmp-exposure`、`--apply-xmp-crop`はlrtl側の画素近似です。`--apply-xmp-basic`は露出、トーン、色、Temperature/Tintをまとめて含み、`--apply-xmp-exposure`とは同時に使えません。既にLightroom等でその補正を焼き込んだJPEG/PNGでは二重適用になるため、主にRAWプレビューやDNGLab現像画像の解析に使ってください。
 
-`batch-render`はROOT自身と直下の各サブフォルダーを調べ、対応画像を含むフォルダーを個別の連番としてレンダーします。`--recursive`を指定すると全階層を検索します。ROOTが連番の場合は`ROOT名.mp4`のように出力し、配下の連番は相対フォルダーを保って出力します。`--format`は`avi`/`mp4`/`mov`（既定`mp4`）、`--workers`は同時処理数（既定1、最大64）です。`--`の後に指定した通常の`render`オプションは全ジョブへ渡されます。各ジョブの成功・失敗をまとめて表示し、失敗した連番があっても他のレンダーを続け、どれかが失敗した場合は終了コード1を返します。これは動画レンダーのバッチ機能で、プレビュー生成やXMP補正の一括適用はまだありません。
+`batch-render`はROOT自身と直下の各サブフォルダーを調べ、対応画像を含むフォルダーを個別の連番としてレンダーします。`--recursive`を指定すると全階層を検索します。ROOTが連番の場合は`ROOT名.mp4`のように出力し、配下の連番は相対フォルダーを保って出力します。`--format`は`avi`/`mp4`/`mov`（既定`mp4`）、`--workers`は同時処理数（既定1、最大64）です。`--`の後に指定した通常の`render`オプションは全ジョブへ渡されます。各ジョブの成功・失敗をまとめて表示し、失敗した連番があっても他のレンダーを続け、どれかが失敗した場合は終了コード1を返します。XMP補間の一括適用には`batch-interpolate`を使います。
 
 ## インストール
 
@@ -332,6 +334,10 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
 
 # 連番をフォルダーから探して並列レンダー（MP4、最大2ジョブ）
 lrtl batch-render "D:\Sequences" --output "D:\Exports" --format mp4 --workers 2 --recursive -- --fps 24 --crf 18 --preset medium
+
+# 複数連番のXMP補間を確認し、バックアップ付きで一括保存
+lrtl batch-interpolate "D:\Sequences" --recursive --workers 2
+lrtl batch-interpolate "D:\Sequences" --recursive --workers 2 --write
 
 # 長期フィルターで選択した画像だけをレンダー
 lrtl render "D:\Timelapse\Developed" --selection "D:\Timelapse\selection.json" --output "D:\Timelapse\filtered.avi"
@@ -642,6 +648,25 @@ WB数値の列コンポーネントを実LRT 7.5.5で呼び出した16ケース�
 `interpolate`は、登録された16個の補正位置の`CorrectionActive`と、Circular 1–2 / MaskGroup 1–4・8–11の`CorrectionMasks[1].Flipped`の計26項目を扱います。欠損は前方へ引き継いで先頭を後方から補完し、4つ星が1つ以下なら参照値を全体へコピーします。複数の4つ星と両端の値が同じ場合もコピーします。値が異なる場合は既存の真偽値を保持し、数値補間はしません。5つ星はこの処理のアンカーになりません。
 
 全フレームで欠けたフラグは作りません。Sync ID形式、内部予約位置、2番目以降のマスク、線形マスクの`Flipped`、`MaskInverted`はこの遷移処理の対象外です。既存IDを保持し、真偽値だけをコピーするために選択キーフレームの欠損構造は生成しません。不正・構造化された登録真偽値は保存前にエラーにします。実LRTの登録26項目とヘルパー処理24ケースを固定データで照合し、CLIの保存・バックアップ・再実行・有効化/反転がAVI画素に及ぼす結果をテストしています。LRT全体のXMP保存やCamera Raw画素との完全一致は未検証です。
+
+## 複数連番のXMPを一括補間
+
+```powershell
+# ROOT自身と直下の連番を検証して変更予定を表示
+lrtl batch-interpolate C:\photos\sequences
+
+# 全階層を検索し、4連番ずつ解析。全体の内容検証後に保存
+lrtl batch-interpolate C:\photos\sequences --recursive --workers 4 --smoothness 50 --write
+
+# 補間したXMP露出を使って一括動画生成
+lrtl batch-render C:\photos\sequences --recursive --output C:\photos\movies --format avi -- --apply-xmp-exposure
+```
+
+`batch-interpolate`は各フォルダーを独立した連番として、通常の`interpolate`と同じ4/5つ星のアンカー、数値補間、スカラー処理、構造均等化、局所補正を適用します。画像のないフォルダーは処理しません。`--workers`は解析の並列数（既定1、1〜64）、`--smoothness`は0〜100（既定50）です。解析結果と保存順はフォルダー順です。
+
+既定では書き込みません。`--write`でも全連番の読込・補間・XMP構築を先に検証し、1つでも内容エラーがあれば全体を保存せず終了コード1を返します。保存する既存XMPはバックアップされ、新規サイドカーや変更のないファイルにはバックアップを作りません。`--no-backup`も指定できます。保存開始後のディスク・権限等のエラーでは、それまでに保存したファイルは残り、全体のロールバックはしません。
+
+このコマンドはLRTのバッチ作業に対応するCLI機能です。LRTのバッチキューそのものを再現した比較ではなく、数値処理は既存の実測比較済み補間経路を再利用しています。バッチプレビュー生成、Deflicker/Holy Grailの一括計算は未対応です。
 
 ## 撮影間隔で連番を分けて取り込む
 
