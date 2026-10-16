@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `holy-grail --lrt-input`の形状調整を実LRTの112ケースで比較し、2/3つ星区間の補正と正規化範囲、float32のRotateトレンドを修正しました。カメラ設定差の27ケースも直接比較し、シャッター比のlog計算を修正しました。同じカメラ設定が続く区間に不要な補正を加えません。Holy Grail全体とCamera Raw現像の完全一致は未検証です。
+
 - `import --split-gap 30s`で、撮影時刻の間隔に応じて写真を複数の連番フォルダーへ分けて取り込めます。時刻順の整列、対応XMPの保持、dry-run、衝突の事前検証と失敗時のロールバックに対応します。LRTの分割ワークフローに対応するCLI機能ですが、指定した時間差を使う独立した判定です。
 
 - `curve IMAGE_OR_XMP|DIRECTORY`でマスター／RGBのポイントカーブをCLIから確認・編集できます。`--mask 'MaskGroupBasedCorrections[1]'`で既存の局所補正にも対応します。JSON表示、4つ星マーク、直線へ戻す操作、dry-run、バックアップと連番全体の事前検証を備え、全体／局所カーブの編集→均等化→AVI画素までテストしています。
@@ -272,6 +274,8 @@ lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --lrt-reduce-deflicker 0.35
 
 # 補正曲線の伸縮・回転を調整
 lrtl holy-grail "D:\Timelapse\Sequence" --stretch 0.4 --rotate -0.2
+# LRT入力では、隣接2/3つ星のHG区間を使う形状調整
+lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --stretch 0.4 --rotate -0.2
 
 # LRTの探索範囲とL1評価を使った曲線パラメーター提案
 lrtl holy-grail "D:\Timelapse\Sequence" --auto-shape

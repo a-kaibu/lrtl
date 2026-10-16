@@ -1646,6 +1646,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--stretch": true, "-stretch": true,
 		"--rotate": true, "-rotate": true,
+		"--lrt-reduce-deflicker": true, "-lrt-reduce-deflicker": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code

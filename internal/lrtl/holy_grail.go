@@ -305,7 +305,7 @@ func holyGrailLRTPairDelta(before, after CameraExposure, ignoreAperture bool) fl
 	if before.ExposureTime <= 0 || after.ExposureTime <= 0 {
 		return 0
 	}
-	delta := math.Log2(2 / (before.ExposureTime / after.ExposureTime))
+	delta := math.Log2(before.ExposureTime / after.ExposureTime)
 	if before.ISO > 0 && after.ISO > 0 {
 		delta -= math.Log2(after.ISO / before.ISO)
 	}
@@ -315,22 +315,40 @@ func holyGrailLRTPairDelta(before, after CameraExposure, ignoreAperture bool) fl
 	return delta / 4
 }
 
-func normalizedHolyGrailInputCurve(values []float64) []float64 {
+// The installed shape helper uses the original Preview EV input, correcting
+// only adjacent 2/3-star pairs before normalization. Four-star pairs participate
+// in other HG stages, but do not activate or adjust this shape curve.
+func lrtHolyGrailShapeCurve(values []float64, ratings []int, stretch, rotate float64) []float64 {
 	result := make([]float64, len(values))
-	if len(values) == 0 {
+	if len(values) == 0 || len(values) != len(ratings) {
 		return result
 	}
-	minimum, maximum := values[0], values[0]
-	for _, value := range values[1:] {
-		minimum = math.Min(minimum, value)
-		maximum = math.Max(maximum, value)
+	adjusted := make([]float64, len(values))
+	adjusted[0] = values[0]
+	minimum, maximum := 100.0, -100.0
+	offset, previousDelta := 0.0, 0.0
+	hasPair := false
+	eligible := func(rating int) bool { return rating == 2 || rating == 3 }
+	for i := 1; i < len(values); i++ {
+		if eligible(ratings[i-1]) && eligible(ratings[i]) {
+			offset += values[i-1] - values[i] - previousDelta
+			hasPair = true
+		} else {
+			previousDelta = values[i-1] - values[i]
+		}
+		adjusted[i] = offset + values[i]
+		minimum = math.Min(minimum, adjusted[i])
+		maximum = math.Max(maximum, adjusted[i])
 	}
 	span := maximum - minimum
-	if span <= 1e-12 {
+	// A degenerate native normalization can produce NaN. Keep lrtl's finite
+	// zero-shape policy for that case rather than publishing invalid XMP.
+	if !hasPair || span == 0 {
 		return result
 	}
-	for index, value := range values {
-		result[index] = (value-minimum)/span - 0.5
+	for i, value := range adjusted {
+		trend := float64(float32(i)/float32(len(values)) - float32(0.5))
+		result[i] = ((value-minimum)/span-0.5)*stretch + trend*rotate
 	}
 	return result
 }
@@ -373,12 +391,11 @@ func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []C
 	}
 	curve = centerAndClipHolyGrailCurve(curve, 10)
 
-	normalized := normalizedHolyGrailInputCurve(negated)
+	shape := lrtHolyGrailShapeCurve(inputs, ratings, options.Stretch, options.Rotate)
+	shape = lrtHolyGrailLowess(shape, 0.5)
 	for index := range curve {
-		trend := float64(index)/float64(len(curve)) - 0.5
-		curve[index] += normalized[index]*options.Stretch + trend*options.Rotate
+		curve[index] += shape[index]
 	}
-	curve = lrtHolyGrailLowess(curve, 0.5)
 	return centerAndClipHolyGrailCurve(curve, 1), nil
 }
 
