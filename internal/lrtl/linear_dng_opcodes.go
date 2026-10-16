@@ -9,12 +9,25 @@ import (
 
 const maxDNGOpcodeBytes = 16 << 20
 
+type dngOpcodeArea struct {
+	area                              image.Rectangle
+	plane, planes, rowPitch, colPitch int
+}
+
 type dngGainMap struct {
-	area                                 image.Rectangle
-	plane, planes, rowPitch, colPitch    int
+	dngOpcodeArea
 	rows, cols, mapPlanes                int
 	spacingV, spacingH, originV, originH float64
 	values                               []float32
+}
+
+type dngPointOpcode struct {
+	dngOpcodeArea
+	id           uint32
+	gainMap      *dngGainMap
+	coefficients []float64
+	table        []float32
+	lookup       []uint16
 }
 
 func dngOpcodeBytes(fields *dngFields, tag uint16) ([]byte, error) {
@@ -35,8 +48,8 @@ func dngOpcodeBytes(fields *dngFields, tag uint16) ([]byte, error) {
 	return fields.scanner.data[offset : offset+uint64(entry.count)], nil
 }
 
-func readDNGGainMaps(fields *dngFields) ([]dngGainMap, error) {
-	var maps []dngGainMap
+func readDNGPointOpcodes(fields *dngFields) ([]dngPointOpcode, error) {
+	var opcodes []dngPointOpcode
 	for _, tag := range []uint16{51008, 51009, 51022} {
 		data, err := dngOpcodeBytes(fields, tag)
 		if err != nil {
@@ -66,24 +79,106 @@ func readDNGGainMaps(fields *dngFields) ([]dngGainMap, error) {
 			payload := data[:size]
 			data = data[size:]
 			// Stage 1 uses a different raw-value domain. Only normalized
-			// post-linearization and post-demosaic GainMap are supported here.
-			if id != 9 || tag == 51008 || version > 0x01070100 {
+			// post-linearization and post-demosaic point operations are supported.
+			if id < 7 || id > 13 || tag == 51008 || version > 0x01070100 {
 				if flags&1 != 0 {
 					continue
 				}
 				return nil, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
 			}
-			gainMap, err := parseDNGGainMap(payload)
+			opcode, err := parseDNGPointOpcode(id, payload)
 			if err != nil {
-				return nil, fmt.Errorf("Linear DNG GainMap in tag %d: %w", tag, err)
+				return nil, fmt.Errorf("Linear DNG opcode %d in tag %d: %w", id, tag, err)
 			}
-			maps = append(maps, gainMap)
+			opcodes = append(opcodes, opcode)
 		}
 		if len(data) != 0 {
 			return nil, fmt.Errorf("trailing bytes in Linear DNG opcode list %d", tag)
 		}
 	}
-	return maps, nil
+	return opcodes, nil
+}
+
+func parseDNGOpcodeArea(data []byte) (dngOpcodeArea, error) {
+	var result dngOpcodeArea
+	if len(data) < 32 {
+		return result, fmt.Errorf("truncated area parameters")
+	}
+	var values [8]uint32
+	for i := range values {
+		values[i] = binary.BigEndian.Uint32(data[i*4:])
+	}
+	if values[0] >= values[2] || values[1] >= values[3] || values[2] > math.MaxInt32 || values[3] > math.MaxInt32 || uint64(values[4])+uint64(values[5]) > math.MaxInt32 || values[5] == 0 || values[6] == 0 || values[7] == 0 || values[6] > math.MaxInt32 || values[7] > math.MaxInt32 {
+		return result, fmt.Errorf("invalid area, plane range or pitch")
+	}
+	result.area = image.Rect(int(values[1]), int(values[0]), int(values[3]), int(values[2]))
+	result.plane, result.planes, result.rowPitch, result.colPitch = int(values[4]), int(values[5]), int(values[6]), int(values[7])
+	return result, nil
+}
+
+func parseDNGPointOpcode(id uint32, data []byte) (dngPointOpcode, error) {
+	result := dngPointOpcode{id: id}
+	if id == 9 {
+		gainMap, err := parseDNGGainMap(data)
+		if err != nil {
+			return result, err
+		}
+		result.dngOpcodeArea, result.gainMap = gainMap.dngOpcodeArea, &gainMap
+		return result, nil
+	}
+	area, err := parseDNGOpcodeArea(data)
+	if err != nil {
+		return result, err
+	}
+	result.dngOpcodeArea = area
+	if len(data) < 36 {
+		return result, fmt.Errorf("truncated mapping parameters")
+	}
+	count := uint64(binary.BigEndian.Uint32(data[32:]))
+	if id == 7 {
+		if count < 1 || count > 65536 || uint64(len(data)) != 36+count*2 {
+			return result, fmt.Errorf("invalid mapping table size")
+		}
+		result.lookup = make([]uint16, int(count))
+		for i := range result.lookup {
+			result.lookup[i] = binary.BigEndian.Uint16(data[36+i*2:])
+		}
+		return result, nil
+	}
+	if id == 8 {
+		if count > 8 || uint64(len(data)) != 36+(count+1)*8 {
+			return result, fmt.Errorf("invalid polynomial degree or coefficient count")
+		}
+		result.coefficients = make([]float64, int(count)+1)
+		for i := range result.coefficients {
+			value := math.Float64frombits(binary.BigEndian.Uint64(data[36+i*8:]))
+			if math.IsNaN(value) || math.IsInf(float64(float32(value)), 0) {
+				return result, fmt.Errorf("non-finite polynomial coefficient")
+			}
+			result.coefficients[i] = value
+		}
+		return result, nil
+	}
+	if id < 10 || id > 13 {
+		return result, fmt.Errorf("unsupported point opcode %d", id)
+	}
+	span, pitch := area.area.Dy(), area.rowPitch
+	if id == 11 || id == 13 {
+		span, pitch = area.area.Dx(), area.colPitch
+	}
+	expected := (span-1)/pitch + 1
+	if count != uint64(expected) || count > uint64((len(data)-36)/4) || uint64(len(data)) != 36+count*4 {
+		return result, fmt.Errorf("invalid row/column table count")
+	}
+	result.table = make([]float32, expected)
+	for i := range result.table {
+		value := math.Float32frombits(binary.BigEndian.Uint32(data[36+i*4:]))
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return result, fmt.Errorf("non-finite row/column entry")
+		}
+		result.table[i] = value
+	}
+	return result, nil
 }
 
 func parseDNGGainMap(data []byte) (dngGainMap, error) {
@@ -92,16 +187,12 @@ func parseDNGGainMap(data []byte) (dngGainMap, error) {
 		return result, fmt.Errorf("truncated parameters")
 	}
 	order := binary.BigEndian
-	ints := [10]uint32{}
-	for i := range ints {
-		ints[i] = order.Uint32(data[i*4:])
+	area, err := parseDNGOpcodeArea(data)
+	if err != nil {
+		return result, err
 	}
-	if ints[0] >= ints[2] || ints[1] >= ints[3] || ints[2] > math.MaxInt32 || ints[3] > math.MaxInt32 || ints[4] > math.MaxInt32 || ints[5] == 0 || uint64(ints[4])+uint64(ints[5]) > math.MaxInt32 || ints[6] == 0 || ints[7] == 0 || ints[6] > math.MaxInt32 || ints[7] > math.MaxInt32 {
-		return result, fmt.Errorf("invalid area, plane range or pitch")
-	}
-	result.area = image.Rect(int(ints[1]), int(ints[0]), int(ints[3]), int(ints[2]))
-	result.plane, result.planes, result.rowPitch, result.colPitch = int(ints[4]), int(ints[5]), int(ints[6]), int(ints[7])
-	result.rows, result.cols = int(ints[8]), int(ints[9])
+	result.dngOpcodeArea = area
+	result.rows, result.cols = int(order.Uint32(data[32:])), int(order.Uint32(data[36:]))
 	result.spacingV, result.spacingH = math.Float64frombits(order.Uint64(data[40:])), math.Float64frombits(order.Uint64(data[48:]))
 	result.originV, result.originH = math.Float64frombits(order.Uint64(data[56:])), math.Float64frombits(order.Uint64(data[64:]))
 	result.mapPlanes = int(order.Uint32(data[72:]))
@@ -152,17 +243,49 @@ func (gainMap *dngGainMap) gain(x, y, plane, width, height int) float64 {
 	value := func(row, col int) float32 { return gainMap.values[(row*gainMap.cols+col)*gainMap.mapPlanes+plane] }
 	left := value(y0, x0)*(1-fy) + value(y1, x0)*fy
 	right := value(y0, x1)*(1-fy) + value(y1, x1)*fy
-	return float64(left*(1-fx) + right*fx)
+	result := float64(left*(1-fx) + right*fx)
+	if math.IsNaN(result) || math.IsInf(result, 0) {
+		// Finite extreme entries can overflow the float32 interpolator.
+		// Evaluate the same convex combination in double precision so a
+		// following lookup cannot receive a non-finite index.
+		fx64, fy64 := u-float64(x0), v-float64(y0)
+		left64 := float64(value(y0, x0))*(1-fy64) + float64(value(y1, x0))*fy64
+		right64 := float64(value(y0, x1))*(1-fy64) + float64(value(y1, x1))*fy64
+		result = left64*(1-fx64) + right64*fx64
+	}
+	return result
 }
 
-func applyDNGGainMaps(maps []dngGainMap, camera *[3]float64, x, y, channels, width, height int) {
-	for i := range maps {
-		gainMap := &maps[i]
-		if !image.Pt(x, y).In(gainMap.area) || (y-gainMap.area.Min.Y)%gainMap.rowPitch != 0 || (x-gainMap.area.Min.X)%gainMap.colPitch != 0 {
+func applyDNGPointOpcodes(opcodes []dngPointOpcode, camera *[3]float64, x, y, channels, width, height int) {
+	for i := range opcodes {
+		opcode := &opcodes[i]
+		if !image.Pt(x, y).In(opcode.area) || (y-opcode.area.Min.Y)%opcode.rowPitch != 0 || (x-opcode.area.Min.X)%opcode.colPitch != 0 {
 			continue
 		}
-		for plane := gainMap.plane; plane < min(channels, gainMap.plane+gainMap.planes); plane++ {
-			camera[plane] = min(1, max(0, camera[plane]*gainMap.gain(x, y, plane, width, height)))
+		for plane := opcode.plane; plane < min(channels, opcode.plane+opcode.planes); plane++ {
+			value := camera[plane]
+			switch opcode.id {
+			case 7:
+				index := min(len(opcode.lookup)-1, int(math.Round(value*65535)))
+				value = float64(opcode.lookup[index]) / 65535
+			case 8:
+				result := opcode.coefficients[len(opcode.coefficients)-1]
+				for i := len(opcode.coefficients) - 2; i >= 0; i-- {
+					result = result*value + opcode.coefficients[i]
+				}
+				value = result
+			case 9:
+				value *= opcode.gainMap.gain(x, y, plane, width, height)
+			case 10:
+				value += float64(opcode.table[(y-opcode.area.Min.Y)/opcode.rowPitch])
+			case 11:
+				value += float64(opcode.table[(x-opcode.area.Min.X)/opcode.colPitch])
+			case 12:
+				value *= float64(opcode.table[(y-opcode.area.Min.Y)/opcode.rowPitch])
+			case 13:
+				value *= float64(opcode.table[(x-opcode.area.Min.X)/opcode.colPitch])
+			}
+			camera[plane] = min(1, max(0, value))
 		}
 	}
 }

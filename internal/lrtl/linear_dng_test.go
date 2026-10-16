@@ -233,6 +233,8 @@ func TestLinearDNGCameraWhiteBalanceAndColorMatrix(t *testing.T) {
 }
 
 func FuzzLinearDNG(f *testing.F) {
+	f.Add(mixedDNGPointFixture(binary.LittleEndian, 2, 2))
+	f.Add(mixedDNGPointFixture(binary.BigEndian, 2, 2))
 	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		f.Add(linearDNGFixture(order, 2, 2, 1, []uint16{1024, 2048, 4096, 8192}, map[uint16]dngTestField{51022: testDNGOpcodeList(testDNGGainMap(testDNGGainMapPayload(2, 2, 2, 2, 1, 1, 2, 3, 4)))}))
 	}

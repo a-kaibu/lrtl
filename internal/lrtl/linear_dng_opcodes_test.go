@@ -113,7 +113,7 @@ func TestDNGGainMapEdgesPlaneSelectionAndPitch(t *testing.T) {
 		for y := 0; y < 8; y++ {
 			for x := 0; x < 8; x++ {
 				camera := [3]float64{.1, .1, .1}
-				applyDNGGainMaps([]dngGainMap{gainMap}, &camera, x, y, 3, 8, 8)
+				applyDNGPointOpcodes([]dngPointOpcode{{dngOpcodeArea: gainMap.dngOpcodeArea, id: 9, gainMap: &gainMap}}, &camera, x, y, 3, 8, 8)
 				for plane := 0; plane < 3; plane++ {
 					want := .1
 					if x >= 1 && x < 8 && y >= 1 && y < 7 && (x-1)%3 == 0 && (y-1)%2 == 0 && plane >= 1 {

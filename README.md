@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- RAWの`OpcodeList2/3`に、16-bit LUT、多項式、行/列ごとの加算・倍率補正を追加しました。既存GainMapと合わせて7種類を記録順に適用します。LUTの全65,536入力の恒等性、0〜8次の多項式、混在する補正順とクリップ、領域・色面・間引き、RAW→XMP露出→TIFF→AVIをテストしています。
+
 - RAW現像でDNGの`OpcodeList2/3`にあるGainMapを適用します。黒レベル補正後の線形値へ、領域・色面・行列の間引き・画素中心の双線形補間・端の延長を反映します。クロップ前のActiveAreaを基準にし、各補正後にクリップします。合成RAW→XMP露出→TIFF→AVIと異常入力をテストしています。未対応の必須Opcodeはエラー、オプション指定された未対応Opcodeはスキップします。
 
 - RAW現像のLinear DNG黒レベル処理を修正しました。ActiveAreaを基準とする繰り返しパターンと行・列の補正値に対応し、各色面の最大黒レベルから正規化します。LUT範囲外の末尾への丸めと、色変換前のセンサー飽和クリップも反映しました。200パターンの独立計算と、合成RAW→XMP露出→TIFF→AVIで検証しています。
@@ -547,7 +549,7 @@ lrtl import "E:\DCIM" --output "D:\Timelapse\DNG" --convert-dng
 
 Converterを`-u -l -p0 -dng1.4`で呼び、一時フォルダーにデモザイク済み・未圧縮Linear DNGを生成します。その実画素から黒/白レベル、AsShotホワイトバランス、CameraCalibration/AnalogBalance、ForwardMatrixまたはColorMatrix、BaselineExposureを使ってGoで16-bit sRGBを生成します。ストリップ/タイル、DefaultCrop/ActiveArea、DefaultScaleに対応します。`--raw-preview`は従来どおりカメラ内蔵プレビューを使う別の入力モードです。元RAWと隣接XMPは現像処理で変更しません。
 
-この現像はAdobeのデモザイクと独自の色変換を組み合わせたものです。デュアル光源の色温度推定、色域外のクリップ、画素端のクロップ丸めは近似です。DNG `OpcodeList2/3`のGainMapによるゲイン補正は適用します。AdobeプロファイルのHue/Sat/Lookテーブル、トーンカーブ、その他のOpcodeやCamera Rawの全現像工程は再現しません。未対応の必須Opcodeはエラーにし、オプション指定された未対応Opcodeだけスキップします。追加XMPは`--apply-xmp-basic`/`--apply-xmp-crop`を指定した場合に既存のlrtl近似処理で適用します。対応カメラはインストール済みConverterに依存し、変換失敗時は内蔵JPEGへ自動フォールバックせずエラーを返します。Converterの出力と1枚分の復号画像にはそれぞれ1 GiBの上限を設け、Converter実行は5分でタイムアウトします。
+この現像はAdobeのデモザイクと独自の色変換を組み合わせたものです。デュアル光源の色温度推定、色域外のクリップ、画素端のクロップ丸めは近似です。DNG `OpcodeList2/3`のMapTable/MapPolynomial/GainMap/DeltaPerRow/DeltaPerColumn/ScalePerRow/ScalePerColumnを適用します。AdobeプロファイルのHue/Sat/Lookテーブル、トーンカーブ、その他のOpcodeやCamera Rawの全現像工程は再現しません。未対応の必須Opcodeはエラーにし、オプション指定された未対応Opcodeだけスキップします。追加XMPは`--apply-xmp-basic`/`--apply-xmp-crop`を指定した場合に既存のlrtl近似処理で適用します。対応カメラはインストール済みConverterに依存し、変換失敗時は内蔵JPEGへ自動フォールバックせずエラーを返します。Converterの出力と1枚分の復号画像にはそれぞれ1 GiBの上限を設け、Converter実行は5分でタイムアウトします。
 
 自動テストはAdobeを必要としない既知画素のLinear DNGと代替プロセスを使い、黒/白レベル、ガンマ、WB/色行列、タイル境界、異常データ、CLI/GUIの各経路と一時ファイルの後始末を確認します。実機ではAdobe DNG Converter 18.7でNikon D3S NEFとCanon 40D sRAW CR2を現像し、NEF連番のAVI、CR2のH.264 MP4、CR2→DNG取り込み→AVIを確認しました。完全なCamera Raw画素一致の検証ではありません。仕様は[AdobeのCLI資料](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section/download-1/dng_converter_commandline.pdf)と[DNG仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)を参照しました。
 
@@ -788,15 +790,23 @@ lrtl render C:\photos\sequence --raw-develop --apply-xmp-basic --output C:\photo
 
 Adobe DNG Converterが出力したLinear DNGを、Go側で黒レベル・白レベル・カメラ色変換・sRGB符号化の順に処理します。`BlackLevelRepeatDim`の繰り返しパターン、色面別BlackLevel、ActiveArea幅/高さの`BlackLevelDeltaH/V`を扱い、DefaultCropより前のActiveAreaを座標基準にします。正規化は各色面の最大黒レベルを使います。LinearizationTableの範囲外は末尾の値へ丸め、センサー値を0〜1へ制限してから色変換とBaselineExposureを適用します。[Adobe DNG仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)の第5章に基づく処理です。
 
-1または3色面の200パターンを独立した全領域走査と比較し、両バイト順・有効領域のずれ・クロップ・負の行/列補正・不正メタデータをテストします。合成RAWでは補正後の一様な画素値をXMP露出、TIFF書き出し、AVI画素まで追跡します。Adobe SDKの最大黒レベル計算も参照していますが、SDK/Camera Rawを呼んだ画素比較ではありません。GainMap以外のOpcodeやカメラプロファイル全体、ノイズ処理、HDR、Camera Rawとの完全一致は未対応です。
+1または3色面の200パターンを独立した全領域走査と比較し、両バイト順・有効領域のずれ・クロップ・負の行/列補正・不正メタデータをテストします。合成RAWでは補正後の一様な画素値をXMP露出、TIFF書き出し、AVI画素まで追跡します。Adobe SDKの最大黒レベル計算も参照していますが、SDK/Camera Rawを呼んだ画素比較ではありません。未対応のOpcodeやカメラプロファイル全体、ノイズ処理、HDR、Camera Rawとの完全一致は未対応です。
 
-### RAWのGainMap補正
+### RAWのOpcode補正
 
-`OpcodeList2`と`OpcodeList3`のGainMap（Opcode ID 9）を順番に適用します。黒レベル補正後、色変換とBaselineExposureより前の線形カメラ値が対象です。領域と行列の間引きはActiveArea内の座標で指定し、マップ位置は画素中心とActiveAreaの幅/高さから求めます。双線形補間と領域外への端の値の延長に対応します。マップの色面が不足するときは最後の色面を使います。DefaultCropはマップの原点を変えません。
+`OpcodeList2`と`OpcodeList3`の以下の補正を記録順に適用します。黒レベル補正後、色変換とBaselineExposureより前の線形カメラ値が対象です。領域・色面・行列の間引きはActiveArea内の座標で指定し、DefaultCropは補正の原点を変えません。整数RAWの0〜1正規化モデルを使い、補正ごとにクリップします。
 
-OpcodeのデータはTIFF本体のバイト順と独立してbig-endianで読みます。必須の未対応Opcode、将来バージョンの必須Opcode、不正なサイズ・非有限値はエラーです。オプション指定された未対応Opcodeはスキップし、対応済みのGainMapはオプション/プレビュー指定でも適用します。現在は1リスト1024個・16 MiBまでです。`OpcodeList1`のGainMap、幾何変形・欠陥画素補間など他のOpcodeは未対応です。画像IFDごとのリストを使い、別のルートプレビューのリストは継承しません。
+| ID | Opcode | 対応内容 |
+|---|---|---|
+| 7 | MapTable | 正規化値を16-bit添字へ丸め、1〜65,536要素のLUTを参照。範囲外は末尾を延長 |
+| 8 | MapPolynomial | 定数項から順に指定された0〜8次の係数を適用 |
+| 9 | GainMap | 画素中心とActiveAreaの幅/高さから位置を求め、双線形補間。範囲外は端を延長し、不足色面は最後の面を使用 |
+| 10 / 11 | DeltaPerRow / DeltaPerColumn | 対象の各行/列へテーブル値を加算 |
+| 12 / 13 | ScalePerRow / ScalePerColumn | 対象の各行/列へテーブル値を乗算 |
 
-処理は[Adobe DNG仕様の第7章](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)とSDKを参照した独立実装です。座標・色面・補正順・飽和、両バイト順、破損データ、合成RAWからXMP露出・TIFF・AVIへの画素をテストし、ファズテストも追加しています。Adobeの画素処理全体や、SDKの走査最適化を含むビット単位の一致を示すものではありません。
+OpcodeのデータはTIFF本体のバイト順と独立してbig-endianで読みます。必須の未対応Opcode、将来バージョンの必須Opcode、不正なサイズ・非有限値はエラーです。行/列のテーブル数は指定領域と間引き後の要素数に一致する必要があります。オプション指定された未対応Opcodeはスキップし、対応済みのOpcodeはオプション/プレビュー指定でも適用します。現在は1リスト1024個・16 MiBまでです。`OpcodeList1`、幾何変形・欠陥画素補間など他のOpcodeは未対応です。画像IFDごとのリストを使い、別のルートプレビューのリストは継承しません。
+
+処理は[Adobe DNG仕様の第7章](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)とSDKを参照した独立実装です。LUT全65,536入力、多項式と独立したべき乗和、座標・色面・混在する補正順・飽和、両バイト順、破損データ、合成RAWからXMP露出・TIFF・AVIへの画素をテストし、ファズテストも追加しています。Adobeの画素処理全体や、SDKの中間16-bit量子化・走査最適化を含むビット単位の一致を示すものではありません。
 
 ### XMPの画素処理
 

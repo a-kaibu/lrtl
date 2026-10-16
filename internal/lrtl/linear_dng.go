@@ -257,7 +257,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		return nil, err
 	}
 	activeArea := crop
-	gainMaps, err := readDNGGainMaps(fields)
+	pointOpcodes, err := readDNGPointOpcodes(fields)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 				}
 				camera[channel] = blackModel.normalize(raw, x, y, channel)
 			}
-			applyDNGGainMaps(gainMaps, &camera, x-activeArea.Min.X, y-activeArea.Min.Y, channels, activeArea.Dx(), activeArea.Dy())
+			applyDNGPointOpcodes(pointOpcodes, &camera, x-activeArea.Min.X, y-activeArea.Min.Y, channels, activeArea.Dx(), activeArea.Dy())
 			if channels == 1 {
 				camera[1], camera[2] = camera[0], camera[0]
 			}
