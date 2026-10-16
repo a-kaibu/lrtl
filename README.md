@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `export DIRECTORY --output NEW_DIRECTORY`で、動画と同じ画像処理から非圧縮RGB 16-bit TIFF連番を書き出せます。RAW現像、XMP基本現像・クロップ、解像度、Deflicker、Motion Blur、文字オーバーレイに対応します。全画像の成功後に新規フォルダーを公開し、元画像との対応を`frames.json`へ記録します。16-bit下位ビット、動画側RGB48との一致、失敗時の後片付けをテストしています。
+
 - `batch-interpolate ROOT`で複数の連番のXMPをCLIから一括補間できます。既定は変更予定の表示だけで、`--recursive`・並列解析・smoothness設定に対応します。`--write`では全連番の内容検証後にバックアップ付きで保存します。個別補間との一致、エラー時の書き込み防止と、一括動画生成までテストしています。
 
 - `holy-grail --lrt-input`で、ExposureTime/FNumberがない画像のAPEX形式（ShutterSpeedValue/ApertureValue）にも対応しました。同梱ExifTool→実LRTパーサーの112ケースで、符号・通常タグとの優先順位・ゼロ値を比較しています。APEXだけの撮影情報からXMP保存・AVI生成まで、実LRTコントローラーの12ケースと比較しました。
@@ -91,7 +93,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed DNG取り込みに対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現、ロッシーDNGとサイズ縮小は未対応 | 一部 |
-| 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。LRTのプリセット/UIや非圧縮TIFF中間画像は未対応 | 一部 |
+| 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。16-bit RGB処理。LRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
@@ -331,6 +333,9 @@ lrtl long-term "D:\Timelapse\Developed" --output "D:\Timelapse\lrt-metrics.json"
 
 # 現像済みJPEG/PNG/TIFFから24 fpsのMJPEG AVIを作成（FFmpeg不要）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\preview.avi"
+
+# XMPを反映した非圧縮16-bit TIFF中間画像を新規フォルダーへ書き出す
+lrtl export "D:\Timelapse\Developed" --output "D:\Timelapse\TIFF" --apply-xmp-basic --apply-xmp-crop
 
 # 連番をフォルダーから探して並列レンダー（MP4、最大2ジョブ）
 lrtl batch-render "D:\Sequences" --output "D:\Exports" --format mp4 --workers 2 --recursive -- --fps 24 --crf 18 --preset medium
@@ -648,6 +653,29 @@ WB数値の列コンポーネントを実LRT 7.5.5で呼び出した16ケース�
 `interpolate`は、登録された16個の補正位置の`CorrectionActive`と、Circular 1–2 / MaskGroup 1–4・8–11の`CorrectionMasks[1].Flipped`の計26項目を扱います。欠損は前方へ引き継いで先頭を後方から補完し、4つ星が1つ以下なら参照値を全体へコピーします。複数の4つ星と両端の値が同じ場合もコピーします。値が異なる場合は既存の真偽値を保持し、数値補間はしません。5つ星はこの処理のアンカーになりません。
 
 全フレームで欠けたフラグは作りません。Sync ID形式、内部予約位置、2番目以降のマスク、線形マスクの`Flipped`、`MaskInverted`はこの遷移処理の対象外です。既存IDを保持し、真偽値だけをコピーするために選択キーフレームの欠損構造は生成しません。不正・構造化された登録真偽値は保存前にエラーにします。実LRTの登録26項目とヘルパー処理24ケースを固定データで照合し、CLIの保存・バックアップ・再実行・有効化/反転がAVI画素に及ぼす結果をテストしています。LRT全体のXMP保存やCamera Raw画素との完全一致は未検証です。
+
+## 16-bit TIFF中間画像を書き出す
+
+```powershell
+# JPEG/PNG/TIFFの連番をXMP現像・クロップ付きで書き出す
+lrtl export C:\photos\sequence --output C:\photos\tiff-export --apply-xmp-basic --apply-xmp-crop
+
+# RAWを現像して、長辺3840画素のTIFF連番へ
+lrtl export C:\photos\raw --output C:\photos\raw-tiff --raw-develop --apply-xmp-basic --long-edge 3840
+
+# 書き出した画素には現像が反映済みなので、そのまま動画にする
+lrtl render C:\photos\tiff-export --output C:\photos\timelapse.avi
+```
+
+`export`は動画と同じ画像処理を使って、`frame000001.tif`から始まる非圧縮RGB 16-bit TIFF連番を作ります。`frames.json`に順序と元ファイル名を記録します。既定でEXIFの向きを画素へ適用し、出力Orientationは1です。PNGの`eXIf`向き情報も両バイト順で読みます。`--auto-orient=false`で向きの適用を止められます。
+
+`--apply-xmp-basic`（または`--apply-xmp-exposure`）、`--apply-xmp-crop`、`--aspect`、`--long-edge`/`--output-height`、`--selection`、`--filename-contains`を指定できます。`--deflicker`とその平滑化・参照領域設定、`--motion-blur`、透かし・撮影時刻のオーバーレイも`render`と同じです。ラスター入力の処理はPure GoでFFmpeg不要です。RAWは`--raw-develop`とインストール済みAdobe DNG Converter（または`--dnglab PATH`）、内蔵プレビューは`--raw-preview`を使います。
+
+出力先は新規フォルダーに限定し、既存のファイルやフォルダーは置き換えません。同じ親の一時フォルダーへ全画像と対応表を作ってから公開するため、途中の不正画像・異なる解像度・現像失敗では出力先に不完全な連番を残しません。元画像・XMPは変更しません。
+
+入力は既存レンダーと同じくsRGBとして処理し、16-bit入力の精度を保持します。8-bit入力の細部が増えるわけではありません。透明度は黒背景へ合成し、出力にアルファチャンネルはありません。撮影EXIF・XMPサイドカー・ICCプロファイルのコピーは行わず、指定した現像値は画素へ反映します。TIFFへ書き出した後に同じXMP露出を再適用すると補正が重複します。Camera Raw現像・色管理・HDRとの一致は未対応です。
+
+テストではTIFFの圧縮・bit深度・向きタグを直接確認し、16-bit下位ビットと透明度の計算、XMP・Deflicker・Motion Blur・オーバーレイ適用後の動画側RGB48入力との一致を検査します。通常のテストは外部アプリ不要で、RAWコンバーターのコマンド契約はテスト用子プロセスで確認します。別途、実NEF/CR2を使ったインストール済みAdobe DNG Converter→TIFF→AVI生成も確認しています（再実行は`LRTL_RAW_SAMPLE`を指定して`go test ./internal/lrtl -run '^TestExportTIFFRealRAW$' -count=1`）。
 
 ## 複数連番のXMPを一括補間
 

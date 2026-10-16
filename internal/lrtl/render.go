@@ -158,6 +158,12 @@ const maxVideoDimension = int64(1<<31 - 1)
 // global XMP tone controls, EXIF orientation, rotated XMP crop bounds, metadata timestamps,
 // and fixed-text watermarks, but does not implement full Camera Raw RAW rendering.
 func RenderSequence(frames []Frame, output string, options RenderOptions) error {
+	return renderSequence(frames, output, options, nil)
+}
+
+// A custom RGB48 destination shares all image processing with video rendering.
+// Its owner stages and publishes the image directory separately.
+func renderSequence(frames []Frame, output string, options RenderOptions, imageWriter func(int, int) (renderFrameWriter, error)) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
 	}
@@ -188,7 +194,10 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		return fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012")
 	}
 	outputExtension := strings.ToLower(filepath.Ext(output))
-	if outputExtension != ".avi" && outputExtension != ".mp4" && outputExtension != ".mov" {
+	if imageWriter != nil {
+		outputExtension = ".tiff"
+	}
+	if imageWriter == nil && outputExtension != ".avi" && outputExtension != ".mp4" && outputExtension != ".mov" {
 		return fmt.Errorf("output must use the .avi, .mp4, or .mov extension: %s", output)
 	}
 	if strings.TrimSpace(options.AudioPath) != "" {
@@ -200,7 +209,11 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 	ffmpegPath := ""
-	if outputExtension == ".avi" {
+	if imageWriter != nil {
+		if options.AudioPath != "" || options.Codec != "" {
+			return fmt.Errorf("image export does not accept audio or video codecs")
+		}
+	} else if outputExtension == ".avi" {
 		if options.Codec != "" {
 			return fmt.Errorf("--codec is only available for MP4 or MOV output")
 		}
@@ -244,7 +257,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	} else if !info.IsDir() {
 		return fmt.Errorf("output parent is not a directory: %s", outputDir)
 	}
-	if !options.Overwrite {
+	if imageWriter == nil && !options.Overwrite {
 		if _, err := os.Lstat(output); err == nil {
 			return fmt.Errorf("output already exists (pass --overwrite to replace it): %s", output)
 		} else if !os.IsNotExist(err) {
@@ -449,42 +462,52 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		}
 	}
 
-	tempFile, err := os.CreateTemp(outputDir, ".lrtl-*"+outputExtension)
-	if err != nil {
-		return fmt.Errorf("create temporary video: %w", err)
-	}
-	tempPath := tempFile.Name()
-	if err := tempFile.Close(); err != nil {
-		_ = os.Remove(tempPath)
-		return fmt.Errorf("close temporary video: %w", err)
-	}
-	if err := os.Remove(tempPath); err != nil {
-		return fmt.Errorf("prepare temporary video: %w", err)
-	}
-	indexPath := ""
-	if outputExtension == ".avi" {
-		indexPath = tempPath + ".idx_"
-	}
+	tempPath, indexPath := "", ""
 	cleanup := func() {
-		_ = os.Remove(tempPath)
+		if tempPath != "" {
+			_ = os.Remove(tempPath)
+		}
 		if indexPath != "" {
 			_ = os.Remove(indexPath)
 		}
 	}
 
 	var writer renderFrameWriter
-	if outputExtension == ".avi" {
+	if imageWriter != nil {
+		writer, err = imageWriter(outputWidth, outputHeight)
+	} else {
+		tempFile, createErr := os.CreateTemp(outputDir, ".lrtl-*"+outputExtension)
+		if createErr != nil {
+			return fmt.Errorf("create temporary video: %w", createErr)
+		}
+		tempPath = tempFile.Name()
+		if closeErr := tempFile.Close(); closeErr != nil {
+			cleanup()
+			return fmt.Errorf("close temporary video: %w", closeErr)
+		}
+		if removeErr := os.Remove(tempPath); removeErr != nil {
+			return fmt.Errorf("prepare temporary video: %w", removeErr)
+		}
+		if outputExtension == ".avi" {
+			indexPath = tempPath + ".idx_"
+		}
+	}
+	if imageWriter == nil && outputExtension == ".avi" {
 		writer, err = mjpeg.New(tempPath, int32(outputWidth), int32(outputHeight), int32(options.FPS))
 		if err != nil {
 			cleanup()
 			return fmt.Errorf("create MJPEG AVI: %w", err)
 		}
-	} else {
+	} else if imageWriter == nil {
 		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, options.FPS, len(frames), options.CRF, options.Preset, options.AudioPath)
 		if err != nil {
 			cleanup()
 			return err
 		}
+	}
+	if err != nil {
+		cleanup()
+		return err
 	}
 	writerClosed := false
 	completed := false
@@ -763,6 +786,10 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 		return fmt.Errorf("finalize %s: %w", strings.ToUpper(options.Codec), err)
 	}
 	writerClosed = true
+	if imageWriter != nil {
+		completed = true
+		return nil
+	}
 
 	if !options.Overwrite {
 		if _, err := os.Lstat(output); err == nil {
