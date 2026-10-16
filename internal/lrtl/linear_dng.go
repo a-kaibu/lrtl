@@ -279,9 +279,22 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 	if crop.Empty() || !crop.In(image.Rect(0, 0, width, height)) {
 		return nil, fmt.Errorf("Linear DNG crop is outside the image")
 	}
+	profileTone, err := readDNGProfileToneCurve(fields)
+	if err != nil {
+		return nil, err
+	}
 	transform := dngIdentityMatrix
+	finalTransform := dngIdentityMatrix
+	xyzToRGB := dngXYZD50ToSRGB
+	if profileTone != nil {
+		xyzToRGB, err = dngProPhotoToXYZ.inverse()
+		if err != nil {
+			return nil, err
+		}
+		finalTransform = dngXYZD50ToSRGB.multiply(dngProPhotoToXYZ)
+	}
 	if channels == 3 {
-		transform, err = dngCameraToSRGB(fields)
+		transform, err = dngCameraToSpace(fields, xyzToRGB)
 		if err != nil {
 			return nil, err
 		}
@@ -374,8 +387,18 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 				camera[1], camera[2] = camera[0], camera[0]
 			}
 			rgb := transform.vector(camera)
+			if profileTone != nil {
+				for channel := range rgb {
+					rgb[channel] = min(1, max(0, rgb[channel])) * gain
+				}
+				rgb = finalTransform.vector(profileTone.apply(rgb))
+			} else {
+				for channel := range rgb {
+					rgb[channel] *= gain
+				}
+			}
 			img.SetNRGBA64(x-crop.Min.X, y-crop.Min.Y, color.NRGBA64{
-				R: encodeDNGSRGB(rgb[0] * gain), G: encodeDNGSRGB(rgb[1] * gain), B: encodeDNGSRGB(rgb[2] * gain), A: 65535,
+				R: encodeDNGSRGB(rgb[0]), G: encodeDNGSRGB(rgb[1]), B: encodeDNGSRGB(rgb[2]), A: 65535,
 			})
 		}
 	}

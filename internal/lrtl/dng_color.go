@@ -141,7 +141,7 @@ func dngChromaticAdaptation(source, destination [3]float64) (dngMatrix, error) {
 	return inverse.multiply(dngDiagonal(gains)).multiply(bradford), nil
 }
 
-func dngCameraToSRGB(fields *dngFields) (dngMatrix, error) {
+func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, error) {
 	color1, hasColor1 := fields.matrix(50721, dngIdentityMatrix)
 	color2, hasColor2 := fields.matrix(50722, color1)
 	calibration1, _ := fields.matrix(50723, dngIdentityMatrix)
@@ -228,7 +228,7 @@ func dngCameraToSRGB(fields *dngFields) (dngMatrix, error) {
 			whiteBalance[channel] = 1 / value
 		}
 		forward := mixDNGMatrix(forward1, forward2, weight)
-		return dngXYZD50ToSRGB.multiply(forward).multiply(dngDiagonal(whiteBalance)).multiply(nativeToReference), nil
+		return xyzToRGB.multiply(forward).multiply(dngDiagonal(whiteBalance)).multiply(nativeToReference), nil
 	}
 	xyzFromCamera, err := dngDiagonal(analog).multiply(mixDNGMatrix(calibration1, calibration2, weight)).multiply(mixDNGMatrix(color1, color2, weight)).inverse()
 	if err != nil {
@@ -248,5 +248,5 @@ func dngCameraToSRGB(fields *dngFields) (dngMatrix, error) {
 	if err != nil {
 		return dngMatrix{}, err
 	}
-	return dngXYZD50ToSRGB.multiply(adaptation).multiply(xyzFromCamera), nil
+	return xyzToRGB.multiply(adaptation).multiply(xyzFromCamera), nil
 }
