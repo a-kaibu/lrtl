@@ -483,3 +483,42 @@ compensation, preview/no-write, backups, repeat no-op, source ratings, reset and
 five actual AVI frames against an independent sRGB exposure formula. It also
 checks positional parsing of lrt-reduce-deflicker. Complete Holy Grail output,
 Auto Shape optimum, clip edge cases and Camera Raw pixel parity remain unproven.
+
+## Holy Grail numerical-controller comparison and ISO preprocessing
+
+`HolyGrailControllerOracle.java` completes 66 calls to the installed
+`cOM7.a(Rsa,float,float,float,float,boolean)` numerical controller, with
+synthetic Preview EV, rating and camera metadata. The callback/UI branch and
+clipping are disabled by its final flag. Inputs are small, ISO changes are
+bounded, and the caller asserts finite final values with absolute magnitude
+below one, so the disabled clipping does not distinguish these cases from the
+manual numerical branch. No image/XMP or application settings are modified.
+The cases cover 5/17/20/31 frames, adjacent 2/3 and 4 marks, 100/125 ISO,
+three stretch values, two rotations and smoothing 0/.35/.5 where the installed
+entry point finishes. One-neighbor smoothing cases are omitted. Both stored
+raw and 1.5-smoothed curves agree with Go to absolute 2e-8 at every frame.
+
+The initial comparison failed because the frame-pair wrapper parses ISO through
+`lrtimelapse.tools.c.a(String)`, its shared exposure-number parser, before Java
+int conversion. Canonical label 100 becomes 101.59366732596479 then 101, and
+125 becomes 128. This differs from feeding raw EXIF ISO directly to the private
+pair arithmetic helper. `HolyGrailISOOracle.java` records 140 inputs including
+all integers 1..99, common larger labels, fractional values and int saturation.
+lrtl applies the measured truncated-label mapping in its LRT-input frame-pair
+wrapper, retaining the separately measured raw numerical pair helper. Unknown
+labels use numeric truncation with Java int bounds. This does not prove the
+full native formatter/parser behavior for every possible metadata string.
+
+The installed controller receives Stretch/Rotate/Reduce Deflicker as float,
+then promotes them for calculation. lrtl now does the same. In particular,
+.35f times 20 lies below seven and selects six LOWESS neighbors. Decimal CLI
+controls are tested against the measured 20-frame controller results, not just
+against inputs already rounded to float32.
+
+An integration test generates JPEG/EXIF with the fixture's changing ISO and
+stored Preview EV, writes compensation through the CLI, checks XMP against the
+actual controller outputs, retains original ratings/profile data and backup
+bytes, then decodes all AVI frames against a separately calculated sRGB gain
+using native measured EV. Source JPEGs are unchanged. The comparison does not
+cover native XMP serialization, clipping-sensitive inputs, arbitrary shutter/
+aperture formatting, Auto Shape optimal parameters or Camera Raw pixel output.

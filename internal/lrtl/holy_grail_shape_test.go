@@ -85,6 +85,10 @@ func TestHolyGrailPairAgainstInstalledLRT755(t *testing.T) {
 
 // Minimal independently generated JPEG/EXIF fixture: 1 second, f/8, ISO 100.
 func holyGrailCameraJPEG(t *testing.T) []byte {
+	return holyGrailCameraJPEGWithISO(t, 100)
+}
+
+func holyGrailCameraJPEGWithISO(t *testing.T, iso uint16) []byte {
 	t.Helper()
 	img := image.NewGray(image.Rect(0, 0, 64, 32))
 	for y := 0; y < 32; y++ {
@@ -110,7 +114,7 @@ func holyGrailCameraJPEG(t *testing.T) []byte {
 	binary.LittleEndian.PutUint16(tiff[26:], 3)
 	entry(28, 0x829a, 5, 68)
 	entry(40, 0x829d, 5, 76)
-	entry(52, 0x8827, 3, 100)
+	entry(52, 0x8827, 3, uint32(iso))
 	binary.LittleEndian.PutUint32(tiff[68:], 1)
 	binary.LittleEndian.PutUint32(tiff[72:], 1)
 	binary.LittleEndian.PutUint32(tiff[76:], 8)
@@ -159,7 +163,8 @@ func TestHolyGrailLRTShapeCLIThroughVideoAndReset(t *testing.T) {
 	}
 	// Analytical combined-stage result: corrected input 0,.1,.2,.3,.4,
 	// no camera-setting delta, stretch .9, then final centering.
-	expected := []float64{-.2, -.1, 0, .1, .2}
+	endpoint := .4 - (2.0/3)*float64(float32(.9))
+	expected := []float64{endpoint, endpoint / 2, 0, -endpoint / 2, -endpoint}
 	for i, frame := range frames {
 		packet, err := PacketForFrame(frame)
 		if err != nil {

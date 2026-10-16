@@ -354,6 +354,11 @@ func lrtHolyGrailShapeCurve(values []float64, ratings []int, stretch, rotate flo
 }
 
 func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []CameraExposure, options HolyGrailCurveOptions, ignoreAperture bool) ([]float64, error) {
+	// The installed controller receives these three controls as Java float.
+	// In particular .35f * 20 selects six LOWESS neighbors, not seven.
+	options.Stretch = float64(float32(options.Stretch))
+	options.Rotate = float64(float32(options.Rotate))
+	options.ReduceDeflicker = float64(float32(options.ReduceDeflicker))
 	if len(inputs) != len(cameras) || len(inputs) != len(ratings) {
 		return nil, fmt.Errorf("Holy Grail input, rating, and camera frame counts differ")
 	}
@@ -385,7 +390,7 @@ func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []C
 	accumulatedPairDelta := 0.0
 	for index := range curve {
 		if index > 0 && lrtHolyGrailPairEligible(ratings[index-1]) && lrtHolyGrailPairEligible(ratings[index]) {
-			accumulatedPairDelta += holyGrailLRTPairDelta(cameras[index-1], cameras[index], ignoreAperture)
+			accumulatedPairDelta += holyGrailLRTFramePairDelta(cameras[index-1], cameras[index], ignoreAperture)
 		}
 		curve[index] += accumulatedPairDelta
 	}

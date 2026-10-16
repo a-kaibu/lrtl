@@ -1,0 +1,45 @@
+package lrtlprobe;
+import java.lang.reflect.*;
+import java.util.*;
+import sun.misc.Unsafe;
+
+/** Successful numerical-controller calls with UI notifications disabled.
+ * Inputs are chosen so disabled clipping cannot affect the recorded result.
+ * No image/XMP files or application settings are changed. */
+public class HolyGrailControllerOracle {
+ public static void main(String[] args)throws Exception {
+  Field singleton=Unsafe.class.getDeclaredField("theUnsafe");singleton.setAccessible(true);
+  Unsafe allocator=(Unsafe)singleton.get(null);
+  Class<?> f=Class.forName("tQa"),s=Class.forName("Rsa"),c=Class.forName("lrtimelapse.cOM7"),t=Class.forName("lrtimelapse.com8"),w=Class.forName("Wd"),factory=Class.forName("ABA");
+  Object controller=allocator.allocateInstance(c),table=allocator.allocateInstance(t);
+  Field tableSequence=t.getDeclaredField("M");tableSequence.setAccessible(true);
+  Field controllerTable=c.getDeclaredField("wc");controllerTable.setAccessible(true);controllerTable.set(controller,table);
+  Field preview=field(f,"O"),packet=field(f,"Aa"),shutter=field(f,"sa"),iso=field(f,"S"),aperture=field(f,"oa"),rawCurve=field(f,"l"),smoothCurve=field(f,"ga");
+  Method empty=Arrays.stream(factory.getMethods()).filter(x->x.getName().equals("A")&&x.getReturnType()==w&&x.getParameterCount()==0).findFirst().orElseThrow();
+  Method calculate=c.getMethod("a",s,float.class,float.class,float.class,float.class,boolean.class);
+  StringBuilder json=new StringBuilder("{\"cases\":[");String sep="";
+  for(int count:new int[]{5,17,20,31})for(float stretch:new float[]{-.4f,0,.4f})for(float rotate:new float[]{-.2f,.18f})for(float reduce:new float[]{0,.35f,.5f}) {
+   if(reduce>0&&(int)((double)reduce*count)<2)continue;
+   @SuppressWarnings("unchecked") List<Object> sequence=(List<Object>)s.getConstructor(int.class).newInstance(-1);
+   double[] inputs=new double[count];int[] ratings=new int[count],isos=new int[count];
+   for(int i=0;i<count;i++) {
+    inputs[i]=((i*37%23)-11)*.003+(i%7)*.000125;
+    ratings[i]=i%9==1?2:i%9==2?3:i%11==4||i%11==5?4:0;
+    isos[i]=i%9>=2?125:100;
+    Object frame=f.getConstructor(Object[].class).newInstance((Object)new Object[4096]);
+    preview.set(frame,inputs[i]);packet.set(frame,empty.invoke(null));shutter.set(frame,"1");iso.set(frame,""+isos[i]);aperture.set(frame,"8");rawCurve.set(frame,0.0);
+    f.getMethod("E",int.class).invoke(frame,ratings[i]);sequence.add(frame);
+   }
+   tableSequence.set(table,sequence);
+   calculate.invoke(controller,sequence,0f,stretch,rotate,reduce,true);
+   double[] expected=new double[count],smoothed=new double[count];
+   for(int i=0;i<count;i++) {
+    expected[i]=(Double)rawCurve.get(sequence.get(i));smoothed[i]=(Double)smoothCurve.get(sequence.get(i));
+    if(!Double.isFinite(expected[i])||Math.abs(expected[i])>=1||!Double.isFinite(smoothed[i]))throw new IllegalStateException("invalid or clipping-sensitive case");
+   }
+   json.append(sep).append("{\"input\":").append(Arrays.toString(inputs)).append(",\"ratings\":").append(Arrays.toString(ratings)).append(",\"iso\":").append(Arrays.toString(isos)).append(",\"stretch\":").append((double)stretch).append(",\"rotate\":").append((double)rotate).append(",\"reduce\":").append((double)reduce).append(",\"expected\":").append(Arrays.toString(expected)).append(",\"smoothed\":").append(Arrays.toString(smoothed)).append("}");sep=",";
+  }
+  System.out.println(json.append("]}"));
+ }
+ static Field field(Class<?> type,String name)throws Exception {Field f=type.getDeclaredField(name);f.setAccessible(true);return f;}
+}

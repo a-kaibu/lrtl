@@ -1,0 +1,704 @@
+{
+  "cases": [
+    {
+      "input": 0.0,
+      "parsed": 0.0,
+      "expected": 0
+    },
+    {
+      "input": -1.0,
+      "parsed": -1.0,
+      "expected": -1
+    },
+    {
+      "input": 25.0,
+      "parsed": 25.398416831491197,
+      "expected": 25
+    },
+    {
+      "input": 32.0,
+      "parsed": 32.0,
+      "expected": 32
+    },
+    {
+      "input": 40.0,
+      "parsed": 40.317473596635935,
+      "expected": 40
+    },
+    {
+      "input": 50.0,
+      "parsed": 50.796833662982394,
+      "expected": 50
+    },
+    {
+      "input": 64.0,
+      "parsed": 64.0,
+      "expected": 64
+    },
+    {
+      "input": 80.0,
+      "parsed": 80.63494719327187,
+      "expected": 80
+    },
+    {
+      "input": 100.0,
+      "parsed": 101.59366732596479,
+      "expected": 101
+    },
+    {
+      "input": 125.0,
+      "parsed": 128.0,
+      "expected": 128
+    },
+    {
+      "input": 160.0,
+      "parsed": 161.26989438654374,
+      "expected": 161
+    },
+    {
+      "input": 200.0,
+      "parsed": 203.18733465192958,
+      "expected": 203
+    },
+    {
+      "input": 250.0,
+      "parsed": 256.0,
+      "expected": 256
+    },
+    {
+      "input": 320.0,
+      "parsed": 322.53978877308765,
+      "expected": 322
+    },
+    {
+      "input": 400.0,
+      "parsed": 406.3746693038589,
+      "expected": 406
+    },
+    {
+      "input": 500.0,
+      "parsed": 512.0,
+      "expected": 512
+    },
+    {
+      "input": 640.0,
+      "parsed": 645.0795775461753,
+      "expected": 645
+    },
+    {
+      "input": 800.0,
+      "parsed": 812.7493386077178,
+      "expected": 812
+    },
+    {
+      "input": 1000.0,
+      "parsed": 1024.0,
+      "expected": 1024
+    },
+    {
+      "input": 1250.0,
+      "parsed": 1290.1591550923506,
+      "expected": 1290
+    },
+    {
+      "input": 1600.0,
+      "parsed": 1625.4986772154357,
+      "expected": 1625
+    },
+    {
+      "input": 2000.0,
+      "parsed": 2048.0,
+      "expected": 2048
+    },
+    {
+      "input": 2500.0,
+      "parsed": 2580.318310184701,
+      "expected": 2580
+    },
+    {
+      "input": 3200.0,
+      "parsed": 3250.9973544308714,
+      "expected": 3250
+    },
+    {
+      "input": 4000.0,
+      "parsed": 4096.0,
+      "expected": 4096
+    },
+    {
+      "input": 5000.0,
+      "parsed": 5160.636620369402,
+      "expected": 5160
+    },
+    {
+      "input": 6400.0,
+      "parsed": 6501.994708861743,
+      "expected": 6501
+    },
+    {
+      "input": 8000.0,
+      "parsed": 8192.0,
+      "expected": 8192
+    },
+    {
+      "input": 10000.0,
+      "parsed": 10321.273240738805,
+      "expected": 10321
+    },
+    {
+      "input": 12500.0,
+      "parsed": 13003.989417723486,
+      "expected": 13003
+    },
+    {
+      "input": 12800.0,
+      "parsed": 12800.0,
+      "expected": 12800
+    },
+    {
+      "input": 16000.0,
+      "parsed": 16384.0,
+      "expected": 16384
+    },
+    {
+      "input": 20000.0,
+      "parsed": 20642.54648147761,
+      "expected": 20642
+    },
+    {
+      "input": 25000.0,
+      "parsed": 26007.97883544697,
+      "expected": 26007
+    },
+    {
+      "input": 25600.0,
+      "parsed": 25600.0,
+      "expected": 25600
+    },
+    {
+      "input": 32000.0,
+      "parsed": 32768.0,
+      "expected": 32768
+    },
+    {
+      "input": 40000.0,
+      "parsed": 41285.09296295522,
+      "expected": 41285
+    },
+    {
+      "input": 50000.0,
+      "parsed": 52015.95767089394,
+      "expected": 52015
+    },
+    {
+      "input": 51200.0,
+      "parsed": 51200.0,
+      "expected": 51200
+    },
+    {
+      "input": 64000.0,
+      "parsed": 65536.0,
+      "expected": 65536
+    },
+    {
+      "input": 80000.0,
+      "parsed": 82570.18592591034,
+      "expected": 82570
+    },
+    {
+      "input": 100000.0,
+      "parsed": 104031.915341788,
+      "expected": 104031
+    },
+    {
+      "input": 102400.0,
+      "parsed": 102400.0,
+      "expected": 102400
+    },
+    {
+      "input": 204800.0,
+      "parsed": 204800.0,
+      "expected": 204800
+    },
+    {
+      "input": 123.0,
+      "parsed": 123.0,
+      "expected": 123
+    },
+    {
+      "input": 100.5,
+      "parsed": 100.5,
+      "expected": 100
+    },
+    {
+      "input": 3000000000.0,
+      "parsed": 3000000000.0,
+      "expected": 2147483647
+    },
+    {
+      "input": 1.0,
+      "parsed": 1.0,
+      "expected": 1
+    },
+    {
+      "input": 2.0,
+      "parsed": 2.0,
+      "expected": 2
+    },
+    {
+      "input": 3.0,
+      "parsed": 3.174802103936399,
+      "expected": 3
+    },
+    {
+      "input": 4.0,
+      "parsed": 4.0,
+      "expected": 4
+    },
+    {
+      "input": 5.0,
+      "parsed": 5.039684199579493,
+      "expected": 5
+    },
+    {
+      "input": 6.0,
+      "parsed": 6.3496042078727974,
+      "expected": 6
+    },
+    {
+      "input": 7.0,
+      "parsed": 7.0,
+      "expected": 7
+    },
+    {
+      "input": 8.0,
+      "parsed": 8.0,
+      "expected": 8
+    },
+    {
+      "input": 9.0,
+      "parsed": 9.0,
+      "expected": 9
+    },
+    {
+      "input": 10.0,
+      "parsed": 10.079368399158986,
+      "expected": 10
+    },
+    {
+      "input": 11.0,
+      "parsed": 11.0,
+      "expected": 11
+    },
+    {
+      "input": 12.0,
+      "parsed": 12.0,
+      "expected": 12
+    },
+    {
+      "input": 13.0,
+      "parsed": 12.699208415745595,
+      "expected": 12
+    },
+    {
+      "input": 14.0,
+      "parsed": 14.0,
+      "expected": 14
+    },
+    {
+      "input": 15.0,
+      "parsed": 16.0,
+      "expected": 16
+    },
+    {
+      "input": 16.0,
+      "parsed": 16.0,
+      "expected": 16
+    },
+    {
+      "input": 17.0,
+      "parsed": 17.0,
+      "expected": 17
+    },
+    {
+      "input": 18.0,
+      "parsed": 18.0,
+      "expected": 18
+    },
+    {
+      "input": 19.0,
+      "parsed": 19.0,
+      "expected": 19
+    },
+    {
+      "input": 20.0,
+      "parsed": 20.158736798317967,
+      "expected": 20
+    },
+    {
+      "input": 21.0,
+      "parsed": 21.0,
+      "expected": 21
+    },
+    {
+      "input": 22.0,
+      "parsed": 22.0,
+      "expected": 22
+    },
+    {
+      "input": 23.0,
+      "parsed": 23.0,
+      "expected": 23
+    },
+    {
+      "input": 24.0,
+      "parsed": 24.0,
+      "expected": 24
+    },
+    {
+      "input": 26.0,
+      "parsed": 26.0,
+      "expected": 26
+    },
+    {
+      "input": 27.0,
+      "parsed": 27.0,
+      "expected": 27
+    },
+    {
+      "input": 28.0,
+      "parsed": 28.0,
+      "expected": 28
+    },
+    {
+      "input": 29.0,
+      "parsed": 29.0,
+      "expected": 29
+    },
+    {
+      "input": 30.0,
+      "parsed": 32.0,
+      "expected": 32
+    },
+    {
+      "input": 31.0,
+      "parsed": 32.0,
+      "expected": 32
+    },
+    {
+      "input": 33.0,
+      "parsed": 33.0,
+      "expected": 33
+    },
+    {
+      "input": 34.0,
+      "parsed": 34.0,
+      "expected": 34
+    },
+    {
+      "input": 35.0,
+      "parsed": 35.0,
+      "expected": 35
+    },
+    {
+      "input": 36.0,
+      "parsed": 36.0,
+      "expected": 36
+    },
+    {
+      "input": 37.0,
+      "parsed": 37.0,
+      "expected": 37
+    },
+    {
+      "input": 38.0,
+      "parsed": 38.0,
+      "expected": 38
+    },
+    {
+      "input": 39.0,
+      "parsed": 39.0,
+      "expected": 39
+    },
+    {
+      "input": 41.0,
+      "parsed": 41.0,
+      "expected": 41
+    },
+    {
+      "input": 42.0,
+      "parsed": 42.0,
+      "expected": 42
+    },
+    {
+      "input": 43.0,
+      "parsed": 43.0,
+      "expected": 43
+    },
+    {
+      "input": 44.0,
+      "parsed": 44.0,
+      "expected": 44
+    },
+    {
+      "input": 45.0,
+      "parsed": 45.0,
+      "expected": 45
+    },
+    {
+      "input": 46.0,
+      "parsed": 46.0,
+      "expected": 46
+    },
+    {
+      "input": 47.0,
+      "parsed": 47.0,
+      "expected": 47
+    },
+    {
+      "input": 48.0,
+      "parsed": 48.0,
+      "expected": 48
+    },
+    {
+      "input": 49.0,
+      "parsed": 49.0,
+      "expected": 49
+    },
+    {
+      "input": 51.0,
+      "parsed": 51.0,
+      "expected": 51
+    },
+    {
+      "input": 52.0,
+      "parsed": 52.0,
+      "expected": 52
+    },
+    {
+      "input": 53.0,
+      "parsed": 53.0,
+      "expected": 53
+    },
+    {
+      "input": 54.0,
+      "parsed": 54.0,
+      "expected": 54
+    },
+    {
+      "input": 55.0,
+      "parsed": 55.0,
+      "expected": 55
+    },
+    {
+      "input": 56.0,
+      "parsed": 56.0,
+      "expected": 56
+    },
+    {
+      "input": 57.0,
+      "parsed": 57.0,
+      "expected": 57
+    },
+    {
+      "input": 58.0,
+      "parsed": 58.0,
+      "expected": 58
+    },
+    {
+      "input": 59.0,
+      "parsed": 59.0,
+      "expected": 59
+    },
+    {
+      "input": 60.0,
+      "parsed": 64.0,
+      "expected": 64
+    },
+    {
+      "input": 61.0,
+      "parsed": 61.0,
+      "expected": 61
+    },
+    {
+      "input": 62.0,
+      "parsed": 62.0,
+      "expected": 62
+    },
+    {
+      "input": 63.0,
+      "parsed": 64.0,
+      "expected": 64
+    },
+    {
+      "input": 65.0,
+      "parsed": 65.0,
+      "expected": 65
+    },
+    {
+      "input": 66.0,
+      "parsed": 66.0,
+      "expected": 66
+    },
+    {
+      "input": 67.0,
+      "parsed": 67.0,
+      "expected": 67
+    },
+    {
+      "input": 68.0,
+      "parsed": 68.0,
+      "expected": 68
+    },
+    {
+      "input": 69.0,
+      "parsed": 69.0,
+      "expected": 69
+    },
+    {
+      "input": 70.0,
+      "parsed": 70.0,
+      "expected": 70
+    },
+    {
+      "input": 71.0,
+      "parsed": 71.0,
+      "expected": 71
+    },
+    {
+      "input": 72.0,
+      "parsed": 72.0,
+      "expected": 72
+    },
+    {
+      "input": 73.0,
+      "parsed": 73.0,
+      "expected": 73
+    },
+    {
+      "input": 74.0,
+      "parsed": 74.0,
+      "expected": 74
+    },
+    {
+      "input": 75.0,
+      "parsed": 75.0,
+      "expected": 75
+    },
+    {
+      "input": 76.0,
+      "parsed": 76.0,
+      "expected": 76
+    },
+    {
+      "input": 77.0,
+      "parsed": 77.0,
+      "expected": 77
+    },
+    {
+      "input": 78.0,
+      "parsed": 78.0,
+      "expected": 78
+    },
+    {
+      "input": 79.0,
+      "parsed": 80.63494719327187,
+      "expected": 80
+    },
+    {
+      "input": 81.0,
+      "parsed": 81.0,
+      "expected": 81
+    },
+    {
+      "input": 82.0,
+      "parsed": 82.0,
+      "expected": 82
+    },
+    {
+      "input": 83.0,
+      "parsed": 83.0,
+      "expected": 83
+    },
+    {
+      "input": 84.0,
+      "parsed": 84.0,
+      "expected": 84
+    },
+    {
+      "input": 85.0,
+      "parsed": 85.0,
+      "expected": 85
+    },
+    {
+      "input": 86.0,
+      "parsed": 86.0,
+      "expected": 86
+    },
+    {
+      "input": 87.0,
+      "parsed": 87.0,
+      "expected": 87
+    },
+    {
+      "input": 88.0,
+      "parsed": 88.0,
+      "expected": 88
+    },
+    {
+      "input": 89.0,
+      "parsed": 89.0,
+      "expected": 89
+    },
+    {
+      "input": 90.0,
+      "parsed": 90.0,
+      "expected": 90
+    },
+    {
+      "input": 91.0,
+      "parsed": 91.0,
+      "expected": 91
+    },
+    {
+      "input": 92.0,
+      "parsed": 92.0,
+      "expected": 92
+    },
+    {
+      "input": 93.0,
+      "parsed": 93.0,
+      "expected": 93
+    },
+    {
+      "input": 94.0,
+      "parsed": 94.0,
+      "expected": 94
+    },
+    {
+      "input": 95.0,
+      "parsed": 95.0,
+      "expected": 95
+    },
+    {
+      "input": 96.0,
+      "parsed": 96.0,
+      "expected": 96
+    },
+    {
+      "input": 97.0,
+      "parsed": 97.0,
+      "expected": 97
+    },
+    {
+      "input": 98.0,
+      "parsed": 98.0,
+      "expected": 98
+    },
+    {
+      "input": 99.0,
+      "parsed": 99.0,
+      "expected": 99
+    }
+  ]
+}
