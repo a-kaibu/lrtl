@@ -416,3 +416,34 @@ test compares all copied image/XMP bytes to their sources and renders both
 resulting sequences to real AVI files with their expected frame counts. This
 does not compare against native automatic split decisions; DNG split tests
 check the plan, with converter execution covered separately by existing tests.
+
+## Manual geometry pixel application
+
+The installed numeric registry already supplies PerspectiveRotate bounds
+(-10..10) and PerspectiveScale bounds (50..150). Adobe's
+[Geometry documentation](https://helpx.adobe.com/lightroom/desktop/edit-photos/crop-rotate-geometry.html)
+describes rotation and uniform scaling, alongside other manual and Upright
+controls. lrtl now consumes those two XMP values under apply-xmp-basic using an
+independent centered affine transform. Scale defaults to 100 percent; positive
+rotation is clockwise in screen coordinates. This is not a measured Camera Raw
+transform/resampler oracle.
+
+The fixed oriented canvas is retained. Source pixels are transformed after
+local corrections and before the existing crop/global-tone stages. Areas
+outside the source are transparent, composited on black by video output. The
+shared spatial stage is used by analysis, rendered-pixel feedback, ordinary
+rendering and the Motion Blur preparation paths. High-precision source types
+retain 16-bit destinations and alpha. Default geometry returns the original
+image without resampling. Horizontal, vertical, aspect, Upright, automatic
+fitting and lens distortion remain unimplemented pixel controls.
+
+Tests compare 16-bit linear ramps against an independent inverse affine map
+at pixel centers, including nonzero image bounds and both rotation signs.
+They check more than 900 distinct output levels, alpha, transparent borders,
+default no-op, parser bounds and geometry-before-crop analysis ordering. A CLI
+test marks and edits scale endpoints, interpolates 100/125/150, and decodes
+the actual AVI frames against calculated sample positions, with/without XMP
+application and with two-frame Motion Blur. Rendered-pixel checks preserve
+source images and XMP, and invalid geometry on a later frame must not publish
+an output video. The comparisons validate lrtl's implementation, not native
+Camera Raw pixel equivalence.

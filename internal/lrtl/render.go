@@ -416,7 +416,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 					return nil, fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
 				}
 				if xmpBasics != nil {
-					img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+					img = applyXMPSpatialCorrections(img, xmpBasics[index])
 				}
 				if xmpCrops != nil {
 					img = applyXMPCrop(img, xmpCrops[index])
@@ -536,7 +536,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				return nil, fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
 			}
 			if xmpBasics != nil {
-				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+				img = applyXMPSpatialCorrections(img, xmpBasics[index])
 			}
 			if xmpCrops != nil && xmpCrops[index].Active && (xmpCrops[index].Bounds != image.Rect(0, 0, width, height) || math.Abs(xmpCrops[index].Angle) > 1e-9) {
 				img = applyXMPCrop(img, xmpCrops[index])
@@ -658,7 +658,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 			}
 			if xmpBasics != nil {
-				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+				img = applyXMPSpatialCorrections(img, xmpBasics[index])
 			}
 			if applyCrop {
 				img = applyXMPCrop(img, xmpCrops[index])
@@ -710,7 +710,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			}
 			img = applyEXIFOrientation(img, orientation)
 			if xmpBasics != nil {
-				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+				img = applyXMPSpatialCorrections(img, xmpBasics[index])
 			}
 			if applyCrop {
 				img = applyXMPCrop(img, xmpCrops[index])

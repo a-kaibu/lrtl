@@ -52,6 +52,7 @@ type xmpBasicAdjustments struct {
 	hasColorMix          bool
 	colorGrading         xmpColorGrading
 	local                []xmpLocalCorrection
+	geometry             xmpGeometry
 }
 
 type xmpParametricCurve struct {
@@ -114,6 +115,7 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 	adjustments.colorNoiseSmoothness = 50
 	adjustments.vignetteMidpoint = 50
 	adjustments.vignetteFeather = 50
+	adjustments.geometry.scale = 100
 	properties := []struct {
 		name   string
 		target *float64
@@ -121,6 +123,8 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 		max    float64
 	}{
 		{"Exposure2012", &adjustments.exposure, -maxRenderXMPExposureStops, maxRenderXMPExposureStops},
+		{"PerspectiveRotate", &adjustments.geometry.rotate, -10, 10},
+		{"PerspectiveScale", &adjustments.geometry.scale, 50, 150},
 		{"Contrast2012", &adjustments.contrast, -100, 100},
 		{"Highlights2012", &adjustments.highlights, -100, 100},
 		{"Shadows2012", &adjustments.shadows, -100, 100},
@@ -690,7 +694,7 @@ func (adjustments xmpBasicAdjustments) globalActive() bool {
 }
 
 func (adjustments xmpBasicAdjustments) active() bool {
-	return adjustments.globalActive() || len(adjustments.local) > 0
+	return adjustments.globalActive() || len(adjustments.local) > 0 || adjustments.geometry.active()
 }
 
 func smoothstep(value float64) float64 {

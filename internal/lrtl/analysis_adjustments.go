@@ -65,7 +65,7 @@ func readSequenceXMPAdjustmentsFromPackets(frames []Frame, width, height int, op
 
 func (adjustments sequenceXMPAdjustments) apply(index int, img image.Image) image.Image {
 	if adjustments.basics != nil {
-		img = applyXMPLocalCorrections(img, adjustments.basics[index].local)
+		img = applyXMPSpatialCorrections(img, adjustments.basics[index])
 	}
 	if adjustments.crops != nil && adjustments.crops[index].Active {
 		img = applyXMPCrop(img, adjustments.crops[index])
