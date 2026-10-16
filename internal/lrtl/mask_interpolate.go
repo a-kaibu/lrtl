@@ -148,6 +148,8 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 				return
 			}
 			values[name] = number
+		} else {
+			numericError = xmpError("crs:%s must be a finite number", name)
 		}
 	}
 	for index := range element.Attr {
@@ -163,6 +165,16 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 		}
 		if value, scalar := scalarElementText(child); scalar {
 			add(child.Tag, value)
+		} else {
+			allowed := localCorrectionProperty(child.Tag)
+			if mask {
+				_, allowed = maskGeometryProperties[child.Tag]
+				_, registered := maskTransitionSpecs[child.Tag]
+				allowed = allowed && registered
+			}
+			if allowed {
+				numericError = xmpError("crs:%s must be a scalar number", child.Tag)
+			}
 		}
 	}
 	if rangeElement := correctionRangeMaskElement(element); rangeElement != nil {
@@ -779,6 +791,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		indexes[index] = indexed
 	}
 	keyframeSet := make(map[int]bool, len(keyframeIndices))
+	prepared := prepareMaskTransitionInputs(indexes)
 	for _, index := range keyframeIndices {
 		keyframeSet[index] = true
 	}
@@ -795,7 +808,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 	luminanceRangeByKey := make(map[maskTransitionKey]string, len(allKeys))
 	hasLuminanceRangeByKey := make(map[maskTransitionKey]bool, len(allKeys))
 	for key := range allKeys {
-		seriesByKey[key] = maskTransitionSeries(keyframeIndices, indexes, key, len(packets), transitionSmoothness)
+		seriesByKey[key] = maskTransitionSeries(keyframeIndices, prepared.Indexes, key, len(packets), transitionSmoothness)
 		luminanceRangeByKey[key], hasLuminanceRangeByKey[key] = firstMaskLuminanceRange(indexes, key)
 	}
 	for target := range packets {
@@ -834,9 +847,17 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		})
 		for _, key := range keys {
 			proposed := make(map[string]float64)
+			for name, value := range prepared.Missing[target][key] {
+				if name == "Angle" && lrtNormalizesMaskAngle(key) {
+					value = normalizeLRTMaskAngle(value)
+				}
+				proposed[name] = value
+			}
 			if !keyframeSet[target] {
 				if target < len(seriesByKey[key]) && seriesByKey[key][target] != nil {
-					proposed = seriesByKey[key][target]
+					for name, value := range seriesByKey[key][target] {
+						proposed[name] = value
+					}
 				}
 			}
 			currentNode, present := indexes[target][key]

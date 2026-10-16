@@ -1,0 +1,154 @@
+{
+  "property": "GradientBasedCorrections[1]/crs:LocalExposure2012",
+  "excluded": [
+    "WhiteBalance",
+    "IncrementalTemperature",
+    "IncrementalTint",
+    "Temperature",
+    "Tint",
+    "xmp:CreateDate",
+    "exif:PixelXDimension",
+    "exif:PixelYDimension"
+  ],
+  "cases": [
+    {
+      "input": [
+        null,
+        1.25,
+        null,
+        2.5,
+        null
+      ],
+      "expected": [
+        1.25,
+        1.25,
+        1.25,
+        2.5,
+        2.5
+      ],
+      "changed": true
+    },
+    {
+      "input": [
+        null,
+        null,
+        -0.123456789123,
+        null,
+        null
+      ],
+      "expected": [
+        -0.123456789123,
+        -0.123456789123,
+        -0.123456789123,
+        -0.123456789123,
+        -0.123456789123
+      ],
+      "changed": true
+    },
+    {
+      "input": [
+        0.0,
+        null,
+        null,
+        -1.5
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0,
+        -1.5
+      ],
+      "changed": true
+    },
+    {
+      "input": [
+        null,
+        null,
+        null
+      ],
+      "expected": [
+        null,
+        null,
+        null
+      ],
+      "changed": false
+    },
+    {
+      "input": [
+        1.0,
+        2.0,
+        3.0
+      ],
+      "expected": [
+        1.0,
+        2.0,
+        3.0
+      ],
+      "changed": false
+    },
+    {
+      "input": [
+        null,
+        0.0,
+        null,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "changed": true
+    },
+    {
+      "input": [
+        5.0,
+        null,
+        null,
+        null
+      ],
+      "expected": [
+        5.0,
+        5.0,
+        5.0,
+        5.0
+      ],
+      "changed": true
+    },
+    {
+      "input": [
+        null,
+        null,
+        null,
+        5.0
+      ],
+      "expected": [
+        5.0,
+        5.0,
+        5.0,
+        5.0
+      ],
+      "changed": true
+    },
+    {
+      "input": [
+        1.0,
+        null,
+        -2.0,
+        null,
+        3.0,
+        null
+      ],
+      "expected": [
+        1.0,
+        1.0,
+        -2.0,
+        -2.0,
+        3.0,
+        3.0
+      ],
+      "changed": true
+    }
+  ]
+}

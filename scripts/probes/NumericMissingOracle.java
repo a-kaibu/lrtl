@@ -11,11 +11,13 @@ public class NumericMissingOracle {
   Method index=Arrays.stream(f.getMethods()).filter(x->x.getName().equals("A")&&x.getReturnType()==int.class&&Modifier.isStatic(x.getModifiers())&&Arrays.equals(x.getParameterTypes(),new Class<?>[]{String.class})).findFirst().orElseThrow();
   Field raw=f.getDeclaredField("X");raw.setAccessible(true);
   Method name=Arrays.stream(f.getMethods()).filter(x->x.getName().equals("K")&&x.getReturnType()==String.class&&Arrays.equals(x.getParameterTypes(),new Class<?>[]{int.class})).findFirst().orElseThrow();
-  System.out.print("{\"excluded\":[");String sep="";
+  String property=args.length==0?"Exposure2012":args[0];
+  System.out.print("{\"property\":\""+property+"\",\"excluded\":[");String sep="";
   for(String field:new String[]{"d","Ha","Wa","la","Z","Xa","ua","W"}){Field v=f.getDeclaredField(field);v.setAccessible(true);System.out.print(sep+"\""+name.invoke(null,v.getInt(null))+"\"");sep=",";}
   Double[][] inputs={{null,1.25,null,2.5,null},{null,null,-.123456789123,null,null},{0.0,null,null,-1.5},{null,null,null},{1.0,2.0,3.0},{null,0.0,null,0.0},{5.0,null,null,null},{null,null,null,5.0},{1.0,null,-2.0,null,3.0,null}};
   System.out.print("],\"cases\":[");sep="";
-  int col=(int)index.invoke(null,"Exposure2012");
+  int col=(int)index.invoke(null,property);
+  if(col<0||col>=4096)throw new IllegalArgumentException("Unknown or out-of-range column "+property);
   for(Double[] input:inputs){
    @SuppressWarnings("unchecked") List<Object> sequence=(List<Object>)s.getConstructor(int.class).newInstance(-1);
    for(Double value:input){Object[] data=new Object[4096];data[col]=value;sequence.add(f.getConstructor(Object[].class).newInstance((Object)data));}
