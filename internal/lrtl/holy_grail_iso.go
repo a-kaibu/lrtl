@@ -20,6 +20,10 @@ func holyGrailLRTISO(value float64) float64 {
 	if result, found := lrtHolyGrailISOValues[value]; found {
 		return float64(result)
 	}
+	return holyGrailLRTIntISO(value)
+}
+
+func holyGrailLRTIntISO(value float64) float64 {
 	if math.IsNaN(value) {
 		return 0
 	}
@@ -33,6 +37,11 @@ func holyGrailLRTISO(value float64) float64 {
 }
 
 func holyGrailLRTFramePairDelta(before, after CameraExposure, ignoreAperture bool) float64 {
-	before.ISO, after.ISO = holyGrailLRTISO(before.ISO), holyGrailLRTISO(after.ISO)
+	if !before.lrtISOParsed {
+		before.ISO = holyGrailLRTISO(before.ISO)
+	}
+	if !after.lrtISOParsed {
+		after.ISO = holyGrailLRTISO(after.ISO)
+	}
 	return holyGrailLRTPairDelta(before, after, ignoreAperture)
 }

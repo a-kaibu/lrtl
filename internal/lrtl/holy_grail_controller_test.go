@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"image/jpeg"
+	"image/png"
 	"math"
 	"os"
 	"path/filepath"
@@ -80,20 +81,50 @@ func TestHolyGrailMeasuredControllerCLIThroughVideo(t *testing.T) {
 }
 
 func runHolyGrailCLIAndVideo(t *testing.T, c measuredHolyGrailControllerCase, auto bool) {
+	runHolyGrailCLIAndVideoWithCachedMetadata(t, c, auto, false)
+}
+
+func runHolyGrailCLIAndVideoWithCachedMetadata(t *testing.T, c measuredHolyGrailControllerCase, auto, cached bool) {
 	t.Helper()
 	dir := t.TempDir()
 	originals := map[string][]byte{}
 	for i, value := range c.Input {
-		path := filepath.Join(dir, fmt.Sprintf("frame%02d.jpg", i))
+		extension := "jpg"
+		if cached {
+			extension = "png"
+		}
+		path := filepath.Join(dir, fmt.Sprintf("frame%02d.%s", i, extension))
 		originals[path] = holyGrailCameraJPEGWithISO(t, uint16(c.ISO[i]))
+		if cached {
+			img, err := jpeg.Decode(bytes.NewReader(originals[path]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var data bytes.Buffer
+			if err := png.Encode(&data, img); err != nil {
+				t.Fatal(err)
+			}
+			originals[path] = data.Bytes()
+		}
 		if err := os.WriteFile(path, originals[path], 0600); err != nil {
 			t.Fatal(err)
 		}
-		writeTestXMP(t, path, map[string]string{"lrt:ExternalExposureDefault": strconv.FormatFloat(4*value, 'g', -1, 64), "xmp:Rating": fmt.Sprint(c.Ratings[i]), "crs:Exposure2012": "0", "crs:CameraProfile": "keep"})
+		properties := map[string]string{"lrt:ExternalExposureDefault": strconv.FormatFloat(4*value, 'g', -1, 64), "xmp:Rating": fmt.Sprint(c.Ratings[i]), "crs:Exposure2012": "0", "crs:CameraProfile": "keep"}
+		if cached {
+			properties["lrt:ShutterSpeed"] = "1"
+			properties["lrt:Iso"] = fmt.Sprint(c.ISO[i])
+			properties["lrt:Aperture"] = "8"
+		}
+		writeTestXMP(t, path, properties)
 	}
 	frames, err := DiscoverSequence(dir)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if cached {
+		if _, err := readCameraExposure(frames[0], false); err == nil {
+			t.Fatal("cached fixture unexpectedly has camera EXIF")
+		}
 	}
 	before, err := os.ReadFile(frames[0].OutputSidecar())
 	if err != nil {
@@ -134,6 +165,14 @@ func runHolyGrailCLIAndVideo(t *testing.T, c measuredHolyGrailControllerCase, au
 		profile, _, _ := packet.GetScalar("crs:CameraProfile")
 		if profile != "keep" {
 			t.Fatal("changed unrelated metadata")
+		}
+		if cached {
+			for name, want := range map[string]string{"lrt:ShutterSpeed": "1", "lrt:Iso": fmt.Sprint(c.ISO[i]), "lrt:Aperture": "8"} {
+				text, found, err := packet.GetScalar(name)
+				if err != nil || !found || text != want {
+					t.Fatalf("cached %s changed: %q err=%v", name, text, err)
+				}
+			}
 		}
 	}
 	backups, _ := filepath.Glob(frames[0].OutputSidecar() + "*.bak")

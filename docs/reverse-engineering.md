@@ -557,3 +557,30 @@ A separate analytical composition of the directly measured range helper tests
 constant Preview EV=40: successive manual stages give -10, -4.5, then -1.
 That fixture also runs CLI save/backup/render/source-preservation checks, but
 is not represented as a successful full manual-mode native-controller oracle.
+
+## Cached Holy Grail camera metadata
+
+HolyGrailMetadataOracle.java measures the installed numeric string and aperture
+parsers and decodes the camera field names used by the frame loader. They are
+ShutterSpeed, Iso and Aperture in http://lrtimelapse.com/. Capitalization matters.
+The fixture contains 137 numeric/shutter strings and 45 aperture strings. Go
+matches the numeric double bits and 43 valid aperture results. For the two
+malformed aperture labels F8 and f/8, lrtl deliberately rejects the input instead
+of accepting the native parser's zero fallback.
+
+HolyGrailMetadataPairOracle.java supplies parsed synthetic camera strings to the
+actual frame-pair wrapper in 36 cases. Go agrees within 1e-14, including decimal
+ISO spellings and aperture labels with trailing zeros. The lexical distinctions
+100 versus 100.0 and 5.6 versus 5.60 are preserved; cached ISO values must not
+pass through the canonical integer-label map a second time. Tables contain only
+measured numerical facts, not native code. Probes are development tools; Go
+runtime and tests do not require Java or an installed LRTimelapse.
+
+The --lrt-input path now prioritizes these cached fields and reads EXIF only
+when a required field is absent. A PNG fixture without EXIF exercises CLI save,
+backup, retained camera metadata and AVI pixels against measured controller EV
+and an independent sRGB gain formula. Partial-cache EXIF fallback and nine
+malformed-late-frame cases check validation before XMP or backup writes.
+The default physical EXIF mode is unchanged. Native formatting of arbitrary raw
+EXIF into camera labels, all string forms, full save/display workflows and
+Camera Raw pixel equivalence remain outside this comparison.

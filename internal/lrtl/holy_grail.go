@@ -23,6 +23,7 @@ type CameraExposure struct {
 	ISO          float64
 	Stops        float64
 	Manual       bool
+	lrtISOParsed bool
 }
 
 type HolyGrailCurveOptions struct {
@@ -57,7 +58,7 @@ type HolyGrailPlan struct {
 	AutoCurve    bool
 }
 
-func readCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error) {
+func readCameraExposureMetadata(frame Frame) (CameraExposure, error) {
 	file, err := os.Open(frame.Image)
 	if err != nil {
 		return CameraExposure{}, err
@@ -76,6 +77,16 @@ func readCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error
 	if iso == 0 {
 		iso = float64(metadata.ISO)
 	}
+	manual := uint16(metadata.ExposureMode) == 1 || uint16(metadata.ExposureProgram) == 1
+	return CameraExposure{ExposureTime: exposureTime, FNumber: fNumber, ISO: iso, Manual: manual}, nil
+}
+
+func readCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error) {
+	camera, err := readCameraExposureMetadata(frame)
+	if err != nil {
+		return CameraExposure{}, err
+	}
+	exposureTime, fNumber, iso := camera.ExposureTime, camera.FNumber, camera.ISO
 	if !ignoreAperture && (fNumber <= 0 || math.IsNaN(fNumber) || math.IsInf(fNumber, 0)) {
 		packet, err := PacketForFrame(frame)
 		if err != nil {
@@ -109,8 +120,7 @@ func readCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error
 	if math.IsNaN(setting) || math.IsInf(setting, 0) {
 		return CameraExposure{}, fmt.Errorf("EXIF exposure settings produce an invalid exposure value")
 	}
-	manual := uint16(metadata.ExposureMode) == 1 || uint16(metadata.ExposureProgram) == 1
-	return CameraExposure{ExposureTime: exposureTime, FNumber: fNumber, ISO: iso, Stops: setting, Manual: manual}, nil
+	return CameraExposure{ExposureTime: exposureTime, FNumber: fNumber, ISO: iso, Stops: setting, Manual: camera.Manual}, nil
 }
 
 func cameraSettingsChanged(before, after CameraExposure, ignoreAperture bool) bool {
@@ -224,7 +234,7 @@ func readHolyGrailLRTInputs(frames []Frame) ([]float64, []int, error) {
 			return nil, nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
 		if !found {
-			return nil, nil, fmt.Errorf("%s: missing scalar lrt:ExternalExposureDefault; export/develop the sequence in LRTimelapse first", frame.OutputSidecar())
+			return nil, nil, fmt.Errorf("%s: missing scalar lrt:ExternalExposureDefault; run lrtl preview-ev DIRECTORY --write or supply existing LRT XMP values", frame.OutputSidecar())
 		}
 		value, valid := scalarNumber(text)
 		if !valid {
@@ -526,8 +536,12 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 	var lrtRatings []int
 	var err error
 	if !reset {
+		readExposure := readCameraExposure
+		if lrtInputMode {
+			readExposure = readHolyGrailLRTCameraExposure
+		}
 		for index, frame := range frames {
-			camera, err := readCameraExposure(frame, ignoreAperture)
+			camera, err := readExposure(frame, ignoreAperture)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
 			}
