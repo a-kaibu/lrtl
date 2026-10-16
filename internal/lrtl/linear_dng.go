@@ -1,5 +1,7 @@
 package lrtl
 
+// This product includes DNG technology under license by Adobe.
+
 import (
 	"encoding/binary"
 	"fmt"
@@ -206,28 +208,6 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 			return nil, fmt.Errorf("Linear DNG requires 8-bit or 16-bit integer samples")
 		}
 	}
-	black, white := fields.values(50714), fields.values(50717)
-	if len(black) == 0 {
-		black = []float64{0}
-	}
-	if len(white) == 0 {
-		white = []float64{float64((uint64(1) << uint(depth)) - 1)}
-	}
-	if (len(black) != 1 && len(black) != channels) || (len(white) != 1 && len(white) != channels) {
-		return nil, fmt.Errorf("unsupported Linear DNG black/white level layout")
-	}
-	for channel := 0; channel < channels; channel++ {
-		if white[channel%len(white)] <= black[channel%len(black)] {
-			return nil, fmt.Errorf("Linear DNG white level must exceed black level")
-		}
-	}
-	if repeat := fields.values(50713); len(repeat) != 0 && (len(repeat) != 2 || repeat[0] != 1 || repeat[1] != 1) {
-		return nil, fmt.Errorf("unsupported repeating black level in Linear DNG")
-	}
-	horizontal, vertical := fields.values(50715), fields.values(50716)
-	if (len(horizontal) != 0 && len(horizontal) != width) || (len(vertical) != 0 && len(vertical) != height) {
-		return nil, fmt.Errorf("invalid Linear DNG black delta dimensions")
-	}
 	linearization := fields.values(50712)
 	blockWidth, blockHeight := width, fields.integer(278, height)
 	offsets, lengths := fields.values(273), fields.values(279)
@@ -265,6 +245,10 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 			}
 		}
 		crop = image.Rect(int(active[1]), int(active[0]), int(active[3]), int(active[2]))
+	}
+	blackModel, err := newDNGBlackModel(fields, crop, channels, depth)
+	if err != nil {
+		return nil, err
 	}
 	origin, size := fields.values(50719), fields.values(50720)
 	if len(origin) == 0 && len(size) == 2 {
@@ -324,23 +308,9 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 					raw = float64(fields.scanner.order.Uint16(data[position : position+2]))
 				}
 				if len(linearization) != 0 {
-					if int(raw) >= len(linearization) {
-						return nil, fmt.Errorf("Linear DNG sample exceeds linearization table")
-					}
-					raw = linearization[int(raw)]
+					raw = linearization[min(int(raw), len(linearization)-1)]
 				}
-				base := black[channel%len(black)]
-				if len(horizontal) != 0 {
-					base += horizontal[x]
-				}
-				if len(vertical) != 0 {
-					base += vertical[y]
-				}
-				denominator := white[channel%len(white)] - base
-				if denominator <= 0 {
-					return nil, fmt.Errorf("Linear DNG black deltas exceed white level")
-				}
-				camera[channel] = max(0, (raw-base)/denominator)
+				camera[channel] = blackModel.normalize(raw, x, y, channel)
 			}
 			if channels == 1 {
 				camera[1], camera[2] = camera[0], camera[0]

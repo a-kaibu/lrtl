@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- RAW現像のLinear DNG黒レベル処理を修正しました。ActiveAreaを基準とする繰り返しパターンと行・列の補正値に対応し、各色面の最大黒レベルから正規化します。LUT範囲外の末尾への丸めと、色変換前のセンサー飽和クリップも反映しました。200パターンの独立計算と、合成RAW→XMP露出→TIFF→AVIで検証しています。
+
 - `export DIRECTORY --output NEW_DIRECTORY`で、動画と同じ画像処理から非圧縮RGB 16-bit TIFF連番を書き出せます。RAW現像、XMP基本現像・クロップ、解像度、Deflicker、Motion Blur、文字オーバーレイに対応します。全画像の成功後に新規フォルダーを公開し、元画像との対応を`frames.json`へ記録します。16-bit下位ビット、動画側RGB48との一致、失敗時の後片付けをテストしています。
 
 - `batch-interpolate ROOT`で複数の連番のXMPをCLIから一括補間できます。既定は変更予定の表示だけで、`--recursive`・並列解析・smoothness設定に対応します。`--write`では全連番の内容検証後にバックアップ付きで保存します。個別補間との一致、エラー時の書き込み防止と、一括動画生成までテストしています。
@@ -780,6 +782,14 @@ lrtl render C:\photos\sequence --raw-develop --apply-xmp-basic --output C:\photo
 
 ## XMP現像の精度
 
+### RAWの黒レベルとセンサー値
+
+Adobe DNG Converterが出力したLinear DNGを、Go側で黒レベル・白レベル・カメラ色変換・sRGB符号化の順に処理します。`BlackLevelRepeatDim`の繰り返しパターン、色面別BlackLevel、ActiveArea幅/高さの`BlackLevelDeltaH/V`を扱い、DefaultCropより前のActiveAreaを座標基準にします。正規化は各色面の最大黒レベルを使います。LinearizationTableの範囲外は末尾の値へ丸め、センサー値を0〜1へ制限してから色変換とBaselineExposureを適用します。[Adobe DNG仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)の第5章に基づく処理です。
+
+1または3色面の200パターンを独立した全領域走査と比較し、両バイト順・有効領域のずれ・クロップ・負の行/列補正・不正メタデータをテストします。合成RAWでは補正後の一様な画素値をXMP露出、TIFF書き出し、AVI画素まで追跡します。Adobe SDKの最大黒レベル計算も参照していますが、SDK/Camera Rawを呼んだ画素比較ではありません。Opcodeやカメラプロファイル全体、ノイズ処理、HDR、Camera Rawとの完全一致は未対応です。
+
+### XMPの画素処理
+
 対応済みの全体/ローカル現像処理は、NRGBA64（RGB/アルファ各16-bit）と浮動小数点の計算を使います。全体の露出・WB・トーン・彩度/HSL・Color Grading・ポイント/パラメトリックカーブ、Texture/Clarity/Dehaze、シャープ・ノイズ低減・周辺減光、および対応マスクの局所調整が対象です。空間フィルターの補助層はfloat32、主要演算はfloat64です。ポイントカーブはXMPの0〜255点座標からPCHIP係数を作り、65536段階の入力位置で評価し、フレームごとに巨大なLUTを持ちません。
 
 全体22ケース、ローカル12ケースで細かな入力差・アルファ・元画像の保持を確認し、カーブは全65536段階の恒等性、宣言点の通過、単調性とファズテストを検証します。これはlrtl内での精度を確認するものです。Camera Rawの演算式・カメラプロファイル・ICC色管理・HDRの再現、およびLRTとの画素一致は未達です。Deflicker測光など一部の解析値は従来の統計定義のままで、Preview EVの256ビンは観測したLRT仕様に合わせています。
@@ -801,3 +811,5 @@ go build -o lrtl.exe ./cmd/lrtl
 ## ライセンス
 
 MIT。詳細は[LICENSE](LICENSE)を参照してください。
+
+This product includes DNG technology under license by Adobe.
