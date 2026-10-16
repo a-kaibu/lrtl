@@ -75,7 +75,7 @@ type InterpolationPlan struct {
 func (plan InterpolationPlan) PropertyCount() int {
 	total := 0
 	for _, change := range plan.Changes {
-		total += len(change.Values) + len(change.StructuredProperties) + len(change.MaskStructuredProperties)
+		total += len(change.Values) + len(change.ScalarValues) + len(change.ScalarRemovals) + len(change.StructuredProperties) + len(change.MaskStructuredProperties)
 		for _, transition := range change.MaskTransitions {
 			total += len(transition.values)
 			if transition.hasLuminanceRange {
@@ -84,20 +84,6 @@ func (plan InterpolationPlan) PropertyCount() int {
 		}
 	}
 	return total
-}
-
-func numericCRSValues(packet *XMPPacket) map[string]float64 {
-	values := make(map[string]float64)
-	for _, property := range NumericCRSProperties {
-		value, found, _ := packet.GetScalar("crs:" + property)
-		if !found {
-			continue
-		}
-		if number, ok := scalarNumber(value); ok {
-			values[property] = number
-		}
-	}
-	return values
 }
 
 func scalarNumber(value string) (float64, bool) {
@@ -241,10 +227,16 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		return nil
 	}
 
-	numericValues := make([]map[string]float64, len(packets))
-	for index, packet := range packets {
-		numericValues[index] = numericCRSValues(packet)
+	numericInputs, err := prepareNumericTransitionInputs(packets)
+	if err != nil {
+		return nil, err
 	}
+	for index, values := range numericInputs.Missing {
+		if err := assign(index, values); err != nil {
+			return nil, err
+		}
+	}
+	numericValues := numericInputs.Values
 	for _, name := range NumericCRSProperties {
 		spec, registered := globalTransitionSpecs[name]
 		if !registered {
