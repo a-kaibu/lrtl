@@ -1,0 +1,2292 @@
+{
+    "cases": [
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -15,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "32",
+            "apertureLabel": "8.0",
+            "expectedTime": 32.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -14,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "25.4",
+            "apertureLabel": "8.0",
+            "expectedTime": 25.4,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -13,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "20.2",
+            "apertureLabel": "8.0",
+            "expectedTime": 20.2,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -12,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "16",
+            "apertureLabel": "8.0",
+            "expectedTime": 16.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -11,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "12.7",
+            "apertureLabel": "8.0",
+            "expectedTime": 12.7,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -10,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "10.1",
+            "apertureLabel": "8.0",
+            "expectedTime": 10.1,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -9,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "8",
+            "apertureLabel": "8.0",
+            "expectedTime": 8.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -8,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "6.3",
+            "apertureLabel": "8.0",
+            "expectedTime": 6.3,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -7,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "5",
+            "apertureLabel": "8.0",
+            "expectedTime": 5.039684199579493,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -6,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "4",
+            "apertureLabel": "8.0",
+            "expectedTime": 4.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -5,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "3.2",
+            "apertureLabel": "8.0",
+            "expectedTime": 3.174802103936399,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -4,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "2.5",
+            "apertureLabel": "8.0",
+            "expectedTime": 2.5198420997897464,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -3,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "2",
+            "apertureLabel": "8.0",
+            "expectedTime": 2.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -2,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1.6",
+            "apertureLabel": "8.0",
+            "expectedTime": 1.5874010519681994,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -1,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1.3",
+            "apertureLabel": "8.0",
+            "expectedTime": 1.2599210498948732,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    0,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1",
+            "apertureLabel": "8.0",
+            "expectedTime": 1.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    1,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0.8",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.7937005259840997,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    2,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0.6",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.6299605249474366,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    3,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0.5",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.5,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    4,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0.4",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.39685026299204984,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    5,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0.3",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.31498026247371824,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    6,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/4",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.25,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/5",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.19842513149602492,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    8,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/6",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.15749013123685915,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    9,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/8",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.125,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    10,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/10",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.09921256574801246,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    11,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/13",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.07874506561842957,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    12,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/16",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0625,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    13,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/20",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.049606282874006244,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    14,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/25",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.03937253280921478,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    15,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/32",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.03125,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    16,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/40",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.024803141437003122,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    17,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/51",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0196078431372549,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    18,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/64",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.015625,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    19,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/81",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.012345679012345678,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    20,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/102",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.00980392156862745,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    21,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    22,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/161",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.006211180124223602,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    23,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/203",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0049261083743842365,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    24,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/256",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.00390625,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    25,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/323",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0030959752321981426,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    26,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/406",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0024630541871921183,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    27,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/512",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.001953125,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    28,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/645",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0015503875968992248,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    29,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/813",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0012300123001230013,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    30,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/1024",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0009765625,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    31,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/1290",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0007751937984496124,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    32,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/1625",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0006153846153846154,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    33,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/2048",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.00048828125,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    34,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/2580",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0003875968992248062,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    35,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/3251",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.00030759766225776686,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    36,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/4096",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.000244140625,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    37,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/5161",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.00019376089905057158,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    38,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/6502",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.00015379883112888343,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    39,
+                    3
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/8192",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0001220703125,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -12,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.25",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.25
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -11,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.28",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.28
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -10,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.31",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.31
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -9,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.35",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.35
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -8,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.40",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.4
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -7,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.45",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.45
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -6,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.50",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.5
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -5,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.56",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.56
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -4,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.63",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.63
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -3,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.71",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.71
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -2,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.79",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.79
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    10,
+                    -1,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "0.89",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.89
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    0,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "-",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 0.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    1,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "1.1",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 1.1224620342254639
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    2,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "1.3",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 1.3
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    3,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "1.4",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 1.4142135381698608
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    4,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "1.6",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 1.587401032447815
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    5,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "1.8",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 1.7817974090576172
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "2.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 2.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    7,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "2.2",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 2.2449240684509277
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    8,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "2.5",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 2.5198421478271484
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    9,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "2.8",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 2.8284270763397217
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    10,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "3.2",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 3.17480206489563
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    11,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "3.6",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 3.6
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    12,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "4.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 4.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    13,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "4.5",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 4.5
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    14,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "5.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 5.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    15,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "5.7",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 5.7
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    16,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "6.3",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 6.34960412979126
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    17,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "7.1",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 7.127189636230469
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    18,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    19,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "9.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 8.979696273803711
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    20,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "10.1",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 10.1
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    21,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "11.3",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 11.3
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    22,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "12.7",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 12.7
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    23,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "14.3",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 14.3
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    24,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "16.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 16.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    25,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "18.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 17.959392547607422
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    26,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "20.2",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 20.2
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    27,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "22.6",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 22.6
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    28,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "25.4",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 25.4
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    29,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "28.5",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 28.5
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    30,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "32.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 32.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    31,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "35.9",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 35.9
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    32,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "40.3",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 40.3
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    33,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "45.3",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 45.3
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    34,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "50.8",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 50.8
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    35,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "57.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 57.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    36,
+                    3
+                ]
+            ],
+            "shutterLabel": "1/128",
+            "apertureLabel": "64.0",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 64.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    -100,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    100,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    10,
+                    101,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "0",
+            "apertureLabel": "8.0",
+            "expectedTime": 0.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    37377,
+                    5,
+                    -3,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    6,
+                    1
+                ]
+            ],
+            "shutterLabel": "8",
+            "apertureLabel": "8.0",
+            "expectedTime": 8.0,
+            "expectedAperture": 8.0
+        },
+        {
+            "tags": [
+                [
+                    33434,
+                    5,
+                    1,
+                    125
+                ],
+                [
+                    33437,
+                    5,
+                    56,
+                    10
+                ],
+                [
+                    37377,
+                    10,
+                    1,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    2,
+                    1
+                ]
+            ],
+            "shutterLabel": "1/125",
+            "apertureLabel": "5.6",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 5.656854152679443
+        },
+        {
+            "tags": [
+                [
+                    33434,
+                    5,
+                    0,
+                    1
+                ],
+                [
+                    33437,
+                    5,
+                    0,
+                    1
+                ],
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    37378,
+                    5,
+                    5,
+                    1
+                ]
+            ],
+            "shutterLabel": "0",
+            "apertureLabel": "5.7",
+            "expectedTime": 0.0,
+            "expectedAperture": 5.7
+        },
+        {
+            "tags": [
+                [
+                    37378,
+                    5,
+                    2,
+                    1
+                ],
+                [
+                    37377,
+                    10,
+                    1,
+                    1
+                ],
+                [
+                    33437,
+                    5,
+                    56,
+                    10
+                ],
+                [
+                    33434,
+                    5,
+                    1,
+                    125
+                ]
+            ],
+            "shutterLabel": "1/125",
+            "apertureLabel": "5.6",
+            "expectedTime": 0.0078125,
+            "expectedAperture": 5.656854152679443
+        },
+        {
+            "tags": [
+                [
+                    37378,
+                    5,
+                    5,
+                    1
+                ],
+                [
+                    37377,
+                    10,
+                    7,
+                    1
+                ],
+                [
+                    33437,
+                    5,
+                    0,
+                    1
+                ],
+                [
+                    33434,
+                    5,
+                    0,
+                    1
+                ]
+            ],
+            "shutterLabel": "0",
+            "apertureLabel": "5.7",
+            "expectedTime": 0.0,
+            "expectedAperture": 5.7
+        }
+    ]
+}

@@ -615,6 +615,37 @@ Each case runs through generated JPEG/EXIF, CLI XMP save/backup and AVI decoding
 saved EV agrees within 2e-8 and decoded gray pixels within two 8-bit levels of
 an independently computed sRGB gain using the native measured EV. A cached-only
 PNG case uses the same changing camera labels. Source preservation and retained
-metadata are checked. APEX/Bulb precedence, manufacturer-specific camera tags,
+metadata are checked. APEX precedence is extended below; Bulb and manufacturer-specific camera tags,
 arbitrary formatting, native save/display behavior and Camera Raw pixels are
 still not covered. Runtime and Go tests require neither ExifTool nor Java.
+
+## APEX camera exposure fallback
+
+HolyGrailApexOracle.java measures installed ExifTool composite ShutterSpeed and
+Aperture labels followed by the installed HG parsers for 112 synthetic EXIF
+cases. These include shutter APEX values from -5 to 13 in thirds, aperture APEX
+values from -4 to 12 in thirds, signed/unsigned shutter declarations, the native
+absolute-value cutoff at 100, ordinary-tag precedence and reversed tag order.
+The fixture records the original tag IDs/types/rationals, labels and parsed
+numbers. Go requires exact parsed double bits for valid inputs. Missing aperture
+or nonpositive shutter results are deliberately rejected before saving.
+
+The precise metadata pass now keeps primary tags and APEX alternatives separately
+and resolves them after scanning. ExposureTime is preferred when present, even
+if zero; FNumber falls back to ApertureValue when zero or absent. ShutterSpeedValue
+is interpreted as signed even when declared unsigned, matching the installed
+ExifTool's camera correction. The composite Aperture logic treats a raw APEX
+zero as absent, despite its mathematical conversion yielding f/1. The 112 cases
+also exposed the native 1.1 aperture-label conversion, now recorded in the table.
+The default physical EXIF mode remains unchanged.
+
+The controller probe's apex mode uses independently measured APEX-derived labels
+in 12 native numerical-controller calls. Each resulting fixture records source
+APEX rationals as well as the native labels and EV arrays. Go tests generate
+actual JPEG EXIF containing only ShutterSpeedValue/ApertureValue and ISO, then
+run CLI save, backup and 17-frame AVI pixel checks against native measured EV.
+No Java or ExifTool is needed by these Go tests. Additional preflight tests
+reject a late invalid shutter or missing APEX aperture without creating backups
+or changing any image/sidecar; --ignore-aperture accepts the latter input.
+These comparisons do not cover native import/save/display workers, Bulb or
+manufacturer-specific precedence, arbitrary EXIF forms, or Camera Raw pixels.

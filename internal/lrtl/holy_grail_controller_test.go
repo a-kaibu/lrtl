@@ -19,6 +19,7 @@ type measuredHolyGrailControllerCase struct {
 	Ratings, ISO                  []int
 	Stretch, Rotate, Reduce       float64
 	CameraShutter, CameraAperture []string
+	ShutterAPEX, ApertureAPEX     [][2]int32
 }
 
 func measuredHolyGrailControllerCases(t *testing.T) []measuredHolyGrailControllerCase {
@@ -107,6 +108,9 @@ func runHolyGrailCLIAndVideoWithCachedMetadata(t *testing.T, c measuredHolyGrail
 				t.Fatal(err)
 			}
 			originals[path] = holyGrailExifJPEG(t, measuredHolyGrailExifCase{TimeNumerator: 1, TimeDenominator: uint32(denominator), ApertureNumerator: uint32(math.Round(fNumber * 100)), ApertureDenominator: 100, ISO: uint16(c.ISO[i])})
+		}
+		if len(c.ShutterAPEX) > 0 {
+			originals[path] = holyGrailAPEXJPEG(t, [][4]int32{{0x9201, 10, c.ShutterAPEX[i][0], c.ShutterAPEX[i][1]}, {0x9202, 5, c.ApertureAPEX[i][0], c.ApertureAPEX[i][1]}}, uint16(c.ISO[i]))
 		}
 		if cached {
 			img, err := jpeg.Decode(bytes.NewReader(originals[path]))

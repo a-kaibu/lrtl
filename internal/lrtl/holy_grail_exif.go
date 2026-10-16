@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"bufio"
+	"math"
 	"os"
 
 	"github.com/evanoberholster/imagemeta/exif2"
@@ -34,8 +35,15 @@ func readHolyGrailLRTExposureMetadata(frame Frame) (CameraExposure, error) {
 	}
 	decoder := exif2.NewIfdReader(exif2.Logger)
 	defer decoder.Close()
+	var exposureTime, fNumber, apexTime, apexAperture float64
+	var hasExposureTime, hasFNumber, hasAPEXTime, hasAPEXAperture bool
 	decoder.SetCustomTagParser(func(parser exif2.TagParser, field exif2.Tag) error {
-		if field.Ifd != ifds.ExifIFD || !field.IsType(tag.TypeRational) || (field.ID != exififd.ExposureTime && field.ID != exififd.FNumber) {
+		if field.Ifd != ifds.ExifIFD || (!field.IsType(tag.TypeRational) && !field.IsType(tag.TypeSignedRational)) {
+			return nil
+		}
+		switch field.ID {
+		case exififd.ExposureTime, exififd.FNumber, exififd.ShutterSpeedValue, exififd.ApertureValue:
+		default:
 			return nil
 		}
 		value := parser.ParseRationalU(field)
@@ -43,10 +51,28 @@ func readHolyGrailLRTExposureMetadata(frame Frame) (CameraExposure, error) {
 			return nil
 		}
 		precise := float64(value[0]) / float64(value[1])
-		if field.ID == exififd.ExposureTime {
-			camera.ExposureTime = precise
-		} else {
-			camera.FNumber = precise
+		// ExifTool interprets ShutterSpeedValue as signed even for cameras
+		// incorrectly declaring it unsigned. Other tags use their field type.
+		if field.IsType(tag.TypeSignedRational) || field.ID == exififd.ShutterSpeedValue {
+			precise = float64(int32(value[0])) / float64(int32(value[1]))
+		}
+		switch field.ID {
+		case exififd.ExposureTime:
+			exposureTime, hasExposureTime = precise, true
+		case exififd.FNumber:
+			fNumber, hasFNumber = precise, true
+		case exififd.ShutterSpeedValue:
+			hasAPEXTime = true
+			if math.Abs(precise) < 100 {
+				apexTime = math.Exp2(-precise)
+			}
+		case exififd.ApertureValue:
+			hasAPEXAperture = true
+			// The composite Aperture tag treats a raw zero APEX value as
+			// absent, even though its mathematical f-number would be one.
+			if precise != 0 {
+				apexAperture = math.Exp2(precise / 2)
+			}
 		}
 		return nil
 	})
@@ -66,6 +92,18 @@ func readHolyGrailLRTExposureMetadata(frame Frame) (CameraExposure, error) {
 		if err = boxes.ReadFTYP(); err == nil {
 			err = boxes.ReadMetadata()
 		}
+	}
+	if hasExposureTime {
+		camera.ExposureTime = exposureTime
+	} else if hasAPEXTime {
+		camera.ExposureTime = apexTime
+	}
+	if hasFNumber && fNumber != 0 {
+		camera.FNumber = fNumber
+	} else if hasAPEXAperture {
+		camera.FNumber = apexAperture
+	} else if hasFNumber {
+		camera.FNumber = fNumber
 	}
 	return camera, err
 }

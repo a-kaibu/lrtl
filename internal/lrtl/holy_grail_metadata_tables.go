@@ -62,6 +62,7 @@ var lrtHolyGrailNumberLabels = map[string]float64{
 }
 
 var lrtHolyGrailApertureLabels = map[string]float64{
+	"1.1":  1.1224620342254639,
 	"1.2":  1.2599210739135742,
 	"1.4":  1.4142135381698608,
 	"1.6":  1.587401032447815,

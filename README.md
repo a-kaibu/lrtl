@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `holy-grail --lrt-input`で、ExposureTime/FNumberがない画像のAPEX形式（ShutterSpeedValue/ApertureValue）にも対応しました。同梱ExifTool→実LRTパーサーの112ケースで、符号・通常タグとの優先順位・ゼロ値を比較しています。APEXだけの撮影情報からXMP保存・AVI生成まで、実LRTコントローラーの12ケースと比較しました。
+
 - `holy-grail --lrt-input`でEXIFのシャッター・絞りをLRTの入力文字列に整形してから計算します。同梱ExifTool→実LRTパーサーの94ケースと比較し、分数精度も保持します。シャッター・絞り・ISOが変化する実LRTコントローラーの12ケースでは、合成EXIF→CLI保存→17フレームAVI画素まで検証しています。
 
 - `holy-grail --lrt-input`でXMPの`lrt:ShutterSpeed`・`lrt:Iso`・`lrt:Aperture`を優先して読みます。情報が揃えばEXIFなしのPNG列でも補正でき、不足項目はEXIFで補います。実LRTの文字列解析とフレーム間計算を比較し、PNG→CLI保存→AVI生成、異常値での書き込み防止もテストしています。
@@ -704,7 +706,9 @@ lrtl curve C:\photos\sequence\frame001.nef --linear
 
 3項目が揃えばEXIFなしの画像でも利用でき、不足する項目だけEXIFで補います。`--ignore-aperture`では絞りは不要です。EXIFのExposureTime/FNumberは元の分数精度を保ち、LRTが要求するExifTool表示に合わせて文字列へ整形します。この経路は同梱ExifTool 13.59→実LRTパーサーの94ケースと比較しています。たとえば1/125秒は計算時に1/128秒となり、f/11の表示`11.0`もネイティブの値に変換されます。通常のEXIFモードにはこの整形を適用しません。
 
-シャッター・絞り・ISOが変わる17フレームの数値コントローラー12ケースでも、CLI保存とAVI画素を誤差付きで比較しています。キャッシュ付きPNG、XMPバックアップ、評価・カメラ設定保持、元画像保持も検査します。測定対象外の文字列形式、APEX/Bulbやメーカー固有タグの選択、クリップを含むLRTの保存・表示ワークフロー、Camera Raw画素との完全一致は未検証です。
+通常の露出タグがない場合は、APEX形式のShutterSpeedValue/ApertureValueから秒数・絞りを計算します。通常タグを優先し、FNumber=0の場合はApertureValueを使います。ExifToolと同じく、絶対値100以上のAPEXシャッター値は無効な秒数となり、絞りのAPEX値0は情報なしとしてエラーにします（`--ignore-aperture`では絞り不要）。この経路は符号・タグ順序・優先順位を含む112ケースで比較しています。
+
+シャッター・絞り・ISOが変わる17フレームの数値コントローラー比較では、通常タグの12ケースとAPEXだけの12ケースでCLI保存とAVI画素を検査しています。キャッシュ付きPNG、XMPバックアップ、評価・カメラ設定保持、元画像保持、異常なAPEXを含む連番の書き込み防止も検査します。測定対象外の文字列形式、Bulbやメーカー固有タグの選択、クリップを含むLRTの保存・表示ワークフロー、Camera Raw画素との完全一致は未検証です。
 
 ## 手動の回転・拡大を動画へ反映
 
