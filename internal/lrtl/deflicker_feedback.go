@@ -122,10 +122,18 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 			return nil, fmt.Errorf("--lrt-reference cannot be combined with --reference")
 		}
 		var err error
-		options.lrtReferences, err = loadLRTReferences(frames)
+		var order []int
+		options.lrtReferences, order, err = loadLRTReferences(frames)
 		if err != nil {
 			return nil, err
 		}
+		// Smooth and iterate in the saved native order, retaining each original
+		// Frame (and its sidecar/index) for all eventual writes.
+		ordered := make([]Frame, len(frames))
+		for i, source := range order {
+			ordered[i] = frames[source]
+		}
+		frames = ordered
 	}
 	if _, err := deflickerGainsWithSmoother([]float64{1}, radius, passes, constant, smoother); err != nil {
 		return nil, err

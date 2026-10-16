@@ -62,6 +62,10 @@ func TestLRTReferenceParsing(t *testing.T) {
 }
 
 func movingReferenceFixture(t *testing.T, dir string, cropped bool) []Frame {
+	return movingReferenceFixtureAt(t, dir, cropped, []int{0, 1, 2, 3, 4})
+}
+
+func movingReferenceFixtureAt(t *testing.T, dir string, cropped bool, positions []int) []Frame {
 	t.Helper()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
@@ -75,7 +79,7 @@ func movingReferenceFixture(t *testing.T, dir string, cropped bool) []Frame {
 		for y := 0; y < 16; y++ {
 			for x := 0; x < width; x++ {
 				v := uint16(12000 + i*5000)
-				if cropped || x >= i*8 && x < i*8+16 {
+				if cropped || x >= positions[i]*8 && x < positions[i]*8+16 {
 					v = value
 				}
 				img.SetGray16(x, y, color.Gray16{Y: v})
@@ -210,13 +214,13 @@ func TestLRTReferenceCLIEqualsCroppedSequence(t *testing.T) {
 func TestLRTReferenceSequenceIdentity(t *testing.T) {
 	frames := movingReferenceFixture(t, t.TempDir(), false)
 	for _, subset := range [][]Frame{nil, frames[:4], {frames[1], frames[0], frames[2], frames[3], frames[4]}} {
-		if _, err := loadLRTReferences(subset); err == nil {
+		if _, _, err := loadLRTReferences(subset); err == nil {
 			t.Fatal("incomplete or reordered sequence accepted")
 		}
 	}
 	// A single box is constant, so a capture-time sort flag cannot change its mapping.
 	writeLRTReferenceSettings(t, filepath.Dir(frames[0].Image), map[string]any{"imageCount": 5, "filenameSort": false, "referenceBoxes": []string{"3;0.25;0.25;0.75;0.75"}})
-	got, err := loadLRTReferences(frames)
+	got, _, err := loadLRTReferences(frames)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +290,7 @@ func FuzzLRTReferences(f *testing.F) {
 }
 
 func TestLRTReferenceFailuresWriteNothing(t *testing.T) {
-	for _, kind := range []string{"json", "missing", "count", "order", "empty", "bad-coordinate", "subpixel", "reference-conflict", "reset-conflict"} {
+	for _, kind := range []string{"json", "missing", "count", "order", "partial-date", "empty", "bad-coordinate", "subpixel", "reference-conflict", "reset-conflict"} {
 		t.Run(kind, func(t *testing.T) {
 			for _, batch := range []bool{false, true} {
 				root := t.TempDir()
@@ -299,7 +303,23 @@ func TestLRTReferenceFailuresWriteNothing(t *testing.T) {
 				case "count":
 					settings["imageCount"] = 6
 				case "order":
+					delete(settings, "filenameSort")
+				case "partial-date":
 					settings["filenameSort"] = false
+					frames, err := DiscoverSequence(bad)
+					if err != nil {
+						t.Fatal(err)
+					}
+					packet, err := PacketForFrame(frames[0])
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := packet.SetScalar("xmp:CreateDate", "2026-10-17T00:00:00"); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := WritePacket(frames[0].Sidecar, packet, false); err != nil {
+						t.Fatal(err)
+					}
 				case "empty":
 					settings["referenceBoxes"] = []string{}
 				case "bad-coordinate":

@@ -112,27 +112,27 @@ func interpolateLRTReferences(anchors []lrtReferenceAnchor, count int) []lrtRefe
 	return result
 }
 
-func loadLRTReferences(frames []Frame) ([]lrtReferenceBox, error) {
+func loadLRTReferences(frames []Frame) ([]lrtReferenceBox, []int, error) {
 	if len(frames) == 0 {
-		return nil, fmt.Errorf("LRT reference settings require a complete image sequence")
+		return nil, nil, fmt.Errorf("LRT reference settings require a complete image sequence")
 	}
 	root := filepath.Dir(frames[0].Image)
 	complete, err := DiscoverSequence(root)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(complete) != len(frames) {
-		return nil, fmt.Errorf("LRT reference settings require the complete sequence in filename order")
+		return nil, nil, fmt.Errorf("LRT reference settings require the complete sequence in filename order")
 	}
 	for i, frame := range frames {
 		if !sameFilesystemPath(frame.Image, complete[i].Image) {
-			return nil, fmt.Errorf("LRT reference settings require the complete sequence in filename order")
+			return nil, nil, fmt.Errorf("LRT reference settings require the complete sequence in filename order")
 		}
 	}
 	path := filepath.Join(root, ".lrt", "lrtsequence.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read LRT reference settings: %w", err)
+		return nil, nil, fmt.Errorf("read LRT reference settings: %w", err)
 	}
 	var settings struct {
 		ReferenceBoxes []string `json:"referenceBoxes"`
@@ -140,19 +140,30 @@ func loadLRTReferences(frames []Frame) ([]lrtReferenceBox, error) {
 		FilenameSort   *bool    `json:"filenameSort"`
 	}
 	if err := json.Unmarshal(data, &settings); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if settings.ImageCount > 0 && settings.ImageCount != len(frames) {
-		return nil, fmt.Errorf("LRT imageCount %d does not match current sequence length %d", settings.ImageCount, len(frames))
+		return nil, nil, fmt.Errorf("LRT imageCount %d does not match current sequence length %d", settings.ImageCount, len(frames))
 	}
 	anchors, err := parseLRTReferenceAnchors(settings.ReferenceBoxes, len(frames))
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
+		return nil, nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if len(anchors) > 1 && (settings.FilenameSort == nil || !*settings.FilenameSort) {
-		return nil, fmt.Errorf("multiple LRT reference boxes require filenameSort=true; capture-time ordering is not supported")
+	if len(anchors) > 1 && settings.FilenameSort == nil {
+		return nil, nil, fmt.Errorf("multiple LRT reference boxes require an explicit filenameSort setting")
 	}
-	return interpolateLRTReferences(anchors, len(frames)), nil
+	boxes := interpolateLRTReferences(anchors, len(frames))
+	order := make([]int, len(frames))
+	for i := range order {
+		order[i] = i
+	}
+	if settings.FilenameSort != nil && !*settings.FilenameSort {
+		order, err = readLRTReferenceDateOrder(frames)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return boxes, order, nil
 }
 
 func (box lrtReferenceBox) rectangle(bounds image.Rectangle) (image.Rectangle, error) {
