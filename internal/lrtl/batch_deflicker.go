@@ -17,6 +17,7 @@ type batchDeflickerResult struct {
 
 func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("batch-deflicker", stderr)
+	nativeFlags := registerNativeDeflickerFlags(set)
 	lrtReference := set.Bool("lrt-reference", false, "use each sequence's saved LRT referenceBoxes")
 	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	recursive := set.Bool("recursive", false, "find sequence directories at any depth")
@@ -39,6 +40,7 @@ func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--workers": true, "-workers": true, "--reference": true, "-reference": true,
 		"--lrt-preview": true, "-lrt-preview": true,
+		"--calculation": true, "-calculation": true, "--lrt-smoothing": true, "-lrt-smoothing": true, "--lrt-accuracy": true, "-lrt-accuracy": true, "--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true,
 		"--smooth": true, "-smooth": true, "--smoother": true, "-smoother": true,
 		"--passes": true, "-passes": true, "--dnglab": true, "-dnglab": true,
 		"--dng-converter": true, "-dng-converter": true,
@@ -81,6 +83,9 @@ func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	input := imageInputOptions{LRTPreview: *lrtPreview, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop}
 	input.LRTReference = *lrtReference
+	if err := nativeFlags.apply(set, &input); err != nil {
+		return reportError(stderr, err)
+	}
 	if err := validateImageInputOptions(input); err != nil {
 		return reportError(stderr, err)
 	}

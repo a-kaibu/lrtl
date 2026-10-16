@@ -1259,6 +1259,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 
 func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("deflicker", stderr)
+	nativeFlags := registerNativeDeflickerFlags(set)
 	lrtReference := set.Bool("lrt-reference", false, "use saved referenceBoxes from .lrt/lrtsequence.json")
 	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	write := set.Bool("write", false, "write exposure corrections to XMP sidecars")
@@ -1280,6 +1281,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--smoother": true, "-smoother": true,
+		"--calculation": true, "-calculation": true, "--lrt-smoothing": true, "-lrt-smoothing": true, "--lrt-accuracy": true, "-lrt-accuracy": true, "--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true,
 		"--lrt-preview": true, "-lrt-preview": true,
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
@@ -1302,7 +1304,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview", "lrt-reference":
+			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview", "lrt-reference", "calculation", "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut":
 				analysisOption = true
 			}
 		})
@@ -1327,6 +1329,9 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	}
 	inputOptions.LRTPreview = *lrtPreview
 	inputOptions.LRTReference = *lrtReference
+	if err := nativeFlags.apply(set, &inputOptions); err != nil {
+		return reportError(stderr, err)
+	}
 	var changes []DeflickerChange
 	measuredPasses := 0
 	if *reset {
@@ -1345,6 +1350,12 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Sequence: %s\n", set.Arg(0))
 	if *reset {
 		fmt.Fprintf(stdout, "Frames: %d; deflicker corrections to reset: %d\n", len(frames), len(changes))
+	} else if inputOptions.NativeDeflicker.Enabled {
+		target := "native smoothed Preview EV"
+		if *constant {
+			target = "native mean Preview EV"
+		}
+		fmt.Fprintf(stdout, "Frames: %d; corrections: %d; calculation: lrt-7.5.5; target: %s; bandwidth: %g; accuracy: %d; passes: %d\n", len(frames), len(changes), target, inputOptions.NativeDeflicker.Smoothing, inputOptions.NativeDeflicker.Accuracy, measuredPasses)
 	} else {
 		target := "smoothed luminance"
 		if *constant {
@@ -1358,7 +1369,11 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		if *reset {
 			fmt.Fprintf(stdout, " %s %+.4f -> %+.4f EV (remove lrtl correction)", xmpExposureTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter)
 		} else {
-			fmt.Fprintf(stdout, " luminance=%.6g correction=%+.4f EV %s=%+.4f EV",
+			measurement := "luminance"
+			if inputOptions.NativeDeflicker.Enabled {
+				measurement = "PreviewEV"
+			}
+			fmt.Fprintf(stdout, " %s=%.6g correction=%+.4f EV %s=%+.4f EV", measurement,
 				change.Luminance, change.Correction, xmpExposureTargetLabel(change.Target), change.ExposureAfter)
 		}
 		fmt.Fprintln(stdout)

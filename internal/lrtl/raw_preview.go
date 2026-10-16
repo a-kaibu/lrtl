@@ -75,6 +75,7 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 }
 
 type imageInputOptions struct {
+	NativeDeflicker  nativeDeflickerOptions
 	PreviewHistogram previewHistogramOptions
 	LRTReference     bool
 	lrtReferences    []lrtReferenceBox
@@ -89,6 +90,9 @@ type imageInputOptions struct {
 }
 
 func validateImageInputOptions(options imageInputOptions) error {
+	if err := options.NativeDeflicker.validate(); err != nil {
+		return err
+	}
 	if err := options.PreviewHistogram.validate(); err != nil {
 		return err
 	}

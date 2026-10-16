@@ -24,6 +24,8 @@ correction with absolute tolerance 2e-8, using the independently tested
 LOWESS component. Inputs must remain unchanged.
 
 This establishes the dense additive pass's numerical behavior. The Go core
-is not yet connected to CLI XMP planning or pixel feedback. Sparse row
-selection, native RAW development, the surrounding UI/worker scheduling and
-complete native multipass image rendering remain unverified.
+is connected to CLI XMP planning and Go-rendered pixel feedback through
+`--calculation lrt-7.5.5`. Storage tests compare these observations through
+modern/legacy internal slots and the global fallback. Sparse row selection,
+native RAW development, surrounding UI/worker scheduling and complete native
+multipass image rendering remain unverified.

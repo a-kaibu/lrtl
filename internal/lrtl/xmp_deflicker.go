@@ -113,6 +113,18 @@ func buildDeflickerChangesFromPackets(frames []Frame, luminances []float64, smoo
 		}
 	}
 
+	return buildDeflickerCorrectionChanges(frames, luminances, corrections, reset, includesCorrection, packets)
+}
+
+func buildDeflickerCorrectionChanges(frames []Frame, luminances, corrections []float64, reset, includesCorrection bool, packets []*XMPPacket) ([]DeflickerChange, error) {
+	if len(frames) == 0 || len(corrections) != len(frames) || !reset && len(luminances) != len(frames) || packets != nil && len(packets) != len(frames) {
+		return nil, fmt.Errorf("invalid Deflicker correction plan dimensions")
+	}
+	for i, value := range corrections {
+		if math.IsNaN(value) || math.IsInf(value, 0) || math.Abs(value) > maxRenderXMPExposureStops {
+			return nil, fmt.Errorf("invalid Deflicker correction at frame %d", i+1)
+		}
+	}
 	changes := make([]DeflickerChange, 0, len(frames))
 	for index, frame := range frames {
 		var packet *XMPPacket

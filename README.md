@@ -12,7 +12,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
-- LRT 7.5.5のDeflickerワーカーを108ケースで実行し、単一パスの計算コアをGoで再現しました。短い連番の直線化、Constant平均、LOWESS、対数変換、精度しきい値、パス別減衰、既存補正への加算・制限を比較しています。このコアはまだCLIの`deflicker`へ接続しておらず、現在のCLI補正は既存の独自経路です。
+- `deflicker`と`batch-deflicker`で`--calculation lrt-7.5.5`を選べるようにしました。本体108ケースで検証した計算コアをヒストグラム測光・内部補正スロットの保存・複数パスへ接続しました。個別/一括の最終XMP一致、日時順ROI、RAW変換経路、既存補正の移行、バックアップ・解除・失敗時の保存中止をテストしています。複数パスの画素現像はGo側で行い、Camera Rawを使う本体全体との一致は未検証です。
 
 - `preview-ev`に`--ignore-blacks`、`--ignore-whites`、`--hard-cut`を追加しました。本体の黒白除外測光を、ソフトな端の重み付けとハードカットの両方で再現します。LRT 7.5.5の96ケース、保存済み参照領域、既存RAWキャッシュ、XMP保存・バックアップ、無効引数をテストしています。
 
@@ -129,7 +129,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を最初の4つ星（なければ先頭）から均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入、近接アンカーの直線化・等値区間の平坦化を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。アスペクト比を使う円形グラデーションの専用形状補正、Camera Rawのマスク描画との一致は未対応 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`preview-images`で対応RAW/XMPからJPEG連番と測光マニフェストを生成し、任意で元XMPへPreview EVを保存。`--lrt-preview camera|visual`でLRTの既存JPEGキャッシュを明示的に読み、測光・動画・TIFF・個別/一括Deflickerの入力として使える。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/Adobe DNG Converterによる現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/Adobe DNG Converterによる現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
-| Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を識別可能なDeflicker専用LocalExposureスロット（なければ`crs:Exposure2012`）へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`--lrt-reference`で保存済み参照領域を読込・補間して測光し、`batch-deflicker`でも利用可能。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
+| Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を識別可能なDeflicker専用LocalExposureスロット（なければ`crs:Exposure2012`）へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`--lrt-reference`で保存済み参照領域を読込・補間して測光し、`batch-deflicker`でも利用可能。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。`--calculation lrt-7.5.5`で本体108ケースと比較したPreview EV・LOWESS・補正計算を個別/一括処理から選択可能。XMPへの保存・リセットとAVI画素への反映も回帰テスト済み。複数パスの画像再生成はGoの独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed/lossy DNG取り込みとロッシーDNGの長辺縮小に対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現は未対応 | 一部 |
@@ -798,7 +798,28 @@ lrtl preview-ev C:\photos\sequence --lrt-preview visual --lrt-reference --ignore
 
 これらのフラグを一つでも明示すると除外測光モードになります。`--ignore-blacks 0`、`--ignore-whites 0`、`--hard-cut=false`も明示指定として扱います。通常測光と除外測光は本体の計算経路が異なり、ゼロ指定でも結果が異なる場合があります。特に除外モードの全白画像・空ヒストグラムは0になります。フラグを省略した場合は通常のPreview EV計算です。
 
-これは`preview-ev`の測光オプションです。保存値は従来どおりPreview EVの4倍を元XMPの`lrt:ExternalExposureDefault`へ記録し、`--write`の指定時だけ保存します。RAW現像・既存LRTキャッシュ・参照領域・XMP反映を組み合わせられます。`deflicker`の既存の線形sRGB中央値や画素への補正処理には、この除外測光を適用していません。LRT Visual Deflicker全体との一致は引き続き未検証です。
+`preview-ev`での保存値は従来どおりPreview EVの4倍を元XMPの`lrt:ExternalExposureDefault`へ記録し、`--write`の指定時だけ保存します。RAW現像・既存LRTキャッシュ・参照領域・XMP反映を組み合わせられます。`deflicker`と`batch-deflicker`では`--calculation lrt-7.5.5`を選んだ場合に同じ除外測光フラグを使えます。LRT Visual Deflicker全体との一致は引き続き未検証です。
+
+## LRT方式のDeflicker計算
+
+```powershell
+# 対応XMP現像を反映しながら3パス計算し、補正案を確認
+lrtl deflicker C:\photos\sequence --calculation lrt-7.5.5 --lrt-smoothing 0.5 --lrt-accuracy 1 --passes 3 --apply-xmp-basic
+
+# LRTが生成済みのVisual Previewと参照領域から単一パスを計算・保存
+lrtl deflicker C:\photos\sequence --calculation lrt-7.5.5 --lrt-preview visual --lrt-reference --write
+
+# 全連番を同じ計算法で処理。全内容検証後にバックアップ付き保存
+lrtl batch-deflicker C:\photos --calculation lrt-7.5.5 --passes 3 --workers 2 --apply-xmp-basic --write
+```
+
+既定の`--calculation lrtl`は従来の線形sRGB中央値・Gaussian/LOWESS・70%応答の補正です。`lrt-7.5.5`は通常または黒白除外ヒストグラムからPreview EVを測り、8枚未満は両端の直線、8枚以上はLRT型LOWESS、`--constant`は算術平均をターゲットにします。測光差を対数関数へ渡し、精度別しきい値と既存補正への加算・-1〜1の制限を適用します。全測光差が厳密にゼロの場合に補正をゼロへ戻す分岐も本体どおりです。
+
+`--lrt-smoothing`は0〜2の帯域係数（既定0.5）、`--lrt-accuracy`は-1:低／0:通常／1:高（既定0）です。高精度ではパス番号に応じた減衰を使います。`--ignore-blacks`、`--ignore-whites`、`--hard-cut`で除外測光を指定できます。`--smooth`・`--smoother`は`lrtl`計算専用で、LRT方式との同時指定はエラーです。Native用フラグは`--calculation lrt-7.5.5`を指定した場合に使えます。最小2枚が必要です。
+
+識別できるDeflicker内部スロットがあれば、その既存値へ本体の計算結果を反映します。スロットがない場合は、lrtlが管理する補正分に計算を適用し、ユーザーの`crs:Exposure2012`を基準値として保持します。既存のlrtl補正が別の位置にある場合も移行し、CorrectionAmountを考慮して保存するスロット値を調整します。必要な変更があるのに対象が無効・Amount=0の場合は保存しません。`--reset`はlrtlが記録した変更を解除し、処理開始前の露出や内部補正の基準値を保持します。
+
+複数パスでは、候補XMPをメモリー上で更新し、Go側の対応現像で再測光して最後の値だけを保存します。XMP反映を指定しない入力は既に現像済みの表示画像として扱い、開始時からの追加補正だけを画素へ反映して既存補正の重複を避けます。LRTキャッシュには開始時の現像状態が反映されている必要があります。キャッシュの鮮度判定・Camera Rawでの再生成は行いません。RAW/XMP現像全体・疎なフレーム選択・本体の保存丸めまでの一致は未検証です。単一パスの数値コア、保存先への対応付け、Go内での再測光・保存のテストを区別しています。
 
 ## LRTの既存プレビューキャッシュを使う
 
@@ -822,7 +843,7 @@ lrtl export C:\photos\sequence --output C:\photos\visual-tiff --lrt-preview visu
 
 キャッシュには処理が適用済みの場合があるため、`export`と`preview-images`では、この入力モードを選ぶと既定のEXIF向き・XMP基本現像・クロップ適用を無効にします。必要な場合はそれぞれのフラグを明示できますが、適用済みの処理を重ねることになります。無加工のMJPEG AVIはキャッシュJPEGを無再圧縮で格納し、TIFFはGoで復号したRGB画素を16-bitコンテナーに保持します。JPEG由来の階調が16-bit相当に増えるものではありません。
 
-通常の解析と同様に`preview-ev --write`は元画像のXMPへ`lrt:ExternalExposureDefault`を保存します。Deflickerは既存の独自測光・補正経路を使い、複数パスではキャッシュを基にしたGo側の補正を再測定します。Camera Rawを再実行する機能ではありません。キャッシュは変更しません。LRTの操作後やXMP編集後にキャッシュが古くなっていても日時等から自動判定しないため、必要なプレビューをLRTで生成してから明示的に選択してください。ROI・ICC色管理・Visual Deflickerの数値全体がLRTと一致することは未確認です。
+通常の解析と同様に`preview-ev --write`は元画像のXMPへ`lrt:ExternalExposureDefault`を保存します。Deflickerは既定で独自測光・補正経路を使い、`--calculation lrt-7.5.5`で本体比較済みの数値計算を選べます。複数パスではキャッシュを基にしたGo側の補正を再測定します。Camera Rawを再実行する機能ではありません。キャッシュは変更しません。LRTの操作後やXMP編集後にキャッシュが古くなっていても日時等から自動判定しないため、必要なプレビューをLRTで生成してから明示的に選択してください。ROI・ICC色管理・Visual Deflickerの数値全体がLRTと一致することは未確認です。
 
 ## LRTの保存済み参照領域を使う
 
@@ -845,7 +866,7 @@ lrtl batch-deflicker C:\photos --lrt-reference --recursive --workers 4 --write
 
 選択で間引いた連番への対応付けは未対応です。`imageCount`が正数で現在の枚数と異なる場合、領域が空の場合、設定ファイル・座標が壊れている場合、画像上で1ピクセル未満になる場合は保存しません。重複するフレーム番号はファイル内の最後の値を使います。有限の範囲外座標は本体同様に0〜1へ制限します。本体が一部の破損エントリーを無視する場合でも、このCLIは明示的に選んだ設定全体を検証してエラーにします。
 
-固定領域の`--reference`、補正解除の`--reset`とは併用できません。XMP基本現像・クロップを明示した場合は、それらを適用した画像上で正規化座標を使います。`.lrt/lrtsequence.json`は変更せず、平滑化・パス数・Constantなど他の保存済み設定は読み込みません。測光と補正は既存の独自Deflicker処理を使うため、参照領域座標の一致はLRT Visual Deflicker全体の数値一致を示しません。
+固定領域の`--reference`、補正解除の`--reset`とは併用できません。XMP基本現像・クロップを明示した場合は、それらを適用した画像上で正規化座標を使います。`.lrt/lrtsequence.json`は変更せず、平滑化・パス数・Constantなど他の保存済み設定は読み込みません。測光と補正は既定の独自処理または`--calculation lrt-7.5.5`を使います。参照領域座標や補正計算の一致は、RAW現像を含むLRT Visual Deflicker全体の一致を示しません。
 
 ## 白黒現像とGrayMixer
 
@@ -1087,7 +1108,7 @@ WarpRectilinearはActiveAreaの整数画素座標を使います。中心は幅�
 
 Goの機能追加・修正では、数値の期待値、境界条件、異常入力、既存XMPの保持とバックアップを回帰テストで確認します。数値テストは手計算や独立した参照値を使い、実装の計算をそのまま複製して期待値にはしません。変更後は以下のテスト・静的解析・ビルドを実行します。GitHub ActionsもWindows/Linuxで同じ3項目を実行します。
 
-現在の自動テストはXMP読み書き・補間、キーフレーム、Preview EV、Deflicker、MJPEG AVI生成などを対象としています。平滑化単体はLRT 7.5.5の実測値53ケースと比較済みですが、LRTが実際に出力した一連のXMPとの数値比較、ブラウザーのGUI操作、外部FFmpeg/DNGLabを含む処理全体の検証は未整備です。ビルド成功だけでは動作確認済みとしません。
+現在の自動テストはXMP読み書き・補間、キーフレーム、Preview EV、Deflicker、MJPEG AVI生成などを対象としています。平滑化単体はLRT 7.5.5の実測値53ケース、Deflicker計算は108ケースと比較済みです。後者は3種類のXMP保存形式へ適用した324ケースも確認し、CLI保存からAVIの復号画素が変わることとリセットで元に戻ることをテストしています。一方、LRTが実際に出力した一連のXMPとの数値比較、ブラウザーのGUI操作、外部FFmpeg/DNGLabを含む処理全体の検証は未整備です。ビルド成功だけでは動作確認済みとしません。
 
 ```powershell
 go test ./...

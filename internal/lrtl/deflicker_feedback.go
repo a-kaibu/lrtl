@@ -102,7 +102,11 @@ func measureDeflickerPackets(frames []Frame, reference image.Rectangle, options 
 		} else {
 			area = area.Add(img.Bounds().Min)
 		}
-		values[i], err = frameLuminance(img, area)
+		if options.NativeDeflicker.Enabled {
+			values[i], err = framePreviewEVAreaWithOptions(img, area, options.PreviewHistogram)
+		} else {
+			values[i], err = frameLuminance(img, area)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("analyze %s: %w", frame.Image, err)
 		}
@@ -159,6 +163,16 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 	source := newFrameInputCache(options, passes > 1)
 	defer source.close()
 	plan := &deflickerSequencePlan{}
+	initialTracked := make([]float64, len(frames))
+	if options.NativeDeflicker.Enabled && !options.ApplyXMPExposure && !options.ApplyXMPBasic {
+		for i, packet := range packets {
+			var err error
+			initialTracked[i], err = trackedDeflickerExposure(packet)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
 	summary := make(map[int]DeflickerChange)
 	writes := make(map[int]map[xmpExposureTarget]float64)
 	includesXMP := options.ApplyXMPExposure || options.ApplyXMPBasic
@@ -168,6 +182,14 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 			feedback = make([]float64, len(frames))
 			for i, packet := range packets {
 				feedback[i] = 1
+				if options.NativeDeflicker.Enabled {
+					exposure, err := trackedDeflickerExposure(packet)
+					if err != nil {
+						return nil, err
+					}
+					feedback[i] = math.Exp2(exposure - initialTracked[i])
+					continue
+				}
 				text, found, err := packet.GetScalar(deflickerCorrectionProperty)
 				if err != nil {
 					return nil, err
@@ -202,7 +224,12 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 			return nil, err
 		}
 		plan.Measurements = append(plan.Measurements, measurements)
-		changes, err := buildDeflickerChangesFromPackets(frames, measurements, radius, 1, constant, false, smoother, includesXMP || pass > 0, packets)
+		var changes []DeflickerChange
+		if options.NativeDeflicker.Enabled {
+			changes, err = buildNativeDeflickerChanges(frames, measurements, packets, options.NativeDeflicker, constant, pass)
+		} else {
+			changes, err = buildDeflickerChangesFromPackets(frames, measurements, radius, 1, constant, false, smoother, includesXMP || pass > 0, packets)
+		}
 		if err != nil {
 			return nil, err
 		}

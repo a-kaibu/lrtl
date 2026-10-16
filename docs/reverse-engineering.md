@@ -54,8 +54,17 @@ Updates accumulate into existing native corrections and clamp to [-1,1].
 When every residual is exactly zero, the worker clears all corrections.
 
 `native_deflicker.go` independently models this pass and compares targets and
-corrections with the fixture under `testdata`. This core has not yet replaced
-the CLI's independent estimator or been connected to XMP/pixel feedback.
+corrections with the fixture under `testdata`. `--calculation lrt-7.5.5` now
+connects it to single/batch Deflicker planning. Histogram measurements use
+the existing raster/RAW/cache input pipeline and optional saved reference boxes.
+The shared XMP planner tracks reversible deltas while storing native absolute
+values in recognized internal slots. Global fallback retains user exposure as
+a separate baseline. Existing tracking is migrated when necessary. Subsequent
+passes remeasure candidate Go-rendered pixels, applying only the additional
+tracked exposure since the starting display image when XMP is not reapplied.
+The tests compare native fixture outputs through modern/legacy/global storage,
+individual/batch final XMP, date-order ROI, reset, backups and error preflight.
+This does not establish native Camera Raw or complete multipass pixel parity.
 
 The earlier observed writer maps the internal Deflicker value to a correction named exactly `#LRT internal use (Deflicker)`, or the sixth legacy gradient after validating all three internal signatures at positions 5–7. lrtl now uses that existing storage slot as well. It does not create or copy proprietary mask templates. Packets without a recognized slot retain the global Exposure2012 fallback. `ol:DeflickerXMPTarget` records the destination separately from `ol:DeflickerCorrection2012`, preserving compatibility with earlier global-only lrtl corrections.
 
