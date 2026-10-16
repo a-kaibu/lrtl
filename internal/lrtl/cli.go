@@ -157,6 +157,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	recursive := set.Bool("recursive", false, "include images in subdirectories")
 	skipJPEG := set.Bool("skip-jpeg", false, "omit JPEG and JPG images (keep RAW and other formats)")
 	renameByDate := set.Bool("rename-by-date", false, "rename images to capture time and sort by capture time")
+	splitGap := set.Duration("split-gap", 0, "split capture-time-sorted images into sequence folders when the gap exceeds this duration (e.g. 30s or 5m)")
 	dryRun := set.Bool("dry-run", false, "show planned copies without writing files")
 	convertDNG := set.Bool("convert-dng", false, "convert supported RAW files to DNG during import")
 	dngCompression := set.String("dng-compression", "", "DNG compression for --convert-dng: lossless or uncompressed (default lossless)")
@@ -165,6 +166,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--sort": true, "-sort": true,
+		"--split-gap": true, "-split-gap": true,
 		"--dng-compression": true, "-dng-compression": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})); err != nil {
@@ -173,15 +175,24 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]"))
 	}
 	sortValue := strings.ToLower(strings.TrimSpace(*sortBy))
-	sortWasSpecified := false
+	sortWasSpecified, splitWasSpecified := false, false
 	set.Visit(func(parsed *flag.Flag) {
 		if parsed.Name == "sort" {
 			sortWasSpecified = true
 		}
+		if parsed.Name == "split-gap" {
+			splitWasSpecified = true
+		}
 	})
+	if splitWasSpecified && *splitGap <= 0 {
+		return reportError(stderr, fmt.Errorf("--split-gap must be positive"))
+	}
+	if *splitGap > 0 && sortWasSpecified && sortValue != "capture-time" {
+		return reportError(stderr, fmt.Errorf("--split-gap requires --sort capture-time"))
+	}
 	if sortValue != "name" && sortValue != "capture-time" {
 		return reportError(stderr, fmt.Errorf("--sort must be name or capture-time: %q", *sortBy))
 	}
@@ -202,8 +213,8 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	}
 	options := ImportOptions{
 		Recursive: *recursive, SkipJPEG: *skipJPEG,
-		SortByCapture: sortValue == "capture-time" || *renameByDate,
-		RenameByDate:  *renameByDate, DryRun: *dryRun,
+		SortByCapture: sortValue == "capture-time" || *renameByDate || *splitGap > 0, SplitGap: *splitGap,
+		RenameByDate: *renameByDate, DryRun: *dryRun,
 		ConvertToDNG: *convertDNG, DNGCompression: *dngCompression, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 	}
 	if err := ImportSequence(set.Arg(0), *output, options, stdout); err != nil {

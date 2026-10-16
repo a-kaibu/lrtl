@@ -20,6 +20,7 @@ type ImportOptions struct {
 	DNGCompression   string
 	DNGLabPath       string
 	DNGConverterPath string
+	SplitGap         time.Duration
 }
 
 type importItem struct {
@@ -113,6 +114,10 @@ func collectImportImages(source string, recursive, skipJPEG bool) ([]string, err
 }
 
 func planImport(source, destination string, options ImportOptions) ([]importItem, error) {
+	if options.SplitGap < 0 {
+		return nil, fmt.Errorf("split gap must be positive or zero (disabled)")
+	}
+	captureOrder := options.SortByCapture || options.RenameByDate || options.SplitGap > 0
 	if options.DNGConverterPath != "" && options.DNGLabPath != "" {
 		return nil, fmt.Errorf("--dng-converter and --dnglab cannot be combined")
 	}
@@ -187,15 +192,15 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 			return nil, fmt.Errorf("find sidecar for %s: %w", filepath.Base(imagePath), err)
 		}
 		items[index].sidecar = sidecar
-		if options.SortByCapture || options.RenameByDate {
+		if captureOrder {
 			frame := Frame{Image: imagePath, Sidecar: sidecar}
 			items[index].captureTime, err = readFrameCaptureTime(frame)
 			if err != nil {
-				return nil, fmt.Errorf("%s: capture time is required for date sorting or renaming: %w", filepath.Base(imagePath), err)
+				return nil, fmt.Errorf("%s: capture time is required for date sorting, renaming or splitting: %w", filepath.Base(imagePath), err)
 			}
 		}
 	}
-	if options.SortByCapture || options.RenameByDate {
+	if captureOrder {
 		sort.SliceStable(items, func(left, right int) bool {
 			if !items[left].captureTime.Equal(items[right].captureTime) {
 				return items[left].captureTime.Before(items[right].captureTime)
@@ -214,9 +219,20 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 			nameCounts[stamp]++
 			items[index].destination = name + filepath.Ext(items[index].destination)
 		}
-	} else if options.SortByCapture {
+	} else if captureOrder {
 		for index := range items {
 			items[index].destination = fmt.Sprintf("%06d_%s", index+1, items[index].destination)
+		}
+	}
+	if options.SplitGap > 0 {
+		sequence := 0
+		folder := ""
+		for i := range items {
+			if i == 0 || items[i].captureTime.Sub(items[i-1].captureTime) > options.SplitGap {
+				sequence++
+				folder = fmt.Sprintf("sequence_%03d_%s", sequence, items[i].captureTime.Format("20060102_150405"))
+			}
+			items[i].destination = filepath.Join(folder, items[i].destination)
 		}
 	}
 	seenNames := make(map[string]string, len(items))
@@ -227,6 +243,18 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 		}
 		seenNames[key] = item.source
 		imageDestination := filepath.Join(destinationPath, item.destination)
+		resolved, err := resolveFuturePath(imageDestination)
+		if err != nil {
+			return nil, fmt.Errorf("resolve image destination: %w", err)
+		}
+		if !pathContains(destinationCanonical, resolved) {
+			return nil, fmt.Errorf("image destination escapes output directory: %s", imageDestination)
+		}
+		if info, err := os.Stat(filepath.Dir(imageDestination)); err == nil && !info.IsDir() {
+			return nil, fmt.Errorf("image destination parent is not a directory: %s", filepath.Dir(imageDestination))
+		} else if err != nil && !os.IsNotExist(err) {
+			return nil, fmt.Errorf("check image destination parent: %w", err)
+		}
 		for _, candidate := range sidecarCandidates(imageDestination) {
 			if _, err := os.Lstat(candidate); err == nil {
 				return nil, fmt.Errorf("destination already exists: %s", candidate)
@@ -281,13 +309,26 @@ func ImportSequence(source, destination string, options ImportOptions, stdout io
 		return fmt.Errorf("create output directory: %w", err)
 	}
 	created := make([]string, 0, len(items)*2)
+	var createdDirectories []string
 	rollback := func() {
 		for index := len(created) - 1; index >= 0; index-- {
 			_ = os.Remove(created[index])
 		}
+		for i := len(createdDirectories) - 1; i >= 0; i-- {
+			_ = os.Remove(createdDirectories[i])
+		}
 	}
 	for _, item := range items {
 		imageDestination := filepath.Join(destination, item.destination)
+		if options.SplitGap > 0 {
+			directory := filepath.Dir(imageDestination)
+			if err := os.Mkdir(directory, 0755); err == nil {
+				createdDirectories = append(createdDirectories, directory)
+			} else if !os.IsExist(err) {
+				rollback()
+				return fmt.Errorf("create sequence directory: %w", err)
+			}
+		}
 		var imageErr error
 		if item.convertDNG {
 			fmt.Fprintf(stdout, "Converting %s to DNG\n", filepath.Base(item.source))

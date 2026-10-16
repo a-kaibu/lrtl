@@ -387,3 +387,32 @@ uses an interior active/unflipped MaskGroup key against inactive/flipped
 non-keys, checks backups and per-frame IDs, and verifies all three rendered AVI
 frames against an independent +1 EV sRGB calculation. That pixel test validates
 lrtl rendering, not Camera Raw equivalence.
+
+## Capture-gap import splitting
+
+The official [LRTImport workflow](https://lrtimelapse.com/workflow/lrtimport/)
+describes importing multiple time-lapse sequences and links its split tutorial.
+The official [LRT 4 announcement](https://lrtimelapse.com/news/lrtimelapse-4-this-is-new/)
+explains that displaying capture intervals assists splitting multiple sequences.
+Those sources support the workflow requirement, not any specific automatic
+scene detector or native gap threshold. lrtl's `import --split-gap DURATION` is
+an independent CLI implementation with an explicit user-supplied threshold.
+
+The import plan requires XMP/EXIF timestamps, sorts by capture instant, and
+starts a numbered/date-stamped sequence folder only when the adjacent interval
+strictly exceeds the threshold. Equal timestamps retain natural source-path
+ordering; timezone offsets and subsecond capture differences are respected.
+Split imports can use date renaming, recursive source paths, JPEG exclusion
+and existing DNG conversion planning. Every target and timestamp is checked
+before publication. Generated destinations are checked against the resolved
+output root, existing files are preserved, and failed copies remove only
+created files and empty created sequence directories.
+
+Tests cover exact gap boundaries, ties, reversed filenames, offsets,
+millisecond thresholds, date-name collisions, dry-run/no-write, existing target
+and invalid-parent preflight, missing capture metadata, recursive DNG plans,
+disabled-option compatibility, and rollback after a source disappears. A CLI
+test compares all copied image/XMP bytes to their sources and renders both
+resulting sequences to real AVI files with their expected frame counts. This
+does not compare against native automatic split decisions; DNG split tests
+check the plan, with converter execution covered separately by existing tests.
