@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -148,28 +146,6 @@ func readCropMetadata(packet *XMPPacket) (cropMetadata, error) {
 	return crop, nil
 }
 
-func cropInputFrames(path string) ([]Frame, bool, error) {
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, false, err
-	}
-	if info.IsDir() {
-		frames, err := DiscoverSequence(path)
-		if err == nil && len(frames) == 0 {
-			err = fmt.Errorf("sequence contains no images")
-		}
-		return frames, true, err
-	}
-	image, sidecar := inputPaths(path)
-	if strings.EqualFold(filepath.Ext(path), ".xmp") {
-		return []Frame{{Image: image, Sidecar: sidecar}}, false, nil
-	}
-	if !imageExtensions[strings.ToLower(filepath.Ext(path))] {
-		return nil, false, fmt.Errorf("unsupported image extension: %s", path)
-	}
-	return []Frame{{Image: image, Sidecar: sidecar}}, false, nil
-}
-
 func runCrop(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("crop", stderr)
 	rectangleText := set.String("rect", "", "normalized left,top,right,bottom (0..1)")
@@ -218,7 +194,7 @@ func runCrop(arguments []string, stdout, stderr io.Writer) int {
 	if !editing && (*dryRun || *noBackup) {
 		return reportError(stderr, fmt.Errorf("--dry-run and --no-backup require a crop edit"))
 	}
-	frames, directory, err := cropInputFrames(path)
+	frames, directory, err := metadataInputFrames(path)
 	if err != nil {
 		return reportError(stderr, err)
 	}

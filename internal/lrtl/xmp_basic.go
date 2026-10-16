@@ -439,6 +439,20 @@ func setXMPToneCurvePoints(packet *XMPPacket, name string, points []toneCurvePoi
 		return err
 	}
 	property := packet.findRootProperty(uri, local)
+	if property.attribute == nil && property.element == nil {
+		var encoded strings.Builder
+		for i, point := range points {
+			if i > 0 {
+				encoded.WriteByte(' ')
+			}
+			fmt.Fprintf(&encoded, "%d, %d", int(point.x), int(point.y))
+		}
+		return packet.SetScalar("crs:"+name, encoded.String())
+	}
+	return setExistingToneCurvePoints(property, name, points)
+}
+
+func setExistingToneCurvePoints(property topLevelXMPProperty, name string, points []toneCurvePoint) error {
 	var encoded strings.Builder
 	for index, point := range points {
 		if index > 0 {
@@ -460,13 +474,14 @@ func setXMPToneCurvePoints(packet *XMPPacket, name string, points []toneCurvePoi
 			return xmpError("cannot replace unsupported structured property crs:%s", name)
 		}
 		sequence.Child = nil
+		prefix := ensurePrefix(sequence, "rdf", rdfNamespace)
 		for _, point := range points {
-			item := sequence.CreateElement("rdf:li")
+			item := sequence.CreateElement(prefix + ":li")
 			item.SetText(fmt.Sprintf("%d, %d", int(point.x), int(point.y)))
 		}
 		return nil
 	}
-	return packet.SetScalar("crs:"+name, encoded.String())
+	return xmpError("missing curve property crs:%s", name)
 }
 
 func toneCurveSequenceElement(property *etree.Element) *etree.Element {

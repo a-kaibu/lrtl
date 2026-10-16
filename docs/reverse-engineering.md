@@ -67,6 +67,18 @@ Tests exercise complete/partial edits, zero angles, -45/+45 boundaries, malforme
 
 A local three-frame Nikon NEF sequence completed `crop --enable`, two endpoint rectangle edits with `--mark`, numeric interpolation, Adobe-backed RAW development and crop rendering to 640x426, 24 fps MJPEG AVI. ffprobe reports three frames. The first source RAW's SHA-256 still matches the original fixture. Sample images and the generated video are local ignored files.
 
+## CLI point-curve editing (2026-10-16)
+
+`curve IMAGE_OR_XMP|DIRECTORY` exposes the supported point-curve workflow without the GUI. It reads global master/RGB curves with the existing modern/legacy fallback mapping and writes point lists or an identity curve. `--mask COLLECTION[N]` selects an existing non-internal local correction and maps the channel to MainCurve/RedCurve/GreenCurve/BlueCurve. `--mark` can save a 4-star reference together with a single-image curve edit. Editing uses the existing 0..255 integer point vocabulary; this CLI uses the existing GUI's 2..64-point and endpoint constraints, without claiming that those are LRT's complete editor limits.
+
+New properties are independently authored RDF Seq values. Existing attributes, plain text and supported RDF sequences retain their storage form. Shared writing now resolves the RDF URI before creating list items, fixing a hard-coded rdf prefix that could bind to an unrelated namespace. Unsupported structured representations and ambiguous duplicate properties fail before publication; sequence/container metadata is retained. The common channel/input-path helpers were moved out of GUI/crop-specific code so both command paths use the same metadata rules.
+
+Read-only text/JSON output reports whether a physical point curve exists, can be edited, and belongs to the existing interpolation equalization set. An absent curve displays an identity default; it does not resolve a named preset into points. Global legacy RGB fallback names not in that set and non-MaskGroup local curves can still be edited directly across a directory. Curves are equalized from the chosen reference where supported; numeric point animation is not implemented. Local rendering still requires a supported mask, and HDR/extended curves and Adobe pixel parity remain unsupported.
+
+Eight regression tests exercise all four channels with attribute/text/sequence/legacy representations, namespace collisions and unknown metadata, embedded-image preservation, no-op/dry-run/backup behavior, batch preflight failure, duplicate curves, HG/internal protection, point limits, directory editing/JSON, and global/local edit→reference-equalization→actual MJPEG pixels. Those end-to-end fixtures map a uniform 128 input at a declared curve point to 64 in all output frames, checking that frame zero also receives a reference curve from the middle 4-star frame. These are lrtl workflow tests, not native LRT or Camera Raw pixel comparisons.
+
+A local three-frame NEF smoke run completed init, a middle-frame global master curve edit with a 4-star mark, a local MaskGroup[1] red curve edit, reference equalization and Adobe-backed RAW rendering. ffprobe confirms 640x426 MJPEG AVI at 24 fps with three frames. The first copied NEF's SHA-256 still matches the source fixture. Images, sidecars and video remain local ignored files.
+
 ## High precision frame transport (2026-10-16)
 
 The renderer now sends little-endian 16-bit-per-channel RGB (`rgb48le`) to FFmpeg for MP4/MOV, rather than quantizing decoded TIFF/DNG/PNG to RGB24. The codec's final pixel format remains explicit: H.264/H.265 use 8-bit yuv420p; ProRes uses yuv422p10le; DNxHR HQX/444 use their 10-bit formats. This is SDR sRGB input transport, not HDR, ICC profile interpretation or verified LRT color management.
