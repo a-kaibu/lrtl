@@ -11,16 +11,19 @@ import (
 )
 
 type ImportOptions struct {
-	Recursive        bool
-	SkipJPEG         bool
-	SortByCapture    bool
-	RenameByDate     bool
-	DryRun           bool
-	ConvertToDNG     bool
-	DNGCompression   string
-	DNGLabPath       string
-	DNGConverterPath string
-	SplitGap         time.Duration
+	Recursive             bool
+	SkipJPEG              bool
+	SortByCapture         bool
+	RenameByDate          bool
+	DryRun                bool
+	ConvertToDNG          bool
+	DNGCompression        string
+	DNGLabPath            string
+	DNGConverterPath      string
+	SplitGap              time.Duration
+	SplitByInterval       bool
+	IntervalTolerance     time.Duration
+	MinimumSequenceLength int
 }
 
 type importItem struct {
@@ -114,10 +117,16 @@ func collectImportImages(source string, recursive, skipJPEG bool) ([]string, err
 }
 
 func planImport(source, destination string, options ImportOptions) ([]importItem, error) {
+	if options.SplitByInterval && (options.SplitGap > 0 || options.IntervalTolerance < 0 || options.IntervalTolerance%time.Millisecond != 0 || options.IntervalTolerance.Milliseconds() > 2147483647 || options.MinimumSequenceLength < 0) {
+		return nil, fmt.Errorf("interval splitting requires a whole-millisecond tolerance in 0..2147483647 ms, a nonnegative minimum length, and no split gap")
+	}
+	if !options.SplitByInterval && (options.IntervalTolerance != 0 || options.MinimumSequenceLength != 0) {
+		return nil, fmt.Errorf("interval tolerance and minimum sequence length require interval splitting")
+	}
 	if options.SplitGap < 0 {
 		return nil, fmt.Errorf("split gap must be positive or zero (disabled)")
 	}
-	captureOrder := options.SortByCapture || options.RenameByDate || options.SplitGap > 0
+	captureOrder := options.SortByCapture || options.RenameByDate || options.SplitGap > 0 || options.SplitByInterval
 	if options.DNGConverterPath != "" && options.DNGLabPath != "" {
 		return nil, fmt.Errorf("--dng-converter and --dnglab cannot be combined")
 	}
@@ -224,7 +233,9 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 			items[index].destination = fmt.Sprintf("%06d_%s", index+1, items[index].destination)
 		}
 	}
-	if options.SplitGap > 0 {
+	if options.SplitByInterval {
+		splitImportByIntervals(items, options)
+	} else if options.SplitGap > 0 {
 		sequence := 0
 		folder := ""
 		for i := range items {
@@ -320,7 +331,7 @@ func ImportSequence(source, destination string, options ImportOptions, stdout io
 	}
 	for _, item := range items {
 		imageDestination := filepath.Join(destination, item.destination)
-		if options.SplitGap > 0 {
+		if options.SplitGap > 0 || options.SplitByInterval {
 			directory := filepath.Dir(imageDestination)
 			if err := os.Mkdir(directory, 0755); err == nil {
 				createdDirectories = append(createdDirectories, directory)

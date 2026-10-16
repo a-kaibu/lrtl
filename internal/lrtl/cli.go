@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const version = "0.9.0"
@@ -131,7 +132,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
-	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]")
+	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]")
@@ -170,6 +171,9 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	skipJPEG := set.Bool("skip-jpeg", false, "omit JPEG and JPG images (keep RAW and other formats)")
 	renameByDate := set.Bool("rename-by-date", false, "rename images to capture time and sort by capture time")
 	splitGap := set.Duration("split-gap", 0, "split capture-time-sorted images into sequence folders when the gap exceeds this duration (e.g. 30s or 5m)")
+	splitIntervals := set.Bool("split-intervals", false, "split by changes of outgoing capture interval using the LRT 7.5.5 grouping rules")
+	intervalTolerance := set.Duration("interval-tolerance", time.Second, "allowed interval variation for --split-intervals (whole milliseconds)")
+	minimumSequenceLength := set.Int("min-sequence-length", 5, "minimum run length for --split-intervals; shorter runs go to single_images")
 	dryRun := set.Bool("dry-run", false, "show planned copies without writing files")
 	convertDNG := set.Bool("convert-dng", false, "convert supported RAW files to DNG during import")
 	dngCompression := set.String("dng-compression", "", "DNG compression for --convert-dng: lossless or uncompressed (default lossless)")
@@ -179,6 +183,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		"--output": true, "-output": true,
 		"--sort": true, "-sort": true,
 		"--split-gap": true, "-split-gap": true,
+		"--interval-tolerance": true, "-interval-tolerance": true, "--min-sequence-length": true, "-min-sequence-length": true,
 		"--dng-compression": true, "-dng-compression": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})); err != nil {
@@ -187,10 +192,11 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]"))
 	}
 	sortValue := strings.ToLower(strings.TrimSpace(*sortBy))
 	sortWasSpecified, splitWasSpecified := false, false
+	intervalOptionsSpecified := false
 	set.Visit(func(parsed *flag.Flag) {
 		if parsed.Name == "sort" {
 			sortWasSpecified = true
@@ -198,7 +204,16 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		if parsed.Name == "split-gap" {
 			splitWasSpecified = true
 		}
+		if parsed.Name == "interval-tolerance" || parsed.Name == "min-sequence-length" {
+			intervalOptionsSpecified = true
+		}
 	})
+	if intervalOptionsSpecified && !*splitIntervals {
+		return reportError(stderr, fmt.Errorf("--interval-tolerance and --min-sequence-length require --split-intervals"))
+	}
+	if *splitIntervals && (splitWasSpecified || *minimumSequenceLength < 1 || (sortWasSpecified && sortValue != "capture-time")) {
+		return reportError(stderr, fmt.Errorf("--split-intervals requires capture-time sorting, a positive minimum length and no --split-gap"))
+	}
 	if splitWasSpecified && *splitGap <= 0 {
 		return reportError(stderr, fmt.Errorf("--split-gap must be positive"))
 	}
@@ -227,7 +242,11 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		Recursive: *recursive, SkipJPEG: *skipJPEG,
 		SortByCapture: sortValue == "capture-time" || *renameByDate || *splitGap > 0, SplitGap: *splitGap,
 		RenameByDate: *renameByDate, DryRun: *dryRun,
-		ConvertToDNG: *convertDNG, DNGCompression: *dngCompression, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+		SplitByInterval: *splitIntervals,
+		ConvertToDNG:    *convertDNG, DNGCompression: *dngCompression, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+	}
+	if *splitIntervals {
+		options.IntervalTolerance, options.MinimumSequenceLength = *intervalTolerance, *minimumSequenceLength
 	}
 	if err := ImportSequence(set.Arg(0), *output, options, stdout); err != nil {
 		return reportError(stderr, err)

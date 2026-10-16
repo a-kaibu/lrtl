@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `import --split-intervals`で、LRT 7.5.5の「間隔で分割」と同じグループ分けを使えます。間隔変化の許容差と最小連番長を指定し、短い連番も`single_images`へ保持します。本体から取得した240ケース、境界・重複時刻・サブ秒・コピー/XMP・取り込み後AVI・衝突・途中失敗のロールバック・ファズテストで検証しています。動画のシーン分割を本体の不足対応項目としていた記述も、今回確認したJPEG展開の実態に合わせて訂正しました。
+
 - `batch-holy-grail ROOT`でHoly Grail露出補正を一括解析・保存できます。再帰探索・並列解析・EXIF/キャッシュ済みLRT入力・Stretch/Rotate・自動形状・2*/3*マーカー・リセットに対応し、全連番の内容検証後に保存します。個別実行とのXMP/AVI一致、LRT 7.5.5実測値との補正一致、再実行での重複防止、評価の復元、解析エラー時の全体保存中止をテストしています。
 
 - `batch-deflicker ROOT`で複数連番のDeflickerを一括解析・保存できます。既定は変更予定の表示で、再帰探索・並列解析・複数パス・Gaussian/LOWESS・参照領域・RAW現像・XMP基本現像・クロップ・リセットに対応します。全連番の解析と最終XMPの内容検証後に保存します。個別実行とXMP/AVIが一致すること、RAW、専用補正スロット、画像を復号しないリセット、エラー時に保存しないことをテストしています。
@@ -115,7 +117,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。16-bit RGB処理。LRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
-| 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。画像プレビュー、ロッシーDNG、DNGのサイズ縮小、動画の自動分割は未実装 | 一部 |
+| 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。画像プレビュー、ロッシーDNG、DNGのサイズ縮小は未実装 | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed DNGと隣接XMPを取り込む。`--dnglab PATH`でDNGLabを明示選択可能。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。バッチプレビューは未実装 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
@@ -229,7 +231,7 @@ AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必
 
 `import`は指定フォルダーの対応画像と、見つかった同名XMPサイドカーを出力フォルダーへコピーします。`--recursive`でサブフォルダーも検索し、元フォルダー名を出力名に付けて衝突を避けます。`--sort capture-time`はXMP/EXIF撮影日時順に並ぶ連番を付け、`--rename-by-date`は日時をファイル名に使います。同じ秒の撮影には連番を追加します。`--skip-jpeg`はJPEG/JPGを除外し、`--dry-run`はコピー予定だけを表示します。撮影日時順・日時リネームには全画像の撮影日時が必要です。`--convert-dng`を指定するとAdobe DNG Converterが対応するRAWファイルを`.dng`へ変換し、隣接XMPサイドカーも新しい画像名に合わせてコピーします。JPEG等と既存DNGはそのままコピーします。圧縮方式は`--dng-compression lossless|uncompressed`で指定でき、既定はlosslessです。ロッシー圧縮とサイズ縮小は未対応です。Adobe DNG Converterは自動検出し、必要なら`--dng-converter PATH`で指定します。`--dnglab PATH`を指定した場合はDNGLabを使います。
 
-`import-video`はFFmpegで動画をJPGまたはPNGの連番へデコードします。既定ではデコード可能な全フレームを保存し、`--fps N`を指定するとその間隔でフレームをサンプリングします。JPEGの圧縮品質は`--quality 1`（高画質）〜`31`（低画質）で指定できます。抽出先は新しいフォルダーでなければならず、既存フォルダーを置き換えません。LRTimelapseの動画取り込みもJPG連番を生成しますが、lrtlではプレビュー生成、シーンごとの自動分割、動画フレームのDNG変換は未実装です。
+`import-video`はFFmpegで動画をJPGまたはPNGの連番へデコードします。既定ではデコード可能な全フレームを保存し、`--fps N`を指定するとその間隔でフレームをサンプリングします。JPEGの圧縮品質は`--quality 1`（高画質）〜`31`（低画質）で指定できます。抽出先は新しいフォルダーでなければならず、既存フォルダーを置き換えません。インストール済みLRT 7.5.5の動画取り込みもFFmpegで全フレームをJPEGへ展開します。今回確認した呼び出しにはシーン検出やシーン境界での分割がなく、写真の「間隔で分割」は別機能でした。以前は動画のシーン分割を本体の不足対応項目として記載していましたが、その根拠を確認できなかったため訂正しました。写真の間隔分割には`import --split-intervals`を使います。
 
 `timeshift`は`--offset 2h30m`、`--offset=-45s`、`--offset 1d`のような固定時間差で連番の撮影日時をずらします。既定はプレビューで、`--write`を付けるとXMPサイドカーへ保存し、既存ファイルはバックアップします。対象は`DateTimeOriginal`、`DateTimeDigitized`、`CreateDate`で、`ModifyDate`と画像に埋め込まれたEXIF値は変更しません。XMPの日付値がなく画像EXIFで撮影日時を読める場合は、ずらした`DateTimeOriginal`をサイドカーへ追加します。
 
@@ -497,7 +499,7 @@ EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一�
 | 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像・対応RAW）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264/H.265 MP4、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWはAdobe DNG ConverterとGoによる実画素現像、内蔵プレビュー、明示したDNGLabから選択可能 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVG輝度プレビュー、UIのXMP Exposure2012/解析画像輝度グラフ、選択フレームのRGBトーンカーブ編集、静止画プレビューと最大640 pxの連番ループ再生、長期撮影指標、XMP画素反映、回転クロップ、参照領域/全体露出Deflickerを実装。LRT Visual Previewと同等の再生速度/画素再現、Exposure2012の複数フレーム同時編集、フレーム間のトーンカーブ編集、XMPロスレス適用、垂直/水平・UprightのGeometry補正、未対応マスク形式の画素現像は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定と既存LRT XMP入力を使う近似Holy Grail補正、現像済みラスターへの対応XMP値適用、一部RAW内蔵プレビュー、Adobe DNG ConverterとGoによるRAW現像（DNGLabも任意選択）を実装。Camera Raw現像の完全再現と同等のRAW画素処理は未実装 |
-| 5 | 残りのCLIワークフローと取り込み機能 | Go標準`net/http`で動くループバック限定のローカルWeb UIで、サムネイル、キーフレーム、XMP補間、レンダー操作を実装。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed DNG変換、追加コーデックも実装。GUIの追加開発は対象外。CLIの動画自動分割、ロッシーDNG/サイズ縮小、LRTと同じ10-bit YUV画素処理・色管理は未対応（現状は16-bit RGBを経由） |
+| 5 | 残りのCLIワークフローと取り込み機能 | Go標準`net/http`で動くループバック限定のローカルWeb UIで、サムネイル、キーフレーム、XMP補間、レンダー操作を実装。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed DNG変換、追加コーデックも実装。GUIの追加開発は対象外。CLIのロッシーDNG/サイズ縮小、LRTと同じ10-bit YUV画素処理・色管理は未対応（現状は16-bit RGBを経由） |
 
 ## 機能調査の出典
 
@@ -759,6 +761,24 @@ lrtl batch-holy-grail C:\photos\sequences --recursive --reset --write
 個別実行とのXMP・AVIフレーム/索引の一致、並列数1/4、EXIF/LRT入力の自動形状、専用補正スロット、LRT 7.5.5で観測した補正値、バックアップ、再実行での重複防止、評価の作成・解除をテストしています。破損した撮影値・XMP・LRT入力・補正記録や評価衝突による全体保存の中止、画像EXIFを読めない場合の補正解除も検査します。LRTのバッチキュー自体の再現やCamera Rawとの画素一致を示すものではありません。
 
 ## 撮影間隔で連番を分けて取り込む
+
+### LRT互換の間隔変化による分割
+
+```powershell
+# 本体と同じ既定値：許容差1秒、最小5枚。予定だけ確認
+lrtl import E:\DCIM --output C:\photos\imported --split-intervals --dry-run
+
+# ミリ秒単位の許容差と最小連番長を明示してコピー
+lrtl import E:\DCIM --output C:\photos\imported --recursive --split-intervals --interval-tolerance 500ms --min-sequence-length 10
+```
+
+全画像のXMP/EXIF撮影時刻を読み、時刻順に並べ、各写真から次の写真までの間隔をミリ秒で計算します。最後の写真の間隔は本体と同じく−1とします。直前の間隔との差が許容差を**超える**場合に区切ります。本体の境界規則に従い、既に2枚以上ある連番では境界の写真を直前の連番へ含めます。最小枚数に達しないグループは破棄せず、末尾の`single_images`へまとめます。同時刻や非正の間隔を含むグループも保持します。
+
+`--interval-tolerance`は0〜2,147,483,647 msの整数ミリ秒（既定1秒）、`--min-sequence-length`は1以上（既定5）です。元画像とXMPはコピーし、元の場所から移動・削除しません。通常の取り込みと同じく、`--dry-run`、再帰検索、JPEG省略、日時リネーム、DNG変換と併用できます。`--split-gap`や明示的な`--sort name`とは併用できません。時刻の欠損はエラーで、ファイル更新日時には代替しません。
+
+本体の分割モデルへ合成間隔列を与えて得た240ケースと比較しています。一定/変動間隔、許容差の境界、短い連番の集約、重複・非正の間隔を含みます。ファイル名と保存方法はlrtlの方式で、`sequence_001_日時`と`single_images`を新しいコピー先へ作ります。本体の既存フォルダーからの移動やUI上の名前付けを再現するものではありません。コピーとXMP保持、動画生成、衝突の事前検証、途中失敗で作成済みファイル/フォルダーだけを戻す処理もテストしています。
+
+### 指定時間差で区切る方式
 
 ```powershell
 # 30秒を超える撮影間隔を連番の区切りにする。まずプレビュー

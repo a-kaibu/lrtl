@@ -649,3 +649,13 @@ reject a late invalid shutter or missing APEX aperture without creating backups
 or changing any image/sidecar; --ignore-aperture accepts the latter input.
 These comparisons do not cover native import/save/display workers, Bulb or
 manufacturer-specific precedence, arbitrary EXIF forms, or Camera Raw pixels.
+
+## Interval-based sequence grouping (LRT 7.5.5)
+
+The installed video-import path invokes FFmpeg to decode every frame to JPEG, with no scene detector or scene-splitting filter in that call. The separate “Split by Intervals” action opens the photo-sequence interval model. This corrects the earlier README implication that scene splitting was a demonstrated missing counterpart of video import.
+
+Inspection of the photo interval calculation found outgoing millisecond intervals (next capture time minus current capture time) and a final sentinel of -1. The grouping model compares each interval with the previous interval, with a default tolerance of 1000 ms. A changed interval closes a run of at least two images after adding the current image; a shorter run is closed before the current image. Initial nonpositive intervals are collected separately. Runs shorter than the minimum length (default five images) are accumulated into one final group; no frames are discarded.
+
+A local reflection harness populated synthetic frame records and executed the installed grouping model and its minimum-length filter. `internal/lrtl/testdata/lrt-7.5.5-interval-split.json` records 240 cases: lengths 1–24, tolerance 0/1/1000/1001/5000 ms, minimum lengths 1/2/3/5/10, random interval changes, constant runs, ramps, duplicate times, isolated gaps and the final -1 sentinel. The Go test compares exact ordered group membership and separately checks that every frame occurs once. Only numerical observations are included; the probe, decompilation output and product code are not distributed.
+
+lrtl applies the grouping to capture-time-sorted import copies. Its `sequence_NNN_timestamp` and `single_images` folders preserve all images and sidecars. Native folder renaming, moving files out of the currently loaded sequence and GUI behavior are outside this comparison. Timestamp decoding is lrtl's existing XMP/EXIF reader; this does not establish equality with the product's timestamp parser for every metadata representation.
