@@ -1,0 +1,482 @@
+{
+  "registered": [
+    "GradientBasedCorrections[1]/crs:CorrectionActive",
+    "GradientBasedCorrections[2]/crs:CorrectionActive",
+    "GradientBasedCorrections[3]/crs:CorrectionActive",
+    "GradientBasedCorrections[4]/crs:CorrectionActive",
+    "CircularGradientBasedCorrections[1]/crs:CorrectionActive",
+    "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+    "CircularGradientBasedCorrections[2]/crs:CorrectionActive",
+    "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Flipped",
+    "PaintBasedCorrections[1]/crs:CorrectionActive",
+    "PaintBasedCorrections[2]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[1]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+    "MaskGroupBasedCorrections[2]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Flipped",
+    "MaskGroupBasedCorrections[3]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Flipped",
+    "MaskGroupBasedCorrections[4]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Flipped",
+    "MaskGroupBasedCorrections[8]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Flipped",
+    "MaskGroupBasedCorrections[9]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Flipped",
+    "MaskGroupBasedCorrections[10]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Flipped",
+    "MaskGroupBasedCorrections[11]/crs:CorrectionActive",
+    "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Flipped"
+  ],
+  "cases": [
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        false,
+        true,
+        false
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        false,
+        true,
+        true
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        false,
+        true,
+        false
+      ],
+      "ratings": [
+        0,
+        4,
+        0
+      ],
+      "expected": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        null,
+        true,
+        null,
+        false,
+        null
+      ],
+      "ratings": [
+        4,
+        0,
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        null,
+        null,
+        null
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        true,
+        null,
+        false
+      ],
+      "ratings": [
+        5,
+        5,
+        5
+      ],
+      "expected": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        true,
+        null,
+        false
+      ],
+      "ratings": [
+        4,
+        4,
+        4
+      ],
+      "expected": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+      "input": [
+        false,
+        false,
+        false
+      ],
+      "ratings": [
+        4,
+        4,
+        4
+      ],
+      "expected": [
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        true,
+        false
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        true,
+        true
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        true,
+        false
+      ],
+      "ratings": [
+        0,
+        4,
+        0
+      ],
+      "expected": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        null,
+        true,
+        null,
+        false,
+        null
+      ],
+      "ratings": [
+        4,
+        0,
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        null,
+        null,
+        null
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        true,
+        null,
+        false
+      ],
+      "ratings": [
+        5,
+        5,
+        5
+      ],
+      "expected": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        true,
+        null,
+        false
+      ],
+      "ratings": [
+        4,
+        4,
+        4
+      ],
+      "expected": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        false,
+        false
+      ],
+      "ratings": [
+        4,
+        4,
+        4
+      ],
+      "expected": [
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        true,
+        false
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        true,
+        true
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        true,
+        false
+      ],
+      "ratings": [
+        0,
+        4,
+        0
+      ],
+      "expected": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        null,
+        true,
+        null,
+        false,
+        null
+      ],
+      "ratings": [
+        4,
+        0,
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        null,
+        null,
+        null
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "expected": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        true,
+        null,
+        false
+      ],
+      "ratings": [
+        5,
+        5,
+        5
+      ],
+      "expected": [
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        true,
+        null,
+        false
+      ],
+      "ratings": [
+        4,
+        4,
+        4
+      ],
+      "expected": [
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+      "input": [
+        false,
+        false,
+        false
+      ],
+      "ratings": [
+        4,
+        4,
+        4
+      ],
+      "expected": [
+        false,
+        false,
+        false
+      ]
+    }
+  ]
+}

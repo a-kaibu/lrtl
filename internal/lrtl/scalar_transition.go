@@ -172,7 +172,7 @@ func rootAutoTransitionScalars(input []transitionScalar, ratings []int, property
 		}
 		return values
 	}
-	if property == "HasSettings" || property == "HasCrop" || property == "UprightPreview" || property == "ConvertToGrayscale" {
+	if property == "HasSettings" || property == "HasCrop" || property == "UprightPreview" || property == "ConvertToGrayscale" || property == "CorrectionActive" || property == "Flipped" {
 		return fillMissingTransitionScalars(values)
 	}
 	return equalizeTransitionStrings(values)

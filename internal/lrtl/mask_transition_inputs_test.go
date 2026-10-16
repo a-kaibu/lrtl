@@ -363,7 +363,7 @@ func TestLocalMissingCLIThroughVideoPixels(t *testing.T) {
 	}
 }
 
-func TestLocalMissingAngleNormalizesOnceAndPreservesActivity(t *testing.T) {
+func TestLocalMissingAngleNormalizesOnceAndEqualizesActivity(t *testing.T) {
 	packets := make([]*XMPPacket, 3)
 	for i := range packets {
 		geometry := map[string]string{"What": "Mask/CircularGradient", "Top": ".1", "Left": ".1", "Bottom": ".9", "Right": ".9"}
@@ -393,8 +393,8 @@ func TestLocalMissingAngleNormalizesOnceAndPreservesActivity(t *testing.T) {
 		}
 		correction := nodes[maskTransitionKey{collection: "CircularGradientBasedCorrections", correctionIndex: 1}]
 		active, _, _ := crsElementValue(unwrapRDFArrayItem(correction.correctionItem), "CorrectionActive")
-		if active != []string{"False", "True", "False"}[i] {
-			t.Fatal("activity changed")
+		if active != "False" {
+			t.Fatal("equal endpoint activity was not copied")
 		}
 	}
 	again, err := planMaskTransitions(packets, []int{0, 2}, 50)

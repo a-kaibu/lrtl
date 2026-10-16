@@ -355,3 +355,35 @@ a clock second differed in the comment while frame/index payloads were equal.
 The test now validates AVI signatures, compares payloads from `movi` through
 the index, and retains decoded-frame count/pixel checks. The revised test
 passed 200 consecutive runs. It still compares the actual encoded frame data.
+
+## Local boolean transitions
+
+Installed registry lookup confirms 26 local Boolean columns: CorrectionActive
+at the 16 supported correction positions, plus Flipped at Circular selectors
+1–2 and MaskGroup selectors 1–4/8–11 (CorrectionMasks[1] only). Linear Flipped
+and MaskInverted are not registered there. `LocalBooleanOracle.java` queries
+the installed registry and successfully invokes missing-value preflight,
+selected-rating equality and reference-copy components for 24 synthetic cases
+across correction and selector paths. All-absent columns skip the gate, as in
+the caller's missing-column handling. Boolean columns with differing values
+retain the filled sequence; they are not numerically interpolated. These are
+component comparisons, not complete outer-application/save oracle results.
+
+lrtl now plans those booleans from existing resource attributes or scalar
+children, applying ordinary metadata preflight before the root-equivalent
+reference/copy dispatch. Comparison uses boolean meaning, so unchanged lexical
+forms such as tRuE are preserved; newly assigned values use True/False. Invalid
+or structured registered booleans fail preflight. Missing selected resources,
+SyncID fallback, unregistered slots, second selectors, MaskInverted and linear
+Flipped retain the existing scope policy. Existing target IDs are preserved.
+
+The previous angle test expected False/True/False activity to survive equal
+False endpoint keys. The installed gate/copy fixture disproved that expectation;
+the test now expects False across the sequence while continuing to check
+one-time radial-angle normalization and no-op repeat. Additional tests cover
+registry parity, all 24 component results, invalid-data/no-write behavior and
+preservation of unregistered flags and lexical forms. A CLI integration test
+uses an interior active/unflipped MaskGroup key against inactive/flipped
+non-keys, checks backups and per-frame IDs, and verifies all three rendered AVI
+frames against an independent +1 EV sRGB calculation. That pixel test validates
+lrtl rendering, not Camera Raw equivalence.

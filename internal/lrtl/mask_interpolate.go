@@ -796,6 +796,10 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 	}
 	keyframeSet := make(map[int]bool, len(keyframeIndices))
 	prepared := prepareMaskTransitionInputs(indexes)
+	booleanChanges, err := planMaskBooleanTransitions(indexes, keyframeIndices)
+	if err != nil {
+		return nil, err
+	}
 	for _, index := range keyframeIndices {
 		keyframeSet[index] = true
 	}
@@ -806,6 +810,9 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		for key := range indexes[index] {
 			keysByTarget[index][key] = true
 			allKeys[key] = true
+		}
+		for key := range booleanChanges[index] {
+			keysByTarget[index][key] = true
 		}
 	}
 	seriesByKey := make(map[maskTransitionKey][]map[string]float64, len(allKeys))
@@ -920,6 +927,9 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 				if copy {
 					values[property] = strconv.FormatFloat(value, 'g', -1, 64)
 				}
+			}
+			for name, value := range booleanChanges[target][key] {
+				values[name] = value
 			}
 			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
 			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
