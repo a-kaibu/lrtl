@@ -319,3 +319,39 @@ numeric worker. Local numeric dispatch remains separate. A CLI integration test
 copies an interior +6 EV reference, checks backup and no-op repeat, and decodes
 the resulting three-frame AVI against an independent linear-sRGB exposure
 formula. This validates lrtl rendering and metadata, not Camera Raw equivalence.
+
+## Local numeric reference copying
+
+The same installed automatic dispatch visits registered local numeric columns.
+`NumericCopyOracle.java` now accepts an optional registered path. Two successful
+runs for `GradientBasedCorrections[1]/crs:LocalExposure2012` and
+`GradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:ZeroX` provide 28 gate/copy
+cases in `lrt-7.5.5-local-numeric-copy.json`. These invoke the actual sequence
+gate and copy helpers; they do not establish complete application XMP writes or
+native interpolation output when the gate is false.
+
+lrtl applies reference copying after local metadata missing-value preparation
+and before sparse/dense numeric interpolation. Only registered positional
+corrections and first selectors participate. Copied values retain double
+precision and bypass numeric-worker clamping and float32 checks. Radial Angle
+post-processing still runs once. The parser validates finite numbers first;
+float32 overflow validation now occurs after dispatch, and still rejects
+columns entering a numeric worker or the SyncID fallback. The previous local
+overflow test now uses differing selected values to exercise that worker.
+
+Existing structure policies remain: missing non-keyframe positional resources
+can be cloned, missing selected resources are not invented, and IDs/other
+fields on existing targets survive numeric writes. Tests compare the component
+fixtures at smoothness 0/50/100, exercise missing non-keyframe resources across
+all four collections, and exclude unregistered positions/SyncID/second
+selectors. A CLI test checks a +6 EV local reference through preview, backup,
+preserved per-frame correction IDs, no-op repeat, and a three-frame AVI checked
+against an independent linear-sRGB formula. This pixel check is for lrtl's own
+rendering and does not claim Camera Raw equivalence.
+
+During validation, the WB control-video test exposed a clock-dependent failure:
+icza/mjpeg writes `time.Now()` into the AVI header comment. Two renders across
+a clock second differed in the comment while frame/index payloads were equal.
+The test now validates AVI signatures, compares payloads from `movi` through
+the index, and retains decoded-frame count/pixel checks. The revised test
+passed 200 consecutive runs. It still compares the actual encoded frame data.

@@ -209,7 +209,11 @@ func TestInterpolateRejectsFloat32OverflowWithoutWriting(t *testing.T) {
 	if err := setXMPExposureTargetValue(packet, xmpExposureTarget{"MaskGroupBasedCorrections", 1}, 1e300); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := planMaskTransitions([]*XMPPacket{packet, EmptyXMPPacket(), EmptyXMPPacket()}, []int{0}, 50); err == nil {
+	other := exposureTestPacket(t, "modern")
+	if err := setXMPExposureTargetValue(other, xmpExposureTarget{"MaskGroupBasedCorrections", 1}, 2e300); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := planMaskTransitions([]*XMPPacket{packet, EmptyXMPPacket(), other}, []int{0, 2}, 50); err == nil {
 		t.Fatal("mask float32 overflow ignored")
 	}
 }

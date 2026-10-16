@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/beevik/etree"
@@ -143,10 +144,6 @@ func maskNodeValues(element *etree.Element, mask bool) (map[string]float64, erro
 			return
 		}
 		if number, ok := scalarNumber(value); ok {
-			if math.IsInf(float64(float32(number)), 0) {
-				numericError = xmpError("crs:%s exceeds finite float32 transition range", name)
-				return
-			}
 			values[name] = number
 		} else {
 			numericError = xmpError("crs:%s must be a finite number", name)
@@ -699,6 +696,10 @@ func maskTransitionSourceWithSmoothness(keyframes []int, indexes []map[maskTrans
 }
 
 func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, key maskTransitionKey, frameCount, smoothness int) []map[string]float64 {
+	return maskTransitionSeriesExcept(keyframes, indexes, key, frameCount, smoothness, nil)
+}
+
+func maskTransitionSeriesExcept(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, key maskTransitionKey, frameCount, smoothness int, copied map[string]float64) []map[string]float64 {
 	series := make([]map[string]float64, frameCount)
 	keyframeFlags := make([]bool, frameCount)
 	for _, keyframe := range keyframes {
@@ -715,6 +716,9 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 		}
 	}
 	for name := range properties {
+		if _, copy := copied[name]; copy {
+			continue
+		}
 		spec, registered := maskTransitionSpecs[name]
 		if !registered {
 			continue
@@ -805,10 +809,20 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		}
 	}
 	seriesByKey := make(map[maskTransitionKey][]map[string]float64, len(allKeys))
+	copiesByKey := make(map[maskTransitionKey]map[string]float64, len(allKeys))
 	luminanceRangeByKey := make(map[maskTransitionKey]string, len(allKeys))
 	hasLuminanceRangeByKey := make(map[maskTransitionKey]bool, len(allKeys))
 	for key := range allKeys {
-		seriesByKey[key] = maskTransitionSeries(keyframeIndices, prepared.Indexes, key, len(packets), transitionSmoothness)
+		copies := maskNumericCopyReferences(keyframeIndices, prepared.Indexes, key)
+		copiesByKey[key] = copies
+		for i, index := range prepared.Indexes {
+			for name, value := range index[key].values {
+				if _, copy := copies[name]; !copy && math.IsInf(float64(float32(value)), 0) {
+					return nil, fmt.Errorf("frame %d crs:%s[%d] crs:%s exceeds finite float32 transition range", i+1, key.collection, key.correctionIndex, name)
+				}
+			}
+		}
+		seriesByKey[key] = maskTransitionSeriesExcept(keyframeIndices, prepared.Indexes, key, len(packets), transitionSmoothness, copies)
 		luminanceRangeByKey[key], hasLuminanceRangeByKey[key] = firstMaskLuminanceRange(indexes, key)
 	}
 	for target := range packets {
@@ -818,7 +832,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 					continue
 				}
 				interpolated := target < len(seriesByKey[key]) && seriesByKey[key][target] != nil
-				if interpolated || hasLuminanceRangeByKey[key] {
+				if interpolated || len(copiesByKey[key]) > 0 || hasLuminanceRangeByKey[key] {
 					keysByTarget[target][key] = true
 				}
 			}
@@ -862,6 +876,15 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 			}
 			currentNode, present := indexes[target][key]
 			current := currentNode.values
+			copies := copiesByKey[key]
+			if !keyframeSet[target] || (present && maskTransitionNodeHasTemplate(currentNode, key)) {
+				for name, value := range copies {
+					if name == "Angle" && lrtNormalizesMaskAngle(key) {
+						value = normalizeLRTMaskAngle(value)
+					}
+					proposed[name] = value
+				}
+			}
 			if lrtNormalizesMaskAngle(key) {
 				if angle, found := current["Angle"]; found {
 					_, hasInterpolatedAngle := proposed["Angle"]
@@ -881,10 +904,22 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 			sort.Strings(propertyNames)
 			for _, property := range propertyNames {
 				value := clampMaskTransitionNumber(property, proposed[property])
-				if old, found := current[property]; found && closeEnough(old, value) {
+				_, copy := copies[property]
+				if copy {
+					value = proposed[property]
+				}
+				old, found := current[property]
+				same := found && closeEnough(old, value)
+				if copy {
+					same = found && math.Float64bits(old) == math.Float64bits(value)
+				}
+				if same {
 					continue
 				}
 				values[property] = formatNumber(value)
+				if copy {
+					values[property] = strconv.FormatFloat(value, 'g', -1, 64)
+				}
 			}
 			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
 			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)

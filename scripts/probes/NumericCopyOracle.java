@@ -18,7 +18,8 @@ public class NumericCopyOracle {
   int[][] ratings={{0,4,0},{0,4,0},{0,0,0},{4,0,4,0,4},{4,0,4},{4,0,4},{4,0,4},{4,5,4},{4,5,0,5,4},{4,0,0},{4,0,4},{4,0,4},{4,0,0},{0,4,0}};
   System.out.print("{\"cases\":[");String sep="";
   for(int c=0;c<inputs.length;c++) {
-   String property=properties[c];int col=(int)index.invoke(null,property);
+   String property=args.length>0?args[0]:properties[c];int col=(int)index.invoke(null,property);
+   if(col<0||col>=4096)throw new IllegalArgumentException(property);
    @SuppressWarnings("unchecked") List<Object> sequence=(List<Object>)s.getConstructor(int.class).newInstance(-1);
    int selected=4;for(int rating:ratings[c])if(property.startsWith("Crop")&&rating==5)selected=5;
    for(int i=0;i<inputs[c].length;i++) {

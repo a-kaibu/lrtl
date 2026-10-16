@@ -185,8 +185,18 @@ func TestWBNumericMissingKeyCLIWriteAndVideo(t *testing.T) {
 		}
 		videos = append(videos, data)
 	}
-	if !bytes.Equal(videos[0], videos[1]) {
-		t.Fatal("WB interpolation video differs from complete native-component metadata control")
+	// The AVI library embeds time.Now() in its header comment. Compare frame
+	// chunks and the index, allowing the two renders to cross a clock second.
+	payloads := make([][]byte, len(videos))
+	for i, video := range videos {
+		start := bytes.Index(video, []byte("movi"))
+		if len(video) < 12 || string(video[:4]) != "RIFF" || string(video[8:12]) != "AVI " || start < 0 {
+			t.Fatal("invalid AVI container")
+		}
+		payloads[i] = video[start+4:]
+	}
+	if !bytes.Equal(payloads[0], payloads[1]) {
+		t.Fatal("WB interpolation frame/index payload differs from complete native-component metadata control")
 	}
 	data, count := videos[0], 0
 	var first, last color.NRGBA
