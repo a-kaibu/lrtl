@@ -47,7 +47,7 @@ var NumericCRSProperties = []string{
 }
 
 var firstFrameEqualizedProperties = []string{
-	"Look", "PointColors", "Preset", "ToneCurve", "ToneCurveName", "ToneCurveName2012", "ToneCurvePV2012",
+	"Look", "PointColors", "Preset", "ToneCurve", "ToneCurveName", "ToneCurvePV2012",
 	"ToneCurvePV2012Blue", "ToneCurvePV2012Green", "ToneCurvePV2012Red",
 }
 
@@ -55,6 +55,8 @@ type ProposedFrame struct {
 	Frame                    Frame
 	Packet                   *XMPPacket
 	Values                   map[string]string
+	ScalarValues             map[string]string
+	ScalarRemovals           []string
 	StructuredProperties     []string
 	MaskStructuredProperties []maskStructuredProperty
 	MaskTransitions          []maskTransitionChange
@@ -140,6 +142,20 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		keyframes = append(keyframes, 0)
 	}
 	proposed := make(map[int]*ProposedFrame)
+	scalarTransitions, err := planRootScalarTransitions(packets)
+	if err != nil {
+		return nil, err
+	}
+	for index, scalar := range scalarTransitions {
+		if len(scalar.Values) > 0 || len(scalar.Removals) > 0 {
+			proposed[index] = &ProposedFrame{Frame: frames[index], Packet: packets[index], Values: make(map[string]string), ScalarValues: scalar.Values, ScalarRemovals: scalar.Removals, CreatedSidecar: created[index]}
+			for _, name := range scalar.Removals {
+				if err := packets[index].RemoveProperty(name); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
 	if len(packets) > 0 {
 		for targetIndex := 1; targetIndex < len(packets); targetIndex++ {
 			for _, property := range firstFrameEqualizedProperties {
@@ -319,7 +335,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 
 	indices := make([]int, 0, len(proposed))
 	for index, change := range proposed {
-		if len(change.Values) > 0 || len(change.StructuredProperties) > 0 || len(change.MaskStructuredProperties) > 0 || len(change.MaskTransitions) > 0 {
+		if len(change.Values) > 0 || len(change.ScalarValues) > 0 || len(change.ScalarRemovals) > 0 || len(change.StructuredProperties) > 0 || len(change.MaskStructuredProperties) > 0 || len(change.MaskTransitions) > 0 {
 			indices = append(indices, index)
 		}
 	}
@@ -350,6 +366,21 @@ type packetOutput struct {
 func applyPlan(plan *InterpolationPlan) ([]packetOutput, error) {
 	outputs := make([]packetOutput, 0, len(plan.Changes))
 	for _, change := range plan.Changes {
+		for _, name := range change.ScalarRemovals {
+			if err := change.Packet.RemoveProperty(name); err != nil {
+				return nil, err
+			}
+		}
+		scalarNames := make([]string, 0, len(change.ScalarValues))
+		for name := range change.ScalarValues {
+			scalarNames = append(scalarNames, name)
+		}
+		sort.Strings(scalarNames)
+		for _, name := range scalarNames {
+			if err := change.Packet.SetScalar(name, change.ScalarValues[name]); err != nil {
+				return nil, fmt.Errorf("%s: %w", change.Frame.Image, err)
+			}
+		}
 		for _, name := range NumericCRSProperties {
 			if value, ok := change.Values[name]; ok {
 				if err := change.Packet.SetScalar("crs:"+name, value); err != nil {

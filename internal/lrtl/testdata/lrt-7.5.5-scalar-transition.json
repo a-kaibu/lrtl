@@ -1,0 +1,274 @@
+{
+  "cases": [
+    {
+      "property": "HasCrop",
+      "input": [
+        null,
+        true,
+        null,
+        false,
+        null
+      ],
+      "filled": [
+        true,
+        true,
+        true,
+        false,
+        false
+      ],
+      "changed": true,
+      "expected": [
+        true,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "property": "HasCrop",
+      "input": [
+        null,
+        null,
+        true,
+        null,
+        null
+      ],
+      "filled": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "changed": true,
+      "expected": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    {
+      "property": "HasCrop",
+      "input": [
+        false,
+        null,
+        null,
+        true,
+        null,
+        false
+      ],
+      "filled": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "changed": true,
+      "expected": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "property": "HasCrop",
+      "input": [
+        null,
+        null,
+        null
+      ],
+      "filled": [
+        null,
+        null,
+        null
+      ],
+      "changed": false,
+      "expected": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "property": "WhiteBalance",
+      "input": [
+        "",
+        null,
+        "Custom",
+        null,
+        "As Shot"
+      ],
+      "filled": [
+        "",
+        "",
+        "Custom",
+        "Custom",
+        "As Shot"
+      ],
+      "changed": true,
+      "expected": [
+        "Custom",
+        "Custom",
+        "Custom",
+        "Custom",
+        "Custom"
+      ]
+    },
+    {
+      "property": "WhiteBalance",
+      "input": [
+        null,
+        " ",
+        null,
+        "Custom",
+        null
+      ],
+      "filled": [
+        " ",
+        " ",
+        " ",
+        "Custom",
+        "Custom"
+      ],
+      "changed": true,
+      "expected": [
+        " ",
+        " ",
+        " ",
+        " ",
+        " "
+      ]
+    },
+    {
+      "property": "crs:CameraProfile",
+      "input": [
+        null,
+        "Camera Neutral",
+        null,
+        "Adobe Color",
+        null
+      ],
+      "filled": [
+        "Camera Neutral",
+        "Camera Neutral",
+        "Camera Neutral",
+        "Adobe Color",
+        "Adobe Color"
+      ],
+      "changed": true,
+      "expected": [
+        "Camera Neutral",
+        "Camera Neutral",
+        "Camera Neutral",
+        "Camera Neutral",
+        "Camera Neutral"
+      ]
+    },
+    {
+      "property": "WhiteBalance",
+      "input": [
+        "Custom",
+        "CUSTOM",
+        "custom"
+      ],
+      "filled": [
+        "Custom",
+        "CUSTOM",
+        "custom"
+      ],
+      "changed": false,
+      "expected": [
+        "Custom",
+        "CUSTOM",
+        "custom"
+      ]
+    },
+    {
+      "property": "WhiteBalance",
+      "input": [
+        null,
+        "",
+        null,
+        ""
+      ],
+      "filled": [
+        "",
+        "",
+        "",
+        ""
+      ],
+      "changed": true,
+      "expected": [
+        "",
+        "",
+        "",
+        ""
+      ]
+    },
+    {
+      "property": "WhiteBalance",
+      "input": [
+        null,
+        null,
+        null
+      ],
+      "filled": [
+        null,
+        null,
+        null
+      ],
+      "changed": false,
+      "expected": [
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "property": "WhiteBalance",
+      "input": [
+        "I",
+        "\u0131",
+        "i"
+      ],
+      "filled": [
+        "I",
+        "\u0131",
+        "i"
+      ],
+      "changed": false,
+      "expected": [
+        "I",
+        "\u0131",
+        "i"
+      ]
+    },
+    {
+      "property": "WhiteBalance",
+      "input": [
+        "\u0130",
+        "i",
+        "I"
+      ],
+      "filled": [
+        "\u0130",
+        "i",
+        "I"
+      ],
+      "changed": false,
+      "expected": [
+        "\u0130",
+        "i",
+        "I"
+      ]
+    }
+  ]
+}

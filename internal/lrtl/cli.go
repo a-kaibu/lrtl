@@ -736,8 +736,10 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "Anchors: %s\n", anchors)
 	numericCount, structuredCount, maskCount := 0, 0, 0
+	scalarCount := 0
 	for _, change := range plan.Changes {
 		numericCount += len(change.Values)
+		scalarCount += len(change.ScalarValues) + len(change.ScalarRemovals)
 		structuredCount += len(change.StructuredProperties) + len(change.MaskStructuredProperties)
 		for _, transition := range change.MaskTransitions {
 			maskCount += len(transition.values)
@@ -747,10 +749,13 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	fmt.Fprintf(stdout, "Proposed frames: %d; numeric values: %d; first-frame XMP structures: %d; local mask values: %d\n", len(plan.Changes), numericCount, structuredCount, maskCount)
+	if scalarCount > 0 {
+		fmt.Fprintf(stdout, "Scalar metadata values: %d\n", scalarCount)
+	}
 	if !*write {
 		fmt.Fprintln(stdout, "Dry run. Pass --write to update sidecar XMP files.")
 		for _, change := range plan.Changes {
-			capacity := len(change.Values) + len(change.StructuredProperties) + len(change.MaskStructuredProperties)
+			capacity := len(change.Values) + len(change.ScalarValues) + len(change.ScalarRemovals) + len(change.StructuredProperties) + len(change.MaskStructuredProperties)
 			for _, transition := range change.MaskTransitions {
 				capacity += len(transition.values)
 				if transition.hasLuminanceRange {
@@ -760,6 +765,12 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 			names := make([]string, 0, capacity)
 			for name := range change.Values {
 				names = append(names, name)
+			}
+			for name := range change.ScalarValues {
+				names = append(names, name)
+			}
+			for _, name := range change.ScalarRemovals {
+				names = append(names, name+" (remove)")
 			}
 			names = append(names, change.StructuredProperties...)
 			for _, property := range change.MaskStructuredProperties {
