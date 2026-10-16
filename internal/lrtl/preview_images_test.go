@@ -107,7 +107,7 @@ func TestPreviewImagesCLIExposureAndWriteEV(t *testing.T) {
 		t.Fatal(&stderr)
 	}
 	m := readPreviewManifest(t, output)
-	if m.Width != 64 || m.Height != 32 || len(m.Frames) != 1 || m.Frames[0].PreviewEV != .5 || m.Frames[0].ExternalExposureDefault != 2 {
+	if m.Width != 64 || m.Height != 32 || len(m.Frames) != 1 || m.Frames[0].PreviewEV != 0.4990196228027344 || m.Frames[0].ExternalExposureDefault != 4*0.4990196228027344 {
 		t.Fatalf("neutral histogram differs: %+v", m)
 	}
 	packet, err := PacketForImage(path, xmp)
@@ -115,7 +115,7 @@ func TestPreviewImagesCLIExposureAndWriteEV(t *testing.T) {
 		t.Fatal(err)
 	}
 	text, found, err := packet.GetScalar("lrt:ExternalExposureDefault")
-	if err != nil || !found || text != "2" {
+	if err != nil || !found || text != formatNumber(4*0.4990196228027344) {
 		t.Fatalf("stored Preview EV differs: %s %t %v", text, found, err)
 	}
 	profile, found, err := packet.GetScalar("crs:CameraProfile")

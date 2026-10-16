@@ -20,6 +20,17 @@ func analyzePreviewEVSequence(frames []Frame, options imageInputOptions) ([]floa
 	if err := validateImageInputOptions(options); err != nil {
 		return nil, err
 	}
+	var references []lrtReferenceBox
+	if options.LRTReference {
+		boxes, order, err := loadLRTReferences(frames)
+		if err != nil {
+			return nil, err
+		}
+		references = make([]lrtReferenceBox, len(frames))
+		for nativeIndex, sourceIndex := range order {
+			references[sourceIndex] = boxes[nativeIndex]
+		}
+	}
 	values := make([]float64, len(frames))
 	width, height := 0, 0
 	var adjustments sequenceXMPAdjustments
@@ -45,7 +56,15 @@ func analyzePreviewEVSequence(frames []Frame, options imageInputOptions) ([]floa
 		} else if bounds.Dx() != width || bounds.Dy() != height {
 			return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
-		values[index], err = framePreviewEV(adjustments.apply(index, img))
+		img = adjustments.apply(index, img)
+		area := img.Bounds()
+		if references != nil {
+			area, err = references[index].rectangle(img.Bounds())
+			if err != nil {
+				return nil, fmt.Errorf("analyze %s: %w", frame.Image, err)
+			}
+		}
+		values[index], err = framePreviewEVArea(img, area)
 		if err != nil {
 			return nil, fmt.Errorf("analyze %s: %w", frame.Image, err)
 		}
@@ -54,42 +73,69 @@ func analyzePreviewEVSequence(frames []Frame, options imageInputOptions) ([]floa
 }
 
 func framePreviewEV(img image.Image) (float64, error) {
-	bounds := img.Bounds()
-	if bounds.Empty() {
-		return 0, fmt.Errorf("empty image")
+	return framePreviewEVArea(img, img.Bounds())
+}
+
+func framePreviewEVArea(img image.Image, area image.Rectangle) (float64, error) {
+	if area.Empty() || area.Intersect(img.Bounds()) != area {
+		return 0, fmt.Errorf("Preview EV reference area %v is empty or outside image bounds %v", area, img.Bounds())
 	}
 	var histogram [3][256]uint64
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+	for y := area.Min.Y; y < area.Max.Y; y++ {
+		for x := area.Min.X; x < area.Max.X; x++ {
 			pixel := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
-			histogram[0][pixel.R]++
-			histogram[1][pixel.G]++
-			histogram[2][pixel.B]++
+			for channel, value := range [3]uint8{pixel.R, pixel.G, pixel.B} {
+				// Native histogram's high bound (255) is exclusive; its 256
+				// bins span [0,255). Every integer below 255 stays in its bin.
+				if value < 255 {
+					histogram[channel][value]++
+				}
+			}
 		}
 	}
-
-	var weighted, count uint64
+	// LRT uses JAI's weighted radius-2 smoothing. The upper sample bound is
+	// exclusive. Round counts, restore each band's original population, round
+	// again, then average the three band means with bin width 255/256.
+	weights := [5]float64{1.0 / 25, 2.0 / 25, 3.0 / 25, 2.0 / 25, 1.0 / 25}
+	mean := 0.0
 	for channel := range histogram {
 		var smoothed [256]uint64
+		var original, total uint64
+		for _, n := range histogram[channel] {
+			original += n
+		}
 		for bin := range smoothed {
-			first, last := max(0, bin-2), min(255, bin+2)
-			var sum uint64
-			for sample := first; sample <= last; sample++ {
-				sum += histogram[channel][sample]
+			first, last := max(0, bin-2), min(256, bin+2)
+			weightIndex := max(0, 2-bin)
+			sum, weightSum := 0.0, 0.0
+			for sample := first; sample < last; sample++ {
+				weight := weights[weightIndex]
+				weightIndex++
+				sum += float64(histogram[channel][sample]) * weight
+				weightSum += weight
 			}
-			smoothed[bin] = sum / uint64(last-first+1)
+			smoothed[bin] = uint64(sum/weightSum + .5)
+			total += smoothed[bin]
 		}
-		for bin, occurrences := range smoothed {
-			weighted += uint64(bin) * occurrences
-			count += occurrences
+		if total == 0 || original == 0 {
+			return 255.0 / 256, nil
 		}
+		scale := float64(original) / float64(total)
+		total = 0
+		for bin, n := range smoothed {
+			smoothed[bin] = uint64(float64(n)*scale + .5)
+			total += smoothed[bin]
+		}
+		if total == 0 {
+			return 255.0 / 256, nil
+		}
+		channelMean := 0.0
+		for bin, n := range smoothed {
+			channelMean += float64(n) / float64(total) * (float64(bin) * 255 / 256)
+		}
+		mean += channelMean
 	}
-	if count == 0 {
-		// Integer smoothing can erase every bin in a very small image.
-		// LRTimelapse returns 255 when the resulting histogram is empty.
-		return 255.0 / 256.0, nil
-	}
-	value := float64(weighted) / float64(count) / 256.0
+	value := mean / 3 / 256
 	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return 0, fmt.Errorf("non-finite Preview EV")
 	}
@@ -98,6 +144,7 @@ func framePreviewEV(img image.Image) (float64, error) {
 
 func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("preview-ev", stderr)
+	lrtReference := set.Bool("lrt-reference", false, "measure saved referenceBoxes from .lrt/lrtsequence.json")
 	lrtPreview := set.String("lrt-preview", "", "measure existing LRT camera or visual preview cache")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
@@ -110,12 +157,12 @@ func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{"--lrt-preview": true, "-lrt-preview": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
-			fmt.Fprintln(stdout, "Usage: lrtl preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]")
+			fmt.Fprintln(stdout, "Usage: lrtl preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]")
 			return code
 		}
 	}
 	if set.NArg() != 1 {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl preview-ev DIRECTORY [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]"))
 	}
 	if *noBackup && !*write {
 		return reportError(stderr, fmt.Errorf("--no-backup requires --write"))
@@ -125,8 +172,9 @@ func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	options := imageInputOptions{
-		LRTPreview: *lrtPreview,
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+		LRTReference: *lrtReference,
+		LRTPreview:   *lrtPreview,
+		RawPreview:   *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic,
 		ApplyXMPCrop: *applyXMPCrop,
 	}

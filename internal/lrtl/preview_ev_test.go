@@ -17,23 +17,22 @@ import (
 )
 
 func TestPreviewEVKnownHistogramMeans(t *testing.T) {
-	// These expectations are hand-calculated from histogram bins, rather
-	// than computed by a second copy of the implementation. At an edge a
-	// five-pixel spike smooths to counts [1,1,1], with mean 1 (or 254).
+	// Expectations are measured from installed LRT 7.5.5, including its
+	// exclusive white bound, weighted smoothing and population normalization.
 	for _, test := range []struct {
 		name  string
 		pixel color.NRGBA
 		count int
 		want  float64
 	}{
-		{"middle_gray", color.NRGBA{128, 128, 128, 255}, 5, 0.5},
-		{"black_edge", color.NRGBA{0, 0, 0, 255}, 5, 1.0 / 256},
-		{"white_edge", color.NRGBA{255, 255, 255, 255}, 5, 254.0 / 256},
-		{"rgb_mean", color.NRGBA{64, 128, 192, 255}, 5, 0.5},
-		{"red_edges", color.NRGBA{255, 0, 0, 255}, 5, 1.0 / 3},
-		{"integer_truncation", color.NRGBA{0, 0, 0, 255}, 4, 0.5 / 256},
+		{"middle_gray", color.NRGBA{128, 128, 128, 255}, 5, 0.499603271484375},
+		{"black_edge", color.NRGBA{0, 0, 0, 255}, 5, 0.0023345947265625},
+		{"white_edge", color.NRGBA{255, 255, 255, 255}, 5, 255.0 / 256},
+		{"rgb_mean", color.NRGBA{64, 128, 192, 255}, 5, 0.499603271484375},
+		{"red_edges", color.NRGBA{255, 0, 0, 255}, 5, 255.0 / 256},
+		{"integer_rounding", color.NRGBA{0, 0, 0, 255}, 4, 0.002918243408203125},
 		{"all_bins_truncate_to_zero", color.NRGBA{128, 128, 128, 255}, 1, 255.0 / 256},
-		{"unassociated_alpha", color.NRGBA{64, 128, 192, 128}, 5, 0.5},
+		{"unassociated_alpha", color.NRGBA{64, 128, 192, 128}, 5, 0.499603271484375},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// Non-zero image origins must not skip pixels or sample outside bounds.
@@ -54,10 +53,9 @@ func TestPreviewEVMixedHistogramAnd16BitInput(t *testing.T) {
 	for x := 6; x < 12; x++ {
 		img.SetGray(x, 0, color.Gray{Y: 255})
 	}
-	// Six black and six white pixels produce edge counts [2,1,1] at
-	// either end. The symmetric combined histogram has mean 127.5.
+	// Native case 56 excludes white pixels and measures the remaining black bins.
 	got, err := framePreviewEV(img)
-	if err != nil || math.Abs(got-127.5/256) > 1e-12 {
+	if err != nil || math.Abs(got-0.002593994140625) > 1e-12 {
 		t.Fatalf("mixed PreviewEV=%g err=%v", got, err)
 	}
 	wide := image.NewNRGBA64(image.Rect(0, 0, 5, 1))
@@ -65,7 +63,7 @@ func TestPreviewEVMixedHistogramAnd16BitInput(t *testing.T) {
 		wide.SetNRGBA64(x, 0, color.NRGBA64{R: 0x4040, G: 0x8080, B: 0xc0c0, A: 0xffff})
 	}
 	got, err = framePreviewEV(wide)
-	if err != nil || math.Abs(got-0.5) > 1e-12 {
+	if err != nil || math.Abs(got-0.499603271484375) > 1e-12 {
 		t.Fatalf("16-bit PreviewEV=%g err=%v", got, err)
 	}
 	if _, err := framePreviewEV(image.NewNRGBA(image.Rectangle{})); err == nil {
@@ -110,8 +108,8 @@ func TestPreviewEVSequenceDecodesRasterFormats(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(values) != 1 || math.Abs(values[0]-0.5) > 1e-12 {
-				t.Fatalf("decoded values=%v, want [0.5]", values)
+			if len(values) != 1 || math.Abs(values[0]-0.4990196228027344) > 1e-12 {
+				t.Fatalf("decoded values=%v, want native case 54", values)
 			}
 		})
 	}
@@ -154,7 +152,7 @@ func TestPreviewEVCLIWritePreservesMetadataAndBacksUp(t *testing.T) {
 	if code := Main([]string{"preview-ev", dir}, &stdout, &stderr); code != 0 {
 		t.Fatalf("preview exit=%d stderr=%s", code, &stderr)
 	}
-	if !strings.Contains(stdout.String(), "PreviewEV=0.5") || !strings.Contains(stdout.String(), "Preview only") {
+	if !strings.Contains(stdout.String(), "PreviewEV="+formatNumber(0.4990196228027344)) || !strings.Contains(stdout.String(), "Preview only") {
 		t.Fatalf("unexpected preview output: %s", &stdout)
 	}
 	assertPreviewEVFileBytes(t, sidecar, originalXMP)
@@ -170,7 +168,7 @@ func TestPreviewEVCLIWritePreservesMetadataAndBacksUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	for property, want := range map[string]string{
-		"lrt:ExternalExposureDefault": "2", "xmp:Rating": "1", "crs:Exposure2012": "1.25",
+		"lrt:ExternalExposureDefault": formatNumber(4 * 0.4990196228027344), "xmp:Rating": "1", "crs:Exposure2012": "1.25",
 	} {
 		got, found, err := packet.GetScalar(property)
 		if err != nil || !found || got != want {
@@ -185,7 +183,7 @@ func TestPreviewEVCLIWritePreservesMetadataAndBacksUp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value, found, err := packet.GetScalar("lrt:ExternalExposureDefault"); err != nil || !found || value != "1" {
+	if value, found, err := packet.GetScalar("lrt:ExternalExposureDefault"); err != nil || !found || value != formatNumber(4*0.24999618530273438) {
 		t.Fatalf("new sidecar value=%q found=%v err=%v", value, found, err)
 	}
 	backups, err := filepath.Glob(sidecar + ".lrtl-*.bak")
@@ -304,7 +302,7 @@ func TestPreviewEVXMPAdjustmentsAreOptIn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if math.Abs(cropped[0]-0.5) > 1e-12 || baseline[0] >= cropped[0] {
+	if math.Abs(cropped[0]-0.4990196228027344) > 1e-12 || baseline[0] >= cropped[0] {
 		t.Fatalf("crop should measure only gray half: baseline=%v crop=%v", baseline, cropped)
 	}
 	for _, options := range []imageInputOptions{{ApplyXMPExposure: true}, {ApplyXMPBasic: true}} {
@@ -346,7 +344,7 @@ func TestPreviewEVEmbeddedRAWPreview(t *testing.T) {
 		t.Fatal("RAW accepted without an explicit input mode")
 	}
 	values, err := analyzePreviewEVSequence(frames, imageInputOptions{RawPreview: true})
-	if err != nil || len(values) != 1 || math.Abs(values[0]-0.5) > 1e-12 {
+	if err != nil || len(values) != 1 || math.Abs(values[0]-0.4990196228027344) > 1e-12 {
 		t.Fatalf("embedded preview values=%v err=%v", values, err)
 	}
 }
@@ -364,7 +362,7 @@ func TestPreviewEVCLINoBackupAndHelp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if value, found, err := packet.GetScalar("lrt:ExternalExposureDefault"); err != nil || !found || value != "2" {
+	if value, found, err := packet.GetScalar("lrt:ExternalExposureDefault"); err != nil || !found || value != formatNumber(4*0.4990196228027344) {
 		t.Fatalf("no-backup did not save: value=%q found=%v err=%v", value, found, err)
 	}
 	backups, err := filepath.Glob(sidecar + ".lrtl-*.bak")

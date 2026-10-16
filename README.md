@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- Preview EVのヒストグラム計算を実LRT 7.5.5の59ケースと比較して修正しました。255の除外、重み付き平滑化の丸め・再正規化、RGB各成分の平均に対応し、従来の一様移動平均との差を解消しました。`preview-ev --lrt-reference`で保存済みの移動する参照領域も使え、日時順でも元フレームへ測光値を保存します。再計算時のPreview EVと`preview-images`の測光マニフェストの数値が従来版から変わります。
+
 - `--lrt-reference`が日時順の連番にも対応しました。`filenameSort=false`では、本体の`xmp:CreateDate`文字列比較と同日時時のファイル名比較を使い、その順序で領域補間・測光・平滑化・複数パスを実行します。実LRTの並べ替え結果、順序が異なる切り出し連番との最終XMP一致、元フレームへの保存・バックアップをテストしています。
 
 - `deflicker`と`batch-deflicker`に`--lrt-reference`を追加しました。`.lrt/lrtsequence.json`の参照領域を読み、LRT 7.5.5と同じ単精度の自然3次スプラインで移動・変形させながら測光します。本体64ケースとの座標一致、対象領域の独立した測光値、複数パス、切り出し画像との最終XMP一致、破損設定時の一括保存中止をテストしています。
@@ -503,7 +505,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キーフレームとは別に扱われます。7.5.5のウィザード計算は2*/3*/4*マークを使い、最大10件のフレーム差の重み付き平均を隣接キーフレームで使いながら、フレームごとの曲線を作ります。シーケンス内のフレーム状態への保存処理も一部追跡できました。フレーム状態の3つの値は、MaskGroup形式では`CorrectionName`が`#LRT internal use (HG)`、`(Deflicker)`、`(Global)`の既存スロットへ対応付け、従来形式では`GradientBasedCorrections[5]`〜`[7]`の`crs:LocalExposure2012`へ書き戻します。インストール済みJARの`raw_m_1.xmp`では、従来形式の5〜7番目にある`CorrectionMasks`内の`crs:MaskName`要素が`LRT: don't alter!`という文字列を持ちます。`lrt:ExternalExposureDefault`を1/4にして内部値へ取り込み、`crs:Exposure2012`とは別に保つ経路も確認しました。lrtlは`CorrectionName`が`#LRT internal use (HG)`のMaskGroup、または従来形式の5〜7番目全てで`LRT: don't alter!`署名を確認できた場合に5番目の`LocalExposure2012`へ補正を書き、書き込み先を記録して`--reset`で戻します。いずれの識別条件も満たさないXMPでは`crs:Exposure2012`を使います。LRTのWizardにはRotate（-4〜+4）、Stretch（-1.5〜+1.5）、0〜1の`holyGrailReduceDeflicker`設定があります。lrtlは`--lrt-input`で入力値を読み、10件重み付き差分キュー、隣接フレーム式、曲線の中央寄せ・制限、Stretch/Rotate経路を実装しました。LOWESS単体は実LRTの53ケースで比較していますが、入力値をLRTと同じ画像処理で生成する部分は未対応です。逆解析で確認した式と保存経路は[リバースエンジニアリングノート](docs/reverse-engineering.md)に記録しています。
 
-EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用し、`preview-ev --write`で同版から復元したヒストグラム計算値を生成できます。LRTのネイティブプレビュー入力とROIは未対応です。Piaの平滑化部品は合成数値列で実測比較済みですが、全ワークフローの比較は未完了です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
+EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用し、`preview-ev --write`で同版から復元したヒストグラム計算値を生成できます。既存のLRTプレビューと保存済みROIは`preview-ev --lrt-preview camera --lrt-reference --write`で測光できます。プレビュー画像の生成経路全体との一致は未検証です。Piaの平滑化部品は合成数値列で実測比較済みですが、全ワークフローの比較は未完了です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
 
 ## 今後の実装順
 
@@ -585,7 +587,11 @@ Converterを`-u -l -p0 -dng1.4`で呼び、一時フォルダーにデモザイ�
 
 ## Preview EVの生成
 
-`preview-ev DIRECTORY`は連番画像から各フレームのPreview EVを測定し、`lrt:ExternalExposureDefault`への保存値も表示します。復元したLRT 7.5.5の計算に合わせ、RGB各256段階のヒストグラムを作り、各ヒストグラムを半径2の移動平均で平滑化してから全チャンネルの平均強度を求めます。Preview EVは平均値を256で割った値で、XMP保存値はその4倍です。既定では表示のみで、`--write`を付けるとXMPサイドカーを更新します。既存ファイルはバックアップされます。`--raw-preview`と`--raw-develop --dnglab PATH`、`--apply-xmp-basic`、`--apply-xmp-crop`も指定できます。
+`preview-ev DIRECTORY`は連番画像から各フレームのPreview EVを測定し、`lrt:ExternalExposureDefault`への保存値も表示します。実LRT 7.5.5で観測した計算に合わせ、RGB各成分の256ビンを[0,255)に配置し、値255を除外します。半径2の重み付き平滑化を上端除外の窓で行い、頻度を丸め、元の成分別総数へ再正規化して再度丸めます。ビン幅は255/256で、各成分の平均強度を個別に求めてRGBの平均を取ります。成分のヒストグラムが空になる場合は、本体と同じ255/256を返します。例えば20×20pxのRGB(128,128,128)は0.4990196228027344です。
+
+Preview EVは平均値を256で割った値で、XMP保存値はその4倍です。既定では表示のみで、`--write`を付けるとXMPサイドカーを更新します。既存ファイルはバックアップされます。`--raw-preview`、`--raw-develop`、`--lrt-preview camera|visual`、`--apply-xmp-basic`、`--apply-xmp-crop`も指定できます。`--lrt-reference`で保存済み参照領域を読み、日時順の領域を元フレームへ対応付けてから測光できます。画像処理を指定した場合は、その処理後の画像上の領域を使います。参照設定が壊れている場合や領域に画素がない場合は全XMPの保存を中止します。
+
+この計算は従来の一様移動平均から修正されています。黒・白・RGB端値・小画像・様々な領域を含む本体59ケースに加え、日時順の領域・XMP保存・バックアップ・破損時の保持をテストしています。同じ復号画素と領域での比較であり、RAW現像・JPEG復号・色管理全体の画素一致を示すものではありません。
 
 ```powershell
 lrtl preview-ev "D:\Timelapse\Developed"
