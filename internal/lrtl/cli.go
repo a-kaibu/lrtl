@@ -99,6 +99,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runBatchInterpolate(arguments[1:], stdout, stderr)
 	case "batch-deflicker":
 		return runBatchDeflicker(arguments[1:], stdout, stderr)
+	case "batch-holy-grail":
+		return runBatchHolyGrail(arguments[1:], stdout, stderr)
 	case "subtitles":
 		return runSubtitles(arguments[1:], stdout, stderr)
 	case "long-term":
@@ -145,6 +147,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  batch-render ROOT --output DIRECTORY [--format avi|mp4|mov] [--workers N] [--recursive] [-- RENDER_OPTIONS...]")
 	fmt.Fprintln(writer, "  batch-interpolate ROOT [--recursive] [--workers N] [--smoothness 0-100] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  batch-deflicker ROOT [--recursive] [--workers N] [DEFLICKER_OPTIONS...] [--write] [--no-backup]")
+	fmt.Fprintln(writer, "  batch-holy-grail ROOT [--recursive] [--workers N] [HOLY_GRAIL_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  export DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--apply-xmp-basic] [--apply-xmp-crop] [--long-edge N] export RGB16 TIFF frames")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
@@ -1641,17 +1644,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 
 func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("holy-grail", stderr)
-	write := set.Bool("write", false, "write exposure compensation and 2*/3* jump keyframes to XMP sidecars")
-	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
-	lrtInput := set.Bool("lrt-input", false, "use existing lrt:ExternalExposureDefault values and 2*/3*/4* ratings as Holy Grail inputs")
-	lrtReduceDeflicker := set.Float64("lrt-reduce-deflicker", 0, "LRT Holy Grail smoothing control for --lrt-input (0 to 1; default 0)")
-	ignoreAperture := set.Bool("ignore-aperture", false, "ignore FNumber when aperture remained fixed")
-	forceMarkJumps := set.Bool("mark-jumps", false, "force 2*/3* marks when EXIF does not confirm Manual mode")
-	noMarkJumps := set.Bool("no-mark-jumps", false, "do not mark camera-setting changes as 2*/3* keyframe pairs")
-	stretch := set.Float64("stretch", 0, "add LRT-style normalized Holy Grail curve stretch (-1.5 to +1.5)")
-	rotate := set.Float64("rotate", 0, "add LRT-style linear Holy Grail curve rotation (-4 to +4)")
-	autoShape := set.Bool("auto-shape", false, "search curve stretch and rotation using L1 smoothness scores")
-	reset := set.Bool("reset", false, "remove lrtl-managed Holy Grail compensation")
+	f := registerHolyGrailFlags(set)
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--stretch": true, "-stretch": true,
 		"--rotate": true, "-rotate": true,
@@ -1664,51 +1657,16 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if set.NArg() != 1 {
 		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
 	}
-	if *forceMarkJumps && *noMarkJumps {
-		return reportError(stderr, fmt.Errorf("--mark-jumps and --no-mark-jumps cannot be used together"))
-	}
-	if *lrtInput && *forceMarkJumps {
-		return reportError(stderr, fmt.Errorf("--lrt-input uses existing 2*/3*/4* XMP ratings and cannot be combined with --mark-jumps"))
-	}
-	lrtReduceDeflickerSet := false
-	set.Visit(func(parsed *flag.Flag) {
-		lrtReduceDeflickerSet = lrtReduceDeflickerSet || parsed.Name == "lrt-reduce-deflicker"
-	})
-	if lrtReduceDeflickerSet && !*lrtInput {
-		return reportError(stderr, fmt.Errorf("--lrt-reduce-deflicker requires --lrt-input"))
-	}
-	if math.IsNaN(*lrtReduceDeflicker) || math.IsInf(*lrtReduceDeflicker, 0) || *lrtReduceDeflicker < 0 || *lrtReduceDeflicker > 1 {
-		return reportError(stderr, fmt.Errorf("--lrt-reduce-deflicker must be between 0 and 1"))
-	}
-	explicitCurveOptions := false
-	set.Visit(func(parsed *flag.Flag) {
-		if parsed.Name == "stretch" || parsed.Name == "rotate" {
-			explicitCurveOptions = true
-		}
-	})
-	if *autoShape && explicitCurveOptions {
-		return reportError(stderr, fmt.Errorf("--auto-shape cannot be combined with --stretch or --rotate"))
-	}
-	useCurveOptions := *lrtInput || *autoShape || explicitCurveOptions
-	if useCurveOptions && (math.IsNaN(*stretch) || math.IsInf(*stretch, 0) || math.IsNaN(*rotate) || math.IsInf(*rotate, 0) || *stretch < -1.5 || *stretch > 1.5 || *rotate < -4 || *rotate > 4) {
-		return reportError(stderr, fmt.Errorf("--stretch must be between -1.5 and +1.5 and --rotate between -4 and +4"))
-	}
-	if useCurveOptions && *reset {
-		return reportError(stderr, fmt.Errorf("--stretch and --rotate cannot be used with --reset"))
+	curveOptions, err := validateHolyGrailFlags(set, f)
+	if err != nil {
+		return reportError(stderr, err)
 	}
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	var curveOptions *HolyGrailCurveOptions
-	if useCurveOptions {
-		curveOptions = &HolyGrailCurveOptions{
-			Stretch: *stretch, Rotate: *rotate, ReduceDeflicker: *lrtReduceDeflicker,
-			Auto: *autoShape, LRTInput: *lrtInput,
-		}
-	}
-	plan, err := buildHolyGrailPlanWithCurveOptions(frames, *ignoreAperture, *reset, *forceMarkJumps, *noMarkJumps, curveOptions)
+	plan, err := buildHolyGrailPlanWithCurveOptions(frames, *f.ignoreAperture, *f.reset, *f.forceMarkJumps, *f.noMarkJumps, curveOptions)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -1734,18 +1692,18 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 			jumpMarks++
 		}
 	}
-	if *reset {
+	if *f.reset {
 		fmt.Fprintf(stdout, "Frames: %d; frames to reset: %d\n", len(frames), len(changes))
 	} else {
 		fmt.Fprintf(stdout, "Frames: %d; exposure corrections: %d\n", len(frames), correctionUpdates)
 	}
-	if !*reset && plan.MarkJumps {
+	if !*f.reset && plan.MarkJumps {
 		fmt.Fprintf(stdout, "HG jump keyframe marks: %d\n", jumpMarks)
-	} else if !*reset && !*lrtInput && !*noMarkJumps && !plan.ManualMode && !*forceMarkJumps {
+	} else if !*f.reset && !*f.lrtInput && !*f.noMarkJumps && !plan.ManualMode && !*f.forceMarkJumps {
 		fmt.Fprintln(stdout, "EXIF does not confirm Manual mode; 2*/3* marks are omitted. Pass --mark-jumps to force them.")
 	}
 	for _, change := range changes {
-		if *reset {
+		if *f.reset {
 			fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))
 			if change.ExposureChanged {
 				fmt.Fprintf(stdout, " %s %+.4f -> %+.4f EV", xmpExposureTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter)
@@ -1768,14 +1726,14 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if len(changes) == 0 {
-		if *reset {
+		if *f.reset {
 			fmt.Fprintln(stdout, "No lrtl-managed Holy Grail corrections to reset.")
 		} else {
 			fmt.Fprintln(stdout, "No exposure-setting compensation is needed.")
 		}
 		return 0
 	}
-	if !*write {
+	if !*f.write {
 		fmt.Fprintln(stdout, "Preview only. Pass --write to update sidecar XMP files.")
 		return 0
 	}
@@ -1784,7 +1742,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	}
 	for _, change := range changes {
 		path := change.Frame.OutputSidecar()
-		backup, err := WritePacket(path, change.Packet, !*noBackup)
+		backup, err := WritePacket(path, change.Packet, !*f.noBackup)
 		if err != nil {
 			return reportError(stderr, err)
 		}

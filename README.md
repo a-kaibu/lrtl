@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `batch-holy-grail ROOT`でHoly Grail露出補正を一括解析・保存できます。再帰探索・並列解析・EXIF/キャッシュ済みLRT入力・Stretch/Rotate・自動形状・2*/3*マーカー・リセットに対応し、全連番の内容検証後に保存します。個別実行とのXMP/AVI一致、LRT 7.5.5実測値との補正一致、再実行での重複防止、評価の復元、解析エラー時の全体保存中止をテストしています。
+
 - `batch-deflicker ROOT`で複数連番のDeflickerを一括解析・保存できます。既定は変更予定の表示で、再帰探索・並列解析・複数パス・Gaussian/LOWESS・参照領域・RAW現像・XMP基本現像・クロップ・リセットに対応します。全連番の解析と最終XMPの内容検証後に保存します。個別実行とXMP/AVIが一致すること、RAW、専用補正スロット、画像を復号しないリセット、エラー時に保存しないことをテストしています。
 
 - RAWプロファイルの`BaselineExposureOffset`を適用します。正負のSRATIONAL値をBaselineExposureへEVで加算し、Hue/Sat補正後・Look/トーンカーブ前の露出段階へ反映します。両バイト順の分数684ケース、露出の相殺で全65,536入力を保持すること、プロファイルとの適用順序、ルートIFDからの継承と主画像による上書き、合成RAW→XMP→TIFF→AVI、異常入力とファズテストで検証しています。
@@ -115,7 +117,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。16-bit RGB処理。LRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。画像プレビュー、ロッシーDNG、DNGのサイズ縮小、動画の自動分割は未実装 | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed DNGと隣接XMPを取り込む。`--dnglab PATH`でDNGLabを明示選択可能。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
-| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。バッチプレビュー、Holy Grailの一括補正は未実装 | 一部 |
+| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。バッチプレビューは未実装 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
 
@@ -179,7 +181,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 解析コマンドの`--apply-xmp-basic`、`--apply-xmp-exposure`、`--apply-xmp-crop`はlrtl側の画素近似です。`--apply-xmp-basic`は露出、トーン、色、Temperature/Tintをまとめて含み、`--apply-xmp-exposure`とは同時に使えません。既にLightroom等でその補正を焼き込んだJPEG/PNGでは二重適用になるため、主にRAWプレビューやDNGLab現像画像の解析に使ってください。
 
-`batch-render`はROOT自身と直下の各サブフォルダーを調べ、対応画像を含むフォルダーを個別の連番としてレンダーします。`--recursive`を指定すると全階層を検索します。ROOTが連番の場合は`ROOT名.mp4`のように出力し、配下の連番は相対フォルダーを保って出力します。`--format`は`avi`/`mp4`/`mov`（既定`mp4`）、`--workers`は同時処理数（既定1、最大64）です。`--`の後に指定した通常の`render`オプションは全ジョブへ渡されます。各ジョブの成功・失敗をまとめて表示し、失敗した連番があっても他のレンダーを続け、どれかが失敗した場合は終了コード1を返します。XMP補間の一括適用には`batch-interpolate`、Deflicker補正の一括適用には`batch-deflicker`を使います。
+`batch-render`はROOT自身と直下の各サブフォルダーを調べ、対応画像を含むフォルダーを個別の連番としてレンダーします。`--recursive`を指定すると全階層を検索します。ROOTが連番の場合は`ROOT名.mp4`のように出力し、配下の連番は相対フォルダーを保って出力します。`--format`は`avi`/`mp4`/`mov`（既定`mp4`）、`--workers`は同時処理数（既定1、最大64）です。`--`の後に指定した通常の`render`オプションは全ジョブへ渡されます。各ジョブの成功・失敗をまとめて表示し、失敗した連番があっても他のレンダーを続け、どれかが失敗した場合は終了コード1を返します。XMP補間の一括適用には`batch-interpolate`、Deflicker補正の一括適用には`batch-deflicker`、Holy Grail補正には`batch-holy-grail`を使います。
 
 ## インストール
 
@@ -710,7 +712,7 @@ lrtl batch-render C:\photos\sequences --recursive --output C:\photos\movies --fo
 
 既定では書き込みません。`--write`でも全連番の読込・補間・XMP構築を先に検証し、1つでも内容エラーがあれば全体を保存せず終了コード1を返します。保存する既存XMPはバックアップされ、新規サイドカーや変更のないファイルにはバックアップを作りません。`--no-backup`も指定できます。保存開始後のディスク・権限等のエラーでは、それまでに保存したファイルは残り、全体のロールバックはしません。
 
-このコマンドはLRTのバッチ作業に対応するCLI機能です。LRTのバッチキューそのものを再現した比較ではなく、数値処理は既存の実測比較済み補間経路を再利用しています。Deflickerの一括計算は次節の`batch-deflicker`に対応します。バッチプレビュー生成、Holy Grailの一括計算は未対応です。
+このコマンドはLRTのバッチ作業に対応するCLI機能です。LRTのバッチキューそのものを再現した比較ではなく、数値処理は既存の実測比較済み補間経路を再利用しています。Deflickerの一括計算は次節の`batch-deflicker`に対応します。Holy Grailの一括計算は`batch-holy-grail`に対応します。バッチプレビュー生成は未対応です。
 
 ### 複数連番のDeflicker
 
@@ -733,6 +735,28 @@ lrtl batch-deflicker C:\photos\sequences --recursive --reset --write
 既定は解析結果の表示だけで、`--write`で保存、`--no-backup`でバックアップを省略します。`--reset`は解析オプションと併用できません。どれかの連番の画像・XMP・補正値・最終パケットが不正なら、全連番のXMPとバックアップを変更せず終了コード1を返します。保存中のOSエラーは保存済み枚数を報告して中断します。複数ファイルを一括でロールバックするトランザクションではありません。
 
 Gaussian/LOWESS、並列数1/4、XMP基本現像・専用補正スロット・RAW現像で個別実行との一致を検査し、補正後AVIも比較します。破損画像/XMP・不正な補正記録・参照領域による全体保存の中止、バックアップ、リセットのプレビューと画像復号の省略もテストしています。LRTのバッチキューやCamera Rawとの画素一致を再現した検証ではありません。測光と補正の一致範囲は通常のDeflickerと同じです。
+
+### 複数連番のHoly Grail補正
+
+```powershell
+# EXIFから補正予定を確認。既定はROOT自身と直下を探索する
+lrtl batch-holy-grail C:\photos\sequences
+
+# 既存のLRT入力を使い、各連番の曲線形状を自動計算して保存する
+lrtl batch-holy-grail C:\photos\sequences --recursive --workers 2 --lrt-input --auto-shape --lrt-reduce-deflicker 0.35 --write
+
+# EXIFから露出補正だけを保存し、2*/3*評価を付けない
+lrtl batch-holy-grail C:\photos\sequences --recursive --no-mark-jumps --write
+
+# 保存済みのlrtl補正と管理対象のジャンプ評価を解除する
+lrtl batch-holy-grail C:\photos\sequences --recursive --reset --write
+```
+
+`holy-grail`と同じオプションと検証・計算・保存経路を使います。`--recursive`で全階層、`--workers`で同時解析数（既定1、1〜64）を指定し、結果表示と保存はフォルダー順です。EXIFモード、`--ignore-aperture`、ジャンプ評価の手動指定/無効化、`--lrt-input`、Stretch/Rotate、`--auto-shape`、`--lrt-reduce-deflicker`に対応します。自動形状は連番ごとに独立して計算します。LRT入力の生成条件・数値一致範囲は個別コマンドの説明と同じです。
+
+既定は変更予定の表示で、`--write`でバックアップ付き保存、`--no-backup`でバックアップを省略します。全連番の撮影値・XMP・補正記録・ジャンプ評価・最終パケットを検証し、どれかが不正なら全体を書き込まず終了コード1を返します。ジャンプ評価は既存の明示的な評価を上書きしません。衝突時の扱いも個別コマンドと同じです。保存中のOSエラーは保存済み枚数を報告して中断します。複数ファイルの一括ロールバックには対応しません。
+
+個別実行とのXMP・AVIフレーム/索引の一致、並列数1/4、EXIF/LRT入力の自動形状、専用補正スロット、LRT 7.5.5で観測した補正値、バックアップ、再実行での重複防止、評価の作成・解除をテストしています。破損した撮影値・XMP・LRT入力・補正記録や評価衝突による全体保存の中止、画像EXIFを読めない場合の補正解除も検査します。LRTのバッチキュー自体の再現やCamera Rawとの画素一致を示すものではありません。
 
 ## 撮影間隔で連番を分けて取り込む
 
