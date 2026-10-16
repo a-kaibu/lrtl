@@ -582,5 +582,39 @@ backup, retained camera metadata and AVI pixels against measured controller EV
 and an independent sRGB gain formula. Partial-cache EXIF fallback and nine
 malformed-late-frame cases check validation before XMP or backup writes.
 The default physical EXIF mode is unchanged. Native formatting of arbitrary raw
-EXIF into camera labels, all string forms, full save/display workflows and
+EXIF into camera labels (extended below), all string forms, full save/display workflows and
 Camera Raw pixel equivalence remain outside this comparison.
+
+## EXIF display labels before Holy Grail calculation
+
+The native importer requests the displayed ShutterSpeed, Aperture and ISO from
+its ExifTool process, then stores those strings in the frame model. Directly
+feeding raw ExposureTime and FNumber into HG omitted both display rounding and
+the native nominal-label conversions. HolyGrailExifOracle.java creates temporary
+synthetic metadata-only JPEGs and measures installed ExifTool 13.59 followed by
+the native number/aperture parsers. Its 94 cases cover common shutter times,
+the quarter-second formatting threshold, decimal rounding boundaries, common
+apertures and apertures below one. The committed fixture records source
+rationals, displayed labels and native parsed values; tests require exact double
+bits. The native import controller itself is inspected, not invoked in this probe.
+
+The compatibility path now formats missing cached fields from EXIF before
+parsing them. A precision pass uses imagemeta's custom tag parser to retain
+ExposureTime/FNumber rationals in double precision: its public metadata fields
+otherwise round to float32 before formatting. In particular, raw 2.35 rounded
+down through float32 would produce a different display label. JPEG and both TIFF
+byte orders exercise the original rational values. The default physical EXIF
+mode retains its existing behavior; cached strings retain their original spelling.
+Additional measured aperture labels with .0 suffixes are registered separately.
+
+HolyGrailControllerOracle.java camera mode invokes the installed numerical
+controller for 12 cases, with 17 frames, changing shutter/aperture/ISO, mixed
+2/3/4-star markers and different Stretch/Rotate/Reduce settings. Inputs avoid
+clipping so the UI-disabled native invocation has the same numerical bounds.
+Each case runs through generated JPEG/EXIF, CLI XMP save/backup and AVI decoding;
+saved EV agrees within 2e-8 and decoded gray pixels within two 8-bit levels of
+an independently computed sRGB gain using the native measured EV. A cached-only
+PNG case uses the same changing camera labels. Source preservation and retained
+metadata are checked. APEX/Bulb precedence, manufacturer-specific camera tags,
+arbitrary formatting, native save/display behavior and Camera Raw pixels are
+still not covered. Runtime and Go tests require neither ExifTool nor Java.

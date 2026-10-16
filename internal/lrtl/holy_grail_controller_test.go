@@ -10,13 +10,15 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 )
 
 type measuredHolyGrailControllerCase struct {
-	Input, Expected, Smoothed []float64
-	Ratings, ISO              []int
-	Stretch, Rotate, Reduce   float64
+	Input, Expected, Smoothed     []float64
+	Ratings, ISO                  []int
+	Stretch, Rotate, Reduce       float64
+	CameraShutter, CameraAperture []string
 }
 
 func measuredHolyGrailControllerCases(t *testing.T) []measuredHolyGrailControllerCase {
@@ -95,6 +97,17 @@ func runHolyGrailCLIAndVideoWithCachedMetadata(t *testing.T, c measuredHolyGrail
 		}
 		path := filepath.Join(dir, fmt.Sprintf("frame%02d.%s", i, extension))
 		originals[path] = holyGrailCameraJPEGWithISO(t, uint16(c.ISO[i]))
+		if len(c.CameraShutter) > 0 {
+			denominator, err := strconv.ParseUint(strings.TrimPrefix(c.CameraShutter[i], "1/"), 10, 32)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fNumber, err := strconv.ParseFloat(c.CameraAperture[i], 64)
+			if err != nil {
+				t.Fatal(err)
+			}
+			originals[path] = holyGrailExifJPEG(t, measuredHolyGrailExifCase{TimeNumerator: 1, TimeDenominator: uint32(denominator), ApertureNumerator: uint32(math.Round(fNumber * 100)), ApertureDenominator: 100, ISO: uint16(c.ISO[i])})
+		}
 		if cached {
 			img, err := jpeg.Decode(bytes.NewReader(originals[path]))
 			if err != nil {
@@ -114,6 +127,10 @@ func runHolyGrailCLIAndVideoWithCachedMetadata(t *testing.T, c measuredHolyGrail
 			properties["lrt:ShutterSpeed"] = "1"
 			properties["lrt:Iso"] = fmt.Sprint(c.ISO[i])
 			properties["lrt:Aperture"] = "8"
+			if len(c.CameraShutter) > 0 {
+				properties["lrt:ShutterSpeed"] = c.CameraShutter[i]
+				properties["lrt:Aperture"] = c.CameraAperture[i]
+			}
 		}
 		writeTestXMP(t, path, properties)
 	}
@@ -167,7 +184,11 @@ func runHolyGrailCLIAndVideoWithCachedMetadata(t *testing.T, c measuredHolyGrail
 			t.Fatal("changed unrelated metadata")
 		}
 		if cached {
-			for name, want := range map[string]string{"lrt:ShutterSpeed": "1", "lrt:Iso": fmt.Sprint(c.ISO[i]), "lrt:Aperture": "8"} {
+			wanted := map[string]string{"lrt:ShutterSpeed": "1", "lrt:Iso": fmt.Sprint(c.ISO[i]), "lrt:Aperture": "8"}
+			if len(c.CameraShutter) > 0 {
+				wanted["lrt:ShutterSpeed"], wanted["lrt:Aperture"] = c.CameraShutter[i], c.CameraAperture[i]
+			}
+			for name, want := range wanted {
 				text, found, err := packet.GetScalar(name)
 				if err != nil || !found || text != want {
 					t.Fatalf("cached %s changed: %q err=%v", name, text, err)

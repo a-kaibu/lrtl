@@ -41,6 +41,24 @@ func parseHolyGrailAperture(text string) (float64, error) {
 	return value, nil
 }
 
+// The native importer requests ExifTool's displayed ShutterSpeed and Aperture,
+// then passes those labels to its HG parsers. Keep this formatting confined to
+// the compatibility path; the physical EXIF mode keeps its existing numbers.
+func holyGrailLRTShutterLabel(seconds float64) string {
+	if seconds > 0 && seconds < .25001 {
+		return "1/" + strconv.FormatFloat(math.Floor(.5+1/seconds), 'f', 0, 64)
+	}
+	return strings.TrimSuffix(strconv.FormatFloat(seconds, 'f', 1, 64), ".0")
+}
+
+func holyGrailLRTApertureLabel(fNumber float64) string {
+	digits := 1
+	if fNumber > 0 && fNumber < 1 {
+		digits = 2
+	}
+	return strconv.FormatFloat(fNumber, 'f', digits, 64)
+}
+
 // The installed frame model reads these three strings from the LRT namespace.
 // Complete cached metadata can supply the camera settings without image EXIF.
 func readHolyGrailLRTCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error) {
@@ -65,7 +83,7 @@ func readHolyGrailLRTCameraExposure(frame Frame, ignoreAperture bool) (CameraExp
 	}
 	camera := CameraExposure{}
 	if !hasTime || !hasISO || (!ignoreAperture && !hasAperture) {
-		camera, err = readCameraExposureMetadata(frame)
+		camera, err = readHolyGrailLRTExposureMetadata(frame)
 		if err != nil {
 			return CameraExposure{}, err
 		}
@@ -74,6 +92,11 @@ func readHolyGrailLRTCameraExposure(frame Frame, ignoreAperture bool) (CameraExp
 		camera.ExposureTime, err = parseHolyGrailCameraNumber(timeText)
 		if err != nil {
 			return CameraExposure{}, fmt.Errorf("lrt:ShutterSpeed: %w", err)
+		}
+	} else {
+		camera.ExposureTime, err = parseHolyGrailCameraNumber(holyGrailLRTShutterLabel(camera.ExposureTime))
+		if err != nil {
+			return CameraExposure{}, fmt.Errorf("EXIF shutter speed: %w", err)
 		}
 	}
 	if hasISO {
@@ -88,6 +111,11 @@ func readHolyGrailLRTCameraExposure(frame Frame, ignoreAperture bool) (CameraExp
 		camera.FNumber, err = parseHolyGrailAperture(apertureText)
 		if err != nil {
 			return CameraExposure{}, fmt.Errorf("lrt:Aperture: %w", err)
+		}
+	} else if !ignoreAperture {
+		camera.FNumber, err = parseHolyGrailAperture(holyGrailLRTApertureLabel(camera.FNumber))
+		if err != nil {
+			return CameraExposure{}, fmt.Errorf("EXIF aperture: %w", err)
 		}
 	}
 	if camera.ExposureTime <= 0 || math.IsNaN(camera.ExposureTime) || math.IsInf(camera.ExposureTime, 0) {

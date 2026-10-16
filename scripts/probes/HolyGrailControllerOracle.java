@@ -18,16 +18,19 @@ public class HolyGrailControllerOracle {
   Method empty=Arrays.stream(factory.getMethods()).filter(x->x.getName().equals("A")&&x.getReturnType()==w&&x.getParameterCount()==0).findFirst().orElseThrow();
   Method calculate=c.getMethod("a",s,float.class,float.class,float.class,float.class,boolean.class);
   StringBuilder json=new StringBuilder("{\"cases\":[");String sep="";
-  for(int count:new int[]{5,17,20,31})for(float stretch:new float[]{-.4f,0,.4f})for(float rotate:new float[]{-.2f,.18f})for(float reduce:new float[]{0,.35f,.5f}) {
+  boolean cameraMode=args.length>0&&args[0].equals("camera");
+  for(int count:cameraMode?new int[]{17}:new int[]{5,17,20,31})for(float stretch:new float[]{-.4f,0,.4f})for(float rotate:new float[]{-.2f,.18f})for(float reduce:cameraMode?new float[]{0,.35f}:new float[]{0,.35f,.5f}) {
    if(reduce>0&&(int)((double)reduce*count)<2)continue;
    @SuppressWarnings("unchecked") List<Object> sequence=(List<Object>)s.getConstructor(int.class).newInstance(-1);
-   double[] inputs=new double[count];int[] ratings=new int[count],isos=new int[count];
+   double[] inputs=new double[count];int[] ratings=new int[count],isos=new int[count];String[] shutters=new String[count],apertures=new String[count];
    for(int i=0;i<count;i++) {
     inputs[i]=((i*37%23)-11)*.003+(i%7)*.000125;
     ratings[i]=i%9==1?2:i%9==2?3:i%11==4||i%11==5?4:0;
     isos[i]=i%9>=2?125:100;
     Object frame=f.getConstructor(Object[].class).newInstance((Object)new Object[4096]);
-    preview.set(frame,inputs[i]);packet.set(frame,empty.invoke(null));shutter.set(frame,"1");iso.set(frame,""+isos[i]);aperture.set(frame,"8");rawCurve.set(frame,0.0);
+    shutters[i]=cameraMode?new String[]{"1/125","1/100","1/80","1/60"}[i%4]:"1";
+    apertures[i]=cameraMode?new String[]{"5.6","6.3","7.1","8.0"}[i%4]:"8";
+    preview.set(frame,inputs[i]);packet.set(frame,empty.invoke(null));shutter.set(frame,shutters[i]);iso.set(frame,""+isos[i]);aperture.set(frame,apertures[i]);rawCurve.set(frame,0.0);
     f.getMethod("E",int.class).invoke(frame,ratings[i]);sequence.add(frame);
    }
    tableSequence.set(table,sequence);
@@ -37,7 +40,9 @@ public class HolyGrailControllerOracle {
     expected[i]=(Double)rawCurve.get(sequence.get(i));smoothed[i]=(Double)smoothCurve.get(sequence.get(i));
     if(!Double.isFinite(expected[i])||Math.abs(expected[i])>=1||!Double.isFinite(smoothed[i]))throw new IllegalStateException("invalid or clipping-sensitive case");
    }
-   json.append(sep).append("{\"input\":").append(Arrays.toString(inputs)).append(",\"ratings\":").append(Arrays.toString(ratings)).append(",\"iso\":").append(Arrays.toString(isos)).append(",\"stretch\":").append((double)stretch).append(",\"rotate\":").append((double)rotate).append(",\"reduce\":").append((double)reduce).append(",\"expected\":").append(Arrays.toString(expected)).append(",\"smoothed\":").append(Arrays.toString(smoothed)).append("}");sep=",";
+   json.append(sep).append("{\"input\":").append(Arrays.toString(inputs)).append(",\"ratings\":").append(Arrays.toString(ratings)).append(",\"iso\":").append(Arrays.toString(isos)).append(",\"stretch\":").append((double)stretch).append(",\"rotate\":").append((double)rotate).append(",\"reduce\":").append((double)reduce).append(",\"expected\":").append(Arrays.toString(expected)).append(",\"smoothed\":").append(Arrays.toString(smoothed));
+   if(cameraMode)json.append(",\"cameraShutter\":[\"").append(String.join("\",\"",shutters)).append("\"],\"cameraAperture\":[\"").append(String.join("\",\"",apertures)).append("\"]");
+   json.append("}");sep=",";
   }
   System.out.println(json.append("]}"));
  }
