@@ -242,3 +242,23 @@ Tests cover path grammar and index bounds, numeric/boolean validation without mu
 - [LRTimelapse discussion with an XMP example of intersected masks](https://forum.lrtimelapse.com/Thread-issue-with-luminance-range-mask-intersected-with-linear-gradient-mask?pid=57463)
 - [LRTimelapse 7.4 release notes](https://lrtimelapse.com/updates/lrtimelapse-7-4/)
 - [LRTimelapse 7 release notes: Select by Filename](https://lrtimelapse.com/news/lrtimelapse-7/)
+# WB numeric null-reference branch
+
+The installed 7.5.5 automatic worker `A(Rsa,int,boolean)`, bytecode offsets
+216–268, tests the reference cell before selecting numeric interpolation. A
+null reference clears that column on every frame when values differ. The
+reference is the first rating-4 frame, falling back to frame zero. The four WB
+numeric fields bypass metadata missing-value preflight, so this branch can
+remove values that exist on later keyframes. `WhiteBalance=Custom` does not
+create a numeric reference. A numeric zero remains present.
+
+lrtl now applies that branch separately to Temperature, Tint,
+IncrementalTemperature and IncrementalTint after numeric validation and before
+anchor extraction. Planning records removals; disk writes retain the existing
+backup and atomic-sidecar behavior. All-absent columns produce no edits and a
+single-frame sequence is not cleared. Analytical regression tests cover
+interior references, mixed ratings, zero, independent columns, CLI preview,
+backup contents, repeated no-op planning and malformed-input preflight. These
+are bytecode-derived branch tests, not successful whole-application oracle
+runs or Camera Raw pixel comparisons. WB column-worker missing-value behavior
+when the reference exists remains unverified.

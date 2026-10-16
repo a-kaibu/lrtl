@@ -231,6 +231,17 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 	if err != nil {
 		return nil, err
 	}
+	if len(normalKeyframes) > 0 {
+		for index, removals := range numericInputs.clearMissingWBReferences(normalKeyframes[0]) {
+			if len(removals) == 0 {
+				continue
+			}
+			if proposed[index] == nil {
+				proposed[index] = &ProposedFrame{Frame: frames[index], Packet: packets[index], Values: make(map[string]string), CreatedSidecar: created[index]}
+			}
+			proposed[index].ScalarRemovals = append(proposed[index].ScalarRemovals, removals...)
+		}
+	}
 	for index, values := range numericInputs.Missing {
 		if err := assign(index, values); err != nil {
 			return nil, err

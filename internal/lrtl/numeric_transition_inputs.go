@@ -14,6 +14,30 @@ type numericTransitionInputs struct {
 	Missing []map[string]float64
 }
 
+// WB numbers bypass metadata missing-value preflight. The automatic worker
+// checks its reference before invoking the numeric column worker: a null
+// reference clears the column, even when another selected keyframe has a value.
+// Keep this separate from preflight so a donor cannot invent a WB reference.
+func (inputs *numericTransitionInputs) clearMissingWBReferences(reference int) [][]string {
+	removals := make([][]string, len(inputs.Values))
+	if len(inputs.Values) < 2 {
+		return removals
+	}
+	for _, name := range []string{"Temperature", "Tint", "IncrementalTemperature", "IncrementalTint"} {
+		if _, present := inputs.Values[reference][name]; present {
+			continue
+		}
+		for i, values := range inputs.Values {
+			if _, present := values[name]; present {
+				removals[i] = append(removals[i], "crs:"+name)
+				delete(values, name)
+			}
+			delete(inputs.Missing[i], name)
+		}
+	}
+	return removals
+}
+
 func prepareNumericTransitionInputs(packets []*XMPPacket) (numericTransitionInputs, error) {
 	plan := numericTransitionInputs{Values: make([]map[string]float64, len(packets)), Missing: make([]map[string]float64, len(packets))}
 	for _, name := range NumericCRSProperties {
