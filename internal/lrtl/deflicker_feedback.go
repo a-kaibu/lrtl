@@ -9,8 +9,10 @@ import (
 )
 
 type deflickerSequencePlan struct {
-	Changes      []DeflickerChange
-	Measurements [][]float64
+	Changes       []DeflickerChange
+	Measurements  [][]float64
+	NativeOptions nativeDeflickerOptions
+	Constant      bool
 }
 
 func pixelFeedbackGains(count, radius, passes int, constant bool, smoother string, measure func([]float64) ([]float64, error)) ([]float64, error) {
@@ -121,6 +123,21 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 	if err := validateImageInputOptions(options); err != nil {
 		return nil, err
 	}
+	if options.LRTDeflickerSettings {
+		var order []int
+		var err error
+		options.NativeDeflicker, passes, constant, order, err = loadLRTDeflickerSettings(frames, options.PreviewHistogram)
+		if err != nil {
+			return nil, err
+		}
+		if !options.LRTReference {
+			ordered := make([]Frame, len(frames))
+			for i, source := range order {
+				ordered[i] = frames[source]
+			}
+			frames = ordered
+		}
+	}
 	if options.LRTReference {
 		if !reference.Empty() {
 			return nil, fmt.Errorf("--lrt-reference cannot be combined with --reference")
@@ -162,7 +179,7 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 	}
 	source := newFrameInputCache(options, passes > 1)
 	defer source.close()
-	plan := &deflickerSequencePlan{}
+	plan := &deflickerSequencePlan{NativeOptions: options.NativeDeflicker, Constant: constant}
 	initialTracked := make([]float64, len(frames))
 	if options.NativeDeflicker.Enabled && !options.ApplyXMPExposure && !options.ApplyXMPBasic {
 		for i, packet := range packets {

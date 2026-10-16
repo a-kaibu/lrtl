@@ -13,6 +13,8 @@ type batchDeflickerResult struct {
 	frames, passes int
 	changes        []DeflickerChange
 	err            error
+	native         nativeDeflickerOptions
+	constant       bool
 }
 
 func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
@@ -124,6 +126,7 @@ func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 					plan, result.err = planDeflickerSequence(frames, reference, input, *radius, *passes, *constant, *smoother)
 					if result.err == nil {
 						result.changes, result.passes = plan.Changes, len(plan.Measurements)
+						result.native, result.constant = plan.NativeOptions, plan.Constant
 					}
 				}
 				if result.err == nil {
@@ -156,6 +159,9 @@ func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		frames += result.frames
 		corrections += len(result.changes)
 		fmt.Fprintf(stdout, "Frames: %d; proposed sidecars: %d; measured passes: %d; reset: %t\n", result.frames, len(result.changes), result.passes, *reset)
+		if result.native.Enabled {
+			fmt.Fprintf(stdout, "Calculation: lrt-7.5.5; bandwidth: %g; accuracy: %d; constant: %t\n", result.native.Smoothing, result.native.Accuracy, result.constant)
+		}
 		for _, change := range result.changes {
 			fmt.Fprintf(stdout, "  %s: %s %+.4f -> %+.4f EV\n", filepath.Base(change.Frame.Image), xmpExposureTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter)
 		}

@@ -23,6 +23,7 @@ func (o nativeDeflickerOptions) validate() error {
 }
 
 type nativeDeflickerFlags struct {
+	saved                  *bool
 	calculation            *string
 	smoothing              *float64
 	accuracy, black, white *int
@@ -31,6 +32,7 @@ type nativeDeflickerFlags struct {
 
 func registerNativeDeflickerFlags(set *flag.FlagSet) nativeDeflickerFlags {
 	return nativeDeflickerFlags{
+		saved:       set.Bool("lrt-deflicker-settings", false, "read saved LRT Deflicker controls and sequence order"),
 		calculation: set.String("calculation", "lrtl", "Deflicker calculation: lrtl or lrt-7.5.5"),
 		smoothing:   set.Float64("lrt-smoothing", .5, "LRT bandwidth factor (0-2), with --calculation lrt-7.5.5"),
 		accuracy:    set.Int("lrt-accuracy", 0, "LRT accuracy: -1 low, 0 normal, 1 high"),
@@ -44,10 +46,20 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 	if *f.calculation != "lrtl" && *f.calculation != "lrt-7.5.5" {
 		return fmt.Errorf("--calculation must be lrtl or lrt-7.5.5")
 	}
-	native := *f.calculation == "lrt-7.5.5"
+	native := *f.calculation == "lrt-7.5.5" || *f.saved
 	var problem error
 	histogram := false
 	set.Visit(func(flag *flag.Flag) {
+		if *f.saved {
+			switch flag.Name {
+			case "lrt-smoothing", "lrt-accuracy", "constant", "passes", "smooth", "smoother":
+				problem = fmt.Errorf("--%s cannot be combined with --lrt-deflicker-settings", flag.Name)
+			case "calculation":
+				if *f.calculation != "lrt-7.5.5" {
+					problem = fmt.Errorf("--lrt-deflicker-settings requires lrt-7.5.5 calculation")
+				}
+			}
+		}
 		switch flag.Name {
 		case "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut":
 			if !native {
@@ -66,6 +78,7 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 		return problem
 	}
 	input.NativeDeflicker = nativeDeflickerOptions{native, *f.smoothing, *f.accuracy}
+	input.LRTDeflickerSettings = *f.saved
 	input.PreviewHistogram = previewHistogramOptions{Enabled: histogram, IgnoreBlacks: *f.black, IgnoreWhites: *f.white, HardCut: *f.hard}
 	return validateImageInputOptions(*input)
 }

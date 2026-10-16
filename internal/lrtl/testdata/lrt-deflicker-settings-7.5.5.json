@@ -1,0 +1,74 @@
+[
+  {
+    "lrtVersion": "7.5.5",
+    "lrtBuild": 1059,
+    "deflickerIgnoreBlacksWhites": 0,
+    "deflickerAccuracy": -1,
+    "deflickerMultipass": false,
+    "deflickerSmoothingFactor": 0.25,
+    "deflickerConstant": false,
+    "imageCount": 5,
+    "deflickerPasses": 3,
+    "filenameSort": true
+  },
+  {
+    "lrtVersion": "7.5.5",
+    "lrtBuild": 1059,
+    "deflickerIgnoreBlacksWhites": 0,
+    "deflickerAccuracy": -1,
+    "deflickerMultipass": true,
+    "deflickerSmoothingFactor": 0.25,
+    "deflickerConstant": false,
+    "imageCount": 5,
+    "deflickerPasses": 3,
+    "filenameSort": true
+  },
+  {
+    "lrtVersion": "7.5.5",
+    "lrtBuild": 1059,
+    "deflickerIgnoreBlacksWhites": 0,
+    "deflickerAccuracy": 0,
+    "deflickerMultipass": false,
+    "deflickerSmoothingFactor": 0.5,
+    "deflickerConstant": false,
+    "imageCount": 5,
+    "deflickerPasses": 3,
+    "filenameSort": true
+  },
+  {
+    "lrtVersion": "7.5.5",
+    "lrtBuild": 1059,
+    "deflickerIgnoreBlacksWhites": 0,
+    "deflickerAccuracy": 0,
+    "deflickerMultipass": true,
+    "deflickerSmoothingFactor": 0.5,
+    "deflickerConstant": false,
+    "imageCount": 5,
+    "deflickerPasses": 3,
+    "filenameSort": true
+  },
+  {
+    "lrtVersion": "7.5.5",
+    "lrtBuild": 1059,
+    "deflickerIgnoreBlacksWhites": 0,
+    "deflickerAccuracy": 1,
+    "deflickerMultipass": false,
+    "deflickerSmoothingFactor": 1.1,
+    "deflickerConstant": true,
+    "imageCount": 5,
+    "deflickerPasses": 3,
+    "filenameSort": true
+  },
+  {
+    "lrtVersion": "7.5.5",
+    "lrtBuild": 1059,
+    "deflickerIgnoreBlacksWhites": 0,
+    "deflickerAccuracy": 1,
+    "deflickerMultipass": true,
+    "deflickerSmoothingFactor": 1.1,
+    "deflickerConstant": true,
+    "imageCount": 5,
+    "deflickerPasses": 3,
+    "filenameSort": true
+  }
+]

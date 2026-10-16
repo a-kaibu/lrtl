@@ -1304,7 +1304,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview", "lrt-reference", "calculation", "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut":
+			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview", "lrt-reference", "calculation", "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut", "lrt-deflicker-settings":
 				analysisOption = true
 			}
 		})
@@ -1342,6 +1342,8 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		if err == nil {
 			changes = plan.Changes
 			measuredPasses = len(plan.Measurements)
+			inputOptions.NativeDeflicker = plan.NativeOptions
+			*constant = plan.Constant
 		}
 	}
 	if err != nil {

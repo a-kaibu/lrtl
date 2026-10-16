@@ -2,6 +2,31 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Saved Deflicker controls
+
+`--lrt-deflicker-settings` imports the modern numerical controls from each
+sequence's `.lrt/lrtsequence.json`: `deflickerSmoothingFactor`,
+`deflickerAccuracy`, `deflickerConstant`, `deflickerMultipass`, and
+`deflickerPasses`, plus `filenameSort`. It selects the observed 7.5.5 correction
+profile. Multipass disabled means one pass; enabled counts must be in the CLI's
+supported 1–8 range. Complete input, matching positive imageCount, and explicit
+control fields are required. Old legacy smoothing/constant fields are ignored.
+
+Six synthetic runtime serialization observations are in
+`internal/lrtl/testdata/lrt-deflicker-settings-7.5.5.json`. Tests compare imported
+controls against explicit CLI values for final XMP, including heterogeneous
+parallel batches, saved date ordering, and optional reference boxes. Malformed
+or incomplete settings and conflicting explicit controls fail before any XMP
+write. Settings and preview caches remain unchanged.
+
+`deflickerIgnoreBlacksWhites` chooses global preference (0), enabled (1), or
+disabled (2); percentages and hard-cut mode are global preferences outside this
+sequence file. Mode 1 therefore requires explicit histogram flags; mode 2
+rejects them. Mode 0/missing uses the CLI options or its normal measurement
+default. Installed global preferences are not imported. This is control-file
+interoperability; it does not establish native Camera Raw/multipass pixel
+equivalence.
+
 ## Local installation observations
 
 - The installed version is LRTimelapse 7.5.5 under `C:\Program Files\LRTimelapse 7`.
