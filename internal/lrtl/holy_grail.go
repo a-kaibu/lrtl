@@ -279,23 +279,33 @@ func lrtHolyGrailLowess(values []float64, smoothing float64) []float64 {
 }
 
 func centerAndClipHolyGrailCurve(values []float64, limit float64) []float64 {
+	return recenterHolyGrailCurve(values, -limit, limit, true)
+}
+
+func recenterHolyGrailCurve(values []float64, lower, upper float64, clip bool) []float64 {
 	result := append([]float64(nil), values...)
-	if len(result) == 0 {
-		return result
-	}
-	minimum, maximum := result[0], result[0]
-	for _, value := range result[1:] {
-		minimum = math.Min(minimum, value)
-		maximum = math.Max(maximum, value)
-	}
-	center := (minimum + maximum) / 2
-	for index := range result {
-		result[index] -= center
-		if result[index] < -limit {
-			result[index] = -limit
+	maximum, minimum := lower-1, upper+1
+	for _, value := range result {
+		if value > maximum {
+			maximum = value
 		}
-		if result[index] > limit {
-			result[index] = limit
+		if value < minimum {
+			minimum = value
+		}
+	}
+	// Preserve the installed helper's sentinel extrema and operation order.
+	// They differ from a midpoint when every value lies beyond a sentinel.
+	span := maximum - minimum
+	shift := (2-span)/2 - minimum - 1
+	for index := range result {
+		result[index] += shift
+		if clip {
+			if result[index] > upper {
+				result[index] = upper
+			}
+			if result[index] < lower {
+				result[index] = lower
+			}
 		}
 	}
 	return result
@@ -354,6 +364,10 @@ func lrtHolyGrailShapeCurve(values []float64, ratings []int, stretch, rotate flo
 }
 
 func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []CameraExposure, options HolyGrailCurveOptions, ignoreAperture bool) ([]float64, error) {
+	return buildHolyGrailLRTCurve(inputs, ratings, cameras, options, ignoreAperture, true)
+}
+
+func buildHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []CameraExposure, options HolyGrailCurveOptions, ignoreAperture, clip bool) ([]float64, error) {
 	// The installed controller receives these three controls as Java float.
 	// In particular .35f * 20 selects six LOWESS neighbors, not seven.
 	options.Stretch = float64(float32(options.Stretch))
@@ -383,7 +397,7 @@ func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []C
 		}
 	}
 	curve = lrtHolyGrailLowess(curve, options.ReduceDeflicker)
-	curve = centerAndClipHolyGrailCurve(curve, 10)
+	curve = recenterHolyGrailCurve(curve, -10, 10, clip)
 	for index := range curve {
 		curve[index] *= 2
 	}
@@ -394,14 +408,14 @@ func buildHolyGrailLRTCompensations(inputs []float64, ratings []int, cameras []C
 		}
 		curve[index] += accumulatedPairDelta
 	}
-	curve = centerAndClipHolyGrailCurve(curve, 10)
+	curve = recenterHolyGrailCurve(curve, -10, 10, clip)
 
 	shape := lrtHolyGrailShapeCurve(inputs, ratings, options.Stretch, options.Rotate)
 	shape = lrtHolyGrailLowess(shape, 0.5)
 	for index := range curve {
 		curve[index] += shape[index]
 	}
-	return centerAndClipHolyGrailCurve(curve, 1), nil
+	return recenterHolyGrailCurve(curve, -1, 1, clip), nil
 }
 
 func optimizeHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []CameraExposure, ignoreAperture bool, reduceDeflicker float64) HolyGrailCurveOptions {
@@ -411,8 +425,8 @@ func optimizeHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []Camera
 	}
 	bestScore := math.Inf(1)
 	for step := 1; step <= 150; step++ {
-		candidate := float64(step)/50 - 1.5
-		curve, err := buildHolyGrailLRTCompensations(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: candidate, ReduceDeflicker: reduceDeflicker, LRTInput: true}, ignoreAperture)
+		candidate := float64(float32(step)/50 - float32(1.5))
+		curve, err := buildHolyGrailLRTCurve(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: candidate, ReduceDeflicker: reduceDeflicker, LRTInput: true}, ignoreAperture, false)
 		if err != nil {
 			return options
 		}
@@ -429,8 +443,8 @@ func optimizeHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []Camera
 
 	bestScore = math.Inf(1)
 	for step := 1; step <= 200; step++ {
-		candidate := float64(step)/25 - 4
-		curve, err := buildHolyGrailLRTCompensations(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: options.Stretch, Rotate: candidate, ReduceDeflicker: reduceDeflicker, LRTInput: true}, ignoreAperture)
+		candidate := float64(float32(step)/25 - float32(4))
+		curve, err := buildHolyGrailLRTCurve(inputs, ratings, cameras, HolyGrailCurveOptions{Stretch: options.Stretch, Rotate: candidate, ReduceDeflicker: reduceDeflicker, LRTInput: true}, ignoreAperture, false)
 		if err != nil {
 			return options
 		}

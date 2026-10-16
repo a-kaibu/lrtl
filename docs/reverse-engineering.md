@@ -522,3 +522,38 @@ bytes, then decodes all AVI frames against a separately calculated sRGB gain
 using native measured EV. Source JPEGs are unchanged. The comparison does not
 cover native XMP serialization, clipping-sensitive inputs, arbitrary shutter/
 aperture formatting, Auto Shape optimal parameters or Camera Raw pixel output.
+
+## Holy Grail clipping and Auto Shape grid
+
+`HolyGrailRangeOracle.java` successfully invokes the installed range helper for
+84 inputs/bounds/clip combinations. Go matches every double bit, including
+signed zero and values near 1e300. The helper seeds its maximum with lower-1
+and minimum with upper+1, then calculates the shift in a particular subtraction
+order. Replacing that with the observed min/max midpoint was incorrect for
+entirely out-of-range columns and for some floating-point cancellation cases.
+lrtl now retains the sentinels and arithmetic order, with clipping optional.
+
+Inspection of `prN` confirms that both candidate loops invoke the numerical
+controller with its clipping/UI flag true. Candidate generation uses Java float
+division followed by float subtraction: step/50f-1.5f and step/25f-4f. The old
+Go search scored clipped manual-mode results and rounded double-generated
+candidates afterward. lrtl now scores unclipped curves and generates candidates
+in float32. Normal compensation publication still uses clipping.
+
+`HolyGrailAutoOracle.java` independently drives the installed controller over
+the same two grids and reads its stored raw/1.5-smoothed arrays. Six successful
+cases cover 17/31/61 frames and reduce 0/.35. Go selects exactly the same
+float32 Stretch/Rotate values; scores and selected curves agree within 2e-8.
+The fixtures also record a wide rotation candidate exceeding magnitude one,
+and Go matches that unclipped curve while the manual branch stays within its
+bounds. Maximum magnitudes observed during the complete grids exceed two, so
+these cases exercise the need for unclipped scoring. This invokes the actual
+numerical controller but not the UI/progress worker itself, and does not prove
+all possible Auto Shape outcomes or its metadata parsing paths.
+
+The Auto Shape CLI integration saves the measured chosen result and checks a
+17-frame AVI against native measured EV and an independent sRGB formula.
+A separate analytical composition of the directly measured range helper tests
+constant Preview EV=40: successive manual stages give -10, -4.5, then -1.
+That fixture also runs CLI save/backup/render/source-preservation checks, but
+is not represented as a successful full manual-mode native-controller oracle.

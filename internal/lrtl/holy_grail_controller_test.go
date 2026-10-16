@@ -76,7 +76,11 @@ func TestHolyGrailControllerAgainstInstalledLRT755(t *testing.T) {
 }
 
 func TestHolyGrailMeasuredControllerCLIThroughVideo(t *testing.T) {
-	c := measuredHolyGrailControllerCases(t)[0]
+	runHolyGrailCLIAndVideo(t, measuredHolyGrailControllerCases(t)[0], false)
+}
+
+func runHolyGrailCLIAndVideo(t *testing.T, c measuredHolyGrailControllerCase, auto bool) {
+	t.Helper()
 	dir := t.TempDir()
 	originals := map[string][]byte{}
 	for i, value := range c.Input {
@@ -97,6 +101,9 @@ func TestHolyGrailMeasuredControllerCLIThroughVideo(t *testing.T) {
 	}
 	var out, stderr bytes.Buffer
 	args := []string{"holy-grail", dir, "--lrt-input", "--stretch", strconv.FormatFloat(c.Stretch, 'g', -1, 64), "--rotate", strconv.FormatFloat(c.Rotate, 'g', -1, 64), "--lrt-reduce-deflicker", strconv.FormatFloat(c.Reduce, 'g', -1, 64)}
+	if auto {
+		args = []string{"holy-grail", dir, "--lrt-input", "--auto-shape", "--lrt-reduce-deflicker", strconv.FormatFloat(c.Reduce, 'g', -1, 64)}
+	}
 	if code := Main(args, &out, &stderr); code != 0 {
 		t.Fatalf("preview: %s", &stderr)
 	}
@@ -118,7 +125,7 @@ func TestHolyGrailMeasuredControllerCLIThroughVideo(t *testing.T) {
 		}
 		value, valid := scalarNumber(text)
 		if !found || !valid || math.Abs(value-c.Expected[i]) > 2e-8 {
-			t.Fatalf("frame %d XMP=%s native=%g", i, text, c.Expected[i])
+			t.Fatalf("frame %d XMP=%s reference=%g", i, text, c.Expected[i])
 		}
 		rating, _ := packet.Rating()
 		if rating != c.Ratings[i] {
@@ -166,7 +173,7 @@ func TestHolyGrailMeasuredControllerCLIThroughVideo(t *testing.T) {
 		want := 255 * (1.055*math.Pow(math.Exp2(c.Expected[count])*math.Pow((64.0/255+.055)/1.055, 2.4), 1/2.4) - .055)
 		r, _, _, _ := frame.At(32, 16).RGBA()
 		if math.Abs(float64(r>>8)-want) > 2 {
-			t.Fatalf("frame %d red=%d native-EV expected=%g", count, r>>8, want)
+			t.Fatalf("frame %d red=%d reference-EV expected=%g", count, r>>8, want)
 		}
 		count++
 		data = data[end+2:]
