@@ -83,6 +83,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runInterpolate(arguments[1:], stdout, stderr)
 	case "init":
 		return runInitialize(arguments[1:], stdout, stderr)
+	case "masks":
+		return runMasks(arguments[1:], stdout, stderr)
 	case "render":
 		return runRender(arguments[1:], stdout, stderr)
 	case "batch-render":
@@ -122,7 +124,8 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
-	fmt.Fprintln(writer, "  set IMAGE PROPERTY VALUE              set a Camera Raw value or LRT Preview EV")
+	fmt.Fprintln(writer, "  set IMAGE PROPERTY|MASK_PATH VALUE    edit global/local Camera Raw values or LRT Preview EV")
+	fmt.Fprintln(writer, "  masks IMAGE_OR_XMP [--json]            inspect correction paths and mask values")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  init DIRECTORY [--mask-format auto|modern|legacy] [--write] [--no-backup] initialize correction slots")
@@ -536,8 +539,10 @@ func runMark(arguments []string, stdout, stderr io.Writer) int {
 
 func runSet(arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 1 && (arguments[0] == "--help" || arguments[0] == "-h") {
-		fmt.Fprintln(stdout, "Usage: lrtl set IMAGE_OR_XMP CRS_PROPERTY|PreviewEV VALUE [--dry-run] [--no-backup]")
+		fmt.Fprintln(stdout, "Usage: lrtl set IMAGE_OR_XMP CRS_PROPERTY|PreviewEV|MASK_PATH VALUE [--dry-run] [--no-backup]")
 		fmt.Fprintln(stdout, "  PreviewEV is in EV and is stored as lrt:ExternalExposureDefault multiplied by 4.")
+		fmt.Fprintln(stdout, "  Local controls: set IMAGE 'MaskGroupBasedCorrections[1].LocalExposure2012' 0.5")
+		fmt.Fprintln(stdout, "  Geometry: set IMAGE 'MaskGroupBasedCorrections[1].CorrectionMasks[1].FullY' 0.8")
 		return 0
 	}
 	dryRun, noBackup := false, false
@@ -573,6 +578,9 @@ func runSet(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if !imageExists && !sidecarExists {
 		return reportError(stderr, fmt.Errorf("image and XMP sidecar do not exist: %s", image))
+	}
+	if strings.Contains(operands[1], "[") {
+		return runSetMaskProperty(image, sidecar, operands[1], operands[2], dryRun, noBackup, stdout, stderr)
 	}
 	property := strings.TrimPrefix(operands[1], "crs:")
 	storedProperty := "crs:" + property

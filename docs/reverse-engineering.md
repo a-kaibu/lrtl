@@ -75,6 +75,14 @@ Tests cover both layouts, per-slot supported selector shapes, IDs, repeat idempo
 
 This initializes missing mask structures and a few format headers. It does not clear/reset all metadata, remove existing edits, create workflow-state files, select keyframes or validate an LRT/Camera Raw read/write round trip. Mixed old/new packet formats are preserved rather than converted, and cross-format mask animation is not established. It is a documented portion of metadata initialization, not a claim of full product initialization parity.
 
+## CLI local correction editing (2026-10-16)
+
+The existing scalar `set` command now accepts strict RDF-array paths such as `MaskGroupBasedCorrections[1].LocalExposure2012` and `GradientBasedCorrections[1].CorrectionMasks[1].FullY`. The new `masks IMAGE [--json]` command lists correction/component paths, selected scalar values, editing eligibility and numeric-transition eligibility. It does not dump binary selector payloads or claim that every listed mask can be rendered. Arrays in all four supported transition collections are addressed by one-based positions; existing wrapped rdf:Description entries and alternate namespace prefixes are preserved.
+
+Setter validation uses the observed 7.5.5 numeric registry bounds and integer types. Exposure values are stored XMP EV, while normalized local contrast/saturation/etc. remain normalized rather than receiving a UI-slider conversion. Boolean Active/Inverted/Flipped fields are per-frame edits, not interpolated fields. Geometry editing is limited to corresponding gradient/radial fields; target elements must already exist. Existing product-internal names, legacy internal mask signatures and lrtl correction tracking targets are excluded from manual editing. Generated init masks can therefore be edited and animated without entering the internal HG/Deflicker storage path.
+
+Tests cover path grammar and index bounds, numeric/boolean validation without mutation on error, internal slot protection, dry runs and original-content backups, both modern/legacy exposure/geometry animation through decoded AVI pixels, wrapped RDF, conflicting namespace prefixes, the second selector component (which is not transitioned), tracked custom slots, radial controls and embedded-image source preservation. The path parser has a bounded fuzz target; a local five-second run completed 27,082 executions without failure. A local three-frame NEF sequence was initialized, edited through these paths, interpolated and developed with Adobe DNG Converter into a 640x426 yuv422p10le ProRes MOV. The editing operations remain independent XMP manipulation; they are not evidence of Camera Raw rendering parity, arbitrary aggregate traversal, brush/AI rendering or full mask-creation UI equivalence.
+
 ## Public workflow behavior
 
 ### Adobe DNG Converter backend
