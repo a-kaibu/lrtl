@@ -241,6 +241,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			}
 			proposed[index].ScalarRemovals = append(proposed[index].ScalarRemovals, removals...)
 		}
+		numericInputs.fillMissingWBColumns(normalKeyframes)
 	}
 	for index, values := range numericInputs.Missing {
 		if err := assign(index, values); err != nil {

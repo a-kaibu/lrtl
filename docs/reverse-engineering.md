@@ -260,5 +260,29 @@ single-frame sequence is not cleared. Analytical regression tests cover
 interior references, mixed ratings, zero, independent columns, CLI preview,
 backup contents, repeated no-op planning and malformed-input preflight. These
 are bytecode-derived branch tests, not successful whole-application oracle
-runs or Camera Raw pixel comparisons. WB column-worker missing-value behavior
-when the reference exists remains unverified.
+runs or Camera Raw pixel comparisons.
+
+## WB numeric column missing-value stage
+
+`A(Rsa,int,int,boolean)` calls the common missing-value helper at bytecode
+offsets 9–15 before reading the column's runtime type and collecting numeric
+anchors. The sparse wrapper calls the same helper when a missing value follows
+an existing value. When the first reference is present and multiple rating-4
+anchors select the numeric worker, lrtl now fills these four WB columns at this
+stage. It records filled keyframe values as writes, including donors that are
+not keyframes. The reference-null removal still runs first. Single-reference
+copying does not use donor filling.
+
+`scripts/probes/WBNumericColumnOracle.java` independently invokes the installed
+column component and produces `lrt-7.5.5-wb-numeric-column.json`: 16 successful
+cases covering all four WB columns, missing selected anchors, leading/trailing
+gaps and constant data. It obtains Integer/Double from the installed registry
+instead of inferring the runtime type from artificial inputs. All four WB
+columns register Integer. Mode zero uses rating-2 anchors and fixes tension to
+zero without reading the GUI slider. Tests map those anchor positions to
+ordinary rating-4 keys and Go smoothness 100; this is a component comparison,
+not the outer automatic application route. Additional regression tests compare
+missing versus manually prefilled keyframes at smoothness 0/50/100. A CLI test
+checks preview, backup contents, no-op repeat and a five-frame MJPEG AVI against
+a control with the component's complete metadata output. The AVI comparison
+tests lrtl's own WB rendering, not Camera Raw pixel equivalence.

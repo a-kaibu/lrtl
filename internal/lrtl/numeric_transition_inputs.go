@@ -38,6 +38,42 @@ func (inputs *numericTransitionInputs) clearMissingWBReferences(reference int) [
 	return removals
 }
 
+// After the automatic worker's reference check, differing WB columns enter a
+// worker that fills missing cells before collecting anchors. With two endpoint
+// anchors the sparse worker's conditional fill has the same result: a present
+// first reference means any missing cell follows an existing one. Interior
+// anchors use the dense worker, which fills unconditionally. One or no actual
+// keyframes instead copies the reference without visiting this worker.
+func (inputs *numericTransitionInputs) fillMissingWBColumns(keyframes []int) {
+	if len(keyframes) <= 1 {
+		return
+	}
+	for _, name := range []string{"Temperature", "Tint", "IncrementalTemperature", "IncrementalTint"} {
+		if _, present := inputs.Values[keyframes[0]][name]; !present {
+			continue
+		}
+		input := make([]transitionScalar, len(inputs.Values))
+		for i, values := range inputs.Values {
+			value, present := values[name]
+			input[i] = transitionScalar{formatNumber(value), present}
+		}
+		for i, value := range fillMissingTransitionScalars(input) {
+			if input[i].present || !value.present {
+				continue
+			}
+			number, _ := scalarNumber(value.value)
+			if inputs.Values[i] == nil {
+				inputs.Values[i] = make(map[string]float64)
+			}
+			if inputs.Missing[i] == nil {
+				inputs.Missing[i] = make(map[string]float64)
+			}
+			inputs.Values[i][name] = number
+			inputs.Missing[i][name] = number
+		}
+	}
+}
+
 func prepareNumericTransitionInputs(packets []*XMPPacket) (numericTransitionInputs, error) {
 	plan := numericTransitionInputs{Values: make([]map[string]float64, len(packets)), Missing: make([]map[string]float64, len(packets))}
 	for _, name := range NumericCRSProperties {
