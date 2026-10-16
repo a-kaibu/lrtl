@@ -197,7 +197,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			}
 		}
 	}
-	assign := func(targetIndex int, sourceValues map[string]float64) error {
+	assignWithPrecision := func(targetIndex int, sourceValues map[string]float64, exact bool) error {
 		if len(sourceValues) == 0 {
 			return nil
 		}
@@ -215,16 +215,26 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 				continue
 			}
 			rendered := formatNumber(value)
+			if exact {
+				rendered = strconv.FormatFloat(value, 'g', -1, 64)
+			}
 			currentText, found, err := target.Packet.GetScalar("crs:" + name)
 			if err != nil {
 				return err
 			}
 			current, valid := scalarNumber(currentText)
-			if !found || !valid || !closeEnough(current, value) {
+			same := found && valid && closeEnough(current, value)
+			if exact {
+				same = found && valid && math.Float64bits(current) == math.Float64bits(value)
+			}
+			if !same {
 				target.Values[name] = rendered
 			}
 		}
 		return nil
+	}
+	assign := func(targetIndex int, sourceValues map[string]float64) error {
+		return assignWithPrecision(targetIndex, sourceValues, false)
 	}
 
 	numericInputs, err := prepareNumericTransitionInputs(packets)
@@ -241,8 +251,22 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			}
 			proposed[index].ScalarRemovals = append(proposed[index].ScalarRemovals, removals...)
 		}
-		numericInputs.fillMissingWBColumns(normalKeyframes)
 	}
+	copyReferences := make(map[string]float64)
+	for _, name := range NumericCRSProperties {
+		spec, registered := globalTransitionSpecs[name]
+		if !registered {
+			continue
+		}
+		keys := normalKeyframes
+		if strings.HasPrefix(name, "Crop") {
+			keys = cropKeyframes
+		}
+		if value, copy := numericColumnCopyReference(numericInputs.Values, name, keys, spec.integer); copy {
+			copyReferences[name] = value
+		}
+	}
+	numericInputs.fillMissingWBColumns(normalKeyframes)
 	for index, values := range numericInputs.Missing {
 		if err := assign(index, values); err != nil {
 			return nil, err
@@ -252,6 +276,14 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 	for _, name := range NumericCRSProperties {
 		spec, registered := globalTransitionSpecs[name]
 		if !registered {
+			continue
+		}
+		if value, copy := copyReferences[name]; copy {
+			for targetIndex := range frames {
+				if err := assignWithPrecision(targetIndex, map[string]float64{name: value}, true); err != nil {
+					return nil, err
+				}
+			}
 			continue
 		}
 		keyframes := normalKeyframes

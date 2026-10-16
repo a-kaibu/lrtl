@@ -286,3 +286,36 @@ missing versus manually prefilled keyframes at smoothness 0/50/100. A CLI test
 checks preview, backup contents, no-op repeat and a five-frame MJPEG AVI against
 a control with the component's complete metadata output. The AVI comparison
 tests lrtl's own WB rendering, not Camera Raw pixel equivalence.
+
+## Numeric reference-copy dispatch
+
+The installed automatic worker calls `Rsa.A(column,rating)` before selecting
+the sparse or dense numeric worker. A selected-rating count of zero or one
+returns true; otherwise it compares selected frames and both endpoints through
+their numeric string values. On true, the caller obtains the first frame of
+the selected rating (`Rsa.h`), falling back to the ordinary reference, and
+copies that cell with `Rsa.A(column,frame)`. That component does not clamp,
+round or convert the value to float32. Consequently an ordinary non-HDR
+Exposure2012 of 99 can be copied unchanged in this branch.
+
+`scripts/probes/NumericCopyOracle.java` successfully invokes the installed
+gate and copy helpers for 14 synthetic cases. The JSON fixture covers ordinary
+and crop ratings, no marks, interior references, equal anchors with differing
+non-keyframes, unequal endpoints, out-of-range integer/Double values,
+float32-overflowing but finite Double values, high precision, tiny numbers and
+signed zero. The signed-zero case confirms that Java's Double string equality
+does not equate -0.0 with +0.0. The probe obtains overloaded methods by return
+type as well as parameters. It does not invoke the outer workflow or establish
+native spline output for cases whose copy gate is false.
+
+lrtl evaluates this gate after ordinary numeric preflight and WB reference
+removal, but before WB column-worker filling. Copy writes use round-trippable
+double text and exact numeric comparison, preserving tiny values and signed
+zero instead of the interpolation formatter's 12-significant-digit/near-zero
+normalization. Regression tests compare all successful copy results at
+smoothness 0/50/100. The previous single-anchor-clamp test was corrected using
+this evidence; overflow rejection now tests differing anchors entering the
+numeric worker. Local numeric dispatch remains separate. A CLI integration test
+copies an interior +6 EV reference, checks backup and no-op repeat, and decodes
+the resulting three-frame AVI against an independent linear-sRGB exposure
+formula. This validates lrtl rendering and metadata, not Camera Raw equivalence.

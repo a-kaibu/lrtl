@@ -114,7 +114,7 @@ func TestSplineRejectsInvalidAnchors(t *testing.T) {
 	}
 }
 
-func TestSingleAnchorStillUsesRegisteredBounds(t *testing.T) {
+func TestSingleAnchorCopiesReferenceWithoutRegisteredBounds(t *testing.T) {
 	dir := t.TempDir()
 	frames := makeFrames(t, dir, 3)
 	writeTestXMP(t, frames[0].Image, map[string]string{"xmp:Rating": "4", "crs:Exposure2012": "99"})
@@ -130,8 +130,8 @@ func TestSingleAnchorStillUsesRegisteredBounds(t *testing.T) {
 		t.Fatalf("changes=%d", len(plan.Changes))
 	}
 	for _, change := range plan.Changes {
-		if change.Values["Exposure2012"] != "5" {
-			t.Fatalf("single anchor bypassed bounds: %v", change.Values)
+		if change.Values["Exposure2012"] != "99" {
+			t.Fatalf("single anchor did not copy its raw reference: %v", change.Values)
 		}
 	}
 }
@@ -187,12 +187,14 @@ func TestInterpolateCLIReadsEmbeddedXMPAndPreservesImage(t *testing.T) {
 }
 
 func TestInterpolateRejectsFloat32OverflowWithoutWriting(t *testing.T) {
-	for _, anchors := range [][]int{{0}, {0, 2}} {
+	// Equal or single references use a double-precision copy branch. Only
+	// differing anchors that enter a numeric worker require float32 inputs.
+	for _, anchors := range [][]int{{0, 4}, {0, 2, 4}} {
 		t.Run(fmt.Sprint(anchors), func(t *testing.T) {
 			dir := t.TempDir()
-			frames := makeFrames(t, dir, 3)
+			frames := makeFrames(t, dir, 5)
 			for _, index := range anchors {
-				writeTestXMP(t, frames[index].Image, map[string]string{"xmp:Rating": "4", "crs:Exposure2012": "1e300"})
+				writeTestXMP(t, frames[index].Image, map[string]string{"xmp:Rating": "4", "crs:Exposure2012": fmt.Sprintf("%de300", index+1)})
 			}
 			var out, stderr bytes.Buffer
 			if code := Main([]string{"interpolate", dir, "--write"}, &out, &stderr); code == 0 {

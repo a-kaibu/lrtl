@@ -1,0 +1,282 @@
+{
+  "cases": [
+    {
+      "property": "Exposure2012",
+      "input": [
+        0.0,
+        99.0,
+        -7.0
+      ],
+      "ratings": [
+        0,
+        4,
+        0
+      ],
+      "copied": true,
+      "expected": [
+        99.0,
+        99.0,
+        99.0
+      ]
+    },
+    {
+      "property": "Sharpness",
+      "input": [
+        1.0,
+        999.0,
+        2.0
+      ],
+      "ratings": [
+        0,
+        4,
+        0
+      ],
+      "copied": true,
+      "expected": [
+        999,
+        999,
+        999
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        99.0,
+        1.0,
+        -2.0
+      ],
+      "ratings": [
+        0,
+        0,
+        0
+      ],
+      "copied": true,
+      "expected": [
+        99.0,
+        99.0,
+        99.0
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        99.0,
+        0.0,
+        99.0,
+        1.0,
+        99.0
+      ],
+      "ratings": [
+        4,
+        0,
+        4,
+        0,
+        4
+      ],
+      "copied": true,
+      "expected": [
+        99.0,
+        99.0,
+        99.0,
+        99.0,
+        99.0
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        99.0,
+        0.0,
+        99.0
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "copied": true,
+      "expected": [
+        99.0,
+        99.0,
+        99.0
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        1e+100,
+        0.0,
+        1e+100
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "copied": true,
+      "expected": [
+        1e+100,
+        1e+100,
+        1e+100
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        1e+100,
+        0.0,
+        -1e+100
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "copied": false,
+      "expected": [
+        1e+100,
+        0.0,
+        -1e+100
+      ]
+    },
+    {
+      "property": "CropLeft",
+      "input": [
+        0.8,
+        -0.3,
+        0.5
+      ],
+      "ratings": [
+        4,
+        5,
+        4
+      ],
+      "copied": true,
+      "expected": [
+        -0.3,
+        -0.3,
+        -0.3
+      ]
+    },
+    {
+      "property": "CropLeft",
+      "input": [
+        0.8,
+        -0.3,
+        0.5,
+        -0.3,
+        0.8
+      ],
+      "ratings": [
+        4,
+        5,
+        0,
+        5,
+        4
+      ],
+      "copied": false,
+      "expected": [
+        0.8,
+        -0.3,
+        0.5,
+        -0.3,
+        0.8
+      ]
+    },
+    {
+      "property": "Tint",
+      "input": [
+        0.0,
+        999.0,
+        1.0
+      ],
+      "ratings": [
+        4,
+        0,
+        0
+      ],
+      "copied": true,
+      "expected": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        -0.0,
+        1.0,
+        0.0
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "copied": false,
+      "expected": [
+        -0.0,
+        1.0,
+        0.0
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        -0.12345678912345678,
+        1.0,
+        -0.12345678912345678
+      ],
+      "ratings": [
+        4,
+        0,
+        4
+      ],
+      "copied": true,
+      "expected": [
+        -0.12345678912345678,
+        -0.12345678912345678,
+        -0.12345678912345678
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        -0.0,
+        1.0,
+        2.0
+      ],
+      "ratings": [
+        4,
+        0,
+        0
+      ],
+      "copied": true,
+      "expected": [
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "property": "Exposure2012",
+      "input": [
+        0.0,
+        1e-15,
+        2.0
+      ],
+      "ratings": [
+        0,
+        4,
+        0
+      ],
+      "copied": true,
+      "expected": [
+        1e-15,
+        1e-15,
+        1e-15
+      ]
+    }
+  ]
+}
