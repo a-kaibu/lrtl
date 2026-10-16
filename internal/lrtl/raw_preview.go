@@ -75,6 +75,7 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 }
 
 type imageInputOptions struct {
+	PreviewHistogram previewHistogramOptions
 	LRTReference     bool
 	lrtReferences    []lrtReferenceBox
 	LRTPreview       string
@@ -88,6 +89,9 @@ type imageInputOptions struct {
 }
 
 func validateImageInputOptions(options imageInputOptions) error {
+	if err := options.PreviewHistogram.validate(); err != nil {
+		return err
+	}
 	if options.LRTPreview != "" {
 		if options.LRTPreview != "camera" && options.LRTPreview != "visual" {
 			return fmt.Errorf("--lrt-preview must be camera or visual")

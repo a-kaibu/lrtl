@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"image"
 	"image/color"
@@ -64,7 +65,7 @@ func analyzePreviewEVSequence(frames []Frame, options imageInputOptions) ([]floa
 				return nil, fmt.Errorf("analyze %s: %w", frame.Image, err)
 			}
 		}
-		values[index], err = framePreviewEVArea(img, area)
+		values[index], err = framePreviewEVAreaWithOptions(img, area, options.PreviewHistogram)
 		if err != nil {
 			return nil, fmt.Errorf("analyze %s: %w", frame.Image, err)
 		}
@@ -77,6 +78,13 @@ func framePreviewEV(img image.Image) (float64, error) {
 }
 
 func framePreviewEVArea(img image.Image, area image.Rectangle) (float64, error) {
+	return framePreviewEVAreaWithOptions(img, area, previewHistogramOptions{})
+}
+
+func framePreviewEVAreaWithOptions(img image.Image, area image.Rectangle, options previewHistogramOptions) (float64, error) {
+	if err := options.validate(); err != nil {
+		return 0, err
+	}
 	if area.Empty() || area.Intersect(img.Bounds()) != area {
 		return 0, fmt.Errorf("Preview EV reference area %v is empty or outside image bounds %v", area, img.Bounds())
 	}
@@ -98,6 +106,7 @@ func framePreviewEVArea(img image.Image, area image.Rectangle) (float64, error) 
 	// again, then average the three band means with bin width 255/256.
 	weights := [5]float64{1.0 / 25, 2.0 / 25, 3.0 / 25, 2.0 / 25, 1.0 / 25}
 	mean := 0.0
+	var filtered [3][256]uint64
 	for channel := range histogram {
 		var smoothed [256]uint64
 		var original, total uint64
@@ -118,6 +127,9 @@ func framePreviewEVArea(img image.Image, area image.Rectangle) (float64, error) 
 			total += smoothed[bin]
 		}
 		if total == 0 || original == 0 {
+			if options.Enabled {
+				continue
+			}
 			return 255.0 / 256, nil
 		}
 		scale := float64(original) / float64(total)
@@ -127,13 +139,23 @@ func framePreviewEVArea(img image.Image, area image.Rectangle) (float64, error) 
 			total += smoothed[bin]
 		}
 		if total == 0 {
+			if options.Enabled {
+				continue
+			}
 			return 255.0 / 256, nil
+		}
+		if options.Enabled {
+			filtered[channel] = smoothed
+			continue
 		}
 		channelMean := 0.0
 		for bin, n := range smoothed {
 			channelMean += float64(n) / float64(total) * (float64(bin) * 255 / 256)
 		}
 		mean += channelMean
+	}
+	if options.Enabled {
+		return filteredPreviewEV(filtered, options), nil
 	}
 	value := mean / 3 / 256
 	if math.IsNaN(value) || math.IsInf(value, 0) {
@@ -144,6 +166,9 @@ func framePreviewEVArea(img image.Image, area image.Rectangle) (float64, error) 
 
 func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("preview-ev", stderr)
+	ignoreBlacks := set.Int("ignore-blacks", 0, "black histogram range percentage (0-100); enables soft exclusion")
+	ignoreWhites := set.Int("ignore-whites", 0, "white histogram range percentage (0-100); enables soft exclusion")
+	hardCut := set.Bool("hard-cut", false, "use a hard histogram cutoff instead of soft exclusion")
 	lrtReference := set.Bool("lrt-reference", false, "measure saved referenceBoxes from .lrt/lrtsequence.json")
 	lrtPreview := set.String("lrt-preview", "", "measure existing LRT camera or visual preview cache")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
@@ -155,7 +180,7 @@ func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP during analysis")
 	write := set.Bool("write", false, "write lrt:ExternalExposureDefault to XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--lrt-preview": true, "-lrt-preview": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true, "--lrt-preview": true, "-lrt-preview": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			fmt.Fprintln(stdout, "Usage: lrtl preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]")
 			return code
@@ -178,6 +203,12 @@ func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic,
 		ApplyXMPCrop: *applyXMPCrop,
 	}
+	options.PreviewHistogram = previewHistogramOptions{IgnoreBlacks: *ignoreBlacks, IgnoreWhites: *ignoreWhites, HardCut: *hardCut}
+	set.Visit(func(f *flag.Flag) {
+		if f.Name == "ignore-blacks" || f.Name == "ignore-whites" || f.Name == "hard-cut" {
+			options.PreviewHistogram.Enabled = true
+		}
+	})
 	values, err := analyzePreviewEVSequence(frames, options)
 	if err != nil {
 		return reportError(stderr, err)
