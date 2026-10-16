@@ -92,7 +92,12 @@ func measureDeflickerPackets(frames []Frame, reference image.Rectangle, options 
 			img = applyExposureGainFrame(img, feedback[i])
 		}
 		area := reference
-		if area.Empty() {
+		if len(options.lrtReferences) > 0 {
+			area, err = options.lrtReferences[i].rectangle(img.Bounds())
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", frame.Image, err)
+			}
+		} else if area.Empty() {
 			area = img.Bounds()
 		} else {
 			area = area.Add(img.Bounds().Min)
@@ -111,6 +116,16 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 	}
 	if err := validateImageInputOptions(options); err != nil {
 		return nil, err
+	}
+	if options.LRTReference {
+		if !reference.Empty() {
+			return nil, fmt.Errorf("--lrt-reference cannot be combined with --reference")
+		}
+		var err error
+		options.lrtReferences, err = loadLRTReferences(frames)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if _, err := deflickerGainsWithSmoother([]float64{1}, radius, passes, constant, smoother); err != nil {
 		return nil, err

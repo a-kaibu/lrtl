@@ -75,6 +75,8 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 }
 
 type imageInputOptions struct {
+	LRTReference     bool
+	lrtReferences    []lrtReferenceBox
 	LRTPreview       string
 	RawPreview       bool
 	RawDevelop       bool

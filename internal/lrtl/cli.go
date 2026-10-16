@@ -1259,6 +1259,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 
 func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("deflicker", stderr)
+	lrtReference := set.Bool("lrt-reference", false, "use saved referenceBoxes from .lrt/lrtsequence.json")
 	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	write := set.Bool("write", false, "write exposure corrections to XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
@@ -1301,7 +1302,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview":
+			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview", "lrt-reference":
 				analysisOption = true
 			}
 		})
@@ -1325,6 +1326,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	inputOptions.LRTPreview = *lrtPreview
+	inputOptions.LRTReference = *lrtReference
 	var changes []DeflickerChange
 	measuredPasses := 0
 	if *reset {
