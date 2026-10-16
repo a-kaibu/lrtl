@@ -98,6 +98,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runImageExport(arguments[1:], stdout, stderr, true)
 	case "batch-render":
 		return runBatchRender(arguments[1:], stdout, stderr)
+	case "batch-preview-images":
+		return runBatchPreviewImages(arguments[1:], stdout, stderr)
 	case "batch-interpolate":
 		return runBatchInterpolate(arguments[1:], stdout, stderr)
 	case "batch-deflicker":
@@ -148,6 +150,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  init DIRECTORY [--mask-format auto|modern|legacy] [--write] [--no-backup] initialize correction slots")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--filename-contains TEXT] [--watermark TEXT] [--watermark-position POS] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  batch-render ROOT --output DIRECTORY [--format avi|mp4|mov] [--workers N] [--recursive] [-- RENDER_OPTIONS...]")
+	fmt.Fprintln(writer, "  batch-preview-images ROOT --output NEW_DIRECTORY [--recursive] [--workers N] [--write-preview-ev] [--no-backup] [-- PREVIEW_OPTIONS...]")
 	fmt.Fprintln(writer, "  batch-interpolate ROOT [--recursive] [--workers N] [--smoothness 0-100] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  batch-deflicker ROOT [--recursive] [--workers N] [DEFLICKER_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  batch-holy-grail ROOT [--recursive] [--workers N] [HOLY_GRAIL_OPTIONS...] [--write] [--no-backup]")

@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `batch-preview-images`で複数連番のJPEGプレビューを並列生成できます。個別生成との一致、選択フレームの保存、元ファイルの保持、生成・保存途中の失敗をテストしています。
+
 - `preview-images DIRECTORY --output NEW_DIRECTORY`でJPEG連番プレビューと測光結果を生成できます。既定は長辺1280px・品質90で、対応XMP基本現像・クロップ・向きを適用します。RAW現像、選択フィルター、Deflicker/Motion Blurにも対応します。表示するJPEGを復号してPreview EVと輝度を測り、`--write-preview-ev`で元XMPへ記録できます。既存TIFF/動画処理との画素一致、選択フレームだけの保存、失敗時の保持、実NEF/CR2をテストしています。Camera Raw/LRT Visual Previewとの画素一致や自動キャッシュ再利用は未対応です。
 
 - `import --convert-dng --dng-compression lossy`でロッシーDNGを取り込めます。`--dng-long-edge N`で長辺を制限でき、既存DNGにも明示的なロッシー再変換を適用します。元RAW/DNGとXMPは保持し、縮小結果の寸法も検査します。CLI引数、dry-run、XMP保持、途中失敗時のロールバックをテストし、実NEF/CR2で元解像度・256pxの変換、既存DNGの再縮小、TIFF→AVIまで確認しました。
@@ -123,7 +125,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。16-bit RGB処理。LRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed/lossy DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。`--dng-long-edge`でロッシーDNGを縮小可能。取り込み画面内の画像プレビューは未実装（既存連番には`preview-images`を使用可能） | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed/lossy DNGと隣接XMPを取り込む。`--dng-long-edge`でロッシーDNGの長辺を制限できる。`--dnglab PATH`でDNGLabを明示選択可能。ロッシーと縮小はAdobeバックエンドのみ。LRTプリセットとの画素一致、JPEG XLは未対応 | 一部 |
-| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。バッチプレビューは未実装 | 一部 |
+| バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。`batch-preview-images ROOT --output NEW_DIRECTORY`でJPEG連番・測光結果を並列生成し、任意で元XMPへPreview EVを保存。全連番の生成・XMP内容検証後に出力を公開 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
 
@@ -718,7 +720,7 @@ lrtl batch-render C:\photos\sequences --recursive --output C:\photos\movies --fo
 
 既定では書き込みません。`--write`でも全連番の読込・補間・XMP構築を先に検証し、1つでも内容エラーがあれば全体を保存せず終了コード1を返します。保存する既存XMPはバックアップされ、新規サイドカーや変更のないファイルにはバックアップを作りません。`--no-backup`も指定できます。保存開始後のディスク・権限等のエラーでは、それまでに保存したファイルは残り、全体のロールバックはしません。
 
-このコマンドはLRTのバッチ作業に対応するCLI機能です。LRTのバッチキューそのものを再現した比較ではなく、数値処理は既存の実測比較済み補間経路を再利用しています。Deflickerの一括計算は次節の`batch-deflicker`に対応します。Holy Grailの一括計算は`batch-holy-grail`に対応します。バッチプレビュー生成は未対応です。
+このコマンドはLRTのバッチ作業に対応するCLI機能です。LRTのバッチキューそのものを再現した比較ではなく、数値処理は既存の実測比較済み補間経路を再利用しています。Deflickerの一括計算は次節の`batch-deflicker`に対応します。Holy Grailの一括計算は`batch-holy-grail`に対応します。JPEGプレビューの一括生成は`batch-preview-images`に対応します。
 
 ### 複数連番のDeflicker
 
@@ -786,7 +788,25 @@ lrtl render C:\photos\preview --output C:\photos\preview.avi
 
 元画像とXMPは既定では変更しません。`--write-preview-ev`は生成した画像の測光値を元XMPの`lrt:ExternalExposureDefault`へ保存し、`--no-backup`でバックアップを省略できます。選択フィルターを使った場合は選択画像だけが対象です。XMPを読み取れない場合や画像生成に失敗した場合はXMPを書きません。全プレビュー生成・最終XMPの内容検証後に保存します。保存中のOSエラーでは保存済み枚数を報告し、生成済みプレビューは残します。画像と複数XMPを一括でロールバックする機能ではありません。
 
-これはCLIから再生・測光に使う独立したプレビュー画像を作る機能です。XMP反映済み画像を測った値は、未調整RAWの測光値とは異なります。LRT/Camera Rawの縮小・ROI・現像と同じ画像を作る検証ではなく、自動キャッシュ判定・再利用、LRT固有のプレビューファイル形式、バッチ生成は未対応です。生成画像には現像値が焼き込まれるので、再生時に元画像のXMPを重ねて適用する必要はありません。
+これはCLIから再生・測光に使う独立したプレビュー画像を作る機能です。XMP反映済み画像を測った値は、未調整RAWの測光値とは異なります。LRT/Camera Rawの縮小・ROI・現像と同じ画像を作る検証ではなく、自動キャッシュ判定・再利用、LRT固有のプレビューファイル形式は未対応です。生成画像には現像値が焼き込まれるので、再生時に元画像のXMPを重ねて適用する必要はありません。
+
+## JPEGプレビューの一括生成
+
+```powershell
+# ルートと直下の連番を、新規フォルダーへ並列生成
+lrtl batch-preview-images C:\photos --output C:\previews --workers 4
+
+# 全階層のRAWを現像し、測光値を元XMPへバックアップ付き保存
+lrtl batch-preview-images C:\photos --output C:\raw-previews --recursive --workers 2 --write-preview-ev -- --raw-develop --long-edge 1280 --quality 94
+```
+
+探索範囲は既定でルート自身と直下のフォルダー、`--recursive`で全階層です。`--workers`は連番の並列処理数（既定1、1〜64）です。`--`以降には`preview-images`の画像処理・RAW・選択オプションを共通指定できます。`--output`、`--write-preview-ev`、`--no-backup`は`--`より前に指定します。
+
+出力先全体が新規フォルダーである必要があります。各連番は`sequence_000001_元フォルダー名`のような番号付きフォルダーに入り、`sequences.json`に入力ルートからの相対パス・出力フォルダー・生成枚数を記録します。親子の連番や、同じ名前のフォルダーも区別します。各フォルダー内のJPEG・`frames.json`は個別生成と同じです。
+
+全連番の生成成功後に出力全体を公開します。`--write-preview-ev`では公開前に全対象XMPの内容を検証し、複数画像が同じXMPを共有する場合も保存を中止します。画像生成や内容検証に失敗した場合は一時出力を削除し、元画像・XMPを変更しません。公開後のXMP保存中にOSエラーが発生した場合は、完全なプレビューとそれまでの保存を残し、保存済み枚数を報告します。一括ロールバックには対応しません。
+
+個別生成とのJPEG・測光値・XMPの一致、並列数1/4、親子フォルダー、同名フォルダー、RAW変換経路、バックアップ、破損画像・XMP、共有XMP、保存途中のエラーをテストしています。Camera Raw/LRT Visual Previewとの画素一致やLRTのバッチキュー自体の再現は未検証です。
 
 ## ロッシーDNGとサイズ縮小
 
