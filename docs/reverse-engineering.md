@@ -41,6 +41,22 @@ To regenerate the observations, compile the probe into a private work directory 
 
 ## Deflicker correction storage
 
+### Native single-pass numerical comparison (2026-10-17)
+
+The batch-mode `cTa(null,true)` worker completed 108 original synthetic dense
+additive passes without a UI. Below eight samples it uses the straight line
+between endpoint measurements; Constant uses the arithmetic mean; longer
+sequences use the existing `eA` LOWESS component. The residual is measured
+minus target. The transfer uses a shifted residual and a bounded log-odds
+function. Accuracy selects a float32 threshold; high accuracy additionally
+uses a pass-dependent dampening factor with float32 0.6 promoted to double.
+Updates accumulate into existing native corrections and clamp to [-1,1].
+When every residual is exactly zero, the worker clears all corrections.
+
+`native_deflicker.go` independently models this pass and compares targets and
+corrections with the fixture under `testdata`. This core has not yet replaced
+the CLI's independent estimator or been connected to XMP/pixel feedback.
+
 The earlier observed writer maps the internal Deflicker value to a correction named exactly `#LRT internal use (Deflicker)`, or the sixth legacy gradient after validating all three internal signatures at positions 5–7. lrtl now uses that existing storage slot as well. It does not create or copy proprietary mask templates. Packets without a recognized slot retain the global Exposure2012 fallback. `ol:DeflickerXMPTarget` records the destination separately from `ol:DeflickerCorrection2012`, preserving compatibility with earlier global-only lrtl corrections.
 
 Tests cover modern and legacy packets, incomplete legacy signatures, independent HG/Deflicker slots, repeated application, reset after later user edits, migration from global-only tracking, malformed/orphaned tracking, and CLI backups. Rendering includes the actual managed slot's existing exposure offset and active/amount controls exactly once. With XMP exposure/basic enabled during measurement, a new residual is added to the existing managed delta; measurements without XMP replace the previous delta. New deltas account for the target CorrectionAmount; an inactive/zero-amount target fails if correction is needed. The luminance statistic and 70% correction response remain lrtl approximations, and do not claim LRT's complete Visual Deflicker behavior.
