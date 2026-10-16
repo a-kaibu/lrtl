@@ -257,7 +257,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		return nil, err
 	}
 	activeArea := crop
-	pointOpcodes, err := readDNGPointOpcodes(fields)
+	imageOpcodes, err := readDNGImageOpcodes(fields, channels)
 	if err != nil {
 		return nil, err
 	}
@@ -306,24 +306,70 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		}
 	}
 	gain := math.Exp2(exposure)
+	var pointOpcodes []dngPointOpcode
+	hasWarp := false
+	for _, opcode := range imageOpcodes {
+		if opcode.warp != nil && !opcode.warp.identity() {
+			hasWarp = true
+		}
+		if opcode.point != nil {
+			pointOpcodes = append(pointOpcodes, *opcode.point)
+		}
+	}
+	readCamera := func(x, y int) [3]float64 {
+		block := y/blockHeight*blocksAcross + x/blockWidth
+		start := int(offsets[block]) + ((y%blockHeight)*blockWidth+x%blockWidth)*channels*sampleBytes
+		var camera [3]float64
+		for channel := 0; channel < channels; channel++ {
+			position := start + channel*sampleBytes
+			raw := float64(data[position])
+			if depth == 16 {
+				raw = float64(fields.scanner.order.Uint16(data[position : position+2]))
+			}
+			if len(linearization) != 0 {
+				raw = linearization[min(int(raw), len(linearization)-1)]
+			}
+			camera[channel] = blackModel.normalize(raw, x, y, channel)
+		}
+		return camera
+	}
+	var cameraPixels []float32
+	if hasWarp {
+		count := uint64(activeArea.Dx()) * uint64(activeArea.Dy()) * uint64(channels)
+		if count > uint64(maxDevelopedRAWBytes)/8 {
+			return nil, fmt.Errorf("DNG warp working buffers exceed development limits")
+		}
+		cameraPixels = make([]float32, int(count))
+		for y := 0; y < activeArea.Dy(); y++ {
+			for x := 0; x < activeArea.Dx(); x++ {
+				camera := readCamera(x+activeArea.Min.X, y+activeArea.Min.Y)
+				for channel := 0; channel < channels; channel++ {
+					cameraPixels[(y*activeArea.Dx()+x)*channels+channel] = float32(camera[channel])
+				}
+			}
+		}
+		verticalScale := 1.0
+		if len(scale) == 2 {
+			verticalScale = scale[1] / scale[0]
+		}
+		cameraPixels, err = applyDNGImageOpcodes(imageOpcodes, cameraPixels, activeArea.Dx(), activeArea.Dy(), channels, verticalScale)
+		if err != nil {
+			return nil, err
+		}
+	}
 	img := image.NewNRGBA64(image.Rect(0, 0, crop.Dx(), crop.Dy()))
 	for y := crop.Min.Y; y < crop.Max.Y; y++ {
 		for x := crop.Min.X; x < crop.Max.X; x++ {
-			block := y/blockHeight*blocksAcross + x/blockWidth
-			start := int(offsets[block]) + ((y%blockHeight)*blockWidth+x%blockWidth)*channels*sampleBytes
 			var camera [3]float64
-			for channel := 0; channel < channels; channel++ {
-				position := start + channel*sampleBytes
-				raw := float64(data[position])
-				if depth == 16 {
-					raw = float64(fields.scanner.order.Uint16(data[position : position+2]))
+			if hasWarp {
+				index := ((y-activeArea.Min.Y)*activeArea.Dx() + x - activeArea.Min.X) * channels
+				for channel := 0; channel < channels; channel++ {
+					camera[channel] = float64(cameraPixels[index+channel])
 				}
-				if len(linearization) != 0 {
-					raw = linearization[min(int(raw), len(linearization)-1)]
-				}
-				camera[channel] = blackModel.normalize(raw, x, y, channel)
+			} else {
+				camera = readCamera(x, y)
+				applyDNGPointOpcodes(pointOpcodes, &camera, x-activeArea.Min.X, y-activeArea.Min.Y, channels, activeArea.Dx(), activeArea.Dy())
 			}
-			applyDNGPointOpcodes(pointOpcodes, &camera, x-activeArea.Min.X, y-activeArea.Min.Y, channels, activeArea.Dx(), activeArea.Dy())
 			if channels == 1 {
 				camera[1], camera[2] = camera[0], camera[0]
 			}

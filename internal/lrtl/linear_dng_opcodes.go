@@ -48,8 +48,8 @@ func dngOpcodeBytes(fields *dngFields, tag uint16) ([]byte, error) {
 	return fields.scanner.data[offset : offset+uint64(entry.count)], nil
 }
 
-func readDNGPointOpcodes(fields *dngFields) ([]dngPointOpcode, error) {
-	var opcodes []dngPointOpcode
+func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, error) {
+	var opcodes []dngImageOpcode
 	for _, tag := range []uint16{51008, 51009, 51022} {
 		data, err := dngOpcodeBytes(fields, tag)
 		if err != nil {
@@ -79,18 +79,29 @@ func readDNGPointOpcodes(fields *dngFields) ([]dngPointOpcode, error) {
 			payload := data[:size]
 			data = data[size:]
 			// Stage 1 uses a different raw-value domain. Only normalized
-			// post-linearization and post-demosaic point operations are supported.
-			if id < 7 || id > 13 || tag == 51008 || version > 0x01070100 {
+			// post-linearization and post-demosaic operations are supported.
+			if (id != 1 && (id < 7 || id > 13)) || tag == 51008 || version > 0x01070100 {
 				if flags&1 != 0 {
 					continue
 				}
 				return nil, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
 			}
+			if id == 1 {
+				warp, err := parseDNGWarpRectilinear(payload, channels)
+				if err != nil {
+					return nil, fmt.Errorf("Linear DNG warp in tag %d: %w", tag, err)
+				}
+				if warp.identity() {
+					continue
+				}
+				opcodes = append(opcodes, dngImageOpcode{warp: warp})
+				continue
+			}
 			opcode, err := parseDNGPointOpcode(id, payload)
 			if err != nil {
 				return nil, fmt.Errorf("Linear DNG opcode %d in tag %d: %w", id, tag, err)
 			}
-			opcodes = append(opcodes, opcode)
+			opcodes = append(opcodes, dngImageOpcode{point: &opcode})
 		}
 		if len(data) != 0 {
 			return nil, fmt.Errorf("trailing bytes in Linear DNG opcode list %d", tag)
