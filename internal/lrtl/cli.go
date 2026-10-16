@@ -735,6 +735,16 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		anchors = "none"
 	}
 	fmt.Fprintf(stdout, "Anchors: %s\n", anchors)
+	for _, group := range []struct {
+		name    string
+		indices []int
+	}{{"Develop", plan.NormalKeyframeIndices}, {"Crop", plan.CropKeyframeIndices}} {
+		names := make([]string, 0, len(group.indices))
+		for _, index := range group.indices {
+			names = append(names, filepath.Base(frames[index].Image))
+		}
+		fmt.Fprintf(stdout, "%s anchors: %s\n", group.name, strings.Join(names, ", "))
+	}
 	numericCount, structuredCount, maskCount := 0, 0, 0
 	scalarCount := 0
 	for _, change := range plan.Changes {
@@ -748,7 +758,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 			}
 		}
 	}
-	fmt.Fprintf(stdout, "Proposed frames: %d; numeric values: %d; first-frame XMP structures: %d; local mask values: %d\n", len(plan.Changes), numericCount, structuredCount, maskCount)
+	fmt.Fprintf(stdout, "Proposed frames: %d; numeric values: %d; reference XMP structures: %d; local mask values: %d\n", len(plan.Changes), numericCount, structuredCount, maskCount)
 	if scalarCount > 0 {
 		fmt.Fprintf(stdout, "Scalar metadata values: %d\n", scalarCount)
 	}

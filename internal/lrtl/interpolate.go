@@ -64,10 +64,12 @@ type ProposedFrame struct {
 }
 
 type InterpolationPlan struct {
-	FrameCount       int
-	KeyframeIndices  []int
-	Changes          []ProposedFrame
-	StructuredSource *XMPPacket
+	FrameCount            int
+	KeyframeIndices       []int
+	NormalKeyframeIndices []int
+	CropKeyframeIndices   []int
+	Changes               []ProposedFrame
+	StructuredSource      *XMPPacket
 }
 
 func (plan InterpolationPlan) PropertyCount() int {
@@ -132,15 +134,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		packets[index] = packet
 	}
 
-	keyframes := make([]int, 0)
-	for index, packet := range packets {
-		if packet.IsKeyframe() {
-			keyframes = append(keyframes, index)
-		}
-	}
-	if len(keyframes) == 0 && len(packets) > 0 {
-		keyframes = append(keyframes, 0)
-	}
+	normalKeyframes, cropKeyframes, keyframes := transitionKeyframeGroups(packets)
 	proposed := make(map[int]*ProposedFrame)
 	scalarTransitions, err := planRootScalarTransitions(packets)
 	if err != nil {
@@ -157,9 +151,13 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		}
 	}
 	if len(packets) > 0 {
-		for targetIndex := 1; targetIndex < len(packets); targetIndex++ {
+		sourceIndex := normalKeyframes[0]
+		for targetIndex := 0; targetIndex < len(packets); targetIndex++ {
+			if targetIndex == sourceIndex {
+				continue
+			}
 			for _, property := range firstFrameEqualizedProperties {
-				differs, err := packets[targetIndex].RootPropertyDiffers(packets[0], "crs:"+property)
+				differs, err := packets[targetIndex].RootPropertyDiffers(packets[sourceIndex], "crs:"+property)
 				if err != nil {
 					return nil, fmt.Errorf("%s: %w", frames[targetIndex].Image, err)
 				}
@@ -177,10 +175,13 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 				change.StructuredProperties = append(change.StructuredProperties, property)
 			}
 		}
-		for targetIndex := 1; targetIndex < len(packets); targetIndex++ {
+		for targetIndex := 0; targetIndex < len(packets); targetIndex++ {
+			if targetIndex == sourceIndex {
+				continue
+			}
 			for _, correctionIndex := range firstFrameEqualizedMaskGroupIndexes {
 				for _, property := range firstFrameEqualizedMaskGroupCurves {
-					differs, err := packets[targetIndex].maskGroupStructuredPropertyDiffers(packets[0], correctionIndex, property)
+					differs, err := packets[targetIndex].maskGroupStructuredPropertyDiffers(packets[sourceIndex], correctionIndex, property)
 					if err != nil {
 						return nil, fmt.Errorf("%s: %w", frames[targetIndex].Image, err)
 					}
@@ -211,11 +212,6 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		}
 	}
 	assign := func(targetIndex int, sourceValues map[string]float64) error {
-		for _, keyframeIndex := range keyframes {
-			if targetIndex == keyframeIndex {
-				return nil
-			}
-		}
 		if len(sourceValues) == 0 {
 			return nil
 		}
@@ -249,17 +245,16 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 	for index, packet := range packets {
 		numericValues[index] = numericCRSValues(packet)
 	}
-	keyframeSet := make(map[int]bool, len(keyframes))
-	keyframeFlags := make([]bool, len(frames))
-	for _, keyframe := range keyframes {
-		keyframeSet[keyframe] = true
-		keyframeFlags[keyframe] = true
-	}
 	for _, name := range NumericCRSProperties {
 		spec, registered := globalTransitionSpecs[name]
 		if !registered {
 			continue
 		}
+		keyframes := normalKeyframes
+		if strings.HasPrefix(name, "Crop") {
+			keyframes = cropKeyframes
+		}
+		keyframeSet, keyframeFlags := transitionKeyframeFlags(len(frames), keyframes)
 		if name == "Exposure2012" && len(packets) > 0 {
 			mergedHDR, found, err := packets[0].GetScalar("crs:IsMergedHDR")
 			if err != nil {
@@ -288,19 +283,16 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 				if keyframeSet[targetIndex] {
 					continue
 				}
-				if err := assign(targetIndex, map[string]float64{name: adjustTransitionValue(float64(anchors[0].y), spec)}); err != nil {
+				if err := assign(targetIndex, map[string]float64{name: adjustTransitionValue(preciseAnchors[0].value, spec)}); err != nil {
 					return nil, err
 				}
 			}
 			continue
 		}
-		splinePoints := transitionSplinePoints(anchors, len(frames))
-		spline, err := newLRTTransitionSpline(splinePoints, smoothness)
+		values, filled, err := sampleLRTNumericTransition(anchors, preciseAnchors, len(frames), keyframeFlags, smoothness, spec)
 		if err != nil {
 			return nil, err
 		}
-		values, filled := spline.sampleFrames(len(frames), keyframeFlags)
-		postprocessLRTTransition(values, filled, keyframeFlags, preciseAnchors, spec)
 		for targetIndex := range frames {
 			if keyframeSet[targetIndex] {
 				continue
@@ -314,7 +306,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			}
 		}
 	}
-	maskTransitions, err := planMaskTransitions(packets, keyframes, smoothness)
+	maskTransitions, err := planMaskTransitions(packets, normalKeyframes, smoothness)
 	if err != nil {
 		return nil, err
 	}
@@ -346,10 +338,11 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 	}
 	var structuredSource *XMPPacket
 	if len(packets) > 0 {
-		structuredSource = packets[0]
+		structuredSource = packets[normalKeyframes[0]]
 	}
 	return &InterpolationPlan{
 		FrameCount: len(frames), KeyframeIndices: keyframes, Changes: changes,
+		NormalKeyframeIndices: normalKeyframes, CropKeyframeIndices: cropKeyframes,
 		StructuredSource: structuredSource,
 	}, nil
 }

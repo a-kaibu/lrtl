@@ -16,7 +16,8 @@ var maskTransitionCollections = []string{
 	"PaintBasedCorrections",
 }
 
-// LRT 7.5.5's post-transition XMP equalizer copies these curve trees from frame zero.
+// LRT 7.5.5's post-transition XMP equalizer copies these curve trees from its
+// reference frame (first rating 4, falling back to frame zero).
 var firstFrameEqualizedMaskGroupIndexes = []int{1, 2, 3, 4, 8, 9, 10, 11}
 var firstFrameEqualizedMaskGroupCurves = []string{"MainCurve", "RedCurve", "GreenCurve", "BlueCurve"}
 
@@ -719,12 +720,10 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 		if len(anchors) == 0 {
 			continue
 		}
-		spline, err := newLRTTransitionSpline(transitionSplinePoints(anchors, frameCount), smoothness)
+		values, filled, err := sampleLRTNumericTransition(anchors, preciseAnchors, frameCount, keyframeFlags, smoothness, spec)
 		if err != nil {
 			continue
 		}
-		values, filled := spline.sampleFrames(frameCount, keyframeFlags)
-		postprocessLRTTransition(values, filled, keyframeFlags, preciseAnchors, spec)
 		for target := 0; target < frameCount; target++ {
 			if keyframeFlags[target] || !filled[target] {
 				continue
