@@ -97,6 +97,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runBatchRender(arguments[1:], stdout, stderr)
 	case "batch-interpolate":
 		return runBatchInterpolate(arguments[1:], stdout, stderr)
+	case "batch-deflicker":
+		return runBatchDeflicker(arguments[1:], stdout, stderr)
 	case "subtitles":
 		return runSubtitles(arguments[1:], stdout, stderr)
 	case "long-term":
@@ -142,6 +144,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--filename-contains TEXT] [--watermark TEXT] [--watermark-position POS] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  batch-render ROOT --output DIRECTORY [--format avi|mp4|mov] [--workers N] [--recursive] [-- RENDER_OPTIONS...]")
 	fmt.Fprintln(writer, "  batch-interpolate ROOT [--recursive] [--workers N] [--smoothness 0-100] [--write] [--no-backup]")
+	fmt.Fprintln(writer, "  batch-deflicker ROOT [--recursive] [--workers N] [DEFLICKER_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  export DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--apply-xmp-basic] [--apply-xmp-crop] [--long-edge N] export RGB16 TIFF frames")
 	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
