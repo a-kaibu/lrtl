@@ -132,7 +132,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer)
 	fmt.Fprintln(writer, "Commands:")
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
-	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]")
+	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed|lossy] [--dng-long-edge N] [--dng-converter PATH|--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]")
@@ -176,7 +176,8 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	minimumSequenceLength := set.Int("min-sequence-length", 5, "minimum run length for --split-intervals; shorter runs go to single_images")
 	dryRun := set.Bool("dry-run", false, "show planned copies without writing files")
 	convertDNG := set.Bool("convert-dng", false, "convert supported RAW files to DNG during import")
-	dngCompression := set.String("dng-compression", "", "DNG compression for --convert-dng: lossless or uncompressed (default lossless)")
+	dngCompression := set.String("dng-compression", "", "DNG compression for --convert-dng: lossless, uncompressed or lossy (default lossless)")
+	dngLongEdge := set.Int("dng-long-edge", 0, "limit lossy DNG long edge in pixels (1-32768; 0 keeps original size)")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --convert-dng")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
@@ -185,6 +186,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		"--split-gap": true, "-split-gap": true,
 		"--interval-tolerance": true, "-interval-tolerance": true, "--min-sequence-length": true, "-min-sequence-length": true,
 		"--dng-compression": true, "-dng-compression": true,
+		"--dng-long-edge": true, "-dng-long-edge": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -192,7 +194,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed] [--dng-converter PATH|--dnglab PATH] [--dry-run]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed|lossy] [--dng-long-edge N] [--dng-converter PATH|--dnglab PATH] [--dry-run]"))
 	}
 	sortValue := strings.ToLower(strings.TrimSpace(*sortBy))
 	sortWasSpecified, splitWasSpecified := false, false
@@ -226,7 +228,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 	if *renameByDate && sortWasSpecified && sortValue != "capture-time" {
 		return reportError(stderr, fmt.Errorf("--rename-by-date requires --sort capture-time"))
 	}
-	dnglabWasSpecified, dngCompressionWasSpecified := false, false
+	dnglabWasSpecified, dngCompressionWasSpecified, dngLongEdgeWasSpecified := false, false, false
 	set.Visit(func(parsed *flag.Flag) {
 		if parsed.Name == "dnglab" {
 			dnglabWasSpecified = true
@@ -234,9 +236,12 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		if parsed.Name == "dng-compression" {
 			dngCompressionWasSpecified = true
 		}
+		if parsed.Name == "dng-long-edge" {
+			dngLongEdgeWasSpecified = true
+		}
 	})
-	if !*convertDNG && (dnglabWasSpecified || dngCompressionWasSpecified) {
-		return reportError(stderr, fmt.Errorf("--dnglab and --dng-compression require --convert-dng"))
+	if !*convertDNG && (dnglabWasSpecified || dngCompressionWasSpecified || dngLongEdgeWasSpecified) {
+		return reportError(stderr, fmt.Errorf("--dnglab, --dng-compression and --dng-long-edge require --convert-dng"))
 	}
 	options := ImportOptions{
 		Recursive: *recursive, SkipJPEG: *skipJPEG,
@@ -244,6 +249,7 @@ func runImport(arguments []string, stdout, stderr io.Writer) int {
 		RenameByDate: *renameByDate, DryRun: *dryRun,
 		SplitByInterval: *splitIntervals,
 		ConvertToDNG:    *convertDNG, DNGCompression: *dngCompression, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+		DNGLongEdge: *dngLongEdge,
 	}
 	if *splitIntervals {
 		options.IntervalTolerance, options.MinimumSequenceLength = *intervalTolerance, *minimumSequenceLength

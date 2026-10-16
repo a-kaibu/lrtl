@@ -18,6 +18,7 @@ type ImportOptions struct {
 	DryRun                bool
 	ConvertToDNG          bool
 	DNGCompression        string
+	DNGLongEdge           int
 	DNGLabPath            string
 	DNGConverterPath      string
 	SplitGap              time.Duration
@@ -149,12 +150,21 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 		return nil, fmt.Errorf("source must be a directory: %s", sourcePath)
 	}
 	compression := strings.ToLower(strings.TrimSpace(options.DNGCompression))
+	if options.DNGLongEdge < 0 || options.DNGLongEdge > 32768 {
+		return nil, fmt.Errorf("DNG long edge must be between 0 and 32768 pixels")
+	}
+	if options.DNGLongEdge > 0 && (!options.ConvertToDNG || compression != "lossy") {
+		return nil, fmt.Errorf("--dng-long-edge requires --convert-dng --dng-compression lossy")
+	}
+	if options.DNGLabPath != "" && (compression == "lossy" || options.DNGLongEdge > 0) {
+		return nil, fmt.Errorf("lossy DNG and resizing require the Adobe DNG Converter backend")
+	}
 	if options.ConvertToDNG {
 		if compression == "" {
 			compression = "lossless"
 		}
-		if compression != "lossless" && compression != "uncompressed" {
-			return nil, fmt.Errorf("DNG compression must be lossless or uncompressed: %q", options.DNGCompression)
+		if compression != "lossless" && compression != "uncompressed" && compression != "lossy" {
+			return nil, fmt.Errorf("DNG compression must be lossless, uncompressed or lossy: %q", options.DNGCompression)
 		}
 	} else if compression != "" {
 		return nil, fmt.Errorf("DNG compression can only be selected with --convert-dng")
@@ -182,7 +192,7 @@ func planImport(source, destination string, options ImportOptions) ([]importItem
 		items[index].source = imagePath
 		items[index].destination = filepath.Base(imagePath)
 		extension := strings.ToLower(filepath.Ext(imagePath))
-		if options.ConvertToDNG && dngImportRawExtensions[extension] {
+		if options.ConvertToDNG && (dngImportRawExtensions[extension] || (extension == ".dng" && compression == "lossy")) {
 			items[index].convertDNG = true
 			items[index].destination = strings.TrimSuffix(items[index].destination, filepath.Ext(items[index].destination)) + ".dng"
 		}
@@ -350,7 +360,7 @@ func ImportSequence(source, destination string, options ImportOptions, stdout io
 			if strings.TrimSpace(options.DNGLabPath) != "" {
 				imageErr = convertRawToDNG(dnglabExecutable, item.source, imageDestination, compression)
 			} else {
-				imageErr = convertRawWithDNGConverter(dnglabExecutable, item.source, imageDestination, compression)
+				imageErr = convertRawWithDNGConverter(dnglabExecutable, item.source, imageDestination, compression, options.DNGLongEdge)
 			}
 		} else {
 			imageErr = copyFile(item.source, imageDestination)

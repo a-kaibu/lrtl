@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -43,7 +44,13 @@ func resolveDNGConverter(path string) (string, error) {
 
 // runDNGConverter always writes into a private directory. Converter options
 // precede the absolute source path, including when a filename starts with '-'.
-func runDNGConverter(executable, source, directory, name string, linear, uncompressed bool) error {
+func runDNGConverter(executable, source, directory, name string, linear bool, compression string, longEdge int) error {
+	if compression != "lossless" && compression != "uncompressed" && compression != "lossy" {
+		return fmt.Errorf("unsupported Adobe DNG compression: %q", compression)
+	}
+	if longEdge < 0 || longEdge > 32768 || (longEdge > 0 && compression != "lossy") || (linear && (compression != "uncompressed" || longEdge != 0)) {
+		return fmt.Errorf("invalid Adobe DNG resize/development options")
+	}
 	resolved, err := resolveDNGConverter(executable)
 	if err != nil {
 		return err
@@ -53,11 +60,16 @@ func runDNGConverter(executable, source, directory, name string, linear, uncompr
 		return fmt.Errorf("resolve RAW source: %w", err)
 	}
 	arguments := []string{"-c", "-p1", "-dng1.4"}
-	if uncompressed {
+	if compression == "uncompressed" {
 		arguments[0] = "-u"
+	} else if compression == "lossy" {
+		arguments[0] = "-lossy"
 	}
 	if linear {
 		arguments = []string{"-u", "-l", "-p0", "-dng1.4"}
+	}
+	if longEdge > 0 {
+		arguments = append(arguments, "-side", strconv.Itoa(longEdge))
 	}
 	arguments = append(arguments, "-d", directory, "-o", name, absolute)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -88,7 +100,7 @@ func developRawWithDNGConverter(source, executable string) ([]byte, error) {
 		return nil, fmt.Errorf("create RAW development directory: %w", err)
 	}
 	defer os.RemoveAll(directory)
-	if err := runDNGConverter(executable, source, directory, "linear.dng", true, true); err != nil {
+	if err := runDNGConverter(executable, source, directory, "linear.dng", true, "uncompressed", 0); err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(filepath.Join(directory, "linear.dng"))
@@ -161,17 +173,31 @@ func encodeDevelopedDNGTIFF(img *image.NRGBA64, orientation uint16) ([]byte, err
 	return data, nil
 }
 
-func convertRawWithDNGConverter(executable, source, destination, compression string) error {
+func convertRawWithDNGConverter(executable, source, destination, compression string, longEdge int) error {
 	directory, err := os.MkdirTemp(filepath.Dir(destination), ".lrtl-adobe-dng-*")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(directory)
-	if err := runDNGConverter(executable, source, directory, "converted.dng", false, compression == "uncompressed"); err != nil {
+	if err := runDNGConverter(executable, source, directory, "converted.dng", false, compression, longEdge); err != nil {
 		return err
 	}
 	if err := validateConvertedDNG(filepath.Join(directory, "converted.dng")); err != nil {
 		return err
+	}
+	if longEdge > 0 {
+		data, err := os.ReadFile(filepath.Join(directory, "converted.dng"))
+		if err != nil {
+			return err
+		}
+		fields, err := findLinearDNG(data)
+		if err != nil {
+			return fmt.Errorf("check resized DNG dimensions: %w", err)
+		}
+		width, height := fields.integer(256, 0), fields.integer(257, 0)
+		if fields.err != nil || width < 1 || height < 1 || max(width, height) > longEdge {
+			return fmt.Errorf("Adobe DNG Converter output did not meet the requested long-edge limit %d", longEdge)
+		}
 	}
 	// Publish using the import workflow's existing no-overwrite checks.
 	if err := os.Rename(filepath.Join(directory, "converted.dng"), destination); err != nil {

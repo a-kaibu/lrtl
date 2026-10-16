@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `import --convert-dng --dng-compression lossy`でロッシーDNGを取り込めます。`--dng-long-edge N`で長辺を制限でき、既存DNGにも明示的なロッシー再変換を適用します。元RAW/DNGとXMPは保持し、縮小結果の寸法も検査します。CLI引数、dry-run、XMP保持、途中失敗時のロールバックをテストし、実NEF/CR2で元解像度・256pxの変換、既存DNGの再縮小、TIFF→AVIまで確認しました。
+
 - `import --split-intervals`で、LRT 7.5.5の「間隔で分割」と同じグループ分けを使えます。間隔変化の許容差と最小連番長を指定し、短い連番も`single_images`へ保持します。本体から取得した240ケース、境界・重複時刻・サブ秒・コピー/XMP・取り込み後AVI・衝突・途中失敗のロールバック・ファズテストで検証しています。動画のシーン分割を本体の不足対応項目としていた記述も、今回確認したJPEG展開の実態に合わせて訂正しました。
 
 - `batch-holy-grail ROOT`でHoly Grail露出補正を一括解析・保存できます。再帰探索・並列解析・EXIF/キャッシュ済みLRT入力・Stretch/Rotate・自動形状・2*/3*マーカー・リセットに対応し、全連番の内容検証後に保存します。個別実行とのXMP/AVI一致、LRT 7.5.5実測値との補正一致、再実行での重複防止、評価の復元、解析エラー時の全体保存中止をテストしています。
@@ -112,13 +114,13 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を識別可能なDeflicker専用LocalExposureスロット（なければ`crs:Exposure2012`）へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。LRTで観察したtricube重み付き局所線形回帰に近いLOWESSも選べるが、測光・反復補正は独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
-| RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed DNG取り込みに対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現、ロッシーDNGとサイズ縮小は未対応 | 一部 |
+| RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed/lossy DNG取り込みとロッシーDNGの長辺縮小に対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。16-bit RGB処理。LRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
-| 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。画像プレビュー、ロッシーDNG、DNGのサイズ縮小は未実装 | 一部 |
-| DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed DNGと隣接XMPを取り込む。`--dnglab PATH`でDNGLabを明示選択可能。ロッシー圧縮とPro相当のサイズ縮小は未対応 | 一部 |
+| 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed/lossy DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。`--dng-long-edge`でロッシーDNGを縮小可能。画像プレビューは未実装 | 一部 |
+| DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed/lossy DNGと隣接XMPを取り込む。`--dng-long-edge`でロッシーDNGの長辺を制限できる。`--dnglab PATH`でDNGLabを明示選択可能。ロッシーと縮小はAdobeバックエンドのみ。LRTプリセットとの画素一致、JPEG XLは未対応 | 一部 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。バッチプレビューは未実装 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
@@ -229,7 +231,7 @@ AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必
 
 ## 使い方
 
-`import`は指定フォルダーの対応画像と、見つかった同名XMPサイドカーを出力フォルダーへコピーします。`--recursive`でサブフォルダーも検索し、元フォルダー名を出力名に付けて衝突を避けます。`--sort capture-time`はXMP/EXIF撮影日時順に並ぶ連番を付け、`--rename-by-date`は日時をファイル名に使います。同じ秒の撮影には連番を追加します。`--skip-jpeg`はJPEG/JPGを除外し、`--dry-run`はコピー予定だけを表示します。撮影日時順・日時リネームには全画像の撮影日時が必要です。`--convert-dng`を指定するとAdobe DNG Converterが対応するRAWファイルを`.dng`へ変換し、隣接XMPサイドカーも新しい画像名に合わせてコピーします。JPEG等と既存DNGはそのままコピーします。圧縮方式は`--dng-compression lossless|uncompressed`で指定でき、既定はlosslessです。ロッシー圧縮とサイズ縮小は未対応です。Adobe DNG Converterは自動検出し、必要なら`--dng-converter PATH`で指定します。`--dnglab PATH`を指定した場合はDNGLabを使います。
+`import`は指定フォルダーの対応画像と、見つかった同名XMPサイドカーを出力フォルダーへコピーします。`--recursive`でサブフォルダーも検索し、元フォルダー名を出力名に付けて衝突を避けます。`--sort capture-time`はXMP/EXIF撮影日時順に並ぶ連番を付け、`--rename-by-date`は日時をファイル名に使います。同じ秒の撮影には連番を追加します。`--skip-jpeg`はJPEG/JPGを除外し、`--dry-run`はコピー予定だけを表示します。撮影日時順・日時リネームには全画像の撮影日時が必要です。`--convert-dng`を指定するとAdobe DNG Converterが対応するRAWファイルを`.dng`へ変換し、隣接XMPサイドカーも新しい画像名に合わせてコピーします。JPEG等はそのままコピーします。既存DNGは通常コピーし、ロッシー指定時のみ再変換します。圧縮方式は`--dng-compression lossless|uncompressed|lossy`で指定でき、既定はlosslessです。ロッシーでは`--dng-long-edge N`で長辺を制限できます。Adobe DNG Converterは自動検出し、必要なら`--dng-converter PATH`で指定します。`--dnglab PATH`を指定した場合はDNGLabを使います。
 
 `import-video`はFFmpegで動画をJPGまたはPNGの連番へデコードします。既定ではデコード可能な全フレームを保存し、`--fps N`を指定するとその間隔でフレームをサンプリングします。JPEGの圧縮品質は`--quality 1`（高画質）〜`31`（低画質）で指定できます。抽出先は新しいフォルダーでなければならず、既存フォルダーを置き換えません。インストール済みLRT 7.5.5の動画取り込みもFFmpegで全フレームをJPEGへ展開します。今回確認した呼び出しにはシーン検出やシーン境界での分割がなく、写真の「間隔で分割」は別機能でした。以前は動画のシーン分割を本体の不足対応項目として記載していましたが、その根拠を確認できなかったため訂正しました。写真の間隔分割には`import --split-intervals`を使います。
 
@@ -499,7 +501,7 @@ EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一�
 | 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像・対応RAW）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264/H.265 MP4、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWはAdobe DNG ConverterとGoによる実画素現像、内蔵プレビュー、明示したDNGLabから選択可能 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVG輝度プレビュー、UIのXMP Exposure2012/解析画像輝度グラフ、選択フレームのRGBトーンカーブ編集、静止画プレビューと最大640 pxの連番ループ再生、長期撮影指標、XMP画素反映、回転クロップ、参照領域/全体露出Deflickerを実装。LRT Visual Previewと同等の再生速度/画素再現、Exposure2012の複数フレーム同時編集、フレーム間のトーンカーブ編集、XMPロスレス適用、垂直/水平・UprightのGeometry補正、未対応マスク形式の画素現像は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定と既存LRT XMP入力を使う近似Holy Grail補正、現像済みラスターへの対応XMP値適用、一部RAW内蔵プレビュー、Adobe DNG ConverterとGoによるRAW現像（DNGLabも任意選択）を実装。Camera Raw現像の完全再現と同等のRAW画素処理は未実装 |
-| 5 | 残りのCLIワークフローと取り込み機能 | Go標準`net/http`で動くループバック限定のローカルWeb UIで、サムネイル、キーフレーム、XMP補間、レンダー操作を実装。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed DNG変換、追加コーデックも実装。GUIの追加開発は対象外。CLIのロッシーDNG/サイズ縮小、LRTと同じ10-bit YUV画素処理・色管理は未対応（現状は16-bit RGBを経由） |
+| 5 | 残りのCLIワークフローと取り込み機能 | Go標準`net/http`で動くループバック限定のローカルWeb UIで、サムネイル、キーフレーム、XMP補間、レンダー操作を実装。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed/lossy DNG変換・ロッシーDNG縮小、追加コーデックも実装。GUIの追加開発は対象外。LRTと同じ10-bit YUV画素処理・色管理は未対応（現状は16-bit RGBを経由） |
 
 ## 機能調査の出典
 
@@ -759,6 +761,22 @@ lrtl batch-holy-grail C:\photos\sequences --recursive --reset --write
 既定は変更予定の表示で、`--write`でバックアップ付き保存、`--no-backup`でバックアップを省略します。全連番の撮影値・XMP・補正記録・ジャンプ評価・最終パケットを検証し、どれかが不正なら全体を書き込まず終了コード1を返します。ジャンプ評価は既存の明示的な評価を上書きしません。衝突時の扱いも個別コマンドと同じです。保存中のOSエラーは保存済み枚数を報告して中断します。複数ファイルの一括ロールバックには対応しません。
 
 個別実行とのXMP・AVIフレーム/索引の一致、並列数1/4、EXIF/LRT入力の自動形状、専用補正スロット、LRT 7.5.5で観測した補正値、バックアップ、再実行での重複防止、評価の作成・解除をテストしています。破損した撮影値・XMP・LRT入力・補正記録や評価衝突による全体保存の中止、画像EXIFを読めない場合の補正解除も検査します。LRTのバッチキュー自体の再現やCamera Rawとの画素一致を示すものではありません。
+
+## ロッシーDNGとサイズ縮小
+
+```powershell
+# 元解像度のロッシーDNGへ変換して取り込む
+lrtl import E:\DCIM --output C:\photos\lossy-dng --convert-dng --dng-compression lossy
+
+# 長辺2560px以下のロッシーDNGへ変換。予定だけ確認する場合は --dry-run を付ける
+lrtl import E:\DCIM --output C:\photos\proxy-dng --convert-dng --dng-compression lossy --dng-long-edge 2560
+```
+
+Adobe DNG Converterの[公式CLI](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section/download-1/dng_converter_commandline.pdf)を使います。`lossy`は`-lossy`、長辺指定は`-side N`へ渡し、DNG 1.4互換で出力します。縮小は`--dng-compression lossy`を明示した場合に指定でき、`--dng-long-edge`は1〜32768（0は元サイズ）の上限です。DNGLabバックエンドはlossless/uncompressedのみで、ロッシー/縮小との併用はエラーです。JPEG XLは選択できません。
+
+既存DNGは通常の取り込みではコピーしますが、`lossy`を指定した場合は再変換します。JPEG等はコピーします。元データは変更せず、隣接XMPを新しいDNG名へコピーします。非可逆圧縮と縮小は画質・解像度を減らすため、既定値は引き続きlosslessです。必要なコピー先を事前検証し、変換失敗・不正DNG・縮小上限を満たさない出力では、この取り込みで作成したファイルと一時出力を戻します。
+
+自動テストは外部プロセスを代替して、RAW/既存DNG・空白やハイフンを含むファイル名・引数順・dry-run・XMP保持・不正オプション・縮小を無視するプロセス・2枚目の変換失敗を検査します。実機のAdobe DNG Converter 18.7ではNikon D3S NEF（4256×2832→256×170）とCanon 40D sRAW CR2（1944×1296→256×171）を検証し、Lossy JPEG圧縮（tag 259 = 34892）、既存DNGの再縮小、XMP露出を含むTIFF現像とAVI生成、元データ保持を確認しました。LRT本体の圧縮プリセットやCamera Rawとの画素一致を再現した比較ではありません。
 
 ## 撮影間隔で連番を分けて取り込む
 
