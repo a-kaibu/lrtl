@@ -1234,18 +1234,22 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 			return reportError(stderr, err)
 		}
 	}
-	var luminances []float64
 	inputOptions := imageInputOptions{
 		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
-	if !*reset {
-		luminances, err = analyzeDeflickerSequenceWithOptions(frames, reference, inputOptions)
-		if err != nil {
-			return reportError(stderr, err)
+	var changes []DeflickerChange
+	measuredPasses := 0
+	if *reset {
+		changes, err = buildDeflickerChangesForInput(frames, nil, *smoothRadius, *passes, *constant, true, *smoother, false)
+	} else {
+		var plan *deflickerSequencePlan
+		plan, err = planDeflickerSequence(frames, reference, inputOptions, *smoothRadius, *passes, *constant, *smoother)
+		if err == nil {
+			changes = plan.Changes
+			measuredPasses = len(plan.Measurements)
 		}
 	}
-	changes, err := buildDeflickerChangesForInput(frames, luminances, *smoothRadius, *passes, *constant, *reset, *smoother, *applyXMPExposure || *applyXMPBasic)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -1258,7 +1262,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 			target = "constant median luminance"
 		}
 		fmt.Fprintf(stdout, "Frames: %d; corrections: %d; target: %s; smoother: %s; smooth radius: %d; passes: %d\n",
-			len(frames), len(changes), target, strings.ToLower(strings.TrimSpace(*smoother)), *smoothRadius, *passes)
+			len(frames), len(changes), target, strings.ToLower(strings.TrimSpace(*smoother)), *smoothRadius, measuredPasses)
 	}
 	for _, change := range changes {
 		fmt.Fprintf(stdout, "  %-42s", filepath.Base(change.Frame.Image))

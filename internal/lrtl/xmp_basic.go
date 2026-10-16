@@ -104,6 +104,10 @@ func readXMPBasicAdjustments(frame Frame) (xmpBasicAdjustments, error) {
 	if err != nil {
 		return xmpBasicAdjustments{}, err
 	}
+	return readXMPBasicPacket(packet)
+}
+
+func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 	adjustments := xmpBasicAdjustments{parametric: xmpParametricCurve{shadowSplit: 25, midtoneSplit: 50, highlightSplit: 75}}
 	adjustments.lumaNoiseDetail = 50
 	adjustments.colorNoiseDetail = 50

@@ -58,11 +58,11 @@ func frameLuminance(img image.Image, reference image.Rectangle) (float64, error)
 	samples := make([]float64, 0, 4096)
 	for y := region.Min.Y; y < region.Max.Y; y += stepY {
 		for x := region.Min.X; x < region.Max.X; x += stepX {
-			pixel := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
-			alpha := float64(pixel.A) / 255
-			luminance := 0.2126*srgb8ToLinear[pixel.R] +
-				0.7152*srgb8ToLinear[pixel.G] +
-				0.0722*srgb8ToLinear[pixel.B]
+			pixel := color.NRGBA64Model.Convert(img.At(x, y)).(color.NRGBA64)
+			alpha := float64(pixel.A) / 65535
+			luminance := 0.2126*srgb16ToLinear[pixel.R] +
+				0.7152*srgb16ToLinear[pixel.G] +
+				0.0722*srgb16ToLinear[pixel.B]
 			// The AVI output is opaque; treat transparent PNG pixels as black.
 			samples = append(samples, luminance*alpha)
 		}

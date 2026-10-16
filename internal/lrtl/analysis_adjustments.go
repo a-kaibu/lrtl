@@ -13,11 +13,24 @@ type sequenceXMPAdjustments struct {
 }
 
 func readSequenceXMPAdjustments(frames []Frame, width, height int, options imageInputOptions) (sequenceXMPAdjustments, error) {
+	return readSequenceXMPAdjustmentsFromPackets(frames, width, height, options, nil)
+}
+
+func readSequenceXMPAdjustmentsFromPackets(frames []Frame, width, height int, options imageInputOptions, packets []*XMPPacket) (sequenceXMPAdjustments, error) {
+	if packets != nil && len(packets) != len(frames) {
+		return sequenceXMPAdjustments{}, fmt.Errorf("adjustment packet count does not match sequence")
+	}
 	adjustments := sequenceXMPAdjustments{}
 	if options.ApplyXMPExposure {
 		adjustments.exposures = make([]float64, len(frames))
 		for index, frame := range frames {
-			exposure, err := readXMPExposure(frame)
+			var exposure float64
+			var err error
+			if packets != nil {
+				exposure, err = readXMPExposurePacket(packets[index])
+			} else {
+				exposure, err = readXMPExposure(frame)
+			}
 			if err != nil {
 				return sequenceXMPAdjustments{}, fmt.Errorf("%s: %w", frame.Image, err)
 			}
@@ -27,7 +40,13 @@ func readSequenceXMPAdjustments(frames []Frame, width, height int, options image
 	if options.ApplyXMPBasic {
 		adjustments.basics = make([]xmpBasicAdjustments, len(frames))
 		for index, frame := range frames {
-			basic, err := readXMPBasicAdjustments(frame)
+			var basic xmpBasicAdjustments
+			var err error
+			if packets != nil {
+				basic, err = readXMPBasicPacket(packets[index])
+			} else {
+				basic, err = readXMPBasicAdjustments(frame)
+			}
 			if err != nil {
 				return sequenceXMPAdjustments{}, fmt.Errorf("%s: %w", frame.Image, err)
 			}
@@ -35,7 +54,7 @@ func readSequenceXMPAdjustments(frames []Frame, width, height int, options image
 		}
 	}
 	if options.ApplyXMPCrop {
-		crops, err := readXMPCrops(frames, width, height)
+		crops, err := readXMPCropsFromPackets(frames, width, height, packets)
 		if err != nil {
 			return sequenceXMPAdjustments{}, err
 		}

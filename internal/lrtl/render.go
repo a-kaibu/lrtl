@@ -177,6 +177,13 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	if err := validateImageInputOptions(inputOptions); err != nil {
 		return err
 	}
+	frameSource := newFrameInputCache(inputOptions, options.Deflicker)
+	defer frameSource.close()
+	if options.Deflicker {
+		if _, err := deflickerGainsWithSmoother([]float64{1}, options.SmoothRadius, options.DeflickerPasses, options.Constant, options.deflickerSmoother()); err != nil {
+			return err
+		}
+	}
 	if options.ApplyXMPExposure && options.ApplyXMPBasic {
 		return fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012")
 	}
@@ -288,7 +295,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	var captureTimes []time.Time
 	var overlayFace font.Face
 
-	first, config, firstFormat, err := readRenderInputWithOptions(frames[0], inputOptions)
+	first, config, firstFormat, err := frameSource.read(0, frames[0])
 	if err != nil {
 		return err
 	}
@@ -376,61 +383,67 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 				return fmt.Errorf("reference area %v is outside frame dimensions %dx%d", options.Reference, width, height)
 			}
 		}
-		luminances := make([]float64, len(frames))
-		for index, frame := range frames {
-			data, frameConfig, format := first, config, firstFormat
-			if index > 0 {
-				data, frameConfig, format, err = readRenderInputWithOptions(frame, inputOptions)
+		gains, err = pixelFeedbackGains(len(frames), options.SmoothRadius, options.DeflickerPasses, options.Constant, options.deflickerSmoother(), func(currentGains []float64) ([]float64, error) {
+			luminances := make([]float64, len(frames))
+			for index, frame := range frames {
+				data, frameConfig, format := first, config, firstFormat
+				if index > 0 {
+					data, frameConfig, format, err = frameSource.read(index, frame)
+					if err != nil {
+						return nil, err
+					}
+				}
+				img, format, decodeErr := image.Decode(bytes.NewReader(data))
+				if decodeErr != nil {
+					return nil, fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
+				}
+				if !supportedRasterFormat(format) {
+					return nil, fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
+				}
+				orientation := uint16(1)
+				if options.AutoOrient {
+					orientation, err = readEXIFOrientation(data)
+					if err != nil {
+						return nil, fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
+					}
+				}
+				frameWidth, frameHeight := orientedDimensions(frameConfig.Width, frameConfig.Height, orientation)
+				if frameWidth != width || frameHeight != height {
+					return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
+				}
+				img = applyEXIFOrientation(img, orientation)
+				if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+					return nil, fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
+				}
+				if xmpBasics != nil {
+					img = applyXMPLocalCorrections(img, xmpBasics[index].local)
+				}
+				if xmpCrops != nil {
+					img = applyXMPCrop(img, xmpCrops[index])
+				}
+				if xmpBasics != nil && xmpBasics[index].globalActive() {
+					img = applyXMPBasicFrame(img, xmpBasics[index])
+				}
+				gain := currentGains[index]
+				if xmpExposures != nil {
+					gain *= math.Exp2(xmpExposures[index])
+				}
+				if gain != 1 {
+					img = applyExposureGainFrame(img, gain)
+				}
+				reference := options.Reference
+				if reference.Empty() {
+					reference = img.Bounds()
+				} else {
+					reference = reference.Add(img.Bounds().Min)
+				}
+				luminances[index], err = frameLuminance(img, reference)
 				if err != nil {
-					return err
+					return nil, fmt.Errorf("analyze %s: %w", frame.Image, err)
 				}
 			}
-			img, format, decodeErr := image.Decode(bytes.NewReader(data))
-			if decodeErr != nil {
-				return fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
-			}
-			if !supportedRasterFormat(format) {
-				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
-			}
-			orientation := uint16(1)
-			if options.AutoOrient {
-				orientation, err = readEXIFOrientation(data)
-				if err != nil {
-					return fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
-				}
-			}
-			frameWidth, frameHeight := orientedDimensions(frameConfig.Width, frameConfig.Height, orientation)
-			if frameWidth != width || frameHeight != height {
-				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
-			}
-			img = applyEXIFOrientation(img, orientation)
-			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
-				return fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
-			}
-			if xmpBasics != nil {
-				img = applyXMPLocalCorrections(img, xmpBasics[index].local)
-			}
-			if xmpCrops != nil {
-				img = applyXMPCrop(img, xmpCrops[index])
-			}
-			if xmpBasics != nil && xmpBasics[index].globalActive() {
-				img = applyXMPBasicFrame(img, xmpBasics[index])
-			}
-			if xmpExposures != nil && xmpExposures[index] != 0 {
-				img = applyExposureGainFrame(img, math.Exp2(xmpExposures[index]))
-			}
-			reference := options.Reference
-			if reference.Empty() {
-				reference = img.Bounds()
-			} else {
-				reference = reference.Add(img.Bounds().Min)
-			}
-			luminances[index], err = frameLuminance(img, reference)
-			if err != nil {
-				return fmt.Errorf("analyze %s: %w", frame.Image, err)
-			}
-		}
-		gains, err = deflickerGainsWithSmoother(luminances, options.SmoothRadius, options.DeflickerPasses, options.Constant, options.deflickerSmoother())
+			return luminances, nil
+		})
 		if err != nil {
 			return err
 		}
@@ -494,7 +507,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 			data, frameConfig := first, config
 			if index > 0 {
 				var readErr error
-				data, frameConfig, _, readErr = readRenderInputWithOptions(frame, inputOptions)
+				data, frameConfig, _, readErr = frameSource.read(index, frame)
 				if readErr != nil {
 					return nil, readErr
 				}
@@ -612,7 +625,7 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 	for index, frame := range frames {
 		data, config, format := first, config, firstFormat
 		if index > 0 {
-			data, config, format, err = readRenderInputWithOptions(frame, inputOptions)
+			data, config, format, err = frameSource.read(index, frame)
 			if err != nil {
 				return err
 			}

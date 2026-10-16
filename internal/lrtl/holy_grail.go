@@ -708,6 +708,10 @@ func readXMPExposure(frame Frame) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	return readXMPExposurePacket(packet)
+}
+
+func readXMPExposurePacket(packet *XMPPacket) (float64, error) {
 	value, found, err := packet.GetScalar("crs:Exposure2012")
 	if err != nil {
 		return 0, err

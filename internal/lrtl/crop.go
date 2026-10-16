@@ -20,10 +20,23 @@ type cropSpec struct {
 }
 
 func readXMPCrops(frames []Frame, width, height int) ([]cropSpec, error) {
+	return readXMPCropsFromPackets(frames, width, height, nil)
+}
+
+func readXMPCropsFromPackets(frames []Frame, width, height int, packets []*XMPPacket) ([]cropSpec, error) {
+	if packets != nil && len(packets) != len(frames) {
+		return nil, fmt.Errorf("crop packet count does not match sequence")
+	}
 	crops := make([]cropSpec, len(frames))
 	full := image.Rect(0, 0, width, height)
 	for index, frame := range frames {
-		packet, err := PacketForFrame(frame)
+		var packet *XMPPacket
+		var err error
+		if packets != nil {
+			packet = packets[index]
+		} else {
+			packet, err = PacketForFrame(frame)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read crop settings for %s: %w", frame.Image, err)
 		}

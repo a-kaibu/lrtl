@@ -86,6 +86,13 @@ func buildDeflickerChangesWithSmoother(frames []Frame, luminances []float64, smo
 // Developed input already contains our previous correction. Add the measured
 // residual in that case; measurements of untouched input replace the old delta.
 func buildDeflickerChangesForInput(frames []Frame, luminances []float64, smoothingRadius, passes int, constant, reset bool, smoother string, includesCorrection bool) ([]DeflickerChange, error) {
+	return buildDeflickerChangesFromPackets(frames, luminances, smoothingRadius, passes, constant, reset, smoother, includesCorrection, nil)
+}
+
+func buildDeflickerChangesFromPackets(frames []Frame, luminances []float64, smoothingRadius, passes int, constant, reset bool, smoother string, includesCorrection bool, packets []*XMPPacket) ([]DeflickerChange, error) {
+	if packets != nil && len(packets) != len(frames) {
+		return nil, fmt.Errorf("deflicker packet count does not match sequence")
+	}
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
 	}
@@ -108,7 +115,13 @@ func buildDeflickerChangesForInput(frames []Frame, luminances []float64, smoothi
 
 	changes := make([]DeflickerChange, 0, len(frames))
 	for index, frame := range frames {
-		packet, err := PacketForFrame(frame)
+		var packet *XMPPacket
+		var err error
+		if packets != nil {
+			packet = packets[index]
+		} else {
+			packet, err = PacketForFrame(frame)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
@@ -164,6 +177,16 @@ func buildDeflickerChangesForInput(frames []Frame, luminances []float64, smoothi
 			}
 		}
 		correction := corrections[index]
+		if !reset && correction != 0 {
+			response, err := deflickerTargetResponse(packet, target)
+			if err != nil {
+				return nil, err
+			}
+			if response == 0 {
+				return nil, fmt.Errorf("%s: Deflicker target is inactive or has zero CorrectionAmount", frame.OutputSidecar())
+			}
+			correction /= response
+		}
 		if includesCorrection && !reset {
 			correction += previous
 		}
