@@ -123,7 +123,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEGおよびTIFFベース画像/RAW（依存ライブラリの実RAWサンプルでNEF/ARWも確認）、CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`で参照する画像内XMPはJPEG/TIFF/DNG/CR2/RW2に加えてNEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRからもタグ700を読み、CR3はAdobe XMP UUID boxから読む。FNumberがない場合は`lrt:Aperture`を参照。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、LRT同様に最大10件のフレーム差平均と2*/3*/4*隣接ペア補正を適用する近似経路も選択可能。`--lrt-reduce-deflicker`で0〜1の平滑化設定を指定できる。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の画像入力生成は未再現。LOWESS単体は実LRTの53ケースで比較済み。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | `crop`で単一画像/XMPまたは連番全体の構図をCLIから確認・編集。矩形と角度、HasCropの有効化、解除、単一画像の5つ星crop markをバックアップ付きで保存できる。`interpolate`は数値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。GUIのドラッグ編集も既存機能として残る。手動PerspectiveRotate/Scaleも基本現像で適用。垂直/水平/Aspect/Uprightの遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
-| 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。反転選択、画像のコピー/移動/除去/削除、フォルダー作成、リネームは未対応 | 一部 |
+| 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。`select`でファイル名・XMP評価・既存選択JSONの積集合と反転選択を作成し、動画/TIFF/JPEG処理へ渡すJSONを保存できる。`copy-sequence`で選択画像と有効なXMPをファイル名・内容・更新日時を保って新規フォルダーへコピーできる。画像の移動/除去/削除、任意フォルダー作成、リネームは未対応 | 一部 |
 | メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`init`による不足マスク/内部補正スロットの初期化、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。画像内XMPを読むのは外部サイドカーがない場合で、編集結果はXMPサイドカーへ保存し画像本体は変更しない。その他のRAWコンテナー内XMP、メタデータ全消去/リセットや全設定のコピー/貼付は未対応 | 一部 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。JPEGは外部サイドカーがなければ画像内の標準/拡張XMP、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRはtag 700、RAFは埋め込みJPEG、CR3はISO BMFFのAdobe XMP UUIDから読み取る。編集結果はサイドカーへ保存し画像を変更しない。`set`で許可した131項目とPreview EVを選択フレーム単位で編集し、局所補正/マスクは`masks`で確認した配列パスを`set`へ渡して編集できます。`preview-ev`でRGBヒストグラムからPreview EVを算出してXMPへ書き込める。CLIの`curve`で全体／局所のマスター/R/G/Bポイントを単一画像や連番へ編集し、属性/単純テキスト/RDF Seq表現をバックアップ付きで保存。全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、ConvertToGrayscaleと8色GrayMixer、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度で16-bit PCHIPカーブ出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を最初の4つ星（なければ先頭）から均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入、近接アンカーの直線化・等値区間の平坦化を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。アスペクト比を使う円形グラデーションの専用形状補正、Camera Rawのマスク描画との一致は未対応 | 一部 |
@@ -1118,6 +1118,29 @@ WarpRectilinearはActiveAreaの整数画素座標を使います。中心は幅�
 対応済みの全体/ローカル現像処理は、NRGBA64（RGB/アルファ各16-bit）と浮動小数点の計算を使います。全体の露出・WB・トーン・彩度/HSL・Color Grading・ポイント/パラメトリックカーブ、Texture/Clarity/Dehaze、シャープ・ノイズ低減・周辺減光、および対応マスクの局所調整が対象です。空間フィルターの補助層はfloat32、主要演算はfloat64です。ポイントカーブはXMPの0〜255点座標からPCHIP係数を作り、65536段階の入力位置で評価し、フレームごとに巨大なLUTを持ちません。
 
 全体22ケース、ローカル12ケースで細かな入力差・アルファ・元画像の保持を確認し、カーブは全65536段階の恒等性、宣言点の通過、単調性とファズテストを検証します。これはlrtl内での精度を確認するものです。Camera Rawの演算式・カメラプロファイル・ICC色管理・HDRの再現、およびLRTとの画素一致は未達です。Deflicker測光など一部の解析値は従来の統計定義のままで、Preview EVの256ビンは観測したLRT仕様に合わせています。
+
+## 連番の選択とコピー
+
+`select`はファイル名、XMP評価、既存の選択JSONでフレームを絞り込みます。条件は積集合として扱い、`--invert`でその結果を元の連番全体に対して反転します。評価がない画像は0、除外評価は-1で、`--ratings`は-1〜5の整数を複数指定できます。外部XMPがある場合はそれを使い、なければ対応画像内のXMPを読みます。ファイル名やJSONだけの選択では画像現像やXMP解析を必要としません。
+
+```powershell
+# 4/5つ星を選び、render/export/preview-imagesでも使えるJSONへ保存
+lrtl select C:\photos\sequence --ratings "4,5" --output C:\photos\keyframes.json
+
+# 既存選択とファイル名条件を満たすフレーム以外を選ぶ
+lrtl select C:\photos\sequence --selection C:\photos\filter.json --filename-contains IMG_ --invert --output C:\photos\other.json
+
+# まず予定を確認し、--writeを追加して新規フォルダーへコピー
+lrtl copy-sequence C:\photos\sequence --selection C:\photos\keyframes.json --output C:\photos\selected
+lrtl copy-sequence C:\photos\sequence --selection C:\photos\keyframes.json --output C:\photos\selected --write
+lrtl render C:\photos\selected --output C:\photos\selected.avi --apply-xmp-basic
+```
+
+`select`は`--output`なしなら選択した名前を表示し、JSONの上書きには`--overwrite`が必要です。JSONは選択結果を固定し、画像のサイズ・更新日時が変わると古いJSONの使用を拒否します。現在のXMP評価で選び直す場合は`select`を再実行してください。空の選択も保存・反転できますが、動画処理やコピーは選択0枚をエラーにします。
+
+`copy-sequence`にも同じ選択フラグを直接指定できます。画像と、通常の読込で採用する有効な外部XMPだけをバイト単位でコピーし、更新日時と名前を保持します。複数画像が同じstemのXMPを共有するときは一度だけコピーします。コピー先は元連番の外にある新規フォルダーが必要で、既存出力を置き換えません。全ファイルのコピーが成功してから出力を公開します。元画像・XMPを変更せず、元連番の`.lrt`設定・キャッシュやバックアップ類はコピー対象に含めません。移動・削除は未対応です。
+
+選択の積集合・反転、埋め込みXMPと外部XMPの優先順位、空の選択、古いJSON、共有XMP、読み取り専用画像、シンボリックリンク境界、失敗時の保持をテストしています。コピーした選択範囲から作ったAVIのフレームとインデックスが、元連番の同じ選択範囲と一致することも確認しています。本体のコピーUIやファイル属性全体との一致を検証したものではありません。
 
 ## 開発
 

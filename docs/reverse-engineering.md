@@ -2,6 +2,30 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## CLI frame selection and sequence copies
+
+The existing feature inventory includes selection, inversion and copying photos.
+`select` now resolves case-insensitive filename, XMP rating and existing manifest
+filters as an intersection, optionally inverted against the complete sequence.
+It stores resolved membership in the existing version-2 selection format with
+image size and modification time. Empty manifests can be inverted by these new
+commands; the existing render/export all-excluded guard is preserved.
+
+`copy-sequence` plans selected image files and their active sidecars using the
+existing discovery/sidecar precedence, preserves names and modification times,
+and copies shared stem sidecars once. It requires a new output outside the
+source directory and publishes that folder after successful copying and source
+identity/size/mtime checks. It does not recreate native workflow settings or
+copy preview caches. Image development and XMP rewriting are unnecessary.
+
+Tests cover filter intersections/inversion, missing/rejected/embedded ratings,
+external-sidecar priority, stale manifests, shared sidecars with case-folded
+paths, read-only files, symlink boundaries, real copy failures, source changes
+and destination collisions. Copied selected bytes and MJPEG AVI frames/index
+match the original selection; the same manifests also drive TIFF and JPEG
+exports. This implements the documented workflow independently, without a
+native copy UI/file-attribute parity claim. Move/remove/delete are still absent.
+
 ## Missing correction resources and RDF validity
 
 Root range materialization is now compared with 144 installed-runtime cases in

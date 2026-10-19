@@ -303,6 +303,10 @@ func writeSelectionManifest(output string, manifest *sequenceSelectionManifest, 
 }
 
 func loadSelectedFrames(frames []Frame, manifestPath, directory string) ([]Frame, error) {
+	return loadSelectionFrames(frames, manifestPath, directory, false)
+}
+
+func loadSelectionFrames(frames []Frame, manifestPath, directory string, allowEmpty bool) ([]Frame, error) {
 	info, err := os.Stat(manifestPath)
 	if err != nil {
 		return nil, fmt.Errorf("selection manifest: %w", err)
@@ -364,7 +368,7 @@ func loadSelectedFrames(frames []Frame, manifestPath, directory string) ([]Frame
 	if len(seen) != len(frames) {
 		return nil, fmt.Errorf("selection manifest does not describe every image in the sequence")
 	}
-	if len(selected) == 0 {
+	if len(selected) == 0 && !allowEmpty {
 		return nil, fmt.Errorf("selection manifest excludes every image")
 	}
 	sort.Slice(selected, func(i, j int) bool { return selected[i].Index < selected[j].Index })
