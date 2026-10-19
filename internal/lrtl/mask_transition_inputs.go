@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -10,11 +11,12 @@ type maskTransitionInputs struct {
 	Missing []map[maskTransitionKey]map[string]float64
 }
 
-// Root correction columns can materialize missing array resources when saved,
-// including keyframes. Selector/range resources retain their separate policy.
+// Registered root columns and first selectors with an existing parent can
+// materialize missing resources on keyframes. Range resources remain separate.
 func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionNode) maskTransitionInputs {
 	plan := maskTransitionInputs{Indexes: make([]map[maskTransitionKey]maskTransitionNode, len(indexes)), Missing: make([]map[maskTransitionKey]map[string]float64, len(indexes))}
 	properties := map[maskTransitionKey]map[string]bool{}
+	booleanParents := map[maskTransitionKey]bool{}
 	for i, index := range indexes {
 		plan.Indexes[i] = make(map[maskTransitionKey]maskTransitionNode, len(index))
 		for key, node := range index {
@@ -30,6 +32,11 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 			if properties[key] == nil {
 				properties[key] = map[string]bool{}
 			}
+			if key.maskIndex == 0 {
+				if _, found, _ := crsElementValue(unwrapRDFArrayItem(node.correctionItem), "CorrectionActive"); found {
+					booleanParents[key] = true
+				}
+			}
 			for name := range node.values {
 				if _, registered := maskTransitionSpecs[name]; registered {
 					properties[key][name] = true
@@ -37,7 +44,24 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 			}
 		}
 	}
-	for key, names := range properties {
+	// A filled CorrectionActive column can create a parent even when it has no
+	// numeric fields. Its actual value is still planned by the boolean worker.
+	for key := range booleanParents {
+		for i := range plan.Indexes {
+			node := plan.Indexes[i][key]
+			node.materializable = true
+			plan.Indexes[i][key] = node
+		}
+	}
+	keys := make([]maskTransitionKey, 0, len(properties))
+	for key := range properties {
+		keys = append(keys, key)
+	}
+	// A native save writes root columns before nested selector columns. Make
+	// parent availability deterministic, independent of Go map iteration.
+	sort.Slice(keys, func(i, j int) bool { return keys[i].maskIndex < keys[j].maskIndex })
+	for _, key := range keys {
+		names := properties[key]
 		for name := range names {
 			input := make([]transitionScalar, len(indexes))
 			for i, index := range indexes {
@@ -53,8 +77,14 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 				if input[i].present || !value.present {
 					continue
 				}
-				if (!found || !maskTransitionNodeHasTemplate(node, key)) && (key.maskIndex != 0 || strings.HasPrefix(name, "RangeMask")) {
-					continue
+				if !found || !maskTransitionNodeHasTemplate(node, key) {
+					if key.maskIndex == 0 {
+						if strings.HasPrefix(name, "RangeMask") {
+							continue
+						}
+					} else if !canFillMissingSelector(plan.Indexes[i], key, name) {
+						continue
+					}
 				}
 				if strings.HasPrefix(name, "RangeMask") {
 					item := node.correctionItem
@@ -82,4 +112,31 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 		}
 	}
 	return plan
+}
+
+// Native selector columns are positional, not SyncID based. Creating their
+// first resource requires an existing parent or a prepared root scalar column.
+func canFillMissingSelector(index map[maskTransitionKey]maskTransitionNode, key maskTransitionKey, property string) bool {
+	if key.maskIndex != 1 || key.correctionIndex < 1 {
+		return false
+	}
+	if _, ok := maskTransitionCorrectionIndexes[key.collection][key.correctionIndex]; !ok {
+		return false
+	}
+	parent := key
+	parent.maskIndex = 0
+	if index[parent].correctionItem == nil && len(index[parent].values) == 0 && !index[parent].materializable {
+		return false
+	}
+	linear := property == "MaskValue" || property == "ZeroX" || property == "ZeroY" || property == "FullX" || property == "FullY"
+	radial := property == "MaskValue" || property == "Top" || property == "Left" || property == "Bottom" || property == "Right" || property == "Angle" || property == "Midpoint" || property == "Roundness" || property == "Feather" || property == "Flipped"
+	switch key.collection {
+	case "GradientBasedCorrections":
+		return linear
+	case "CircularGradientBasedCorrections":
+		return radial
+	case "MaskGroupBasedCorrections":
+		return linear || radial
+	}
+	return false
 }

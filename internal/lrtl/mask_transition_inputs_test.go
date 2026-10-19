@@ -192,8 +192,8 @@ func TestLocalMissingMaterializesSelectedCorrectionWithoutCloning(t *testing.T) 
 		t.Fatal("missing selected-frame correction was not filled")
 	}
 	for _, change := range changes[1] {
-		if change.templateCorrection != nil || change.templateMask != nil || change.key.maskIndex != 0 {
-			t.Fatal("missing selected-frame resource cloned a template/selector")
+		if change.templateCorrection != nil || change.templateMask != nil {
+			t.Fatal("missing selected-frame resource cloned a template")
 		}
 		if err := applyMaskTransition(packets[1], change); err != nil {
 			t.Fatal(err)
@@ -207,8 +207,12 @@ func TestLocalMissingMaterializesSelectedCorrectionWithoutCloning(t *testing.T) 
 	if nodes[key].values["LocalExposure2012"] != .4 {
 		t.Fatalf("missing keyframe values: %v", nodes[key].values)
 	}
-	if _, exists := nodes[maskTransitionKey{collection: key.collection, correctionIndex: 1, maskIndex: 1}]; exists {
-		t.Fatal("cloned missing selector")
+	selector := nodes[maskTransitionKey{collection: key.collection, correctionIndex: 1, maskIndex: 1}]
+	if selector.values["ZeroY"] != -.2 {
+		t.Fatalf("missing selected selector values: %v", selector.values)
+	}
+	if _, found, _ := crsElementValue(unwrapRDFArrayItem(selector.maskItem), "MaskSyncID"); found {
+		t.Fatal("cloned missing selector ID")
 	}
 	if _, found, err := crsElementValue(unwrapRDFArrayItem(nodes[key].correctionItem), "CorrectionSyncID"); err != nil || found {
 		t.Fatal("cloned source correction ID")

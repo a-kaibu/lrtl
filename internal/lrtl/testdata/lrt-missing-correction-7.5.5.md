@@ -23,15 +23,17 @@ and correction-path materialization themselves were executed.
 
 A separate isolated attempt to write only a nested selector column into a
 packet with no parent correction array fails in the native XPath array writer.
-It is not evidence for copying a whole selector tree. Go therefore expands
-missing selected root correction numbers and CorrectionActive, while retaining
-the existing selected-selector/range-resource policy. Non-keyframe template
+It is not evidence for copying a whole selector tree. Go expands missing
+selected root correction numbers and CorrectionActive. The later forty-case
+`lrt-missing-selector-7.5.5.json` observation set also establishes minimal first
+selector writes with an existing or separately prepared parent. Missing range
+resources remain excluded. Non-keyframe template
 cloning is a separate existing policy, not established by these observations.
 
 These investigations also exposed an RDF serialization issue: property
 attributes alongside rdf:parseType="Resource" are rejected by the installed
 Adobe XMP parser. Generated resource fields now use child property elements.
 The optional TestGeneratedMaskResourcesAdobeParser compiles an original small
-reflection harness and parses modern/legacy initialization and four generated
-missing-correction packets in the installed runtime. It requires Java/javac and
+reflection harness and parses modern/legacy initialization, four generated
+missing-correction packets, and forty selector cases in the installed runtime. It requires Java/javac and
 LRTL_NATIVE_JAR; ordinary tests validate generated RDF shape without Java.

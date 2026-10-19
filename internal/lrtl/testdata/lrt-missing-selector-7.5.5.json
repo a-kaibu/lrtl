@@ -1,0 +1,682 @@
+[
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "empty-array",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "empty-item",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "empty-array",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "empty-item",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Top",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Top",
+    "mode": "empty-array",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Top",
+    "mode": "empty-item",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Top",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "absent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "empty-array",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "empty-item",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "new-parent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Top",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Top",
+    "mode": "empty-array",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Top",
+    "mode": "empty-item",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Top",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "absent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "empty-array",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "empty-item",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "new-parent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "empty-array",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "empty-item",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "ZeroY",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "absent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "empty-array",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "empty-item",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "Flipped",
+    "mode": "new-parent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "empty-array",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "empty-item",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "ZeroY",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "absent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Bag",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "empty-array",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "empty-item",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Seq",
+    "maskContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "Flipped",
+    "mode": "new-parent",
+    "input": [
+      "True",
+      null,
+      "False"
+    ],
+    "expected": "True",
+    "rootContainer": "Bag",
+    "maskContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "0.125000",
+    "itemCount": 1
+  }
+]

@@ -46,6 +46,7 @@ type maskTransitionKey struct {
 }
 
 type maskTransitionNode struct {
+	materializable    bool
 	values            map[string]float64
 	luminanceRange    string
 	hasLuminanceRange bool
@@ -804,7 +805,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 	}
 	keyframeSet := make(map[int]bool, len(keyframeIndices))
 	prepared := prepareMaskTransitionInputs(indexes)
-	booleanChanges, err := planMaskBooleanTransitions(indexes, keyframeIndices)
+	booleanChanges, err := planMaskBooleanTransitions(prepared.Indexes, keyframeIndices)
 	if err != nil {
 		return nil, err
 	}
@@ -1045,6 +1046,8 @@ func ensureMaskTransitionStructure(packet *XMPPacket, change maskTransitionChang
 		return nil
 	}
 	correction := unwrapRDFArrayItem(correctionItem)
+	existingMasks := directCRSProperty(correction, "CorrectionMasks")
+	nativeEmptyMask := existingMasks.element == nil && existingMasks.attribute == nil && change.templateMask == nil
 	maskProperty, err := ensureCRSArrayProperty(correction, "CorrectionMasks")
 	if err != nil {
 		return err
@@ -1052,6 +1055,9 @@ func ensureMaskTransitionStructure(packet *XMPPacket, change maskTransitionChang
 	masks, err := ensureRDFArrayContainer(maskProperty)
 	if err != nil {
 		return err
+	}
+	if nativeEmptyMask {
+		masks.Tag = "Bag"
 	}
 	_, err = ensureRDFArrayPosition(masks, change.key.maskIndex, change.templateMask)
 	return err
