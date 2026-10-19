@@ -883,6 +883,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	filenameContains := set.String("filename-contains", "", "render only frames whose filename contains this text (case-insensitive)")
 	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores-proxy|prores-lt|prores|prores-hq|prores-4444|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
 	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
+	fadeOut := set.Float64("fade-out", 0, "fade video and audio to black/silence over the final seconds (0 off)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
 	crf := set.Int("crf", 18, "H.264/H.265 quality (0-51; lower is higher quality)")
@@ -920,6 +921,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--filename-contains": true, "-filename-contains": true,
 		"--codec": true, "-codec": true,
 		"--fps": true, "-fps": true,
+		"--fade-out": true, "-fade-out": true,
 		"--quality": true, "-quality": true,
 		"--ffmpeg": true, "-ffmpeg": true,
 		"--crf": true, "-crf": true,
@@ -1007,6 +1009,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	options := RenderOptions{
 		FrameRate:         *fps,
+		FadeOutSeconds:    *fadeOut,
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
@@ -1067,6 +1070,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	features = append(features, strings.ToUpper(selectedCodec)+" codec")
+	if options.FadeOutSeconds > 0 {
+		features = append(features, fmt.Sprintf("%g-second fade out", options.FadeOutSeconds))
+	}
 	if *applyXMPExposure {
 		features = append(features, "XMP Exposure2012")
 	}

@@ -84,6 +84,26 @@ func TestFractionalAVIHeaderPayloadAndCLI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The dependency includes wall-clock creation time in strn. Compare every
+	// other byte without requiring all renders to finish in the same second.
+	normalizeCreationTime := func(data []byte) {
+		movi := bytes.Index(data, []byte("movi"))
+		if movi < 0 {
+			t.Fatal("missing AVI movie list")
+		}
+		position := bytes.Index(data[:movi], []byte("strn"))
+		if position < 0 || position+8 > movi {
+			t.Fatal("missing AVI stream description")
+		}
+		size := int(binary.LittleEndian.Uint32(data[position+4 : position+8]))
+		end := position + 8 + size
+		prefix := []byte("Created with https://github.com/icza/mjpeg at ")
+		if end > movi || !bytes.HasPrefix(data[position+8:end], prefix) {
+			t.Fatal("unexpected AVI creation description")
+		}
+		clear(data[position+8+len(prefix) : end])
+	}
+	normalizeCreationTime(controlBytes)
 	for _, input := range []string{"23.976", "29.97", "47.952", "59.94", "49/2", "2997/100", "24000/1001"} {
 		t.Run(input, func(t *testing.T) {
 			rate, err := parseFrameRate(input)
@@ -105,6 +125,7 @@ func TestFractionalAVIHeaderPayloadAndCLI(t *testing.T) {
 			}
 			copy(data[32:36], controlBytes[32:36])
 			copy(data[128:136], controlBytes[128:136])
+			normalizeCreationTime(data)
 			if !bytes.Equal(data, controlBytes) {
 				t.Fatal("rate change altered JPEG payload, index or other headers")
 			}

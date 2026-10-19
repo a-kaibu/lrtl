@@ -28,6 +28,7 @@ type lrtRenderPreset struct {
 	Gamut            int      `json:"gamut"`
 	DynamicRange     int      `json:"dynamicRange"`
 	FadeOut          bool     `json:"fadeOut"`
+	FadeTime         int      `json:"fadeTime"`
 	Sharpen          bool     `json:"sharpen"`
 	CAS              bool     `json:"cas"`
 	RemoveAirplanes  bool     `json:"removeAirplanes"`
@@ -38,7 +39,7 @@ type lrtRenderPreset struct {
 
 func decodeLRTRenderPreset(data []byte) (lrtRenderPreset, error) {
 	// Native JSON deserialization starts with the RenderPreset constructor.
-	preset := lrtRenderPreset{Encoder: "h264", FrameRate: "29.97", OutputResV: 1080, OutputQuality: 1, SubSampling: "420", Speed: 1}
+	preset := lrtRenderPreset{Encoder: "h264", FrameRate: "29.97", OutputResV: 1080, OutputQuality: 1, SubSampling: "420", Speed: 1, FadeTime: 3}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return preset, err
@@ -155,7 +156,7 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}{
 		{"speed", preset.Speed != 1}, {"interpolation", preset.Interpolation != 0},
 		{"videoRange", preset.VideoRange != 0}, {"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
-		{"fadeOut", preset.FadeOut}, {"sharpen", preset.Sharpen}, {"cas", preset.CAS}, {"removeAirplanes", preset.RemoveAirplanes},
+		{"sharpen", preset.Sharpen}, {"cas", preset.CAS}, {"removeAirplanes", preset.RemoveAirplanes},
 		{"denoise", preset.Denoise}, {"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
 	} {
 		if field.active {
@@ -167,6 +168,15 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}
 	if preset.OutputQuality < 0 || preset.OutputQuality > 5 {
 		return options, fmt.Errorf("LRT outputQuality must be between 0 and 5")
+	}
+	if !explicit["fade-out"] {
+		options.FadeOutSeconds = 0
+		if preset.FadeOut {
+			if preset.FadeTime < 0 {
+				return options, fmt.Errorf("LRT fadeTime must be nonnegative")
+			}
+			options.FadeOutSeconds = float64(preset.FadeTime)
+		}
 	}
 	if !explicit["codec"] {
 		switch strings.ToLower(preset.Encoder) {

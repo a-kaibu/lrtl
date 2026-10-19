@@ -100,6 +100,7 @@ func ExportTIFFSequence(frames []Frame, output string, options RenderOptions) er
 	// renderer validates them before starting any destination.
 	options.FPS, options.Quality = 24, 90
 	options.FrameRate = ""
+	options.FadeOutSeconds = 0
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {
 		return &tiffSequenceWriter{directory: staging, width: width, height: height, frames: manifest.Frames}, nil
 	}); err != nil {

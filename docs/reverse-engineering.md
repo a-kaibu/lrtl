@@ -2,6 +2,25 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Fade out during rendering
+
+Sixteen direct filter-builder calls are recorded in
+`testdata/lrt-fade-7.5.5.json`. They confirm single-precision duration from the
+displayed rate, clamping a fade longer than the video, three-decimal start
+formatting and identical video/audio filter timing. The adjacent notes state
+the inputs and limits; no native encoder or GUI was launched. The Go planner
+matches all observed starts and float32 durations.
+
+`--fade-out SECONDS` now applies to pure-Go AVI video and FFmpeg MP4/MOV video
+and audio. Native fadeOut/fadeTime imports are connected; explicit CLI values
+override them, including zero to disable. The Go video operation scales RGB
+after Motion Blur and overlays, preserving 16-bit data; the audio path appends
+afade after its existing padding/trim filter. TIFF/preview image exports clear
+the video-only setting. Frame-count/index preservation, source retention,
+early JPEG passthrough, layering, invalid values, preset/batch forwarding and
+real decoded audio/video are regression tested. Native color-managed YUV pixel
+equivalence and native Motion Blur trimming remain outside this measurement.
+
 ## Saved native render presets
 
 `render --lrt-render-preset FILE` imports a native RenderPreset JSON object or
@@ -43,7 +62,7 @@ floating-point or per-frame rounding drift.
 The pinned pure-Go MJPEG writer exposes integer FPS only. lrtl finalizes its
 temporary AVI, verifies that writer's known fixed header layout, and updates
 the main interval and video stream scale/rate before publication. It does not
-parse or modify arbitrary input AVIs. Tests compare all remaining bytes with
+parse or modify arbitrary input AVIs. Tests normalize only the generated strn creation timestamp, then compare all remaining bytes with
 an integer-rate control, including JPEG payloads and idx1 entries. Optional
 FFmpeg/ffprobe integration verifies actual stream rate/count/duration for AVI,
 MP4 and MOV, plus AAC padding from short audio to rational video duration.

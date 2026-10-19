@@ -20,7 +20,7 @@ The broader arbitrary-fraction input syntax is a lrtl capability, not a claim
 about the native helper's accepted labels or its full export command builder.
 
 Tests compare generated AVI stream scale/rate, rounded main-header interval,
-unchanged JPEG payload/index bytes, source retention, batch forwarding, SRT
+unchanged JPEG payload/index bytes (normalizing only the library-generated stream description timestamp), source retention, batch forwarding, SRT
 alias equivalence and overflow-safe long-sequence timing. FFmpeg argument tests
 cover H.264/H.265/ProRes/DNxHR with audio trimming. Optional actual FFmpeg/ffprobe
 tests check AVI/H.264 MP4/ProRes MOV frame rate, count and duration, plus a short

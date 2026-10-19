@@ -22,6 +22,7 @@ type RenderOptions struct {
 	LRTPreview        string
 	FPS               int
 	FrameRate         string
+	FadeOutSeconds    float64
 	Quality           int
 	FFmpegPath        string
 	Codec             string
@@ -168,7 +169,16 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
 	}
-	if _, err := options.frameRate(); err != nil {
+	rate, err := options.frameRate()
+	if err != nil {
+		return err
+	}
+	label := options.FrameRate
+	if label == "" {
+		label = rate.String()
+	}
+	fade, err := planVideoFade(len(frames), rate, label, options.FadeOutSeconds)
+	if err != nil {
 		return err
 	}
 	if options.Quality < 1 || options.Quality > 100 {
@@ -502,7 +512,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, len(frames), options.CRF, options.Preset, options.AudioPath)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, len(frames), options.CRF, options.Preset, options.AudioPath, fade)
 		if err != nil {
 			cleanup()
 			return err
@@ -624,6 +634,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 				}
 			}
+			if img != nil {
+				img = fadeVideoImage(img, fade.gain(target, rate))
+			}
 			if outputExtension == ".avi" {
 				var encoded bytes.Buffer
 				if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
@@ -635,6 +648,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				if err != nil {
 					return fmt.Errorf("convert overlaid %s to RGB48: %w", frames[target].Image, err)
 				}
+			}
+			if outputExtension != ".avi" && img == nil {
+				fadeRGB48(rgb, fade.gain(target, rate))
 			}
 			if err := writer.AddFrame(rgb); err != nil {
 				closeErr := writer.Close()
@@ -718,6 +734,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if err != nil {
 				return fmt.Errorf("convert %s to RGB48: %w", frame.Image, err)
 			}
+			fadeRGB48(rgb, fade.gain(index, rate))
 			if err := writer.AddFrame(rgb); err != nil {
 				closeErr := writer.Close()
 				writerClosed = true
@@ -729,7 +746,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || format != "jpeg" {
+		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || format != "jpeg" || fade.gain(index, rate) < 1 {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
@@ -767,6 +784,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if options.Watermark != "" {
 				img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 			}
+			img = fadeVideoImage(img, fade.gain(index, rate))
 			if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
 				return fmt.Errorf("encode %s as JPEG: %w", frame.Image, err)
 			}

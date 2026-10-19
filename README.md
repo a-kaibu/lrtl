@@ -117,7 +117,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
-| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、保存済みアスペクト比に対応。HDR・速度変更・追加フィルターなどはエラーにする | 一部 |
+| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、フェード、保存済みアスペクト比に対応。HDR・速度変更・追加フィルターなどはエラーにする | 一部 |
 | 選択範囲の手動キーフレーム | 選択画像への4/5つ星マーク設定・解除 | `mark-sequence`／`unmark-sequence`で一括設定・解除。ファイル名・評価・JSON・反転で対象を選択し、元評価の復元、HG保護、保存前検証、バックアップに対応。GUI操作との比較は未実施 | CLI実装済み |
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
@@ -513,6 +513,20 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 
 EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用し、`preview-ev --write`で同版から復元したヒストグラム計算値を生成できます。既存のLRTプレビューと保存済みROIは`preview-ev --lrt-preview camera --lrt-reference --write`で測光できます。プレビュー画像の生成経路全体との一致は未検証です。Piaの平滑化部品は合成数値列で実測比較済みですが、全ワークフローの比較は未完了です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
 
+## フェードアウト
+
+`render --fade-out SECONDS`で動画の最後を黒へ、MP4/MOVに音声がある場合は同じ時刻から無音へフェードできます。既定の`0`で無効になり、小数秒も指定可能です。動画より長い時間を指定した場合は、動画全体へ短縮します。AVIの映像処理はGoだけで動きます。
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\fade.avi --fps 24 --fade-out 3
+lrtl render C:\photos\sequence --output C:\photos\fade.mp4 --audio C:\photos\music.wav --fade-out 2.5
+lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --fade-out 3
+```
+
+LRTプリセットの`fadeOut=true`／`fadeTime`も読み込み、`--fade-out 0`で明示的に解除できます。開始時刻の小数3桁丸めと、映像・音声の開始／長さの共通化を、本体のフィルター生成16ケースと比較しています。映像はMotion Blur、透かし・時刻表示を適用した後のRGB値を減衰させます。露出補正とは別の処理です。字幕ファイル自体にはフェードを追加しません。
+
+最後のフレームは動画終了時刻より前に表示されるため、完全な黒へ到達するフレームがない場合があります。これは終端時刻へ向けてフェードする方式によるものです。AVIの変更不要な前半JPEGは再圧縮せず、フェードが必要なフレームを再エンコードします。Go側のRGBフェードと、本体の色変換済みYUVフェードの画素完全一致は未検証です。時刻計算、16-bit精度、Motion Blur・透かしとの順序、元画像保持、不正値での既存出力保持、実MP4の映像と音量をテストしています。
+
 ## LRTのレンダープリセットを使う
 
 `render --lrt-render-preset FILE.json`で、本体のRenderPreset形式のJSONを再利用できます。LRTの設定JSON全体を渡した場合は`lastRenderSettings`を読み、`--lrt-preset-name NAME`を付けると`renderPresets`から完全一致する名前を選びます。同名が複数ある場合はエラーです。単独のプリセットJSONも受け付けます。
@@ -527,9 +541,9 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --lrt-render-
 
 `encoder`、`frameRate`、`outputResV`、`outputQuality`を必須とし、省略可能な項目には本体のコンストラクターで観測した既定値を使います。読み込むのは指定したJSONだけで、LRTのグローバル設定を自動探索・変更しません。JSON内の音声が有効な場合、相対パスはそのJSONのフォルダーを基準に解決します。設定JSON全体の`renderConstrainCrop=true`では`renderAR`も使います。動画の拡張子は選んだコーデックに合わせて指定してください。
 
-CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
+CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--fade-out`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
 
-HDR・広色域・full range・速度変更・フレーム生成・フェード・追加シャープ・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420に限ります。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
+HDR・広色域・full range・速度変更・フレーム生成・追加シャープ・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420に限ります。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
 
 この対応に合わせ、`--codec prores-proxy|prores-lt|prores-4444`も追加しました。FFmpegにはProRes 4444用10-bit YUVを渡し、ffprobeでは4444・12-bitのデコード形式として報告されることを確認しています。完全な12-bit入力精度やアルファチャンネルの保持は実装していません。本体で生成した6種類のJSONと画質ヘルパー値、明示CLIとの画素入力・引数一致、設定と元画像の保持、バッチ転送、不正設定時の出力保持、実MOVのプロファイルをテストしています。
 

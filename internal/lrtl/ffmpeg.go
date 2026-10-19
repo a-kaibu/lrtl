@@ -88,7 +88,7 @@ func proresProfile(codec string) (string, string, bool) {
 	return "", "", false
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb48le",
@@ -124,9 +124,13 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	if audioPath != "" {
 		duration := strconv.FormatFloat(rate.seconds(frameCount), 'f', 9, 64)
+		audioFilter := "asetpts=PTS-STARTPTS,apad,atrim=duration=" + duration
+		if fade.duration > 0 {
+			audioFilter += ",afade=t=out:st=" + strconv.FormatFloat(fade.start, 'f', 3, 64) + ":d=" + strconv.FormatFloat(fade.duration, 'f', -1, 32)
+		}
 		arguments = append(arguments,
 			"-c:a", "aac", "-b:a", "192k",
-			"-af", "asetpts=PTS-STARTPTS,apad,atrim=duration="+duration,
+			"-af", audioFilter,
 			"-t", duration, "-shortest",
 		)
 	}
