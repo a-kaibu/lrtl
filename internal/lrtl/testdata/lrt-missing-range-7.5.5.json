@@ -1,0 +1,2306 @@
+[
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "GradientBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "CircularGradientBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "PaintBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 1,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 1
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "absent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "empty",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "Type",
+    "mode": "new-parent",
+    "input": [
+      "1",
+      null,
+      "2"
+    ],
+    "expected": "1.000000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "ColorAmount",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumMin",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumMax",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "absent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "empty",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumFeather",
+    "mode": "new-parent",
+    "input": [
+      "0.4",
+      null,
+      "0.8"
+    ],
+    "expected": "0.400000",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "absent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "empty",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Seq",
+    "rootID": "own-1",
+    "rootExposure": "0.125",
+    "itemCount": 2
+  },
+  {
+    "collection": "MaskGroupBasedCorrections",
+    "slot": 2,
+    "property": "LumRange",
+    "mode": "new-parent",
+    "input": [
+      "0.1 0.2 0.8 0.9",
+      null,
+      "0.2 0.3 0.7 0.8"
+    ],
+    "expected": "0.1 0.2 0.8 0.9",
+    "rootContainer": "Bag",
+    "rootID": "",
+    "rootExposure": "",
+    "itemCount": 2
+  }
+]

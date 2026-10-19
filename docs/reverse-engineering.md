@@ -4,6 +4,16 @@ These notes record observed interfaces and public workflow behavior used to desi
 
 ## Missing correction resources and RDF validity
 
+Root range materialization is now compared with 144 installed-runtime cases in
+`internal/lrtl/testdata/lrt-missing-range-7.5.5.json`: four correction families,
+positions 1/2, five numeric range columns plus LumRange text, and absent/empty
+range structs or absent parents. Registered root range paths can create both
+their correction array and range struct without another parent scalar column.
+Own PointModels survive, while source sample payloads are not copied. Malformed
+text/array/attribute range representations fail before writes. The optional
+native parser harness now accepts 190 generated packets. The probe boundary
+and metadata-stamping tail exception are described alongside the fixture.
+
 Follow-up selector observations are recorded in
 `internal/lrtl/testdata/lrt-missing-selector-7.5.5.json`: forty cases cover
 Gradient/Circular/MaskGroup first selectors, slots 1/2, absent/empty arrays and
@@ -12,7 +22,7 @@ parent IDs and exposure survive; source selector IDs and What are not copied.
 New nested arrays use Bag and existing Seq arrays retain their form. Root
 numeric/boolean availability is prepared before selector columns so one pass
 produces the final proposed structure. The new path is restricted to registered
-linear/radial coordinates and Flipped, excluding brush, ranges, SyncID fallback
+linear/radial coordinates and Flipped, excluding brush, selector-level ranges, SyncID fallback
 and later selector components. Tests also exercise repeated CLI runs, original
 backups, zero/boolean-only parents, and later structural failures without any
 earlier file writes. The same native-writer metadata-tail limitation applies.
@@ -29,7 +39,7 @@ observations do not establish a complete native Auto-Transition/save workflow.
 lrtl now fills missing selected root corrections as well as fields on existing
 resources. Filled numbers become anchors before interpolation. Missing selected
 first selectors now receive registered linear/radial fields and Flipped when
-their parent exists or can be prepared; missing range resources remain excluded.
+their parent exists or can be prepared; missing selector-level range resources remain excluded; registered root ranges now materialize from scalar columns.
 Tests compare all sixteen observed property
 values and array sizes, check a CLI sequence against an independently prefilled
 keyframe, and verify dry runs, original backups, own IDs, unrelated metadata,
@@ -39,9 +49,8 @@ During the probe, Adobe's XMP parser rejected property attributes combined with
 `rdf:parseType="Resource"`. lrtl's new-field writer now emits property children
 on such elements. Normal tests check generated RDF shape; the optional
 `TestGeneratedMaskResourcesAdobeParser` uses Java/javac and `LRTL_NATIVE_JAR`
-to parse 46 generated packets in the installed runtime: modern/legacy
-initialization, four missing-correction collections, and forty first-selector
-cases. The runtime probe and
+to parse 190 generated packets in the installed runtime: modern/legacy
+initialization, four missing-correction collections, forty first-selector cases, and 144 root-range cases. The runtime probe and
 parser are development checks only, with no Java dependency in the Go CLI.
 
 ## Saved Deflicker controls
@@ -207,7 +216,7 @@ Regression tests cover mixed 2/3/4/5 ratings, a stale lrtl marker with a non-edi
 
 lrtl prepares separate copies of indexed numeric maps before local interpolation. Registered root correction numbers can fill absent resources (including selected keyframes); the first selector can also materialize when its parent exists or can be prepared from root scalar columns. Numeric fields can be supplied by non-keyframes; filled values then participate in the normal 4-star anchor selection, and missing scalar fields on existing selected keyframe resources are proposed for writing. The original index and RDF trees are not mutated during preparation. Known original values are compared against proposed values, preserving the packet's own IDs, active flags and unrelated data. LocalTemperature/LocalTint are ordinary local numeric columns; the global WB preflight exclusions do not apply to them.
 
-Missing root correction resources and empty root RDF items now materialize registered scalar values; missing ranges, unsupported selector fields, ID-fallback records, unregistered positions and selector components after index 1 retain their exclusions. Non-keyframe structure cloning remains a separate existing policy. RangeMask fields are filled only when that nested resource exists. Malformed/non-finite/structured registered numbers fail instead of being silently treated as missing and overwritten by a neighbor. This validation is lrtl behavior; malformed product-input parity is not established. Filled radial angles receive the observed post-normalization once before serialization; explicit activity flags remain independent.
+Missing root correction resources and empty root RDF items now materialize registered scalar values; missing selector-level ranges, unsupported selector fields, ID-fallback records, unregistered positions and selector components after index 1 retain their exclusions. Non-keyframe structure cloning remains a separate existing policy. Registered root RangeMask fields now materialize missing structs; selector-level ranges still require their existing resource. Malformed/non-finite/structured registered numbers fail instead of being silently treated as missing and overwritten by a neighbor. This validation is lrtl behavior; malformed product-input parity is not established. Filled radial angles receive the observed post-normalization once before serialization; explicit activity flags remain independent.
 
 Eight regression tests include nine measured local-column cases, old/modern positional layouts, precise selected-keyframe writes, selector coordinates, own IDs and unrelated metadata, minimal selected root-resource creation without template cloning, ID/reserved/second-selector exclusions, malformed input without writes/backups, normalized radial angles with repeat idempotence, and absent RangeMask resources. A five-frame CLI integration previews, writes, verifies original-content backups/no-op repeats, and renders actual MJPEG AVI pixels against an independent sRGB exposure formula while preserving source images. It uses a uniform source to avoid confusing JPEG chroma artifacts with the exposure calculation. Complete local structural parity, unsupported mask types and Adobe pixel equivalence remain outside this measurement.
 

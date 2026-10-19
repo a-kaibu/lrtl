@@ -12,11 +12,12 @@ type maskTransitionInputs struct {
 }
 
 // Registered root columns and first selectors with an existing parent can
-// materialize missing resources on keyframes. Range resources remain separate.
+// materialize missing resources on keyframes. Registered root range fields
+// can create their own struct; selector-level ranges remain separate.
 func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionNode) maskTransitionInputs {
 	plan := maskTransitionInputs{Indexes: make([]map[maskTransitionKey]maskTransitionNode, len(indexes)), Missing: make([]map[maskTransitionKey]map[string]float64, len(indexes))}
 	properties := map[maskTransitionKey]map[string]bool{}
-	booleanParents := map[maskTransitionKey]bool{}
+	scalarParents := map[maskTransitionKey]bool{}
 	for i, index := range indexes {
 		plan.Indexes[i] = make(map[maskTransitionKey]maskTransitionNode, len(index))
 		for key, node := range index {
@@ -34,7 +35,10 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 			}
 			if key.maskIndex == 0 {
 				if _, found, _ := crsElementValue(unwrapRDFArrayItem(node.correctionItem), "CorrectionActive"); found {
-					booleanParents[key] = true
+					scalarParents[key] = true
+				}
+				if node.hasLuminanceRange {
+					scalarParents[key] = true
 				}
 			}
 			for name := range node.values {
@@ -44,9 +48,9 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 			}
 		}
 	}
-	// A filled CorrectionActive column can create a parent even when it has no
-	// numeric fields. Its actual value is still planned by the boolean worker.
-	for key := range booleanParents {
+	// Boolean and LumRange text columns can create a parent without numbers.
+	// Their actual values are still planned by the separate scalar workers.
+	for key := range scalarParents {
 		for i := range plan.Indexes {
 			node := plan.Indexes[i][key]
 			node.materializable = true
@@ -78,20 +82,12 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 					continue
 				}
 				if !found || !maskTransitionNodeHasTemplate(node, key) {
-					if key.maskIndex == 0 {
-						if strings.HasPrefix(name, "RangeMask") {
-							continue
-						}
-					} else if !canFillMissingSelector(plan.Indexes[i], key, name) {
+					if key.maskIndex > 0 && !canFillMissingSelector(plan.Indexes[i], key, name) {
 						continue
 					}
 				}
-				if strings.HasPrefix(name, "RangeMask") {
-					item := node.correctionItem
-					if key.maskIndex > 0 {
-						item = node.maskItem
-					}
-					if correctionRangeMaskElement(unwrapRDFArrayItem(item)) == nil {
+				if strings.HasPrefix(name, "RangeMask") && key.maskIndex > 0 {
+					if correctionRangeMaskElement(unwrapRDFArrayItem(node.maskItem)) == nil {
 						continue
 					}
 				}

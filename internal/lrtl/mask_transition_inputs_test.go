@@ -437,7 +437,7 @@ func TestLocalMissingAngleNormalizesOnceAndEqualizesActivity(t *testing.T) {
 	}
 }
 
-func TestLocalMissingPreflightDoesNotCreateRangeMask(t *testing.T) {
+func TestLocalMissingPreflightCreatesRegisteredRootRangeMask(t *testing.T) {
 	packets := []*XMPPacket{localMissingPacket(t, "GradientBasedCorrections", nil, nil), localMissingPacket(t, "GradientBasedCorrections", nil, nil)}
 	key := maskTransitionKey{collection: "GradientBasedCorrections", correctionIndex: 1}
 	source, err := indexMaskTransitionNodes(packets[0])
@@ -459,10 +459,8 @@ func TestLocalMissingPreflightDoesNotCreateRangeMask(t *testing.T) {
 		}
 	}
 	prepared := prepareMaskTransitionInputs(indexes)
-	for name := range prepared.Missing[1][key] {
-		if strings.HasPrefix(name, "RangeMask") {
-			t.Fatal("planned fields for absent range resource")
-		}
+	if prepared.Missing[1][key]["RangeMaskType"] != 1 || prepared.Missing[1][key]["RangeMaskColorAmount"] != .7 {
+		t.Fatal("did not plan missing registered range fields")
 	}
 	changes, err := planMaskTransitions(packets, []int{0, 1}, 50)
 	if err != nil {
@@ -477,7 +475,7 @@ func TestLocalMissingPreflightDoesNotCreateRangeMask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if correctionRangeMaskElement(unwrapRDFArrayItem(target[key].correctionItem)) != nil {
-		t.Fatal("created missing range resource")
+	if correctionRangeMaskElement(unwrapRDFArrayItem(target[key].correctionItem)) == nil || target[key].values["RangeMaskColorAmount"] != .7 {
+		t.Fatal("did not materialize the missing range resource")
 	}
 }

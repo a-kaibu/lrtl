@@ -301,6 +301,20 @@ func generatedMaskResources(t *testing.T) []string {
 		}
 		files = append(files, path)
 	}
+	for i, tc := range missingRangeObservations(t) {
+		packets := missingRangePackets(t, tc)
+		applySelectedRange(t, packets)
+		assertRDFResourceSyntax(t, packets[1].Document.Root())
+		data, err := packets[1].Serialize()
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(dir, fmt.Sprintf("range-%d.xmp", i))
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, path)
+	}
 	return files
 }
 

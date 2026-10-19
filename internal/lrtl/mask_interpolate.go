@@ -845,6 +845,11 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		luminanceRangeByKey[key], hasLuminanceRangeByKey[key] = firstMaskLuminanceRange(indexes, key)
 	}
 	for target := range packets {
+		for key := range allKeys {
+			if registeredRootRangeKey(key) && hasLuminanceRangeByKey[key] {
+				keysByTarget[target][key] = true
+			}
+		}
 		if !keyframeSet[target] {
 			for key := range allKeys {
 				if key.correctionIndex < 1 {
@@ -945,7 +950,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 			}
 			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
 			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
-			if keyframeSet[target] && (!present || !maskTransitionNodeHasTemplate(currentNode, key)) {
+			if keyframeSet[target] && !registeredRootRangeKey(key) && (!present || !maskTransitionNodeHasTemplate(currentNode, key)) {
 				hasLuminanceRangeChange = false
 			}
 			if len(values) > 0 || hasLuminanceRangeChange {
@@ -1134,9 +1139,9 @@ func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 	}
 	for name, value := range change.values {
 		if strings.HasPrefix(name, "RangeMask") {
-			rangeElement := correctionRangeMaskElement(target)
-			if rangeElement == nil {
-				return xmpError("missing crs:CorrectionRangeMask for range-mask transition")
+			rangeElement, err := rangeTransitionElement(target, change.key)
+			if err != nil {
+				return err
 			}
 			if err := setCRSElementValue(rangeElement, strings.TrimPrefix(name, "RangeMask"), value); err != nil {
 				return err
@@ -1148,15 +1153,45 @@ func applyMaskTransition(packet *XMPPacket, change maskTransitionChange) error {
 		}
 	}
 	if change.hasLuminanceRange {
-		rangeElement := correctionRangeMaskElement(target)
-		if rangeElement == nil {
-			return xmpError("missing crs:CorrectionRangeMask for luminance-range transition")
+		rangeElement, err := rangeTransitionElement(target, change.key)
+		if err != nil {
+			return err
 		}
 		if err := setCRSElementValue(rangeElement, "LumRange", change.luminanceRange); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func registeredRootRangeKey(key maskTransitionKey) bool {
+	_, registered := maskTransitionCorrectionIndexes[key.collection][key.correctionIndex]
+	return registered && key.maskIndex == 0 && key.correctionID == ""
+}
+
+func rangeTransitionElement(target *etree.Element, key maskTransitionKey) (*etree.Element, error) {
+	property := directCRSProperty(target, "CorrectionRangeMask")
+	if property.attribute != nil {
+		return nil, xmpError("crs:CorrectionRangeMask must be a resource, not an attribute")
+	}
+	if property.element == nil {
+		if !registeredRootRangeKey(key) {
+			return nil, xmpError("missing crs:CorrectionRangeMask for transition")
+		}
+		prefix := ensurePrefix(target, "crs", crsNamespace)
+		property.element = target.CreateElement(prefix + ":CorrectionRangeMask")
+		rdfPrefix := ensurePrefix(property.element, "rdf", rdfNamespace)
+		property.element.CreateAttr(rdfPrefix+":parseType", "Resource")
+	}
+	for _, token := range property.element.Child {
+		if text, ok := token.(*etree.CharData); ok && strings.TrimSpace(text.Data) != "" {
+			return nil, xmpError("crs:CorrectionRangeMask must be a resource, not text")
+		}
+		if child, ok := token.(*etree.Element); ok && child.NamespaceURI() == rdfNamespace && (child.Tag == "Seq" || child.Tag == "Bag" || child.Tag == "Alt") {
+			return nil, xmpError("crs:CorrectionRangeMask must be a struct, not an array")
+		}
+	}
+	return property.element, nil
 }
 
 func maskTransitionKeyLabel(key maskTransitionKey) string {

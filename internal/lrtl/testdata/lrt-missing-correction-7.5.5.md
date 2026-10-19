@@ -35,5 +35,5 @@ attributes alongside rdf:parseType="Resource" are rejected by the installed
 Adobe XMP parser. Generated resource fields now use child property elements.
 The optional TestGeneratedMaskResourcesAdobeParser compiles an original small
 reflection harness and parses modern/legacy initialization, four generated
-missing-correction packets, and forty selector cases in the installed runtime. It requires Java/javac and
+missing-correction packets, forty selector cases, and 144 root-range cases in the installed runtime. It requires Java/javac and
 LRTL_NATIVE_JAR; ordinary tests validate generated RDF shape without Java.
