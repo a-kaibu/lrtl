@@ -4,6 +4,25 @@ These notes record observed interfaces and public workflow behavior used to desi
 
 ## CLI frame selection and sequence copies
 
+`set-sequence` now applies the existing scalar/PreviewEV/local-mask editing rules
+to selected frames. It shares root numeric parsing with single-image `set`,
+prepares all candidates before writing, deduplicates shared-sidecar outputs and
+rejects an edit that would affect an unselected image through a shared XMP.
+Both candidate naming variants are checked: updating the common stem could
+otherwise overtake an unselected image's currently active private sidecar.
+Dry runs are the default; writes use original-content backups unless explicitly
+disabled. Image bytes, embedded metadata and target-owned mask IDs survive.
+Unchanged candidates produce no write or extra backup. Tests include per-image
+XMP controls, selection/inversion, negative values/ratings, mask/internal-role
+validation, late parsing failures, embedded packets and AVI output controls.
+
+An observed sidecar-precedence regression was also fixed in the common writer:
+when both naming variants have future modification times, writing the chosen
+file with the current clock time could make the stale companion newest. Existing
+future-dated outputs now advance by two seconds before publication, retaining
+the effective sidecar and providing a changed timestamp on coarse filesystems.
+The regression test checks both fresh discovery and the saved effective value.
+
 The existing feature inventory includes selection, inversion and copying photos.
 `select` now resolves case-insensitive filename, XMP rating and existing manifest
 filters as an intersection, optionally inverted against the complete sequence.

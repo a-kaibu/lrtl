@@ -211,6 +211,16 @@ func WritePacket(path string, packet *XMPPacket, backup bool) (string, error) {
 		cleanup()
 		return backupPath, err
 	}
+	// Discovery chooses the newest sidecar variant. Do not make an edited
+	// future-dated active file older than its stale companion. Two seconds
+	// also advances timestamps on filesystems with coarse time resolution.
+	if statErr == nil && info.ModTime().After(time.Now()) {
+		stamp := info.ModTime().Add(2 * time.Second)
+		if err := os.Chtimes(tempPath, stamp, stamp); err != nil {
+			cleanup()
+			return backupPath, err
+		}
+	}
 	if err := os.Rename(tempPath, path); err != nil {
 		cleanup()
 		return backupPath, err

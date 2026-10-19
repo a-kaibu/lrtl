@@ -18,10 +18,20 @@ import (
 const version = "0.9.0"
 
 func flagFirst(arguments []string, valueFlags map[string]bool) []string {
+	return reorderFlags(arguments, valueFlags, false)
+}
+
+func reorderFlags(arguments []string, valueFlags map[string]bool, numericOperands bool) []string {
 	flags := make([]string, 0, len(arguments))
 	operands := make([]string, 0, len(arguments))
 	for index := 0; index < len(arguments); index++ {
 		argument := arguments[index]
+		if numericOperands && strings.HasPrefix(argument, "-") {
+			if _, err := strconv.ParseFloat(argument, 64); err == nil {
+				operands = append(operands, argument)
+				continue
+			}
+		}
 		if argument == "--" {
 			operands = append(operands, arguments[index+1:]...)
 			break
@@ -82,6 +92,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runMark(arguments[1:], stdout, stderr)
 	case "set":
 		return runSet(arguments[1:], stdout, stderr)
+	case "set-sequence":
+		return runSetSequence(arguments[1:], stdout, stderr)
 	case "unmark":
 		return runUnmark(arguments[1:], stdout, stderr)
 	case "interpolate":
@@ -142,6 +154,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
 	fmt.Fprintln(writer, "  select DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--output FILTER.json]")
 	fmt.Fprintln(writer, "  copy-sequence DIRECTORY --output NEW_DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write]")
+	fmt.Fprintln(writer, "  set-sequence DIRECTORY PROPERTY VALUE [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed|lossy] [--dng-long-edge N] [--dng-converter PATH|--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
@@ -648,48 +661,21 @@ func runSet(arguments []string, stdout, stderr io.Writer) int {
 	if strings.Contains(operands[1], "[") {
 		return runSetMaskProperty(image, sidecar, operands[1], operands[2], dryRun, noBackup, stdout, stderr)
 	}
-	property := strings.TrimPrefix(operands[1], "crs:")
-	storedProperty := "crs:" + property
-	previewEV := property == "PreviewEV" || property == "lrt:PreviewEV"
-	if previewEV {
-		storedProperty = "lrt:ExternalExposureDefault"
-	} else {
-		if strings.Contains(property, ":") {
-			return reportError(stderr, fmt.Errorf("property must be a numeric Camera Raw control or PreviewEV: %s", operands[1]))
-		}
-		allowed := false
-		for _, candidate := range NumericCRSProperties {
-			if property == candidate {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			return reportError(stderr, fmt.Errorf("unsupported numeric Camera Raw property: %s", operands[1]))
-		}
-	}
-	value, err := strconv.ParseFloat(operands[2], 64)
-	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
-		return reportError(stderr, fmt.Errorf("value must be a finite number: %s", operands[2]))
-	}
-	storedValue := value
-	if previewEV {
-		storedValue *= 4
-		if math.IsInf(storedValue, 0) {
-			return reportError(stderr, fmt.Errorf("PreviewEV is outside the supported numeric range: %s", operands[2]))
-		}
+	edit, err := parseNumericXMPSet(operands[1], operands[2])
+	if err != nil {
+		return reportError(stderr, err)
 	}
 	packet, err := PacketForImage(image, sidecar)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	if err := packet.SetScalar(storedProperty, formatNumber(storedValue)); err != nil {
+	if err := packet.SetScalar(edit.property, edit.value); err != nil {
 		return reportError(stderr, err)
 	}
-	if previewEV {
-		fmt.Fprintf(stdout, "%s: set PreviewEV=%s (%s=%s)\n", filepath.Base(image), formatNumber(value), storedProperty, formatNumber(storedValue))
+	if edit.previewEV {
+		fmt.Fprintf(stdout, "%s: set PreviewEV=%s (%s=%s)\n", filepath.Base(image), formatNumber(edit.inputValue), edit.property, edit.value)
 	} else {
-		fmt.Fprintf(stdout, "%s: set %s=%s\n", filepath.Base(image), storedProperty, formatNumber(storedValue))
+		fmt.Fprintf(stdout, "%s: set %s=%s\n", filepath.Base(image), edit.property, edit.value)
 	}
 	if dryRun {
 		fmt.Fprintf(stdout, "Dry run. Would write %s\n", sidecar)
