@@ -117,6 +117,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
+| 選択範囲の手動キーフレーム | 選択画像への4/5つ星マーク設定・解除 | `mark-sequence`／`unmark-sequence`で一括設定・解除。ファイル名・評価・JSON・反転で対象を選択し、元評価の復元、HG保護、保存前検証、バックアップに対応。GUI操作との比較は未実施 | CLI実装済み |
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量は、`set IMAGE PreviewEV VALUE`またはGUIで編集できるLRT値`lrt:ExternalExposureDefault / 4`が全フレームで有効なら使い、値が揃わない場合は画像輝度へフォールバックして、LRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式で算出。候補位置も同版の整数間隔・端点選択ルールに対応。GUIでは候補一覧から保存対象を選べる。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。既存マーカーは既定で保持し、選択中の評価だけ数量推定から差し引く。`--replace-existing`では同じ評価を連番から削除し、他の2〜5つ星との衝突を前方9枚以内の空きフレームへ移す。`--evenly-spaced`は輝度解析なしで利用可能。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。`preview-ev --write`で復元したヒストグラム測光値をXMPへ生成できる。LRT本体のプレビュー縮小/ROIと同じ画像入力、および数量スライダーは未対応 | 一部 |
@@ -1160,6 +1161,20 @@ lrtl set-sequence C:\photos\sequence 'MaskGroupBasedCorrections[1].CorrectionMas
 共通のXMP保存処理では、未来日時を持つ既存サイドカーの更新日時も進めます。`.画像拡張子.xmp`と通常のstem `.xmp`が併存するとき、保存後に古い方が採用されて編集が見えなくなる問題を回帰テストで修正しました。
 
 単一画像編集とのXMP一致、負の値・評価、選択JSONと反転、局所項目、埋め込みメタデータ、元内容バックアップ、繰り返し時の保持、後の不正XMPや内部補正に対する保存前エラー、編集後のAVI一致をテストしています。
+
+### 選択範囲のキーフレーム設定・解除
+
+`mark-sequence`で選択した画像を4つ星（`--kind default`）または5つ星（`--kind crop`）に設定できます。`unmark-sequence`でlrtlが付けたマークを解除し、設定前の評価（評価なしも含む）を復元します。両方とも既定は変更予定の表示で、保存には`--write`が必要です。`select`と同じファイル名・評価・JSON・反転の選択フラグを使えます。
+
+```powershell
+lrtl mark-sequence C:\photos\sequence --selection C:\photos\filter.json --kind default
+lrtl mark-sequence C:\photos\sequence --selection C:\photos\filter.json --kind crop --write
+lrtl unmark-sequence C:\photos\sequence --selection C:\photos\filter.json --write
+```
+
+4つ星から5つ星へ変更しても最初の評価を保持します。解除時はlrtlのマークがない画像をスキップし、外部で付けた4/5つ星も消す場合だけ`--force-rating`を指定します。2/3つ星や内部Holy Grailマークは解除しません。通常マークの設定対象にHGが含まれる場合、およびlrtlのマークを持つ画像が後からHGへ変更されている場合は、全対象の保存前にエラーにします。
+
+既存XMPのバックアップ、変更がない場合の保存省略、共有XMPによる選択外画像の保護、埋め込みXMPの引き継ぎは`set-sequence`と共通です。保存は事前検証後にXMP単位で行うため、保存中のI/O障害に対する連番全体の原子性は保証しません。評価の復元、種別変更、選択反転、繰り返し、HG保護、後半の不正XMP、共有XMP、元画像保持を回帰テストに含めています。
 
 ## 開発
 

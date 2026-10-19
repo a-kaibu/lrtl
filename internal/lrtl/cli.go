@@ -90,6 +90,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runLensTag(arguments[1:], stdout, stderr)
 	case "mark":
 		return runMark(arguments[1:], stdout, stderr)
+	case "mark-sequence", "unmark-sequence":
+		return runMarkSequence(arguments[1:], stdout, stderr, arguments[0] == "unmark-sequence")
 	case "set":
 		return runSet(arguments[1:], stdout, stderr)
 	case "set-sequence":
@@ -160,6 +162,8 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  timeshift DIRECTORY --offset DURATION [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  lens-tag DIRECTORY --aperture f/8 [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  mark IMAGE [--kind default|crop]       mark an XMP keyframe")
+	fmt.Fprintln(writer, "  mark-sequence DIRECTORY [--kind default|crop] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]")
+	fmt.Fprintln(writer, "  unmark-sequence DIRECTORY [--force-rating] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  set IMAGE PROPERTY|MASK_PATH VALUE    edit global/local Camera Raw values or LRT Preview EV")
 	fmt.Fprintln(writer, "  masks IMAGE_OR_XMP [--json]            inspect correction paths and mask values")
 	fmt.Fprintln(writer, "  crop IMAGE_OR_XMP|DIRECTORY [--rect L,T,R,B] [--angle DEGREES] [--enable|--clear] [--mark] [--dry-run] [--no-backup] [--json]")

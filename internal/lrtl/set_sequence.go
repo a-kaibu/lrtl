@@ -82,6 +82,20 @@ func planSequenceValueEdits(all, selected []Frame, property, text string) ([]pac
 			return nil, err
 		}
 	}
+	return planSelectedPacketEdits(all, selected, func(packet *XMPPacket) error {
+		if local != nil {
+			_, err := setMaskProperty(packet, *local, text)
+			return err
+		}
+		return packet.SetScalar(global.property, global.value)
+	})
+}
+
+// Validate every candidate before the caller starts writing any sidecars.
+func planSelectedPacketEdits(all, selected []Frame, edit func(*XMPPacket) error) ([]packetOutput, error) {
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("no frames selected")
+	}
 	outputs := make([]packetOutput, 0, len(selected))
 	selectedImages := map[string]bool{}
 	byPath := map[string][]byte{}
@@ -107,11 +121,7 @@ func planSequenceValueEdits(all, selected []Frame, property, text string) ([]pac
 		if err != nil {
 			return nil, err
 		}
-		if local != nil {
-			if _, err := setMaskProperty(packet, *local, text); err != nil {
-				return nil, fmt.Errorf("%s: %w", frame.Image, err)
-			}
-		} else if err := packet.SetScalar(global.property, global.value); err != nil {
+		if err := edit(packet); err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.Image, err)
 		}
 		after, err := packet.Serialize()

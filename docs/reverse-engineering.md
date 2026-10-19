@@ -4,6 +4,16 @@ These notes record observed interfaces and public workflow behavior used to desi
 
 ## CLI frame selection and sequence copies
 
+`mark-sequence` and `unmark-sequence` share the selected-packet preflight used
+by `set-sequence`. Marking uses the existing 4/5-star mapping and saves the
+original rating once, including an absent rating. Changing kinds retains that
+original. Bulk removal skips unowned markers unless `--force-rating` requests
+clearing external 4/5-star ratings; HG ratings and internal HG marks survive.
+An owned marker subsequently changed to HG is rejected before any writes.
+These commands extend CLI workflow coverage; they are not a new claim of native
+writer equivalence. Tests check restoration, selection inversion, idempotence,
+backups, shared outputs, late preflight failures and embedded image retention.
+
 `set-sequence` now applies the existing scalar/PreviewEV/local-mask editing rules
 to selected frames. It shares root numeric parsing with single-image `set`,
 prepares all candidates before writing, deduplicates shared-sidecar outputs and
