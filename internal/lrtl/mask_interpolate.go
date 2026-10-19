@@ -709,6 +709,10 @@ func maskTransitionSeries(keyframes []int, indexes []map[maskTransitionKey]maskT
 }
 
 func maskTransitionSeriesExcept(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, key maskTransitionKey, frameCount, smoothness int, copied map[string]float64) []map[string]float64 {
+	return maskTransitionSeriesWithAngleMode(keyframes, indexes, key, frameCount, smoothness, copied, lrtNormalizesMaskAngle(key))
+}
+
+func maskTransitionSeriesWithAngleMode(keyframes []int, indexes []map[maskTransitionKey]maskTransitionNode, key maskTransitionKey, frameCount, smoothness int, copied map[string]float64, normalizeAngle bool) []map[string]float64 {
 	series := make([]map[string]float64, frameCount)
 	keyframeFlags := make([]bool, frameCount)
 	for _, keyframe := range keyframes {
@@ -757,7 +761,7 @@ func maskTransitionSeriesExcept(keyframes []int, indexes []map[maskTransitionKey
 				series[target] = make(map[string]float64)
 			}
 			value := adjustTransitionValue(values[target], spec)
-			if name == "Angle" && lrtNormalizesMaskAngle(key) {
+			if name == "Angle" && normalizeAngle {
 				value = normalizeLRTMaskAngle(value)
 			}
 			series[target][name] = value
@@ -793,6 +797,20 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 	transitionSmoothness := 50
 	if len(smoothness) > 0 {
 		transitionSmoothness = smoothness[0]
+	}
+	return planMaskTransitionsWithFormat(packets, keyframeIndices, transitionSmoothness, "auto")
+}
+
+func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, transitionSmoothness int, format string) ([][]maskTransitionChange, error) {
+	format, err := transitionMaskFormat(packets, format)
+	if err != nil {
+		return nil, err
+	}
+	normalizesAngle := func(key maskTransitionKey) bool {
+		if !lrtNormalizesMaskAngle(key) {
+			return false
+		}
+		return format == "modern" && key.collection == "MaskGroupBasedCorrections" || format == "legacy" && key.collection == "CircularGradientBasedCorrections"
 	}
 	changes := make([][]maskTransitionChange, len(packets))
 	indexes := make([]map[maskTransitionKey]maskTransitionNode, len(packets))
@@ -841,7 +859,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 				}
 			}
 		}
-		seriesByKey[key] = maskTransitionSeriesExcept(keyframeIndices, prepared.Indexes, key, len(packets), transitionSmoothness, copies)
+		seriesByKey[key] = maskTransitionSeriesWithAngleMode(keyframeIndices, prepared.Indexes, key, len(packets), transitionSmoothness, copies, normalizesAngle(key))
 		luminanceRangeByKey[key], hasLuminanceRangeByKey[key] = firstMaskLuminanceRange(indexes, key)
 	}
 	for target := range packets {
@@ -886,7 +904,7 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 		for _, key := range keys {
 			proposed := make(map[string]float64)
 			for name, value := range prepared.Missing[target][key] {
-				if name == "Angle" && lrtNormalizesMaskAngle(key) {
+				if name == "Angle" && normalizesAngle(key) {
 					value = normalizeLRTMaskAngle(value)
 				}
 				proposed[name] = value
@@ -903,13 +921,13 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 			copies := copiesByKey[key]
 			if !keyframeSet[target] || (present && maskTransitionNodeHasTemplate(currentNode, key)) {
 				for name, value := range copies {
-					if name == "Angle" && lrtNormalizesMaskAngle(key) {
+					if name == "Angle" && normalizesAngle(key) {
 						value = normalizeLRTMaskAngle(value)
 					}
 					proposed[name] = value
 				}
 			}
-			if lrtNormalizesMaskAngle(key) {
+			if normalizesAngle(key) {
 				if angle, found := current["Angle"]; found {
 					_, hasInterpolatedAngle := proposed["Angle"]
 					if keyframeSet[target] || !hasInterpolatedAngle {

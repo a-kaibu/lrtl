@@ -12,9 +12,24 @@ slots 1/10. Go compares 72 results for the corresponding pure layout across
 three RDF representations, including serialization and reparsing (216 checks).
 CLI tests additionally cover dry runs, original backups, image preservation and
 stable repeats adjacent to the boundaries. Details and limits are recorded in
-the adjacent fixture notes. The native helper selects one layout per sequence;
-lrtl currently processes both collections independently in mixed-layout XMP.
-This known dispatch gap and aspect-aware radial geometry remain unresolved.
+the adjacent fixture notes. The native helper selects one layout per sequence.
+lrtl now applies that dispatch to selected values, missing columns, reference
+copies and spline samples, including mixed-layout XMP. The same native fixture
+is compared across all six columns and three RDF forms (432 mixed-layout
+checks). Aspect-aware radial geometry remains separate and unresolved.
+
+Native `Rsa.A(File)` checks the first image's effective XMP for MaskGroup first,
+then Gradient. Six direct observations in `testdata/lrt-mask-format-7.5.5.json`
+confirm that empty arrays count, MaskGroup wins when both exist, and Circular
+or Paint alone do not identify a legacy sequence. Missing detection falls back
+to the application preference; the probe explicitly sets that preference to 2.
+lrtl uses modern as its fallback and offers `interpolate`/`batch-interpolate
+--mask-format auto|legacy|modern` to specify the intended preference explicitly.
+It does not read or change LRT's global settings. Auto detection examines only
+the first frame in lrtl's existing sequence order. That ordering and its
+sidecar/embedded-XMP discovery remain independent of the native folder loader.
+The native detector probe reads synthetic opaque NEF placeholders plus valid
+sidecars and invokes no GUI, image decoder or complete folder-loading workflow.
 
 ## CLI frame selection and sequence copies
 

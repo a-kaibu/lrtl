@@ -401,6 +401,10 @@ func TestLocalMissingAngleNormalizesOnceAndEqualizesActivity(t *testing.T) {
 		}
 		active := []string{"False", "True", "False"}[i]
 		packets[i] = localMissingPacket(t, "CircularGradientBasedCorrections", map[string]string{"CorrectionActive": active}, geometry)
+		// Native automatic legacy detection uses Gradient, not Circular alone.
+		if _, _, err := ensurePacketCRSArray(packets[i], "GradientBasedCorrections"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	changes, err := planMaskTransitions(packets, []int{0, 2}, 50)
 	if err != nil {

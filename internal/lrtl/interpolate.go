@@ -64,6 +64,7 @@ type ProposedFrame struct {
 }
 
 type InterpolationPlan struct {
+	MaskFormat            string
 	FrameCount            int
 	KeyframeIndices       []int
 	NormalKeyframeIndices []int
@@ -106,8 +107,15 @@ func buildPlan(frames []Frame) (*InterpolationPlan, error) {
 }
 
 func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan, error) {
+	return buildPlanWithMaskFormat(frames, smoothness, "auto")
+}
+
+func buildPlanWithMaskFormat(frames []Frame, smoothness int, maskFormat string) (*InterpolationPlan, error) {
 	if smoothness < 0 || smoothness > 100 {
 		return nil, fmt.Errorf("smoothness must be between 0 and 100")
+	}
+	if _, err := transitionMaskFormat(nil, maskFormat); err != nil {
+		return nil, err
 	}
 	packets := make([]*XMPPacket, len(frames))
 	created := make([]bool, len(frames))
@@ -118,6 +126,10 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			return nil, err
 		}
 		packets[index] = packet
+	}
+	maskFormat, err := transitionMaskFormat(packets, maskFormat)
+	if err != nil {
+		return nil, err
 	}
 
 	normalKeyframes, cropKeyframes, keyframes := transitionKeyframeGroups(packets)
@@ -342,7 +354,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 			}
 		}
 	}
-	maskTransitions, err := planMaskTransitions(packets, normalKeyframes, smoothness)
+	maskTransitions, err := planMaskTransitionsWithFormat(packets, normalKeyframes, smoothness, maskFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -377,6 +389,7 @@ func buildPlanWithSmoothness(frames []Frame, smoothness int) (*InterpolationPlan
 		structuredSource = packets[normalKeyframes[0]]
 	}
 	return &InterpolationPlan{
+		MaskFormat: maskFormat,
 		FrameCount: len(frames), KeyframeIndices: keyframes, Changes: changes,
 		NormalKeyframeIndices: normalKeyframes, CropKeyframeIndices: cropKeyframes,
 		StructuredSource: structuredSource,

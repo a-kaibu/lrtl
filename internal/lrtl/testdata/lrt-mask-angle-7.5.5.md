@@ -26,7 +26,13 @@ The native probe reads the in-memory frame columns, without invoking the GUI,
 whole Auto-Transition worker or native XMP writer. The Go side also exercises
 its own persistence path. This is evidence for the postprocessing component
 and pure-layout Go saving, not complete Auto-Transition or Camera Raw parity.
-Mixed-layout native dispatch remains a known gap: lrtl currently processes
-both collections independently, whereas this native helper selects one
-layout from the sequence version. Aspect-aware radial geometry is separate
-and remains unimplemented.
+Mixed-layout tests now compare all six columns in each observation, across
+three RDF forms (432 additional checks). They explicitly select legacy for
+version 1 and use automatic MaskGroup detection for version 2. Inactive-layout
+columns survive unchanged. Copy, missing-column and spline branches also have
+dispatch regressions; their numeric spline values use the existing Go sampler
+as a control and do not represent additional native spline observations.
+CLI/batch tests check first-frame detection, per-sequence choices, backups,
+dry runs, image retention, stable repeats and invalid options without writes.
+The native format-detection observations are in lrt-mask-format-7.5.5.json.
+Aspect-aware radial geometry is separate and remains unimplemented.

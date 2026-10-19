@@ -133,7 +133,11 @@ func TestMaskAngleAgainstInstalled755(t *testing.T) {
 		for form := 0; form < 3; form++ {
 			t.Run(fmt.Sprintf("%d/form%d", n, form), func(t *testing.T) {
 				packet := maskAnglePacket(t, tc, form)
-				changes, err := planMaskTransitions([]*XMPPacket{packet}, []int{0}, 50)
+				format := "legacy"
+				if tc.Mode == 2 {
+					format = "modern"
+				}
+				changes, err := planMaskTransitionsWithFormat([]*XMPPacket{packet}, []int{0}, 50, format)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -163,6 +167,10 @@ func TestMaskAngleCLIOriginalBackupsAndImages(t *testing.T) {
 			continue
 		}
 		t.Run(fmt.Sprintf("%d/%g", tc.Mode, *tc.Input), func(t *testing.T) {
+			format := "legacy"
+			if tc.Mode == 2 {
+				format = "modern"
+			}
 			frames := cropFixture(t, 3)
 			dir := filepath.Dir(frames[0].Image)
 			for i, frame := range frames {
@@ -173,11 +181,11 @@ func TestMaskAngleCLIOriginalBackupsAndImages(t *testing.T) {
 				persistExposurePacket(t, frame, packet)
 			}
 			before := batchFileSnapshot(t, dir)
-			markerCommand(t, "interpolate", dir)
+			markerCommand(t, "interpolate", dir, "--mask-format", format)
 			if !reflect.DeepEqual(before, batchFileSnapshot(t, dir)) {
 				t.Fatal("dry run wrote source")
 			}
-			markerCommand(t, "interpolate", dir, "--write")
+			markerCommand(t, "interpolate", dir, "--mask-format", format, "--write")
 			for _, frame := range frames {
 				packet, err := PacketForFrame(frame)
 				if err != nil {
@@ -192,7 +200,7 @@ func TestMaskAngleCLIOriginalBackupsAndImages(t *testing.T) {
 				assertPreviewEVFileBytes(t, backups[0], before[frame.Sidecar])
 			}
 			after := batchFileSnapshot(t, dir)
-			markerCommand(t, "interpolate", dir, "--write")
+			markerCommand(t, "interpolate", dir, "--mask-format", format, "--write")
 			if !reflect.DeepEqual(after, batchFileSnapshot(t, dir)) {
 				t.Fatal("stable angles created more writes/backups")
 			}

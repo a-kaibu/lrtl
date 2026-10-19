@@ -18,10 +18,12 @@ func runBatchInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	recursive := set.Bool("recursive", false, "find sequence directories at any depth")
 	workers := set.Int("workers", 1, "number of sequences to analyze concurrently (1-64)")
 	smoothness := set.Int("smoothness", 50, "LRT-compatible spline smoothness (0-100)")
+	maskFormat := set.String("mask-format", "auto", "angle postprocessing layout: auto, legacy or modern")
 	write := set.Bool("write", false, "write interpolated sidecars after all sequences pass validation")
 	noBackup := set.Bool("no-backup", false, "do not create sidecar backups")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--workers": true, "-workers": true, "--smoothness": true, "-smoothness": true,
+		"--mask-format": true, "-mask-format": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
@@ -36,6 +38,9 @@ func runBatchInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *smoothness < 0 || *smoothness > 100 {
 		return reportError(stderr, fmt.Errorf("--smoothness must be between 0 and 100"))
+	}
+	if _, err := transitionMaskFormat(nil, *maskFormat); err != nil {
+		return reportError(stderr, err)
 	}
 	root, err := filepath.Abs(set.Arg(0))
 	if err != nil {
@@ -61,7 +66,7 @@ func runBatchInterpolate(arguments []string, stdout, stderr io.Writer) int {
 					results[index].err = err
 					continue
 				}
-				plan, err := buildPlanWithSmoothness(frames, *smoothness)
+				plan, err := buildPlanWithMaskFormat(frames, *smoothness, *maskFormat)
 				results[index].plan, results[index].err = plan, err
 				if err == nil {
 					results[index].outputs, results[index].err = applyPlan(plan)
@@ -94,6 +99,7 @@ func runBatchInterpolate(arguments []string, stdout, stderr io.Writer) int {
 		frameCount += result.plan.FrameCount
 		sidecarCount += len(result.outputs)
 		fmt.Fprintf(stdout, "Frames: %d; effective keyframes: %d; proposed sidecars: %d; properties: %d; spline smoothness: %d\n", result.plan.FrameCount, len(result.plan.KeyframeIndices), len(result.outputs), result.plan.PropertyCount(), *smoothness)
+		fmt.Fprintf(stdout, "Mask angle format: %s\n", result.plan.MaskFormat)
 	}
 	if failures > 0 {
 		fmt.Fprintf(stderr, "Batch interpolation: %d sequence(s) failed validation; no sidecars written.\n", failures)

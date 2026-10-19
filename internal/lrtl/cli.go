@@ -169,12 +169,12 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  crop IMAGE_OR_XMP|DIRECTORY [--rect L,T,R,B] [--angle DEGREES] [--enable|--clear] [--mark] [--dry-run] [--no-backup] [--json]")
 	fmt.Fprintln(writer, "  curve IMAGE_OR_XMP|DIRECTORY [--channel master|red|green|blue] [--mask COLLECTION[N]] [--points 'X,Y;X,Y;...'|--linear] [--mark] [--dry-run] [--no-backup] [--json]")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
-	fmt.Fprintln(writer, "  interpolate DIRECTORY [--write]        preview or write keyframe transitions")
+	fmt.Fprintln(writer, "  interpolate DIRECTORY [--mask-format auto|legacy|modern] [--write]        preview or write keyframe transitions")
 	fmt.Fprintln(writer, "  init DIRECTORY [--mask-format auto|modern|legacy] [--write] [--no-backup] initialize correction slots")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--filename-contains TEXT] [--watermark TEXT] [--watermark-position POS] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  batch-render ROOT --output DIRECTORY [--format avi|mp4|mov] [--workers N] [--recursive] [-- RENDER_OPTIONS...]")
 	fmt.Fprintln(writer, "  batch-preview-images ROOT --output NEW_DIRECTORY [--recursive] [--workers N] [--write-preview-ev] [--no-backup] [-- PREVIEW_OPTIONS...]")
-	fmt.Fprintln(writer, "  batch-interpolate ROOT [--recursive] [--workers N] [--smoothness 0-100] [--write] [--no-backup]")
+	fmt.Fprintln(writer, "  batch-interpolate ROOT [--recursive] [--workers N] [--smoothness 0-100] [--mask-format auto|legacy|modern] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  batch-deflicker ROOT [--recursive] [--workers N] [DEFLICKER_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  batch-holy-grail ROOT [--recursive] [--workers N] [HOLY_GRAIL_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  export DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--apply-xmp-basic] [--apply-xmp-crop] [--long-edge N] export RGB16 TIFF frames")
@@ -757,7 +757,8 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	write := set.Bool("write", false, "write interpolated sidecar values")
 	noBackup := set.Bool("no-backup", false, "do not create a backup")
 	smoothness := set.Int("smoothness", 50, "LRT-compatible spline smoothness (0-100; default 50)")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--smoothness": true, "-smoothness": true})); err != nil {
+	maskFormat := set.String("mask-format", "auto", "angle postprocessing layout: auto, legacy or modern")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--smoothness": true, "-smoothness": true, "--mask-format": true, "-mask-format": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}
@@ -773,7 +774,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	plan, err := buildPlanWithSmoothness(frames, *smoothness)
+	plan, err := buildPlanWithMaskFormat(frames, *smoothness, *maskFormat)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -783,6 +784,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
 	fmt.Fprintf(stdout, "Frames: %d; effective keyframes: %d; spline smoothness: %d\n", plan.FrameCount, len(keyframeNames), *smoothness)
+	fmt.Fprintf(stdout, "Mask angle format: %s\n", plan.MaskFormat)
 	anchors := strings.Join(keyframeNames, ", ")
 	if anchors == "" {
 		anchors = "none"
