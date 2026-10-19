@@ -2,6 +2,32 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Saved native render presets
+
+`render --lrt-render-preset FILE` imports a native RenderPreset JSON object or
+the lastRenderSettings member of a native settings JSON. `--lrt-preset-name`
+selects one exact unique name from its renderPresets array. Native settings
+declare those members separately from renderAR/renderConstrainCrop; the loader
+also applies that global aspect constraint when enabled. It neither discovers
+nor writes the native global settings. Explicit CLI values win for supported
+render controls, and audio paths may be overridden or disabled explicitly.
+
+Six native serialized objects and measured H.264/H.265 CRFs are in
+`testdata/lrt-render-preset-7.5.5.json`; the adjacent notes distinguish direct
+observations from inspected encoder profile switches. Go maps fps, height,
+quality/codec profiles, Motion Blur and audio to its existing renderer. Known
+unsupported enabled filters, speed/interpolation and color/HDR modes fail
+instead of being silently discarded. H.264/H.265 imports require 420 sampling.
+New ProRes Proxy/LT/4444 backends cover the native profile choices alongside
+the existing 422/HQ paths. FFmpeg receives 10-bit YUV; its 4444 decoder reports
+12-bit output, which is not evidence of full 12-bit input precision or alpha.
+
+Regression tests compare explicit render controls with imported settings at
+the RGB/input-argument boundary, check global/named presets, overrides, source
+and output retention, batch forwarding, invalid JSON/options and optional real
+ProRes and 1080p NTSC H.264 output through ffprobe. Complete native rendering
+and color-management parity remain outside this measurement.
+
 ## Fractional output frame rates
 
 Nine direct observations of the installed `mQa` label parser confirm /1001

@@ -72,6 +72,22 @@ func dnxhrProfile(codec string) (string, string, bool) {
 	}
 }
 
+func proresProfile(codec string) (string, string, bool) {
+	switch codec {
+	case "prores-proxy":
+		return "0", "yuv422p10le", true
+	case "prores-lt":
+		return "1", "yuv422p10le", true
+	case "prores":
+		return "2", "yuv422p10le", true
+	case "prores-hq":
+		return "3", "yuv422p10le", true
+	case "prores-4444":
+		return "4", "yuv444p10le", true
+	}
+	return "", "", false
+}
+
 func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
@@ -95,16 +111,10 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		arguments = append(arguments,
 			"-c:v", "libx265", "-preset", preset, "-crf", strconv.Itoa(crf),
 			"-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-tag:v", "hvc1")
-	case "prores", "prores-hq":
-		profile := "2"
-		if codec == "prores-hq" {
-			profile = "3"
-		}
-		arguments = append(arguments,
-			"-c:v", "prores_ks", "-profile:v", profile,
-			"-pix_fmt", "yuv422p10le", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
 	default:
-		if profile, pixelFormat, supported := dnxhrProfile(codec); supported {
+		if profile, pixelFormat, supported := proresProfile(codec); supported {
+			arguments = append(arguments, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", pixelFormat, "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
+		} else if profile, pixelFormat, supported := dnxhrProfile(codec); supported {
 			arguments = append(arguments,
 				"-c:v", "dnxhd", "-profile:v", profile,
 				"-pix_fmt", pixelFormat, "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")

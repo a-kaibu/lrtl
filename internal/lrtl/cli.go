@@ -876,10 +876,12 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 
 func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
+	lrtPreset := set.String("lrt-render-preset", "", "read a native render preset or LRT settings JSON")
+	lrtPresetName := set.String("lrt-preset-name", "", "choose an exact name from native renderPresets")
 	output := set.String("output", "", "output AVI, MP4, or MOV path")
 	selectionPath := set.String("selection", "", "use included frames from a long-term selection manifest")
 	filenameContains := set.String("filename-contains", "", "render only frames whose filename contains this text (case-insensitive)")
-	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores|prores-hq|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
+	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores-proxy|prores-lt|prores|prores-hq|prores-4444|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
 	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
@@ -911,6 +913,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	parseArgs := flagFirst(arguments, map[string]bool{
+		"--lrt-render-preset": true, "-lrt-render-preset": true, "--lrt-preset-name": true, "-lrt-preset-name": true,
 		"--lrt-preview": true, "-lrt-preview": true,
 		"--output": true, "-output": true,
 		"--selection": true, "-selection": true,
@@ -945,6 +948,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *output == "" {
 		return reportError(stderr, fmt.Errorf("--output is required"))
+	}
+	if *lrtPresetName != "" && *lrtPreset == "" {
+		return reportError(stderr, fmt.Errorf("--lrt-preset-name requires --lrt-render-preset"))
 	}
 	if *applyXMPExposure && *applyXMPBasic {
 		return reportError(stderr, fmt.Errorf("--apply-xmp-exposure cannot be combined with --apply-xmp-basic because the basic controls already include Exposure2012"))
@@ -1032,6 +1038,19 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		DNGLabPath:        *dnglab,
 		DNGConverterPath:  *dngConverter,
 	}
+	if *lrtPreset != "" {
+		saved, err := loadLRTRenderPreset(*lrtPreset, *lrtPresetName)
+		if err != nil {
+			return reportError(stderr, fmt.Errorf("LRT render preset: %w", err))
+		}
+		explicit := map[string]bool{}
+		set.Visit(func(parsed *flag.Flag) { explicit[parsed.Name] = true })
+		options, err = applyLRTRenderPreset(options, saved, *lrtPreset, explicit)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		fmt.Fprintf(stdout, "LRT render preset: %s\n", saved.Name)
+	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
@@ -1063,8 +1082,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if timestampOverlayEnabled {
 		features = append(features, "EXIF/XMP timestamp overlay")
 	}
-	if *motionBlurFrames > 0 {
-		features = append(features, fmt.Sprintf("%d-frame temporal blend", *motionBlurFrames))
+	if options.MotionBlurFrames > 0 {
+		features = append(features, fmt.Sprintf("%d-frame temporal blend", options.MotionBlurFrames))
 	}
 	if *rawPreview {
 		features = append(features, "embedded RAW previews")
@@ -1079,13 +1098,17 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if *longEdge > 0 {
 		features = append(features, fmt.Sprintf("long-edge limit of %d pixels", *longEdge))
 	}
-	if *outputHeight > 0 {
-		features = append(features, fmt.Sprintf("%d-pixel output height", *outputHeight))
+	if options.OutputHeight > 0 {
+		features = append(features, fmt.Sprintf("%d-pixel output height", options.OutputHeight))
 	}
-	if aspectRatio > 0 {
-		features = append(features, fmt.Sprintf("%s aspect crop", strings.TrimSpace(*aspectValue)))
+	if options.AspectRatio > 0 {
+		label := strings.TrimSpace(*aspectValue)
+		if label == "" {
+			label = formatNumber(options.AspectRatio)
+		}
+		features = append(features, fmt.Sprintf("%s aspect crop", label))
 	}
-	if strings.TrimSpace(*audioPath) != "" {
+	if strings.TrimSpace(options.AudioPath) != "" {
 		features = append(features, "AAC audio track")
 	}
 	if *selectionPath != "" {
@@ -1098,9 +1121,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		features = append(features, "text watermark")
 	}
 	if len(features) > 0 {
-		fmt.Fprintf(stdout, "Rendered %d frames at %s fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)
+		fmt.Fprintf(stdout, "Rendered %d frames at %s fps with %s: %s\n", len(frames), options.FrameRate, strings.Join(features, " and "), *output)
 	} else {
-		fmt.Fprintf(stdout, "Rendered %d frames at %s fps: %s\n", len(frames), *fps, *output)
+		fmt.Fprintf(stdout, "Rendered %d frames at %s fps: %s\n", len(frames), options.FrameRate, *output)
 	}
 	return 0
 }
