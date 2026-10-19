@@ -1,0 +1,11 @@
+[
+{"input":"23.976","native":23.976025},
+{"input":"24","native":24.0},
+{"input":"25","native":25.0},
+{"input":"29.97","native":29.97003},
+{"input":"30","native":30.0},
+{"input":"47.952","native":47.95205},
+{"input":"48","native":48.0},
+{"input":"59.94","native":59.94006},
+{"input":"60","native":60.0}
+]

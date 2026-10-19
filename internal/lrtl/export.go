@@ -99,6 +99,7 @@ func ExportTIFFSequence(frames []Frame, output string, options RenderOptions) er
 	// These video-only values do not affect the image processing, but the shared
 	// renderer validates them before starting any destination.
 	options.FPS, options.Quality = 24, 90
+	options.FrameRate = ""
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {
 		return &tiffSequenceWriter{directory: staging, width: width, height: height, frames: manifest.Frames}, nil
 	}); err != nil {

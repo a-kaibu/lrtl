@@ -5,15 +5,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 func writeSequenceSubtitles(frames []Frame, output string, fps int, timestampFormat string, overwrite bool) error {
+	rate, err := parseFrameRate(strconv.Itoa(fps))
+	if err != nil {
+		return err
+	}
+	return writeSequenceSubtitlesAtRate(frames, output, rate, timestampFormat, overwrite)
+}
+
+func writeSequenceSubtitlesAtRate(frames []Frame, output string, rate frameRate, timestampFormat string, overwrite bool) error {
 	if len(frames) == 0 {
 		return fmt.Errorf("sequence contains no images")
 	}
-	if fps < 1 || fps > 240 {
-		return fmt.Errorf("frame rate must be between 1 and 240 fps: %d", fps)
+	if _, err := parseFrameRate(rate.String()); err != nil {
+		return err
 	}
 	if strings.ToLower(filepath.Ext(output)) != ".srt" {
 		return fmt.Errorf("subtitle output must use the .srt extension: %s", output)
@@ -54,8 +63,14 @@ func writeSequenceSubtitles(frames []Frame, output string, fps int, timestampFor
 			_ = temporary.Close()
 			return fmt.Errorf("timestamp format produces the reserved SRT delimiter in frame %d", index+1)
 		}
-		start := srtTimecode(frameOffsetMilliseconds(int64(index), int64(fps)))
-		end := srtTimecode(frameOffsetMilliseconds(int64(index+1), int64(fps)))
+		startMS, startErr := rate.offsetMilliseconds(int64(index))
+		endMS, endErr := rate.offsetMilliseconds(int64(index + 1))
+		if startErr != nil || endErr != nil {
+			_ = temporary.Close()
+			return fmt.Errorf("subtitle timing exceeds supported duration")
+		}
+		start := srtTimecode(startMS)
+		end := srtTimecode(endMS)
 		if _, err := fmt.Fprintf(writer, "%d\n%s --> %s\n%s\n\n", index+1, start, end, label); err != nil {
 			_ = temporary.Close()
 			return fmt.Errorf("write temporary subtitles: %w", err)

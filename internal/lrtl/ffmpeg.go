@@ -72,12 +72,12 @@ func dnxhrProfile(codec string) (string, string, bool) {
 	}
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height, fps, frameCount, crf int, preset, audioPath string) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb48le",
 		"-video_size", fmt.Sprintf("%dx%d", width, height),
-		"-framerate", strconv.Itoa(fps), "-i", "pipe:0",
+		"-framerate", rate.String(), "-i", "pipe:0",
 	}
 	if audioPath != "" {
 		arguments = append(arguments, "-i", audioPath, "-map", "0:v:0", "-map", "1:a:0")
@@ -113,7 +113,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		}
 	}
 	if audioPath != "" {
-		duration := strconv.FormatFloat(float64(frameCount)/float64(fps), 'f', 9, 64)
+		duration := strconv.FormatFloat(rate.seconds(frameCount), 'f', 9, 64)
 		arguments = append(arguments,
 			"-c:a", "aac", "-b:a", "192k",
 			"-af", "asetpts=PTS-STARTPTS,apad,atrim=duration="+duration,

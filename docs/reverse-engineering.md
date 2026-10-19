@@ -2,6 +2,33 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Fractional output frame rates
+
+Nine direct observations of the installed `mQa` label parser confirm /1001
+NTSC meanings for 23.976, 29.97, 47.952 and 59.94, alongside integer controls.
+The synthetic fixture and measurement limits are recorded in
+`testdata/lrt-frame-rate-7.5.5.json` and its adjacent notes. lrtl now accepts
+decimal/fractional rates in render and subtitle commands, passes reduced
+fractions to FFmpeg, and keeps audio trimming and SRT timing on the same rate.
+Explicit fractions are literal; decimal NTSC labels are aliases. SRT rounding
+uses the absolute frame index with integer arithmetic, avoiding accumulated
+floating-point or per-frame rounding drift.
+
+The pinned pure-Go MJPEG writer exposes integer FPS only. lrtl finalizes its
+temporary AVI, verifies that writer's known fixed header layout, and updates
+the main interval and video stream scale/rate before publication. It does not
+parse or modify arbitrary input AVIs. Tests compare all remaining bytes with
+an integer-rate control, including JPEG payloads and idx1 entries. Optional
+FFmpeg/ffprobe integration verifies actual stream rate/count/duration for AVI,
+MP4 and MOV, plus AAC padding from short audio to rational video duration.
+
+Investigation of aspect-aware radial geometry also located the `hSa` helper.
+The inspected automatic worker reaches its conversion/restoration branch only
+behind `LRTimelapseMain.I()`, which checks an internal development setting and
+additional state. The ordinary alternative calls the measured angle helper.
+No setting or gate was modified. Aspect geometry remains unimplemented, and
+it should not be described as a proven omission from the normal runtime path.
+
 ## Measured mask-angle postprocessing
 
 `testdata/lrt-mask-angle-7.5.5.json` records 24 direct invocations of the installed

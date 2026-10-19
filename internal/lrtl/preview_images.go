@@ -123,6 +123,7 @@ func GeneratePreviewImages(frames []Frame, output string, options RenderOptions)
 		manifest.Frames[i] = PreviewImageFrame{Source: filepath.Base(frame.Image), SourceIndex: frame.Index, File: fmt.Sprintf("frame%0*d.jpg", digits, i+1)}
 	}
 	options.FPS = 24
+	options.FrameRate = ""
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {
 		manifest.Width, manifest.Height = width, height
 		return &previewImageWriter{directory: staging, manifest: manifest, quality: options.Quality}, nil

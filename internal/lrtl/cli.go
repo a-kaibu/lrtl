@@ -880,7 +880,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	selectionPath := set.String("selection", "", "use included frames from a long-term selection manifest")
 	filenameContains := set.String("filename-contains", "", "render only frames whose filename contains this text (case-insensitive)")
 	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores|prores-hq|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
-	fps := set.Int("fps", 24, "integer frame rate (1-240)")
+	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
 	crf := set.Int("crf", 18, "H.264/H.265 quality (0-51; lower is higher quality)")
@@ -1000,7 +1000,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		frames = matched
 	}
 	options := RenderOptions{
-		FPS:               *fps,
+		FrameRate:         *fps,
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
@@ -1098,9 +1098,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		features = append(features, "text watermark")
 	}
 	if len(features) > 0 {
-		fmt.Fprintf(stdout, "Rendered %d frames at %d fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)
+		fmt.Fprintf(stdout, "Rendered %d frames at %s fps with %s: %s\n", len(frames), *fps, strings.Join(features, " and "), *output)
 	} else {
-		fmt.Fprintf(stdout, "Rendered %d frames at %d fps: %s\n", len(frames), *fps, *output)
+		fmt.Fprintf(stdout, "Rendered %d frames at %s fps: %s\n", len(frames), *fps, *output)
 	}
 	return 0
 }
@@ -1144,7 +1144,7 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("subtitles", stderr)
 	output := set.String("output", "", "write timestamp subtitles to an SRT file")
-	fps := set.Int("fps", 24, "video frame rate used for subtitle timing (1-240)")
+	fps := set.String("fps", "24", "video frame rate for subtitle timing (1-240; decimals or fractions)")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used for subtitle text")
 	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
@@ -1166,10 +1166,14 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	if err := writeSequenceSubtitles(frames, *output, *fps, *timestampFormat, *overwrite); err != nil {
+	rate, err := parseFrameRate(*fps)
+	if err != nil {
 		return reportError(stderr, err)
 	}
-	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %d fps: %s\n", len(frames), *fps, *output)
+	if err := writeSequenceSubtitlesAtRate(frames, *output, rate, *timestampFormat, *overwrite); err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %s fps: %s\n", len(frames), rate.String(), *output)
 	return 0
 }
 

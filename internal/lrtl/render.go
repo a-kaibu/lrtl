@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/icza/mjpeg"
 	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	_ "golang.org/x/image/tiff"
@@ -22,6 +21,7 @@ import (
 type RenderOptions struct {
 	LRTPreview        string
 	FPS               int
+	FrameRate         string
 	Quality           int
 	FFmpegPath        string
 	Codec             string
@@ -168,8 +168,8 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
 	}
-	if options.FPS < 1 || options.FPS > 240 {
-		return fmt.Errorf("fps must be between 1 and 240: %d", options.FPS)
+	if _, err := options.frameRate(); err != nil {
+		return err
 	}
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
@@ -494,13 +494,15 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	}
 	if imageWriter == nil && outputExtension == ".avi" {
-		writer, err = mjpeg.New(tempPath, int32(outputWidth), int32(outputHeight), int32(options.FPS))
+		rate, _ := options.frameRate() // validated before creating any output
+		writer, err = newRatedMJPEGWriter(tempPath, int32(outputWidth), int32(outputHeight), rate)
 		if err != nil {
 			cleanup()
 			return fmt.Errorf("create MJPEG AVI: %w", err)
 		}
 	} else if imageWriter == nil {
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, options.FPS, len(frames), options.CRF, options.Preset, options.AudioPath)
+		rate, _ := options.frameRate()
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, len(frames), options.CRF, options.Preset, options.AudioPath)
 		if err != nil {
 			cleanup()
 			return err

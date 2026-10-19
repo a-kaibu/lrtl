@@ -132,7 +132,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`preview-images`で対応RAW/XMPからJPEG連番と測光マニフェストを生成し、任意で元XMPへPreview EVを保存。`--lrt-preview camera|visual`でLRTの既存JPEGキャッシュを明示的に読み、測光・動画・TIFF・個別/一括Deflickerの入力として使える。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/Adobe DNG Converterによる現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/Adobe DNG Converterによる現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を識別可能なDeflicker専用LocalExposureスロット（なければ`crs:Exposure2012`）へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`--lrt-reference`で保存済み参照領域を読込・補間して測光し、`batch-deflicker`でも利用可能。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。`--calculation lrt-7.5.5`で本体108ケースと比較したPreview EV・LOWESS・補正計算を個別/一括処理から選択可能。`--lrt-deflicker-settings`で連番ごとに保存済みの平滑化・精度・Constant・複数パス・並び順を再利用できる。XMPへの保存・リセットとAVI画素への反映も回帰テスト済み。複数パスの画像再生成はGoの独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
-| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。整数1–240 fps、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
+| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。1–240 fpsの整数・小数・分数（23.976/29.97/47.952/59.94はNTSCの/1001指定として扱う）に対応し、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed/lossy DNG取り込みとロッシーDNGの長辺縮小に対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
@@ -511,6 +511,24 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キーフレームとは別に扱われます。7.5.5のウィザード計算は2*/3*/4*マークを使い、最大10件のフレーム差の重み付き平均を隣接キーフレームで使いながら、フレームごとの曲線を作ります。シーケンス内のフレーム状態への保存処理も一部追跡できました。フレーム状態の3つの値は、MaskGroup形式では`CorrectionName`が`#LRT internal use (HG)`、`(Deflicker)`、`(Global)`の既存スロットへ対応付け、従来形式では`GradientBasedCorrections[5]`〜`[7]`の`crs:LocalExposure2012`へ書き戻します。インストール済みJARの`raw_m_1.xmp`では、従来形式の5〜7番目にある`CorrectionMasks`内の`crs:MaskName`要素が`LRT: don't alter!`という文字列を持ちます。`lrt:ExternalExposureDefault`を1/4にして内部値へ取り込み、`crs:Exposure2012`とは別に保つ経路も確認しました。lrtlは`CorrectionName`が`#LRT internal use (HG)`のMaskGroup、または従来形式の5〜7番目全てで`LRT: don't alter!`署名を確認できた場合に5番目の`LocalExposure2012`へ補正を書き、書き込み先を記録して`--reset`で戻します。いずれの識別条件も満たさないXMPでは`crs:Exposure2012`を使います。LRTのWizardにはRotate（-4〜+4）、Stretch（-1.5〜+1.5）、0〜1の`holyGrailReduceDeflicker`設定があります。lrtlは`--lrt-input`で入力値を読み、10件重み付き差分キュー、隣接フレーム式、曲線の中央寄せ・制限、Stretch/Rotate経路を実装しました。LOWESS単体は実LRTの53ケースで比較していますが、入力値をLRTと同じ画像処理で生成する部分は未対応です。逆解析で確認した式と保存経路は[リバースエンジニアリングノート](docs/reverse-engineering.md)に記録しています。
 
 EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用し、`preview-ev --write`で同版から復元したヒストグラム計算値を生成できます。既存のLRTプレビューと保存済みROIは`preview-ev --lrt-preview camera --lrt-reference --write`で測光できます。プレビュー画像の生成経路全体との一致は未検証です。Piaの平滑化部品は合成数値列で実測比較済みですが、全ワークフローの比較は未完了です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
+
+## 動画と字幕のフレームレート
+
+`render`と`subtitles`の`--fps`は、整数・小数・分数で1〜240 fpsを指定できます。23.976／29.97／47.952／59.94という小数表記は、LRT 7.5.5の9ケースの観測に合わせ、それぞれ24000/1001、30000/1001、48000/1001、60000/1001として扱います。末尾のゼロがある`29.970`なども同じです。分数を明示した場合はその値をそのまま使うため、正確な小数29.97が必要なら`2997/100`を指定できます。`24.5`など他の小数も指定可能です。約分後の分子・分母は32-bitの正整数に収まる必要があります。
+
+```powershell
+# 29.97 NTSCのMJPEG AVI。追加ソフト不要
+lrtl render C:\photos\sequence --output C:\photos\ntsc.avi --fps 29.97
+# 動画と同じフレームレートのSRT字幕
+lrtl subtitles C:\photos\sequence --output C:\photos\ntsc.srt --fps 30000/1001
+# 音声付きMP4と、複数連番の一括出力（FFmpegが必要）
+lrtl render C:\photos\sequence --output C:\photos\ntsc.mp4 --fps 29.97 --audio C:\photos\music.wav
+lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --fps 24000/1001
+```
+
+AVIはストリームの分子・分母へ、FFmpegには分数のまま渡します。音声の終了時刻と字幕も同じ比率を使い、字幕は絶対フレーム番号から整数演算でミリ秒を求めるため、1フレームごとの丸め誤差を蓄積しません。これはNTSCのdrop-frameタイムコード表示ではなく、通常のSRT再生時刻です。GUIのfps欄は従来の整数指定のままです。
+
+AVIヘッダー・JPEG画素データ・インデックス保持、バッチ転送、長時間字幕の時刻、不正fpsでの既存出力保持をテストしています。FFmpeg／ffprobeがある環境では、実際のAVI・H.264 MP4・ProRes MOVのフレーム数・fps・再生時間と、短い音声を動画長まで延長する処理も検査します。本体の動画エクスポート全体との一致を示すものではありません。
 
 ## 今後の実装順
 
