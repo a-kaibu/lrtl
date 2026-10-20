@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -22,6 +23,27 @@ type plainPrecisionTestImage struct{ image.Image }
 
 func runFFmpegCaptureHelper() bool {
 	args := os.Args[1:]
+	if slices.Contains(args, "-h") {
+		formats := os.Getenv("LRTL_TEST_FFMPEG_FORMATS")
+		if formats == "failure" {
+			fmt.Fprintln(os.Stderr, "synthetic encoder query failure")
+			os.Exit(2)
+		}
+		if formats != "missing" {
+			if formats == "" {
+				formats = "yuv420p yuv422p10le yuv444p10le"
+			}
+			fmt.Fprintln(os.Stdout, "    Supported pixel formats: "+formats)
+		}
+		arguments, err := json.Marshal(args)
+		if err != nil {
+			panic(err)
+		}
+		if err := os.WriteFile(os.Getenv("LRTL_TEST_FFMPEG_CAPTURE")+".probe.json", arguments, 0600); err != nil {
+			panic(err)
+		}
+		return true
+	}
 	if !slices.Contains(args, "-pixel_format") {
 		return false
 	}

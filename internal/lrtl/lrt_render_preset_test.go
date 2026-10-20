@@ -100,7 +100,7 @@ func TestLRTRenderPresetGlobalSelectionAspectAndOverrides(t *testing.T) {
 		if err != nil || options.AudioPath != filepath.Join(filepath.Dir(path), "music.wav") {
 			t.Fatalf("relative audio: %s %v", options.AudioPath, err)
 		}
-		explicit := map[string]bool{"codec": true, "crf": true, "fps": true, "long-edge": true, "aspect": true, "audio": true, "motion-blur": true}
+		explicit := map[string]bool{"codec": true, "subsampling": true, "crf": true, "fps": true, "long-edge": true, "aspect": true, "audio": true, "motion-blur": true}
 		base := RenderOptions{NativeTiming: true, VideoRange: "limited", PlaybackSpeed: 1, FrameRate: "24", Codec: "h264", CRF: 31, LongEdge: 320, AspectRatio: 2, MotionBlurFrames: 0, AudioPath: ""}
 		options, err = applyLRTRenderPreset(base, preset, path, explicit)
 		if err != nil || options != base {
@@ -192,7 +192,7 @@ func TestLRTRenderPresetRejectsUnsupportedBeforeSaving(t *testing.T) {
 	if err := json.Unmarshal(renderPresetObservations(t)[0].Preset, &original); err != nil {
 		t.Fatal(err)
 	}
-	for field, value := range map[string]any{"speed": 0, "interpolation": 1, "gamut": 1, "dynamicRange": 1, "cas": true, "removeAirplanes": true, "denoise": true, "deflickerLuma": true, "deflickerChroma": true, "subSampling": "444", "encoder": "unknown", "outputQuality": 6, "frameRate": "NaN", "outputResV": -1} {
+	for field, value := range map[string]any{"speed": 0, "interpolation": 1, "gamut": 1, "dynamicRange": 1, "cas": true, "removeAirplanes": true, "denoise": true, "deflickerLuma": true, "deflickerChroma": true, "subSampling": "411", "encoder": "unknown", "outputQuality": 6, "frameRate": "NaN", "outputResV": -1} {
 		t.Run(field, func(t *testing.T) {
 			mutated := map[string]any{}
 			for key, item := range original {

@@ -1,6 +1,6 @@
 # LumaFrame (`lrtl`)
 
-LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。Lightroom互換XMPのキーフレーム編集やHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFとRAW連番からMJPEG AVI、H.264/H.265 MP4、ProRes MOVを生成できます。
+LRTimelapseと同じ作業を段階的に実現することを目指す、独立したオープンソースのタイムラプスツールです。Lightroom互換XMPのキーフレーム編集やHoly Grail露出補正に加え、現像済みJPEG/PNG/TIFFとRAW連番からMJPEG AVI、H.264 MP4／H.265 MP4・MOV、ProRes MOVを生成できます。
 
 **RAW連番は、インストール済みのAdobe DNG Converterでデモザイクし、Goで現像して動画にできます。** `render --raw-develop`はConverterを自動検出し、実画素のLinear DNGを16-bit sRGBへ変換します。JPEG/PNG/TIFF連番とMJPEG AVIの処理はPure Go、MP4/MOV出力にはFFmpegも必要です。`--dnglab PATH`で従来のDNGLabバックエンドも選べます。Camera Raw/Lightroomのプロファイル・全設定と画素一致する現像エンジンではありません。
 
@@ -133,10 +133,10 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 視覚プレビュー | 露出や遷移を画像・グラフで確認 | `preview`で輝度曲線、XMP Exposure2012、キーフレームを静的SVGに表示。`preview-images`で対応RAW/XMPからJPEG連番と測光マニフェストを生成し、任意で元XMPへPreview EVを保存。`--lrt-preview camera|visual`でLRTの既存JPEGキャッシュを明示的に読み、測光・動画・TIFF・個別/一括Deflickerの入力として使える。`gui`は全フレームのXMP Exposure2012とキーフレームをグラフ表示し、クリックでフレームを選択できる。「画像輝度を解析」で最大64×64格子から得た線形sRGB輝度の中央値を先頭フレームとの差分EVで重ねる。RAW内蔵プレビュー/Adobe DNG Converterによる現像、XMP基本値・クロップ適用を選択可能。ラスター画像と対応RAWの内蔵プレビューを一覧表示し、選択フレームにXMP基本現像値・ローカル補正・クロップを適用した静止画も表示できる。「連番を再生」で1〜30 fpsを指定したループ再生にも対応し、XMP基本値/クロップとRAW内蔵プレビュー/Adobe DNG Converterによる現像を反映できる。再生画像は最大640 pxへ縮小し、読み込み時間によって指定fpsを下回る場合がある。GUIでは表示中の青いExposure2012点を上下ドラッグして、該当1フレームの値をサイドカーのバックアップ付きで保存する。通常点は最大4000個に間引き、キーフレーム点を追加表示する。曲線全体/隣接フレームへの補間編集、LRT Visual Previewとの速度・画素一致、Adobe現像値との一致は未対応 | 一部 |
 | Deflicker | 参照領域と平滑化曲線に基づく視覚補正、複数パス、Lightroomへ渡す調整値 | `render --deflicker`で画素に補正し、`deflicker --write`でJPEG/PNG/TIFFまたは`--raw-preview`／`--raw-develop`の輝度解析結果を識別可能なDeflicker専用LocalExposureスロット（なければ`crs:Exposure2012`）へ記録可能。`--smoother gaussian|lowess`で平滑化を選択。`--lrt-reference`で保存済み参照領域を読込・補間して測光し、`batch-deflicker`でも利用可能。`deflicker`解析は`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WBを含む）または露出のみの`--apply-xmp-exposure`、`--apply-xmp-crop`を測定前に適用できる。`--calculation lrt-7.5.5`で本体108ケースと比較したPreview EV・LOWESS・補正計算を個別/一括処理から選択可能。`--lrt-deflicker-settings`で連番ごとに保存済みの平滑化・精度・Constant・複数パス・並び順を再利用できる。XMPへの保存・リセットとAVI画素への反映も回帰テスト済み。複数パスの画像再生成はGoの独自近似。LRTのVisual Preview、Camera Rawとの数値一致、カーブUIは未対応 | 一部 |
 | 長期撮影補正 | Luminance・Contrast・Hueで長期連番の画像をフィルターし、明るさ・コントラスト・色の大きく異なる画像を除外 | `long-term`で画像を分析し、各指標の範囲から選択JSONを作成。`render --selection`で選択フレームのみ動画化でき、`--apply-xmp-basic`（グラデーションと現行形式の輝度範囲ローカル露出/彩度マスクを含む）/`--apply-xmp-exposure`/`--apply-xmp-crop`で測定前にXMP値を反映できる。既定指標は独自定義。`--metric-profile lrt-7.5.5`は64×64 bilinear縮小、Gaussian scale 4のぼかし、平均グレースケール輝度/標準偏差/平均HSB色相を使う。LRTの時間フィルター曲線、構図UI、現像プレビューは未対応 | 一部 |
-| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264/H.265 MP4またはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。1–240 fpsの整数・小数・分数（23.976/29.97/47.952/59.94はNTSCの/1001指定として扱う）に対応し、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
+| 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264 MP4／H.265 MP4・MOVまたはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。1–240 fpsの整数・小数・分数（23.976/29.97/47.952/59.94はNTSCの/1001指定として扱う）に対応し、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed/lossy DNG取り込みとロッシーDNGの長辺縮小に対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
-| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
+| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264 MP4／H.265 MP4・MOV、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。H.264/H.265は`--subsampling 420`で8-bit、`422`／`444`で10-bit出力。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。速度変更後の過去Nフレームを合成し、本体と同じ先頭Nフレーム除去を行う。48件のフィルター実測で枚数・開始位置・フェード時刻を照合。字幕も`--motion-blur N`で開始位置を揃える。中間画像は先頭を保持。16-bit RGB処理で、LRTの10-bit YUVフィルター出力との画素完全一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed/lossy DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。`--dng-long-edge`でロッシーDNGを縮小可能。取り込み画面内の画像プレビューは未実装（既存連番には`preview-images`を使用可能） | 一部 |
@@ -174,7 +174,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 1. `.xmp`サイドカーをスキャンし、キーフレームと数値設定を確認する。
 2. JPEG/PNG/TIFF連番、RAW内蔵プレビュー、またはAdobe DNG ConverterでデモザイクしたRAWからLRT互換の数量と等間隔キーフレーム位置を提案し、任意でXMPにマークする。
 3. キーフレームを手動で設定し、許可済みの数値設定をプレビューまたはXMPに書き込む。
-4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはAdobe DNG ConverterでデモザイクしたRAWをMJPEG AVI、H.264/H.265 MP4、ProRes MOVにまとめる。必要なら`--aspect 16:9 --output-height 1080`のように出力比率と高さを指定するか、`--long-edge`で縮小する。XMP値未焼き込みのsRGB入力には`--apply-xmp-basic`で基本8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、8色域のHSL補正、Temperature/Tintの簡易ホワイトバランス、ColorGrade近似、明示ポイントカーブを近似適用できる。
+4. 現像済みJPEG/PNG/TIFF、対応RAW内蔵プレビュー、またはAdobe DNG ConverterでデモザイクしたRAWをMJPEG AVI、H.264 MP4／H.265 MP4・MOV、ProRes MOVにまとめる。必要なら`--aspect 16:9 --output-height 1080`のように出力比率と高さを指定するか、`--long-edge`で縮小する。XMP値未焼き込みのsRGB入力には`--apply-xmp-basic`で基本8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、8色域のHSL補正、Temperature/Tintの簡易ホワイトバランス、ColorGrade近似、明示ポイントカーブを近似適用できる。
 5. レンダー時に簡易Deflickerを画素へ適用するか、JPEG/PNG/TIFFまたは選択したRAW入力の解析結果をXMP露出値として保存する。
 6. 対応画像のEXIF露出時間・ISO・絞り値からHoly Grail補正を算出し、Camera RawのXMP露出値として出力する。
 7. 輝度曲線、XMP露出補正、キーフレーム位置をSVGプレビューで確認する。RAW解析時は内蔵プレビューまたはAdobe DNG Converterによる現像を選び、必要に応じてXMP Exposure/cropを反映する。
@@ -212,7 +212,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ## インストール
 
-ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264/H.265 MP4とProRes MOV出力、動画からのフレーム抽出には外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAW現像とDNG変換にはAdobe DNG Converter（または明示選択するDNGLab）が必要です。Adobeは自動検出または`--dng-converter PATH`、DNGLabは`--dnglab PATH`で指定します。FFmpeg、Adobe DNG Converter、DNGLabはlrtlに同梱しません。RAWデコーダー候補の[raw-go](https://github.com/vegidio/raw-go)はLibRawをCGOで静的リンクするためCツールチェーンが必要で、現行のPure Goビルド条件に合わず採用していません。LibRaw自体はLGPL-2.1またはCDDL 1.0で提供されています（[ライセンス説明](https://github.com/LibRaw/LibRaw#licensing)）。
+ビルドにはGo 1.23以降が必要です。Go側の依存ライブラリはPure Goです。MJPEG AVI出力にはFFmpegやネイティブDLLは不要です。H.264 MP4／H.265 MP4・MOVとProRes MOV出力、動画からのフレーム抽出には外部FFmpegが必要です（`--ffmpeg`で実行ファイルを指定できます）。RAW現像とDNG変換にはAdobe DNG Converter（または明示選択するDNGLab）が必要です。Adobeは自動検出または`--dng-converter PATH`、DNGLabは`--dnglab PATH`で指定します。FFmpeg、Adobe DNG Converter、DNGLabはlrtlに同梱しません。RAWデコーダー候補の[raw-go](https://github.com/vegidio/raw-go)はLibRawをCGOで静的リンクするためCツールチェーンが必要で、現行のPure Goビルド条件に合わず採用していません。LibRaw自体はLGPL-2.1またはCDDL 1.0で提供されています（[ライセンス説明](https://github.com/LibRaw/LibRaw#licensing)）。
 
 ```powershell
 go install github.com/a-kaibu/lrtl/cmd/lrtl@latest
@@ -539,6 +539,18 @@ ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告さ�
 
 本体のレンジフィルター生成3ケース、全コーデック経路への引数、プリセット／バッチ／CLI上書き、元ファイル保持をテストしています。実際のH.264・H.265・ProRes・DNxHR出力について、黒・白・中間グレーとBT.709の行列情報も検査しています。本体の色変換済み中間画像とGoのRGB入力の完全一致を検証したものではありません。
 
+### H.264／H.265の色差形式・bit深度
+
+`--subsampling 420|422|444`で選択します。既定の420は8-bit、422／444はLRT本体の設定に合わせて10-bit出力です。`4:2:0`／`4:2:2`／`4:4:4`表記も受け付けます。保存したプリセットの`subSampling`も読み込みます。H.265はMP4とMOVの両方へ出力できます。
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\master.mov --codec h265 --subsampling 444 --video-range limited
+```
+
+H.264／H.265だけに適用する設定です。ProRes／DNxHRは各プロファイルの形式を使います。FFmpegが要求した形式に対応するか出力作成前に確認し、未対応なら既存出力を保持してエラーにします（FFmpegの[非対応pixel formatの代替選択](https://ffmpeg.org/ffmpeg.html#Advanced-Video-options)を防ぐため）。SDR出力の対応であり、HDRや本体との色管理・全画素の一致は未対応です。
+
+本体ヘルパーの36観測、CLI／プリセット／バッチ、形式非対応時の出力保持をテストしています。外部FFmpegが利用できる環境では18種類の実動画を生成し、bit深度・色差形式・レンジ・16-bit入力から残る輝度階調も検査します。追加で2枚入力のMOV／MP4の表示・デコード時刻を確認します。旧x265で短い入力の時刻が不正になる問題を避けるため、H.265の出力が1〜2枚ならBフレームを無効にします。観測条件は[検証メモ](internal/lrtl/testdata/lrt-h26x-format-7.5.5.md)に記載しています。
+
 ## レンダー時の拡大縮小
 
 `--output-height`／`--long-edge`による出力時の拡大縮小は、本体が選ぶLanczos系に合わせて純GoのLanczos3を使います。以前のCatmull-Romから変更しました。[FFmpegの仕様](https://www.ffmpeg.org/ffmpeg-scaler.html)にある既定幅3のsinc系カーネルを、縮小率に合わせて広げ、範囲外の重みを最端画素へ折り返します。色付きの透明画素による縁の混入を避けるため、アルファを乗じた色を合成してから元に戻します。画像全体の浮動小数点中間層を持たず、縦方向の窓に必要な行を再利用します。
@@ -651,7 +663,7 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --lrt-render-
 
 CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
 
-HDR・広色域・フレーム生成・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420に限ります。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
+HDR・広色域・フレーム生成・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420／422／444を読み込み、明示した`--subsampling`を優先します。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
 
 この対応に合わせ、`--codec prores-proxy|prores-lt|prores-4444`も追加しました。FFmpegにはProRes 4444用10-bit YUVを渡し、ffprobeでは4444・12-bitのデコード形式として報告されることを確認しています。完全な12-bit入力精度やアルファチャンネルの保持は実装していません。本体で生成した6種類のJSONと画質ヘルパー値、明示CLIとの画素入力・引数一致、設定と元画像の保持、バッチ転送、不正設定時の出力保持、実MOVのプロファイルをテストしています。
 
@@ -693,7 +705,7 @@ AVIヘッダー・JPEG画素データ・インデックス保持、バッチ転�
 | 段階 | 目標 | 状況 |
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | XMPの読み書き、4/5つ星キーフレーム操作、LRT 7.5.5由来の数量/配置規則、127個の全体数値項目と登録ローカル項目のスプライン補間、スナップショット、GUIのExposure2012グラフ、選択フレームのマスター/R/G/Bトーンカーブ点編集を実装。Lightroom/Camera Raw連携画面と連番全体でカーブを同時編集する機能は未実装 |
-| 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像・対応RAW）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264/H.265 MP4、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWはAdobe DNG ConverterとGoによる実画素現像、内蔵プレビュー、明示したDNGLabから選択可能 |
+| 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像・対応RAW）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264 MP4／H.265 MP4・MOV、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWはAdobe DNG ConverterとGoによる実画素現像、内蔵プレビュー、明示したDNGLabから選択可能 |
 | 3 | 画像解析、プレビュー、Deflicker | 静的SVG輝度プレビュー、UIのXMP Exposure2012/解析画像輝度グラフ、選択フレームのRGBトーンカーブ編集、静止画プレビューと最大640 pxの連番ループ再生、長期撮影指標、XMP画素反映、回転クロップ、参照領域/全体露出Deflickerを実装。LRT Visual Previewと同等の再生速度/画素再現、Exposure2012の複数フレーム同時編集、フレーム間のトーンカーブ編集、XMPロスレス適用、垂直/水平・UprightのGeometry補正、未対応マスク形式の画素現像は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定と既存LRT XMP入力を使う近似Holy Grail補正、現像済みラスターへの対応XMP値適用、一部RAW内蔵プレビュー、Adobe DNG ConverterとGoによるRAW現像（DNGLabも任意選択）を実装。Camera Raw現像の完全再現と同等のRAW画素処理は未実装 |
 | 5 | 残りのCLIワークフローと取り込み機能 | Go標準`net/http`で動くループバック限定のローカルWeb UIで、サムネイル、キーフレーム、XMP補間、レンダー操作を実装。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed/lossy DNG変換・ロッシーDNG縮小、追加コーデックも実装。GUIの追加開発は対象外。LRTと同じ10-bit YUV画素処理・色管理は未対応（現状は16-bit RGBを経由） |

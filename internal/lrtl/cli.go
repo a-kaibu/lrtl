@@ -881,7 +881,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	output := set.String("output", "", "output AVI, MP4, or MOV path")
 	selectionPath := set.String("selection", "", "use included frames from a long-term selection manifest")
 	filenameContains := set.String("filename-contains", "", "render only frames whose filename contains this text (case-insensitive)")
-	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores-proxy|prores-lt|prores|prores-hq|prores-4444|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
+	codec := set.String("codec", "", "MP4: h264|h265; MOV: h265|prores-proxy|prores-lt|prores|prores-hq|prores-4444|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
+	subsampling := set.String("subsampling", "", "H.264/H.265: 420 (8-bit, default), 422 or 444 (10-bit)")
 	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
 	fadeOut := set.Float64("fade-out", 0, "fade video and audio to black/silence over the final seconds (0 off)")
 	sharpen := set.Bool("sharpen", false, "apply output luma sharpening before overlays and fade")
@@ -946,6 +947,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--watermark-position": true, "-watermark-position": true,
 		"--motion-blur": true, "-motion-blur": true,
 		"--crop-position": true, "-crop-position": true,
+		"--subsampling": true, "-subsampling": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1026,6 +1028,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
+		Subsampling:       *subsampling,
 		CRF:               *crf,
 		Preset:            *preset,
 		LongEdge:          *longEdge,
@@ -1093,6 +1096,11 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	features = append(features, strings.ToUpper(selectedCodec)+" codec")
+	if (selectedCodec == "h264" || selectedCodec == "h265") && options.Subsampling != "" {
+		if value, _ := normalizeSubsampling(options.Subsampling); value != "420" {
+			features = append(features, value+" subsampling (10-bit)")
+		}
+	}
 	if options.OutputSharpen {
 		features = append(features, "output sharpening")
 	}

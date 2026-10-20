@@ -269,7 +269,8 @@ Six native serialized objects and measured H.264/H.265 CRFs are in
 observations from inspected encoder profile switches. Go maps fps, height,
 quality/codec profiles, Motion Blur and audio to its existing renderer. Known
 unsupported enabled filters, interpolation and color/HDR modes fail
-instead of being silently discarded. H.264/H.265 imports require 420 sampling.
+instead of being silently discarded. H.264/H.265 imports support 420, 422 and
+444 sampling as documented below.
 New ProRes Proxy/LT/4444 backends cover the native profile choices alongside
 the existing 422/HQ paths. FFmpeg receives 10-bit YUV; its 4444 decoder reports
 12-bit output, which is not evidence of full 12-bit input precision or alpha.
@@ -279,6 +280,32 @@ the RGB/input-argument boundary, check global/named presets, overrides, source
 and output retention, batch forwarding, invalid JSON/options and optional real
 ProRes and 1080p NTSC H.264 output through ffprobe. Complete native rendering
 and color-management parity remain outside this measurement.
+
+## H.264/H.265 chroma sampling and bit depth
+
+The installed 7.5.5 encoder helpers were invoked with synthetic SDR presets:
+two codecs, three sampling modes, three quality values and two video ranges.
+All 36 observations are retained in `testdata/lrt-h26x-format-7.5.5.json`,
+with provenance in the adjacent Markdown file. Both codecs select 8-bit
+`yuv420p` for 420 and 10-bit `yuv422p10le` / `yuv444p10le` for 422 / 444.
+The native extension helper selects MP4 for H.264 and MOV for H.265.
+
+`--subsampling` and saved preset imports now follow those formats. H.265 MOV
+joins the existing H.265 MP4 path. Before opening output, encoder help must
+confirm support for the exact pixel format, preventing an unnoticed FFmpeg
+format substitution. Explicit SDR range conversion uses the selected depth.
+ProRes and DNxHR retain their codec-specific formats; still exports clear this
+video-only option. HDR and complete native color-management parity remain
+unsupported.
+
+Tests cover all 36 observations, CLI/preset/batch forwarding, invalid inputs,
+capability failures and source/output retention. Optional actual-encoder tests
+cover 18 container/sampling/range combinations, checking ffprobe metadata and
+decoded luma from a 16-bit gradient. The measured 10-bit outputs retain over
+700 distinct luma levels per row; these tests do not compare full native renders.
+Two further H.265 MOV/MP4 encodes verify two-frame PTS/DTS values. Outputs
+shorter than three frames disable B frames to avoid the uninitialized delay
+timestamp in older x265; the fixture notes link the upstream implementation.
 
 ## Fractional output frame rates
 
@@ -569,7 +596,7 @@ A local three-frame NEF smoke run completed init, a middle-frame global master c
 
 ## High precision frame transport (2026-10-16)
 
-The renderer now sends little-endian 16-bit-per-channel RGB (`rgb48le`) to FFmpeg for MP4/MOV, rather than quantizing decoded TIFF/DNG/PNG to RGB24. The codec's final pixel format remains explicit: H.264/H.265 use 8-bit yuv420p; ProRes uses yuv422p10le; DNxHR HQX/444 use their 10-bit formats. This is SDR sRGB input transport, not HDR, ICC profile interpretation or verified LRT color management.
+The renderer now sends little-endian 16-bit-per-channel RGB (`rgb48le`) to FFmpeg for MP4/MOV, rather than quantizing decoded TIFF/DNG/PNG to RGB24. The codec's final pixel format remains explicit: H.264/H.265 use 8-bit yuv420p by default or 10-bit yuv422p10le/yuv444p10le with explicit or imported sampling; ProRes uses yuv422p10le; DNxHR HQX/444 use their 10-bit formats. This is SDR sRGB input transport, not HDR, ICC profile interpretation or verified LRT color management.
 
 Geometry allocates 16-bit image buffers for 16-bit input, including EXIF orientation, aspect crop, XMP crop/rotation and Catmull-Rom resizing. Exposure-only edits use a 65536-entry linear-light sRGB LUT and preserve alpha. Text overlays draw into the same precision. Motion blur now blends 16-bit RGB samples using the observed LRT weights and a larger memory estimate. LRT's YUV filter path still differs. The supported basic/local color, tone-curve and spatial controls now also use 16-bit NRGBA buffers, a 65536-entry decode table, float32 detail layers and float64 tone/color calculations. Tone curves retain PCHIP coefficients per original XMP segment and evaluate 16-bit positions directly, avoiding both an 8-bit LUT and a 128 KiB table per curve per frame. This improves internal numerical precision while retaining the existing independent SDR control approximations; it does not establish Adobe or LRT pixel parity.
 

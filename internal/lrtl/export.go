@@ -105,6 +105,7 @@ func ExportTIFFSequence(frames []Frame, output string, options RenderOptions) er
 	options.VideoRange = "auto"
 	options.OutputSharpen = false
 	options.NativeTiming = false
+	options.Subsampling = ""
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {
 		return &tiffSequenceWriter{directory: staging, width: width, height: height, frames: manifest.Frames}, nil
 	}); err != nil {

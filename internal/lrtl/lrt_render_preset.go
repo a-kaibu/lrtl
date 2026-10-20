@@ -213,8 +213,11 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 		}
 	}
 	if options.Codec == "h264" || options.Codec == "h265" {
-		if preset.SubSampling != "420" {
-			return options, fmt.Errorf("LRT subsampling %q is unsupported for H.264/H.265; expected 420", preset.SubSampling)
+		if !explicit["subsampling"] {
+			options.Subsampling = preset.SubSampling
+		}
+		if _, err := normalizeSubsampling(options.Subsampling); err != nil {
+			return options, err
 		}
 		if !explicit["crf"] {
 			values := []int{22, 18, 15, 10, 8, 0}
@@ -223,6 +226,8 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 			}
 			options.CRF = values[preset.OutputQuality]
 		}
+	} else if !explicit["subsampling"] {
+		options.Subsampling = ""
 	}
 	if !explicit["fps"] {
 		options.FrameRate = preset.FrameRate

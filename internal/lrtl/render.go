@@ -28,6 +28,7 @@ type RenderOptions struct {
 	Quality           int
 	FFmpegPath        string
 	Codec             string
+	Subsampling       string
 	CRF               int
 	Preset            string
 	LongEdge          int
@@ -190,6 +191,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err != nil {
 		return err
 	}
+	if _, err := normalizeSubsampling(options.Subsampling); err != nil {
+		return err
+	}
 	label := options.FrameRate
 	if label == "" {
 		label = rate.String()
@@ -229,6 +233,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if imageWriter == nil && outputExtension != ".avi" && outputExtension != ".mp4" && outputExtension != ".mov" {
 		return fmt.Errorf("output must use the .avi, .mp4, or .mov extension: %s", output)
 	}
+	if options.Subsampling != "" && (imageWriter != nil || outputExtension == ".avi") {
+		return fmt.Errorf("--subsampling requires H.264 or H.265 output")
+	}
 	if outputExtension == ".avi" && videoRange == "limited" {
 		return fmt.Errorf("limited video range requires MP4 or MOV; MJPEG AVI uses full-range JPEG")
 	}
@@ -260,9 +267,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		if outputExtension == ".mp4" && options.Codec != "h264" && options.Codec != "h265" {
 			return fmt.Errorf("MP4 codec must be h264 or h265: %q", options.Codec)
 		}
-		if _, _, prores := proresProfile(options.Codec); outputExtension == ".mov" && !prores {
+		if _, _, prores := proresProfile(options.Codec); outputExtension == ".mov" && !prores && options.Codec != "h265" {
 			if _, _, supported := dnxhrProfile(options.Codec); !supported {
-				return fmt.Errorf("MOV codec must be a supported ProRes or DNxHR profile: %q", options.Codec)
+				return fmt.Errorf("MOV codec must be h265 or a supported ProRes or DNxHR profile: %q", options.Codec)
 			}
 		}
 		if options.Codec == "h264" || options.Codec == "h265" {
@@ -281,6 +288,21 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			return err
 		}
 		ffmpegPath = resolvedPath
+		if options.Codec == "h264" || options.Codec == "h265" {
+			format, err := h26xPixelFormat(options.Subsampling)
+			if err != nil {
+				return err
+			}
+			encoder := "libx264"
+			if options.Codec == "h265" {
+				encoder = "libx265"
+			}
+			if err := requireFFmpegPixelFormat(ffmpegPath, encoder, format); err != nil {
+				return err
+			}
+		} else if options.Subsampling != "" {
+			return fmt.Errorf("--subsampling requires H.264 or H.265 output")
+		}
 	}
 
 	outputDir := filepath.Dir(output)
@@ -538,7 +560,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration, options.Subsampling)
 		if err != nil {
 			cleanup()
 			return err

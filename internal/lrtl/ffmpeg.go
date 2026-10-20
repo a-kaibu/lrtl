@@ -88,7 +88,7 @@ func proresProfile(codec string) (string, string, bool) {
 	return "", "", false
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration string) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb48le",
@@ -109,13 +109,26 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	switch codec {
 	case "h264":
+		pixelFormat, err := h26xPixelFormat(subsampling)
+		if err != nil {
+			return nil, err
+		}
 		arguments = append(arguments,
 			"-c:v", "libx264", "-preset", preset, "-crf", strconv.Itoa(crf),
-			"-pix_fmt", "yuv420p", "-vf", videoRangeFilter(videoRange, "yuv420p"), "-tag:v", "avc1")
+			"-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat), "-tag:v", "avc1")
 	case "h265":
+		pixelFormat, err := h26xPixelFormat(subsampling)
+		if err != nil {
+			return nil, err
+		}
 		arguments = append(arguments,
 			"-c:v", "libx265", "-preset", preset, "-crf", strconv.Itoa(crf),
-			"-pix_fmt", "yuv420p", "-vf", videoRangeFilter(videoRange, "yuv420p"), "-tag:v", "hvc1")
+			"-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat), "-tag:v", "hvc1")
+		// Older x265 leaves its B-frame delay timestamp uninitialized until
+		// the third input frame. A shorter sequence needs no B-frame reorder.
+		if frameCount < 3 {
+			arguments = append(arguments, "-bf", "0")
+		}
 	default:
 		if profile, pixelFormat, supported := proresProfile(codec); supported {
 			arguments = append(arguments, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat))
