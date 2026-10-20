@@ -1,0 +1,8 @@
+[
+{"width":32,"height":24,"outputHeight":16,"scale":"scale=w=20:h=16:out_range=full:flags=lanczos"},
+{"width":32,"height":24,"outputHeight":36,"scale":"scale=w=48:h=36:out_range=full:flags=lanczos"},
+{"width":64,"height":32,"outputHeight":16,"scale":"scale=w=32:h=16:out_range=full:flags=lanczos"},
+{"width":33,"height":25,"outputHeight":16,"scale":"scale=w=20:h=16:out_range=full:flags=lanczos"},
+{"width":32,"height":64,"outputHeight":32,"scale":"scale=w=32:h=64:out_range=full:flags=lanczos"},
+{"width":63,"height":31,"outputHeight":24,"scale":"scale=w=48:h=24:out_range=full:flags=lanczos"}
+]

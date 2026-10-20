@@ -2,6 +2,35 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Lanczos output resampling
+
+Six native graph-builder calls recorded in `testdata/lrt-scale-filter-7.5.5.json`
+confirm `scale=...:out_range=full:flags=lanczos`. FFmpeg documents default
+Lanczos width3 (https://www.ffmpeg.org/ffmpeg-scaler.html). The former Go
+Catmull-Rom output resize is replaced with an independent separable Lanczos3
+filter: half-pixel centers, expanded support on downsampling, normalized
+weights and out-of-image weights folded onto the nearest edge sample.
+Premultiplied RGB/alpha is combined in float64 without clipping between axes;
+the result is unassociated/clipped only at the final pixel. A sliding row
+cache avoids a full-image four-channel float64 intermediate and reuses rows.
+
+24 actual bundled FFmpeg 8.0.1 gray16le scale observations contain 16,338 output
+samples (six patterns/four resizes). Their pooled RMSE drops from980.479 for
+the former Catmull-Rom filter to44.413 for the new implementation. Stored
+vectors, not the production equation, supply reference values. Optional
+external replay checks the complete stored planes. Tests also cover16-bit
+constants, identity, nonzero bounds, alpha/transparent color, extreme shrink
+ratios, edge folding, normalization and source retention. This is a grayscale
+component comparison; native color-managed RGB/YUV/video parity is not proven.
+Residuals are largest on high-frequency upscaling. See fixture provenance.
+
+The native observations additionally reveal still-open geometry differences:
+32x24 at requested16 yields20x16, while Go currently rounds to21x16;
+32x64 at requested32 yields32x64, while Go's explicit height produces16x32.
+Native preset short-edge/portrait semantics and even dimension selection
+are not fixed by this resampling change. GUI/XMP geometry resamplers are
+unchanged. The overall compatibility goal remains incomplete.
+
 ## Motion Blur warm-up trimming
 
 `testdata/lrt-motion-trim-7.5.5.json` records 48 isolated ordinary native graph

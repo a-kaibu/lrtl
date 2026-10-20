@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	_ "golang.org/x/image/tiff"
 )
@@ -145,15 +144,6 @@ func outputDimensions(width, height, longEdge, outputHeight int, aspectRatio flo
 		return longEdge, max(1, int(math.Round(float64(height)*float64(longEdge)/float64(width)))), nil
 	}
 	return max(1, int(math.Round(float64(width)*float64(longEdge)/float64(height)))), longEdge, nil
-}
-
-func resizeFrame(img image.Image, width, height int) image.Image {
-	if img.Bounds().Dx() == width && img.Bounds().Dy() == height {
-		return img
-	}
-	resized := newFrameImage(image.Rect(0, 0, width, height), img)
-	xdraw.CatmullRom.Scale(resized, resized.Bounds(), img, img.Bounds(), xdraw.Src, nil)
-	return resized
 }
 
 const maxVideoDimension = int64(1<<31 - 1)
