@@ -413,9 +413,9 @@ func TestOutputCASPresetBatchAndDisabledOverride(t *testing.T) {
 		}
 		return data
 	}
-	markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "control.mp4"), "--ffmpeg", executable)
+	markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "control.mp4"), "--ffmpeg", executable, "--output-color", "lrt-7.5.5")
 	control := readCapture()
-	markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "explicit.mp4"), "--ffmpeg", executable, "--cas")
+	markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "explicit.mp4"), "--ffmpeg", executable, "--cas", "--output-color", "lrt-7.5.5")
 	want := readCapture()
 	markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "preset.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path)
 	actual := readCapture()

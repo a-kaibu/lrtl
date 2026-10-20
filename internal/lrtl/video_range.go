@@ -41,8 +41,12 @@ func normalizeOutputColor(value string) (string, error) {
 func nativeSDRColorFilter(value, pixelFormat string) string {
 	// Match the observed final SDR encoder path, including swscale's initial
 	// RGB conversion. This does not replace the Go image filters' color model.
+	return "pad=ceil(iw/2)*2:ceil(ih/2)*2,scale=iw:ih:out_range=full:flags=lanczos,format=yuv444p10le," + nativeSDRPlanarColorFilter(value, pixelFormat)
+}
+
+func nativeSDRPlanarColorFilter(value, pixelFormat string) string {
 	if value == "auto" {
 		value = "limited"
 	}
-	return "pad=ceil(iw/2)*2:ceil(ih/2)*2,scale=iw:ih:out_range=full:flags=lanczos,format=yuv444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,setsar=1/1,zscale=rangein=full:range=" + value + ":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format=" + pixelFormat
+	return "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,setsar=1/1,zscale=rangein=full:range=" + value + ":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format=" + pixelFormat
 }

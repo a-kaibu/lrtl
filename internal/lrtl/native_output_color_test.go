@@ -85,7 +85,7 @@ func TestNativeOutputColorBackendArguments(t *testing.T) {
 		for _, codec := range []string{"h264", "h265", "prores-hq", "dnxhr-hqx"} {
 			for _, value := range []string{"auto", "limited", "full"} {
 				t.Run(profile+"/"+codec+"/"+value, func(t *testing.T) {
-					writer, err := newFFmpegFrameWriter(executable, filepath.Join(t.TempDir(), "out.mov"), "mov", codec, 64, 32, frameRate{24, 1}, 1, 0, "ultrafast", "", videoFade{}, value, "", "444", profile)
+					writer, err := newFFmpegFrameWriter(executable, filepath.Join(t.TempDir(), "out.mov"), "mov", codec, 64, 32, frameRate{24, 1}, 1, 0, "ultrafast", "", videoFade{}, value, "", "444", ffmpegFrameEncoding{outputColor: profile})
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -210,12 +210,28 @@ func TestNativeOutputColorGoldenPlanes(t *testing.T) {
 }
 
 func TestNativeOutputColorActualImages(t *testing.T) {
+	verifyNativeColorActualImages(t, 0, "444")
+}
+
+func TestNativeSpatialActualImages(t *testing.T) {
+	for mode := 1; mode <= 3; mode++ {
+		for _, sampling := range []string{"420", "422", "444"} {
+			t.Run(fmt.Sprintf("mode%d/%s", mode, sampling), func(t *testing.T) { verifyNativeColorActualImages(t, mode, sampling) })
+		}
+	}
+}
+
+func verifyNativeColorActualImages(t *testing.T, mode int, sampling string) {
+	t.Helper()
 	executable, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		t.Skip("FFmpeg required")
 	}
 	for _, extension := range []string{"png", "tif"} {
 		for _, codec := range []string{"h264", "h265", "prores-hq"} {
+			if codec == "prores-hq" && sampling != "444" {
+				continue
+			}
 			for _, value := range []string{"full", "limited"} {
 				t.Run(extension+"/"+codec+"/"+value, func(t *testing.T) {
 					dir := t.TempDir()
@@ -244,12 +260,24 @@ func TestNativeOutputColorActualImages(t *testing.T) {
 					}
 					output := filepath.Join(t.TempDir(), "go"+suffix)
 					cliArgs := []string{"render", dir, "--output", output, "--codec", codec, "--fps", "24", "--crf", "0", "--preset", "ultrafast", "--video-range", value, "--output-color", "lrt-7.5.5", "--ffmpeg", executable}
+					if mode&1 != 0 {
+						cliArgs = append(cliArgs, "--sharpen")
+					}
+					if mode&2 != 0 {
+						cliArgs = append(cliArgs, "--cas")
+					}
 					if codec != "prores-hq" {
-						cliArgs = append(cliArgs, "--subsampling", "444")
+						cliArgs = append(cliArgs, "--subsampling", sampling)
 					}
 					markerCommand(t, cliArgs...)
 					reference := filepath.Join(t.TempDir(), "reference"+suffix)
 					pix := "yuv444p10le"
+					if sampling == "420" {
+						pix = "yuv420p"
+					}
+					if sampling == "422" {
+						pix = "yuv422p10le"
+					}
 					enc := []string{"-c:v", "libx264", "-preset", "ultrafast", "-crf", "0", "-tag:v", "avc1"}
 					if codec == "h265" {
 						enc = []string{"-c:v", "libx265", "-preset", "ultrafast", "-crf", "0", "-tag:v", "hvc1", "-x265-params", "colorprim=bt709:range=" + value + ":transfer=bt709:colormatrix=bt709"}
@@ -261,6 +289,14 @@ func TestNativeOutputColorActualImages(t *testing.T) {
 					// This reference graph follows the observed native command, independently
 					// of the production filter builder and the Go image reader.
 					filter := "crop=floor(iw/2)*2:floor(ih/2)*2,scale=w=64:h=32:out_range=full:flags=lanczos,format=yuv444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,setsar=1/1,zscale=rangein=full:range=" + value + ":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format=" + pix
+					spatial := ""
+					if mode&1 != 0 {
+						spatial += ",unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=0.4"
+					}
+					if mode&2 != 0 {
+						spatial += ",cas=strength=0.90"
+					}
+					filter = strings.Replace(filter, ",zscale=", spatial+",zscale=", 1)
 					args := []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d."+extension), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-frames:v", "3", "-an", "-vf", filter}
 					args = append(args, enc...)
 					metadata := "tv"

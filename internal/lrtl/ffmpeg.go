@@ -33,6 +33,7 @@ type ffmpegFrameWriter struct {
 	input   io.WriteCloser
 	stderr  cappedBuffer
 	closed  bool
+	spatial *nativeSpatialFilter
 }
 
 func resolveFFmpeg(path string) (string, error) {
@@ -88,10 +89,17 @@ func proresProfile(codec string) (string, string, bool) {
 	return "", "", false
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string, outputColor ...string) (*ffmpegFrameWriter, error) {
+type ffmpegFrameEncoding struct {
+	outputColor string
+	spatial     *nativeSpatialFilter
+}
+
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string, encoding ...ffmpegFrameEncoding) (*ffmpegFrameWriter, error) {
 	profile := "standard"
-	if len(outputColor) > 0 {
-		profile = outputColor[0]
+	var spatial *nativeSpatialFilter
+	if len(encoding) > 0 {
+		profile = encoding[0].outputColor
+		spatial = encoding[0].spatial
 	}
 	profile, err := normalizeOutputColor(profile)
 	if err != nil {
@@ -105,9 +113,17 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			videoRange = "limited"
 		}
 	}
+	inputFormat := "rgb48le"
+	if spatial != nil {
+		if !nativeColor || width <= 0 || height <= 0 || width%2 != 0 || height%2 != 0 || spatial.width != width || spatial.height != height {
+			return nil, fmt.Errorf("native spatial filtering requires an even SDR planar frame")
+		}
+		inputFormat = "yuv444p10le"
+		colorFilter = nativeSDRPlanarColorFilter
+	}
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
-		"-f", "rawvideo", "-pixel_format", "rgb48le",
+		"-f", "rawvideo", "-pixel_format", inputFormat,
 		"-video_size", fmt.Sprintf("%dx%d", width, height),
 		"-framerate", rate.String(), "-i", "pipe:0",
 	}
@@ -205,7 +221,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	if err != nil {
 		return nil, fmt.Errorf("open FFmpeg input: %w", err)
 	}
-	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}}
+	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}, spatial: spatial}
 	command.Stderr = &writer.stderr
 	if err := command.Start(); err != nil {
 		_ = input.Close()
@@ -217,6 +233,13 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 func (writer *ffmpegFrameWriter) AddFrame(frame []byte) error {
 	if writer.closed {
 		return fmt.Errorf("FFmpeg input is already closed")
+	}
+	if writer.spatial != nil {
+		var err error
+		frame, err = writer.spatial.frame(frame)
+		if err != nil {
+			return err
+		}
 	}
 	for len(frame) > 0 {
 		written, err := writer.input.Write(frame)

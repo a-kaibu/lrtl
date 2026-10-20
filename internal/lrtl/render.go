@@ -223,6 +223,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		return err
 	}
 	fade := timing.fade
+	// Spatial filters can stay in the native YUV domain through encoding when
+	// there is no later RGB overlay/fade. Other combinations retain the existing
+	// RGB path until those later stages also have a native planar implementation.
+	nativeSpatial := imageWriter == nil && outputColor == "lrt-7.5.5" &&
+		(options.OutputSharpen || options.OutputCAS) && !options.TimestampOverlay &&
+		options.Watermark == "" && fade.duration == 0
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
@@ -602,7 +608,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration, options.Subsampling, outputColor)
+		encoding := ffmpegFrameEncoding{outputColor: outputColor}
+		nativeSpatial = nativeSpatial && outputWidth%2 == 0 && outputHeight%2 == 0
+		if nativeSpatial {
+			encoding.spatial = &nativeSpatialFilter{outputWidth, outputHeight, options.OutputSharpen, options.OutputCAS}
+		}
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration, options.Subsampling, encoding)
 		if err != nil {
 			cleanup()
 			return err
@@ -758,7 +769,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					return blendErr
 				}
 			}
-			if options.OutputSharpen || options.OutputCAS {
+			if !nativeSpatial && (options.OutputSharpen || options.OutputCAS) {
 				filterOutputRGB48(rgb, outputWidth, outputHeight, options)
 			}
 			var img image.Image
@@ -871,7 +882,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					img = resizeFrame(img, outputWidth, outputHeight)
 				}
 			}
-			if options.OutputSharpen || options.OutputCAS {
+			if !nativeSpatial && (options.OutputSharpen || options.OutputCAS) {
 				img, err = filterOutputImage(img, options)
 				if err != nil {
 					return err
