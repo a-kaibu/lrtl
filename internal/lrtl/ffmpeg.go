@@ -88,7 +88,23 @@ func proresProfile(codec string) (string, string, bool) {
 	return "", "", false
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string, outputColor ...string) (*ffmpegFrameWriter, error) {
+	profile := "standard"
+	if len(outputColor) > 0 {
+		profile = outputColor[0]
+	}
+	profile, err := normalizeOutputColor(profile)
+	if err != nil {
+		return nil, err
+	}
+	nativeColor := profile == "lrt-7.5.5"
+	colorFilter := videoRangeFilter
+	if nativeColor {
+		colorFilter = nativeSDRColorFilter
+		if videoRange == "auto" {
+			videoRange = "limited"
+		}
+	}
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb48le",
@@ -97,6 +113,11 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	if audioPath != "" {
 		arguments = append(arguments, "-i", audioPath, "-map", "0:v:0", "-map", "1:a:0")
+	}
+	if nativeColor {
+		const flags = "print_info+accurate_rnd+bitexact+full_chroma_int"
+		arguments = append([]string{"-sws_flags", flags}, arguments...)
+		arguments = append(arguments, "-sws_flags", flags)
 	}
 	// Native audio can intentionally extend beyond the actual video count at
 	// float boundaries. A video frame cap stops FFmpeg before that audio drains.
@@ -115,7 +136,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		}
 		arguments = append(arguments,
 			"-c:v", "libx264", "-preset", preset, "-crf", strconv.Itoa(crf),
-			"-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat), "-tag:v", "avc1")
+			"-pix_fmt", pixelFormat, "-vf", colorFilter(videoRange, pixelFormat), "-tag:v", "avc1")
 	case "h265":
 		pixelFormat, err := h26xPixelFormat(subsampling)
 		if err != nil {
@@ -123,7 +144,10 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		}
 		arguments = append(arguments,
 			"-c:v", "libx265", "-preset", preset, "-crf", strconv.Itoa(crf),
-			"-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat), "-tag:v", "hvc1")
+			"-pix_fmt", pixelFormat, "-vf", colorFilter(videoRange, pixelFormat), "-tag:v", "hvc1")
+		if nativeColor {
+			arguments = append(arguments, "-x265-params", "colorprim=bt709:range="+videoRange+":transfer=bt709:colormatrix=bt709")
+		}
 		// Older x265 leaves its B-frame delay timestamp uninitialized until
 		// the third input frame. A shorter sequence needs no B-frame reorder.
 		if frameCount < 3 {
@@ -131,11 +155,11 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		}
 	default:
 		if profile, pixelFormat, supported := proresProfile(codec); supported {
-			arguments = append(arguments, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat))
+			arguments = append(arguments, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", pixelFormat, "-vf", colorFilter(videoRange, pixelFormat))
 		} else if profile, pixelFormat, supported := dnxhrProfile(codec); supported {
 			arguments = append(arguments,
 				"-c:v", "dnxhd", "-profile:v", profile,
-				"-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat))
+				"-pix_fmt", pixelFormat, "-vf", colorFilter(videoRange, pixelFormat))
 		} else {
 			return nil, fmt.Errorf("unsupported FFmpeg video codec %q", codec)
 		}
@@ -146,6 +170,9 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			metadata = "pc"
 		}
 		arguments = append(arguments, "-color_range", metadata, "-colorspace", "bt709")
+	}
+	if nativeColor {
+		arguments = append(arguments, "-color_primaries", "bt709", "-color_trc", "unspecified")
 	}
 	if audioPath != "" {
 		duration := strconv.FormatFloat(rate.seconds(frameCount), 'f', 9, 64)
@@ -167,6 +194,10 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	movFlags := "+faststart"
 	if videoRange != "auto" {
 		movFlags += "+write_colr"
+	}
+	if nativeColor {
+		movFlags = "+write_colr+write_gama+prefer_icc+faststart"
+		arguments = append(arguments, "-mov_gamma", "2.4")
 	}
 	arguments = append(arguments, "-movflags", movFlags, "-f", container, output)
 	command := exec.Command(executable, arguments...)

@@ -115,7 +115,7 @@ func TestSubsamplingPresetCLIAndBatch(t *testing.T) {
 				}
 				format, _ := h26xPixelFormat(sampling)
 				joined := strings.Join(args, " ")
-				if !strings.Contains(joined, "-pix_fmt "+format) || !strings.Contains(joined, "-vf "+videoRangeFilter(videoRange, format)) {
+				if !strings.Contains(joined, "-pix_fmt "+format) || !strings.Contains(joined, "-vf "+nativeSDRColorFilter(videoRange, format)) {
 					t.Fatalf("wrong output format/range: %s", joined)
 				}
 				probe, err := os.ReadFile(capture + ".probe.json")

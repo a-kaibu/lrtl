@@ -424,7 +424,7 @@ func TestOutputSharpenAVIPresetBatchAndFalseOverride(t *testing.T) {
 	}
 	run := func(extra ...string) []byte {
 		output := filepath.Join(t.TempDir(), "video.avi")
-		markerCommand(t, append([]string{"render", dir, "--output", output, "--fps", "2", "--quality", "100", "--video-range", "auto", "--codec", ""}, extra...)...)
+		markerCommand(t, append([]string{"render", dir, "--output", output, "--fps", "2", "--quality", "100", "--video-range", "auto", "--output-color", "standard", "--codec", ""}, extra...)...)
 		data, err := os.ReadFile(output)
 		if err != nil {
 			t.Fatal(err)

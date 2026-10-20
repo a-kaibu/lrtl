@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `render --output-color lrt-7.5.5`で、本体に合わせた最終SDR色変換を使えます。保存プリセットでは既定で有効になります。本体の色設定162通りから通常SDRの経路を確認し、RGB16→YUVの144ケースと、PNG／TIFF→H.264／H.265／ProResの実動画12ケースで復号後の全画素を比較しています。内部フィルターのRGB/YUV変換、ICC、HDR・広色域の完全一致は未対応です。
+
 - `render --interpolation 2`で純Goの低速モーション補償を使えるようにしました。本体が選ぶ双方向のブロック推定・重なり合成・履歴予測を実装し、8-bit／10-bitの720ケース、96,085,440サンプル分のハッシュと一致。ブレンドとは異なる中間画像を生成します。プリセット・字幕・バッチ、時間フィルターの併用、JPEG AVI・実MP4/MOV、失敗時の保持もテストしています。HDRと色管理を含む本体動画全体の一致は未確認です。
 
 - 保存プリセットのfps変換を本体の156入力と比較して反映しました。`24.5`→`25000/1001`、整数近傍の0.001境界、指数・16進表記などを確認し、補間の282ケースも照合。`subtitles --lrt-render-preset FILE`で動画と同じfps・速度・補間・前後トリムを読み込めます。映像と音声で時間計算に使うfpsが異なる本体の挙動も、実MP4の長さ・映像/音声フェードまでテストしています。
@@ -151,6 +153,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed/lossy DNG取り込みとロッシーDNGの長辺縮小に対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264 MP4／H.265 MP4・MOV、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。H.264/H.265は`--subsampling 420`で8-bit、`422`／`444`で10-bit出力。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
+| 最終SDR色変換 | 本体の出力レンジ・色差変換・メタデータ | `--output-color lrt-7.5.5`と保存プリセットの既定で、full-range YUV444 10-bitを経由する最終エンコードに対応。144平面ケース・実動画12ケースを比較。内部フィルター、ICC、HDR・広色域まで含む全体一致は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
 | フレーム補間 | 速度変更時のブレンド・動き補償 | `--interpolation 1`でブレンド、`2`で低速の双方向モーション補償。保存プリセット・字幕・バッチに対応。ブレンド2,304ケース、モーション720ケースの平面出力ハッシュ・枚数を比較。時間フィルター併用と実動画もテスト。色管理を含む本体動画全体との完全一致は未確認 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。速度変更後の過去Nフレームを合成し、本体と同じ先頭Nフレーム除去を行う。48件のフィルター実測で枚数・開始位置・フェード時刻を照合。字幕も`--motion-blur N`で開始位置を揃える。中間画像は先頭を保持。16-bit RGB処理で、LRTの10-bit YUVフィルター出力との画素完全一致は未確認 | 一部 |
@@ -551,7 +554,11 @@ lrtl render C:\photos\sequence --output C:\photos\full.mov --codec dnxhr-hqx --v
 lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --video-range limited
 ```
 
-LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分岐と同じlimitedとして読み込みます。CLIで明示した値を優先し、`--video-range auto`で従来の経路を選べます。元のRGB48入力を16-bitのままレンジ変換し、色差変換のBT.709行列情報とレンジ指定をMP4/MOVへ渡します。転送特性・ICC色管理全体・HDRの再現は引き続き未対応です。
+LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分岐と同じlimitedとして読み込みます。CLIで明示した値を優先します。通常の`standard`色変換ではRGB48からBT.709行列で変換し、`--video-range auto`は従来のFFmpeg変換を使います。
+
+`--output-color lrt-7.5.5`は、本体の通常SDR出力に合わせ、RGB48→full-range YUV444 10-bit→指定レンジ・色差形式の順に変換し、BT.709・レンジ・MOVガンマ情報を渡します。**保存プリセットではこのプロファイルが既定**です。このとき`--video-range auto`もlimitedへ解決します。`--output-color standard`で通常の経路を明示できます。MP4/MOVとlibzimg入りFFmpegが必要です。プリセットの画像フィルターだけをAVIに使う場合も`--output-color standard`を明示してください。バッチでも`--`以降に同じ指定を渡せます。
+
+比較範囲は、等倍・不透明な16-bit PNG／TIFFと、画像フィルターを無効にした最終エンコードです。内部フィルターのRGB/YUV変換は従来のBT.709近似のままで、本体がフィルター前に行う変換まで一致させたものではありません。JPEGの復号差、ICC、リサイズを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)を参照してください。
 
 ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告されず、fullの10-bit端点も4〜1019へクリップされました。limitedが一般的な用途に適します。H.264/H.265/DNxHRではfull／limitedのタグと実際の輝度値を確認しています。AVIはfull-range JPEGのためauto／fullを受け付け、limited指定は保存前にエラーにします。
 

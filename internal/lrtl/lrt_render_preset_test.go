@@ -100,8 +100,8 @@ func TestLRTRenderPresetGlobalSelectionAspectAndOverrides(t *testing.T) {
 		if err != nil || options.AudioPath != filepath.Join(filepath.Dir(path), "music.wav") {
 			t.Fatalf("relative audio: %s %v", options.AudioPath, err)
 		}
-		explicit := map[string]bool{"codec": true, "subsampling": true, "crf": true, "fps": true, "long-edge": true, "aspect": true, "audio": true, "motion-blur": true}
-		base := RenderOptions{NativeTiming: true, VideoRange: "limited", PlaybackSpeed: 1, FrameRate: "24", Codec: "h264", CRF: 31, LongEdge: 320, AspectRatio: 2, MotionBlurFrames: 0, AudioPath: ""}
+		explicit := map[string]bool{"codec": true, "subsampling": true, "crf": true, "fps": true, "long-edge": true, "aspect": true, "audio": true, "motion-blur": true, "output-color": true}
+		base := RenderOptions{NativeTiming: true, VideoRange: "limited", OutputColor: "standard", PlaybackSpeed: 1, FrameRate: "24", Codec: "h264", CRF: 31, LongEdge: 320, AspectRatio: 2, MotionBlurFrames: 0, AudioPath: ""}
 		options, err = applyLRTRenderPreset(base, preset, path, explicit)
 		if err != nil || options != base {
 			t.Fatalf("overrides changed: %+v %v", options, err)
@@ -164,7 +164,7 @@ func TestLRTRenderPresetCLIEquivalentManualAndBatch(t *testing.T) {
 	}
 	output := filepath.Join(t.TempDir(), "preset.mp4")
 	presetPixels, presetFlags := run("render", dir, "--output", output, "--ffmpeg", executable, "--lrt-render-preset", path)
-	manualPixels, manualFlags := run("render", dir, "--output", filepath.Join(t.TempDir(), "manual.mp4"), "--ffmpeg", executable, "--fps", "29.97", "--codec", "h264", "--crf", "10", "--video-range", "limited", "--output-height", "24", "--motion-blur", "5")
+	manualPixels, manualFlags := run("render", dir, "--output", filepath.Join(t.TempDir(), "manual.mp4"), "--ffmpeg", executable, "--fps", "29.97", "--codec", "h264", "--crf", "10", "--video-range", "limited", "--output-height", "24", "--motion-blur", "5", "--output-color", "lrt-7.5.5")
 	if !bytes.Equal(presetPixels, manualPixels) || !reflect.DeepEqual(presetFlags, manualFlags) {
 		t.Fatal("saved preset differs from explicit render controls")
 	}

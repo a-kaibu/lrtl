@@ -190,6 +190,9 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 		}
 	}
 	options.NativeTiming = true
+	if !explicit["output-color"] {
+		options.OutputColor = "lrt-7.5.5"
+	}
 	if !explicit["interpolation"] {
 		options.Interpolation = preset.Interpolation
 	}

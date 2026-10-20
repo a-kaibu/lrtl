@@ -26,6 +26,7 @@ type RenderOptions struct {
 	PlaybackSpeed         float64
 	Interpolation         int
 	VideoRange            string
+	OutputColor           string
 	OutputSharpen         bool
 	OutputCAS             bool
 	OutputDenoise         int
@@ -209,6 +210,10 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err != nil {
 		return err
 	}
+	outputColor, err := normalizeOutputColor(options.OutputColor)
+	if err != nil {
+		return err
+	}
 	if _, err := normalizeSubsampling(options.Subsampling); err != nil {
 		return err
 	}
@@ -253,6 +258,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 	if outputExtension == ".avi" && videoRange == "limited" {
 		return fmt.Errorf("limited video range requires MP4 or MOV; MJPEG AVI uses full-range JPEG")
+	}
+	if outputExtension == ".avi" && outputColor == "lrt-7.5.5" {
+		return fmt.Errorf("lrt-7.5.5 output color requires MP4/MOV output")
 	}
 	if strings.TrimSpace(options.AudioPath) != "" {
 		if outputExtension == ".avi" {
@@ -594,7 +602,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration, options.Subsampling)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration, options.Subsampling, outputColor)
 		if err != nil {
 			cleanup()
 			return err

@@ -190,8 +190,8 @@ func TestVideoRangePresetAndBatchForwarding(t *testing.T) {
 			t.Fatal(err)
 		}
 		if value == "auto" {
-			if bytes.Contains(data, []byte("zscale")) {
-				t.Fatal("auto override ignored")
+			if !bytes.Contains(data, []byte("range=limited")) {
+				t.Fatal("native profile auto must resolve to limited")
 			}
 		} else {
 			want := value
