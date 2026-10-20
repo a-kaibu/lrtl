@@ -10,37 +10,38 @@ import (
 )
 
 type lrtRenderPreset struct {
-	SavedAspectRatio *float64 `json:"-"`
-	Name             string   `json:"name"`
-	ID               string   `json:"ID"`
-	Encoder          string   `json:"encoder"`
-	FrameRate        string   `json:"frameRate"`
-	OutputResV       int      `json:"outputResV"`
-	OutputQuality    int      `json:"outputQuality"`
-	SubSampling      string   `json:"subSampling"`
-	Speed            float64  `json:"speed"`
-	Interpolation    int      `json:"interpolation"`
-	MotionBlur       bool     `json:"motionBlur"`
-	MotionBlurLevel  int      `json:"motionBlurLevel"`
-	Audio            bool     `json:"audio"`
-	AudioTrack       string   `json:"audioTrack"`
-	VideoRange       int      `json:"videoRange"`
-	Gamut            int      `json:"gamut"`
-	DynamicRange     int      `json:"dynamicRange"`
-	FadeOut          bool     `json:"fadeOut"`
-	FadeTime         int      `json:"fadeTime"`
-	Sharpen          bool     `json:"sharpen"`
-	CAS              bool     `json:"cas"`
-	RemoveAirplanes  bool     `json:"removeAirplanes"`
-	Denoise          bool     `json:"denoise"`
-	DenoiseLevel     int      `json:"denoiseLevel"`
-	DeflickerLuma    bool     `json:"deflickerLuma"`
-	DeflickerChroma  bool     `json:"deflickerChroma"`
+	SavedAspectRatio     *float64 `json:"-"`
+	Name                 string   `json:"name"`
+	ID                   string   `json:"ID"`
+	Encoder              string   `json:"encoder"`
+	FrameRate            string   `json:"frameRate"`
+	OutputResV           int      `json:"outputResV"`
+	OutputQuality        int      `json:"outputQuality"`
+	SubSampling          string   `json:"subSampling"`
+	Speed                float64  `json:"speed"`
+	Interpolation        int      `json:"interpolation"`
+	MotionBlur           bool     `json:"motionBlur"`
+	MotionBlurLevel      int      `json:"motionBlurLevel"`
+	Audio                bool     `json:"audio"`
+	AudioTrack           string   `json:"audioTrack"`
+	VideoRange           int      `json:"videoRange"`
+	Gamut                int      `json:"gamut"`
+	DynamicRange         int      `json:"dynamicRange"`
+	FadeOut              bool     `json:"fadeOut"`
+	FadeTime             int      `json:"fadeTime"`
+	Sharpen              bool     `json:"sharpen"`
+	CAS                  bool     `json:"cas"`
+	RemoveAirplanes      bool     `json:"removeAirplanes"`
+	RemoveAirplanesLevel int      `json:"removeAirplanesLevel"`
+	Denoise              bool     `json:"denoise"`
+	DenoiseLevel         int      `json:"denoiseLevel"`
+	DeflickerLuma        bool     `json:"deflickerLuma"`
+	DeflickerChroma      bool     `json:"deflickerChroma"`
 }
 
 func decodeLRTRenderPreset(data []byte) (lrtRenderPreset, error) {
 	// Native JSON deserialization starts with the RenderPreset constructor.
-	preset := lrtRenderPreset{Encoder: "h264", FrameRate: "29.97", OutputResV: 1080, OutputQuality: 1, SubSampling: "420", Speed: 1, FadeTime: 3, DenoiseLevel: 1}
+	preset := lrtRenderPreset{Encoder: "h264", FrameRate: "29.97", OutputResV: 1080, OutputQuality: 1, SubSampling: "420", Speed: 1, FadeTime: 3, DenoiseLevel: 1, RemoveAirplanesLevel: 1}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return preset, err
@@ -157,7 +158,6 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}{
 		{"interpolation", preset.Interpolation != 0},
 		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
-		{"removeAirplanes", preset.RemoveAirplanes},
 		{"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
 	} {
 		if field.active {
@@ -180,6 +180,15 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 				return options, fmt.Errorf("enabled LRT denoiseLevel must be from 1 to 4")
 			}
 			options.OutputDenoise = preset.DenoiseLevel
+		}
+	}
+	if !explicit["remove-airplanes"] {
+		options.RemoveAirplanes = 0
+		if preset.RemoveAirplanes {
+			if preset.RemoveAirplanesLevel < 1 || preset.RemoveAirplanesLevel > 3 {
+				return options, fmt.Errorf("enabled LRT removeAirplanesLevel must be from 1 to 3")
+			}
+			options.RemoveAirplanes = preset.RemoveAirplanesLevel
 		}
 	}
 	options.NativeTiming = true

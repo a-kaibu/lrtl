@@ -252,6 +252,38 @@ conversion and adds filter deltas to original RGB16 samples. Complete native
 color management, Camera Raw and HDR equivalence remain unverified. See
 `testdata/lrt-denoise-7.5.5.md` for exact settings, provenance and reproduction.
 
+## Transient light-trail removal
+
+The installed static helper supplies three graphs: 3/3/5-frame temporal medians,
+with sigma-15 luma detail and highlight LUTs for medium/strong. Their default
+LUT chroma expressions clip YUV10 to 64..960. The local full builder did not
+activate this gated feature; no gate was changed. Caller head/tail/duration rules
+were inspected separately. These scopes are distinguished in the fixture notes.
+
+`testdata/lrt-airplane-planes-8.0.1.json` stores 102 observations, 323,253 output
+samples and PTS traces. Default CPU 32x16 and scalar 17x13 plane outputs match
+Go exactly. tmedian emits N-2r frames, timestamps each from the window's first
+source and does not pad endpoints. At speed 1, native head trimming normally
+leaves N-3 light/medium frames or N-5 strong frames, without Motion Blur.
+
+At other speeds, setpts/fps propagates the original EOF time and holds the final
+median image through that end. The Go source schedule models this hold before
+speed/tmix/sharpen/CAS/overlays/fade. The caller trim end still uses Java float
+division of the original count; head trim is max(MotionBlurWindow,1), tail bound
+is 1. A hundred helper/caller-composition graphs executed by the native bundle
+yield 62 nonempty cases (496 frames) and 38 empty/rejected cases. All Go frame
+counts match, and direct median-ID tests cover the held tail. Native-style
+output `-r 24` retained those counts.
+
+Presets retain original-count estimates for audio/fade, independently of actual
+median output. Tests check SRT anchors/counts, bounded cache ownership, future
+errors, denoise/median/time/overlay order, preset defaults/overrides, batch,
+JPEG AVI, still exports and source/output retention. Eighteen actual H.264/H.265
+videos verify counts/durations/decoded luma; an audio test verifies the longer
+native estimated tail and fade. RGB48/YUV10 conversion remains independent;
+full native application/color-management equivalence is unproven. See
+`testdata/lrt-airplane-7.5.5.md` for parameters, provenance and limits.
+
 ## Explicit video range
 
 Three native color-filter-builder observations in

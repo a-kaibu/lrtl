@@ -348,11 +348,22 @@ func denoisePreclean10(input []uint16, width, height int) []uint16 {
 		}
 	}
 	filtered := median(median(quantized))
+	blurred := gaussianOutputPlane(filtered, width, height, .5, 255)
+	output := make([]uint16, len(input))
+	for i, v := range blurred {
+		output[i] = max(input[i], v*4)
+	}
+	return output
+}
+
+// One-step symmetric recursive Gaussian approximation at the plane's native
+// precision. Callers supply positive sigma and an 8-bit or 10-bit peak.
+func gaussianOutputPlane(input []uint16, width, height int, sigma float64, peak int) []uint16 {
 	buffer := make([]float32, len(input))
-	for i, v := range filtered {
+	for i, v := range input {
 		buffer[i] = float32(v)
 	}
-	const lambda = .125 // sigma^2 / 2, sigma=0.5 and one recursive step.
+	lambda := sigma * sigma / 2
 	decay := (1 + 2*lambda - math.Sqrt(1+4*lambda)) / (2 * lambda)
 	feedback := float32(decay)
 	boundary := float32(1 / (1 - decay))
@@ -381,8 +392,7 @@ func denoisePreclean10(input []uint16, width, height int) []uint16 {
 	}
 	output := make([]uint16, len(input))
 	for i, value := range buffer {
-		blur := int(math.RoundToEven(float64(float32(value * scale))))
-		output[i] = max(input[i], uint16(min(255, max(0, blur))*4))
+		output[i] = uint16(min(peak, max(0, int(math.RoundToEven(float64(float32(value*scale)))))))
 	}
 	return output
 }

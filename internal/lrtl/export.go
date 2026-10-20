@@ -106,6 +106,7 @@ func ExportTIFFSequence(frames []Frame, output string, options RenderOptions) er
 	options.OutputSharpen = false
 	options.OutputCAS = false
 	options.OutputDenoise = 0
+	options.RemoveAirplanes = 0
 	options.NativeTiming = false
 	options.Subsampling = ""
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {

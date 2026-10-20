@@ -1,0 +1,5 @@
+[
+{"level":1,"enum":"LIGHT","filter":",tmedian=radius=1:percentile=0.50"},
+{"level":2,"enum":"MEDIUM","filter":",tmedian=radius=1:percentile=0.50,split=2[main][blur];[blur]gblur=sigma=15[blur_out];[main][blur_out]blend=c0_expr='min(1023,max(0,A+(A-B)*0.20))':c1_expr='A':c2_expr='A',lutyuv=y='min(255*4, if(lt(val, 918.00), val, 918.00 + (val-918.00)*2.0000))'"},
+{"level":3,"enum":"STRONG","filter":",tmedian=radius=2:percentile=0.50,split=2[main][blur];[blur]gblur=sigma=15[blur_out];[main][blur_out]blend=c0_expr='min(1023,max(0,A+(A-B)*0.35))':c1_expr='A':c2_expr='A',lutyuv=y='min(255*4, if(lt(val, 867.00), val, 867.00 + (val-867.00)*3.0000))'"}
+]

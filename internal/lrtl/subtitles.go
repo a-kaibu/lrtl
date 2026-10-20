@@ -26,6 +26,10 @@ func writeSequenceSubtitlesAtSpeed(frames []Frame, output string, rate frameRate
 }
 
 func writeSequenceSubtitlesWithMotionBlur(frames []Frame, output string, rate frameRate, speed float64, motionBlur int, timestampFormat string, overwrite bool) error {
+	return writeSequenceSubtitlesWithTemporalFilters(frames, output, rate, speed, motionBlur, 0, timestampFormat, overwrite)
+}
+
+func writeSequenceSubtitlesWithTemporalFilters(frames []Frame, output string, rate frameRate, speed float64, motionBlur, airplanes int, timestampFormat string, overwrite bool) error {
 	if len(frames) == 0 {
 		return fmt.Errorf("sequence contains no images")
 	}
@@ -36,7 +40,7 @@ func writeSequenceSubtitlesWithMotionBlur(frames []Frame, output string, rate fr
 	if err != nil {
 		return err
 	}
-	timeline, err := planVideoFrames(len(frames), speed, motionBlur)
+	timeline, err := planFilteredVideoFrames(len(frames), speed, motionBlur, airplanes)
 	if err != nil {
 		return err
 	}
@@ -74,7 +78,7 @@ func writeSequenceSubtitlesWithMotionBlur(frames []Frame, output string, rate fr
 	defer os.Remove(temporaryPath)
 	writer := bufio.NewWriter(temporary)
 	index := 0
-	for sourceIndex, timestamp := range timestamps {
+	for sourceIndex, timestamp := range timestamps[:airplaneTimelineSourceCount(len(frames), speed, airplanes)] {
 		label := strings.NewReplacer("\r", " ", "\n", " ").Replace(timestamp.Format(timestampFormat))
 		if strings.Contains(label, "-->") {
 			_ = temporary.Close()

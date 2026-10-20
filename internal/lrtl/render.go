@@ -27,6 +27,7 @@ type RenderOptions struct {
 	OutputSharpen     bool
 	OutputCAS         bool
 	OutputDenoise     int
+	RemoveAirplanes   int
 	Quality           int
 	FFmpegPath        string
 	Codec             string
@@ -171,6 +172,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err := validateOutputDenoise(options.OutputDenoise); err != nil {
 		return err
 	}
+	if err := validateRemoveAirplanes(options.RemoveAirplanes); err != nil {
+		return err
+	}
 	cropPosition, err := options.cropPosition()
 	if err != nil {
 		return err
@@ -184,10 +188,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		return err
 	}
 	trimWindow := options.MotionBlurFrames
+	airplaneLevel := options.RemoveAirplanes
 	if imageWriter != nil {
 		trimWindow = 0 // Intermediate images retain their source correspondence.
+		airplaneLevel = 0
 	}
-	timeline, err := planVideoFrames(len(frames), speed, trimWindow)
+	timeline, err := planFilteredVideoFrames(len(frames), speed, trimWindow, airplaneLevel)
 	if err != nil {
 		return err
 	}
@@ -203,7 +209,8 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if label == "" {
 		label = rate.String()
 	}
-	timing, err := planRenderTiming(options, len(frames), outputCount, trimWindow, rate, label)
+	headTrim, tailTrim := nativeFilterTrim(trimWindow, airplaneLevel)
+	timing, err := planRenderTiming(options, len(frames), outputCount, headTrim+tailTrim, rate, label)
 	if err != nil {
 		return err
 	}
@@ -395,6 +402,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		return err
 	}
 	if err := validateOutputDenoiseMemory(outputWidth, outputHeight, len(frames), options.OutputDenoise, options.MotionBlurFrames); err != nil {
+		return err
+	}
+	if err := validateAirplaneMemory(outputWidth, outputHeight, len(frames), airplaneLevel, options.OutputDenoise, options.MotionBlurFrames); err != nil {
 		return err
 	}
 	if options.MotionBlurFrames > 0 {
@@ -593,7 +603,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	}()
 
-	if options.MotionBlurFrames > 0 || speed != 1 || options.OutputDenoise > 0 {
+	if options.MotionBlurFrames > 0 || speed != 1 || options.OutputDenoise > 0 || airplaneLevel > 0 {
 		prepareMotionBlurFrame := func(index int) ([]byte, error) {
 			frame := frames[index]
 			data, frameConfig := first, config
@@ -662,6 +672,10 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			denoiser := newOutputDenoiser(outputWidth, outputHeight, len(frames), options.OutputDenoise, prepareMotionBlurFrame)
 			prepareMotionBlurFrame = denoiser.frame
 		}
+		if airplaneLevel > 0 {
+			remover := newAirplaneRemover(outputWidth, outputHeight, len(frames), airplaneLevel, prepareMotionBlurFrame)
+			prepareMotionBlurFrame = remover.frame
+		}
 
 		windowFrames := options.MotionBlurFrames
 		if windowFrames == 0 {
@@ -670,11 +684,16 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		weights := lrtMotionBlurWeights(windowFrames)
 		queuedFrames := make([][]byte, 0, windowFrames)
 		target := 0
-		for sourceIndex := range frames {
-			rgb, prepareErr := prepareMotionBlurFrame(sourceIndex)
-			if prepareErr != nil {
-				return fmt.Errorf("prepare %s: %w", filepath.Base(frames[sourceIndex].Image), prepareErr)
+		var lastFilteredRGB []byte
+		for sourceIndex := 0; sourceIndex < airplaneTimelineSourceCount(len(frames), speed, airplaneLevel); sourceIndex++ {
+			if sourceIndex < airplaneSourceCount(len(frames), airplaneLevel) {
+				var prepareErr error
+				lastFilteredRGB, prepareErr = prepareMotionBlurFrame(sourceIndex)
+				if prepareErr != nil {
+					return fmt.Errorf("prepare %s: %w", filepath.Base(frames[sourceIndex].Image), prepareErr)
+				}
 			}
+			rgb := lastFilteredRGB
 			preparedRGB := rgb
 			for end := playbackOutputEnd(sourceIndex+1, speed); target < end; target++ {
 				rgb := preparedRGB
