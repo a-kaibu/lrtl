@@ -166,6 +166,7 @@ type playbackFrameStream struct {
 	lastRGB                                                                     []byte
 	lastSource                                                                  int
 	motion                                                                      *motionEstimator
+	color                                                                       outputFrameColor
 }
 
 func newPlaybackFrameStream(width, height, count, airplanes, mode int, speed float64, rate frameRate, label string, load func(int) ([]byte, error)) (*playbackFrameStream, error) {
@@ -229,7 +230,7 @@ func (p *playbackFrameStream) readThrough(last int) error {
 		}
 		input := interpolationInput{rgb: rgb}
 		if p.mode > 0 {
-			input.planes = outputYUV10(rgb, p.width, p.height)
+			input.planes = p.color.planes(rgb, p.width, p.height)
 			if p.speed < 1 {
 				for c := range input.eight {
 					input.eight[c] = quantizeInterpolationPlane(input.planes[c], p.width)
@@ -313,13 +314,7 @@ func (p *playbackFrameStream) frame(target int) ([]byte, int, error) {
 				}
 			}
 		}
-		for i := 0; i < p.width*p.height; i++ {
-			var delta [3]float64
-			for c := range delta {
-				delta[c] = float64(int(filtered[c][i])-int(input.planes[c][i])) * (65535.0 / 1023)
-			}
-			addOutputYUVDelta(rgb[i*6:], delta)
-		}
+		p.color.apply(rgb, input.planes, filtered)
 	}
 	p.lastSource, p.lastRGB = anchor, rgb
 	p.emitted++

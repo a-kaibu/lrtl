@@ -12,7 +12,9 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
-- 通常SDRで、動画デフリッカー→ノイズ除去→光跡除去→シャープ／CASまでYUVのまま処理する経路を追加しました。最強ノイズ除去のfull-range輝度の8/10-bit変換も修正。12経路のスカラー参照、H.264／H.265／ProResの72実動画で全画素を比較しています。補間・Motion Blur・字幕・透かし・フェード併用時の時間処理は既存RGB経路です。通常CPUの最強併用1件には1成分・2段階のSIMD差が残り、テストと測定記録へ明記しています。
+- 通常SDRのYUV経路をMotion Blur全7段階と高速補間へ広げました。時間平均のfloat32積算、整数の均等平均、前後トリムを反映し、22経路とH.264／H.265／ProResの132実動画をスカラー参照と比較しています。補間なしの低速複製もYUVのまま処理できます。低速ブレンド／モーション補間、字幕・透かし・フェード併用の時間処理は既存RGB経路です。
+
+- 通常SDRで、動画デフリッカー→ノイズ除去→光跡除去→シャープ／CASまでYUVのまま処理する経路を追加しました。最強ノイズ除去のfull-range輝度の8/10-bit変換も修正。12経路のスカラー参照、H.264／H.265／ProResの72実動画で全画素を比較しています。低速ブレンド／モーション補間、字幕・透かし・フェード併用時の時間処理は既存RGB経路です。通常CPUの最強併用1件には1成分・2段階のSIMD差が残り、テストと測定記録へ明記しています。
 
 - 通常SDRのシャープ／CASで、純Goの固定小数点RGB16→YUV10変換を使い、YUVのまま出力できるようにしました。24件の保存済み参照、16-bitの灰色・RGB全入力値と乱数のnative／scalar比較、シャープ・CAS・両方を適用した84実動画ケースで確認しています。偶数寸法かつ字幕・透かし・フェードなしの経路で有効です。時間フィルターとの併用条件と残る差は以下を参照してください。
 
@@ -160,7 +162,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 最終SDR色変換 | 本体の出力レンジ・色差変換・メタデータ | `--output-color lrt-7.5.5`と保存プリセットの既定で、full-range YUV444 10-bitを経由する最終エンコードに対応。144平面ケース・実動画12ケースを比較。内部フィルター、ICC、HDR・広色域まで含む全体一致は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
 | フレーム補間 | 速度変更時のブレンド・動き補償 | `--interpolation 1`でブレンド、`2`で低速の双方向モーション補償。保存プリセット・字幕・バッチに対応。ブレンド2,304ケース、モーション720ケースの平面出力ハッシュ・枚数を比較。時間フィルター併用と実動画もテスト。色管理を含む本体動画全体との完全一致は未確認 | 一部 |
-| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。速度変更後の過去Nフレームを合成し、本体と同じ先頭Nフレーム除去を行う。48件のフィルター実測で枚数・開始位置・フェード時刻を照合。字幕も`--motion-blur N`で開始位置を揃える。中間画像は先頭を保持。16-bit RGB処理で、LRTの10-bit YUVフィルター出力との画素完全一致は未確認 | 一部 |
+| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と`(i/N)^1.5`の3桁重みを適用。先頭Nフレーム除去と字幕の開始位置に対応。通常SDR・偶数寸法・字幕/透かし/フェードなしでは10-bit YUVをfloat32で積算し、高速補間や動画デフリッカー・ノイズ/光跡除去と併用可能。22経路・132実動画をスカラー参照と比較。低速ブレンド/モーション補間などは既存RGB経路で、全体一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed/lossy DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。`--dng-long-edge`でロッシーDNGを縮小可能。取り込み画面内の画像プレビューは未実装（既存連番には`preview-images`を使用可能） | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed/lossy DNGと隣接XMPを取り込む。`--dng-long-edge`でロッシーDNGの長辺を制限できる。`--dnglab PATH`でDNGLabを明示選択可能。ロッシーと縮小はAdobeバックエンドのみ。LRTプリセットとの画素一致、JPEG XLは未対応 | 一部 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。`batch-preview-images ROOT --output NEW_DIRECTORY`でJPEG連番・測光結果を並列生成し、任意で元XMPへPreview EVを保存。全連番の生成・XMP内容検証後に出力を公開 | 一部 |
@@ -564,7 +566,7 @@ LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分�
 
 通常SDRプロファイルでシャープ／CASを指定し、出力寸法が偶数、字幕・透かし・フェードなしの場合、Goで本体と同じ固定小数点RGB16→YUV10変換を行い、シャープ→CASの結果をYUVのままエンコーダーへ渡します。RGBへ差分を戻す従来経路で発生した色差クリップを避けます。`standard`、奇数寸法、字幕・透かし・フェード併用は従来のRGB経路です。
 
-実動画の比較範囲は、等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。ノイズ除去・動画デフリッカー・光跡除去も、補間・Motion Blur・字幕・透かし・フェードが無効かつ偶数寸法の場合、初段からYUVのまま処理します。それ以外は既存RGB経路です。12経路・72実動画をスカラー参照と比較し、通常CPUに残る最強併用の1成分・2段階の差も[測定記録](internal/lrtl/testdata/lrt-native-temporal-color-7.5.5.md)に明記しています。JPEGの復号差、ICC、リサイズを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
+実動画の比較範囲は、等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、字幕・透かし・フェードなしで偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間など、それ以外は既存RGB経路です。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、通常CPUに残る最強併用の1成分・2段階の差も[測定記録](internal/lrtl/testdata/lrt-native-temporal-color-7.5.5.md)に明記しています。JPEGの復号差、ICC、リサイズを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
 
 ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告されず、fullの10-bit端点も4〜1019へクリップされました。limitedが一般的な用途に適します。H.264/H.265/DNxHRではfull／limitedのタグと実際の輝度値を確認しています。AVIはfull-range JPEGのためauto／fullを受け付け、limited指定は保存前にエラーにします。
 

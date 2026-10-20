@@ -31,9 +31,13 @@ func nativeTemporalCases() []nativeTemporalCase {
 }
 
 func nativeTemporalFixture(t *testing.T) string {
+	return nativePlaybackFixture(t, 17)
+}
+
+func nativePlaybackFixture(t *testing.T, count int) string {
 	t.Helper()
 	dir := t.TempDir()
-	for f := 0; f < 17; f++ {
+	for f := 0; f < count; f++ {
 		rgb := make([]byte, 64*32*6)
 		for y := 0; y < 32; y++ {
 			for x := 0; x < 64; x++ {
@@ -67,6 +71,17 @@ func nativeTemporalCLI(tc nativeTemporalCase) []string {
 
 // Build the reference from independently recorded installed helper graphs.
 func nativeTemporalReferenceGraph(t *testing.T, tc nativeTemporalCase) string {
+	graph := nativeTemporalReferenceFilters(t, tc)
+	if tc.spatial {
+		graph += ",unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=0.4,cas=strength=0.90"
+	}
+	if tc.air > 0 {
+		graph += ",trim=start_frame=1:end_frame=16,setpts=PTS-STARTPTS"
+	}
+	return graph
+}
+
+func nativeTemporalReferenceFilters(t *testing.T, tc nativeTemporalCase) string {
 	t.Helper()
 	graph := "scale=iw:ih:out_range=full:flags=lanczos,format=yuv444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,setsar=1/1"
 	var deflicker []struct {
@@ -97,12 +112,6 @@ func nativeTemporalReferenceGraph(t *testing.T, tc nativeTemporalCase) string {
 				graph += row.Filter
 			}
 		}
-	}
-	if tc.spatial {
-		graph += ",unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=0.4,cas=strength=0.90"
-	}
-	if tc.air > 0 {
-		graph += ",trim=start_frame=1:end_frame=16,setpts=PTS-STARTPTS"
 	}
 	return graph
 }
@@ -210,59 +219,66 @@ func TestNativeTemporalActualVideos(t *testing.T) {
 	dir := nativeTemporalFixture(t)
 	before := batchFileSnapshot(t, dir)
 	for _, tc := range nativeTemporalCases() {
-		for _, codec := range []string{"h264", "h265", "prores-hq"} {
-			for _, videoRange := range []string{"full", "limited"} {
-				t.Run(tc.name+"/"+codec+"/"+videoRange, func(t *testing.T) {
-					suffix := ".mov"
-					pix := "yuv444p10le"
-					enc := []string{"-c:v", "libx265", "-preset", "ultrafast", "-crf", "0", "-tag:v", "hvc1", "-x265-params", "colorprim=bt709:range=" + videoRange + ":transfer=bt709:colormatrix=bt709"}
-					if codec == "h264" {
-						suffix = ".mp4"
-						pix = "yuv420p"
-						enc = []string{"-c:v", "libx264", "-preset", "ultrafast", "-crf", "0", "-tag:v", "avc1"}
-					}
-					if codec == "prores-hq" {
-						pix = "yuv422p10le"
-						enc = []string{"-c:v", "prores_ks", "-profile:v", "3"}
-					}
-					output := filepath.Join(t.TempDir(), "go"+suffix)
-					args := []string{"render", dir, "--output", output, "--output-color", "lrt-7.5.5", "--ffmpeg", executable, "--fps", "24", "--codec", codec, "--crf", "0", "--preset", "ultrafast", "--video-range", videoRange}
-					if codec == "h265" {
-						args = append(args, "--subsampling", "444")
-					}
-					markerCommand(t, append(args, nativeTemporalCLI(tc)...)...)
-					reference := filepath.Join(t.TempDir(), "reference"+suffix)
-					graph := nativeTemporalReferenceGraph(t, tc) + ",zscale=rangein=full:range=" + videoRange + ":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format=" + pix
-					args = []string{"-v", "error", "-cpuflags", "0", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
-					args = append(args, enc...)
-					metadata := "tv"
-					if videoRange == "full" {
-						metadata = "pc"
-					}
-					args = append(args, "-pix_fmt", pix, "-color_range", metadata, "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "unspecified", "-mov_gamma", "2.4", "-movflags", "+write_colr+write_gama+prefer_icc+faststart", reference)
-					nativeColorCommand(t, executable, nil, args...)
-					decode := func(path string) []byte {
-						return nativeColorCommand(t, executable, nil, "-v", "error", "-i", path, "-pix_fmt", pix, "-f", "rawvideo", "pipe:1")
-					}
-					got, want := decode(output), decode(reference)
-					if len(got) == 0 || !bytes.Equal(got, want) {
-						t.Fatalf("decoded temporal video differs: bytes%d/%d hashes%x/%x", len(got), len(want), sha256.Sum256(got), sha256.Sum256(want))
-					}
-					if probe, err := exec.LookPath("ffprobe"); err == nil {
-						metadata := func(path string) []byte {
-							return nativeColorCommand(t, probe, nil, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,nb_frames,r_frame_rate,pix_fmt,color_range,color_space,color_transfer,color_primaries", "-of", "json", path)
-						}
-						if !bytes.Equal(metadata(output), metadata(reference)) {
-							t.Fatal("temporal video metadata differs")
-						}
-					}
-				})
-			}
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			verifyNativeFilteredVideos(t, executable, dir, nativeTemporalCLI(tc), nativeTemporalReferenceGraph(t, tc))
+		})
 	}
 	for path, data := range before {
 		if !bytes.Equal(data, denoiseRead(t, path)) {
 			t.Fatal("source changed", path)
+		}
+	}
+}
+
+func verifyNativeFilteredVideos(t *testing.T, executable, dir string, flags []string, referenceGraph string) {
+	t.Helper()
+	for _, codec := range []string{"h264", "h265", "prores-hq"} {
+		for _, videoRange := range []string{"full", "limited"} {
+			t.Run(codec+"/"+videoRange, func(t *testing.T) {
+				suffix := ".mov"
+				pix := "yuv444p10le"
+				enc := []string{"-c:v", "libx265", "-preset", "ultrafast", "-crf", "0", "-tag:v", "hvc1", "-x265-params", "colorprim=bt709:range=" + videoRange + ":transfer=bt709:colormatrix=bt709"}
+				if codec == "h264" {
+					suffix = ".mp4"
+					pix = "yuv420p"
+					enc = []string{"-c:v", "libx264", "-preset", "ultrafast", "-crf", "0", "-tag:v", "avc1"}
+				}
+				if codec == "prores-hq" {
+					pix = "yuv422p10le"
+					enc = []string{"-c:v", "prores_ks", "-profile:v", "3"}
+				}
+				output := filepath.Join(t.TempDir(), "go"+suffix)
+				args := []string{"render", dir, "--output", output, "--output-color", "lrt-7.5.5", "--ffmpeg", executable, "--fps", "24", "--codec", codec, "--crf", "0", "--preset", "ultrafast", "--video-range", videoRange}
+				if codec == "h265" {
+					args = append(args, "--subsampling", "444")
+				}
+				markerCommand(t, append(args, flags...)...)
+				reference := filepath.Join(t.TempDir(), "reference"+suffix)
+				graph := referenceGraph + ",zscale=rangein=full:range=" + videoRange + ":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format=" + pix
+				args = []string{"-v", "error", "-cpuflags", "0", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
+				args = append(args, enc...)
+				metadata := "tv"
+				if videoRange == "full" {
+					metadata = "pc"
+				}
+				args = append(args, "-pix_fmt", pix, "-color_range", metadata, "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "unspecified", "-mov_gamma", "2.4", "-movflags", "+write_colr+write_gama+prefer_icc+faststart", reference)
+				nativeColorCommand(t, executable, nil, args...)
+				decode := func(path string) []byte {
+					return nativeColorCommand(t, executable, nil, "-v", "error", "-i", path, "-pix_fmt", pix, "-f", "rawvideo", "pipe:1")
+				}
+				got, want := decode(output), decode(reference)
+				if len(got) == 0 || !bytes.Equal(got, want) {
+					t.Fatalf("decoded temporal video differs: bytes%d/%d hashes%x/%x", len(got), len(want), sha256.Sum256(got), sha256.Sum256(want))
+				}
+				if probe, err := exec.LookPath("ffprobe"); err == nil {
+					metadata := func(path string) []byte {
+						return nativeColorCommand(t, probe, nil, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,nb_frames,r_frame_rate,pix_fmt,color_range,color_space,color_transfer,color_primaries", "-of", "json", path)
+					}
+					if !bytes.Equal(metadata(output), metadata(reference)) {
+						t.Fatal("temporal video metadata differs")
+					}
+				}
+			})
 		}
 	}
 }

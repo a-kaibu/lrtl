@@ -350,7 +350,7 @@ func TestInterpolationCLIPresetBatchSubtitlesAndFilters(t *testing.T) {
 	capture := filepath.Join(t.TempDir(), "capture")
 	t.Setenv("LRTL_TEST_FFMPEG_CAPTURE", capture)
 	run := func(extra ...string) []byte {
-		args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "out.mp4"), "--ffmpeg", executable}
+		args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "out.mp4"), "--ffmpeg", executable, "--output-color", "standard"}
 		markerCommand(t, append(args, extra...)...)
 		return denoiseRead(t, capture)
 	}
@@ -405,7 +405,7 @@ func TestInterpolationCLIPresetBatchSubtitlesAndFilters(t *testing.T) {
 		if !bytes.Equal(run("--lrt-render-preset", path), want) {
 			t.Fatal("preset interpolation differs from CLI")
 		}
-		markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path)
+		markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path, "--output-color", "standard")
 		if !bytes.Equal(denoiseRead(t, capture), want) {
 			t.Fatal("batch lost interpolation")
 		}

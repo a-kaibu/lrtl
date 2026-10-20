@@ -7,9 +7,12 @@ stage. Interleaved working samples retain the six-byte pixel layout for
 bounded source queues and cropping; only the encoder input is planar.
 
 This path applies to `--output-color lrt-7.5.5` (the saved preset default),
-with one of these temporal filters, even output dimensions, interpolation and
-Motion Blur disabled, and no timestamp/watermark/fade. Playback duplication
-retains the existing timeline. Other combinations retain the RGB path.
+with one of these temporal filters, even output dimensions and no timestamp,
+watermark or fade. The original measurements below disabled interpolation
+and Motion Blur. The subsequent [playback extension](lrt-native-playback-color-7.5.5.md)
+adds Motion Blur and modes 1/2 at speeds >= 1. Low-speed blend/motion
+interpolation still retains the RGB path. Mode 0 frame duplication retains
+the existing timeline and native working color.
 
 Level 4 denoise negotiates an 8-bit removegrain/Gaussian branch. With full-range
 metadata, luma depth reduction subtracts the replicated high bits before

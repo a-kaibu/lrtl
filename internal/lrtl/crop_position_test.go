@@ -82,7 +82,7 @@ func TestCropPositionActualMP4Pixels(t *testing.T) {
 	path := savePresetJSON(t, map[string]any{"lastRenderSettings": preset, "renderConstrainCrop": true, "renderAR": 1})
 	for _, position := range []int{0, 100} {
 		output := filepath.Join(t.TempDir(), "video.mp4")
-		markerCommand(t, "render", dir, "--output", output, "--lrt-render-preset", path, "--crop-position", strconv.Itoa(position), "--ffmpeg", ffmpeg, "--video-range", "auto", "--preset", "ultrafast", "--crf", "0")
+		markerCommand(t, "render", dir, "--output", output, "--lrt-render-preset", path, "--crop-position", strconv.Itoa(position), "--ffmpeg", ffmpeg, "--video-range", "auto", "--output-color", "standard", "--preset", "ultrafast", "--crf", "0")
 		data, err := exec.Command(ffmpeg, "-v", "error", "-i", output, "-an", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1").Output()
 		if err != nil || len(data) != 24*24*3 {
 			t.Fatalf("decoded MP4 frame bytes%d: %v", len(data), err)
@@ -195,7 +195,7 @@ func TestCropPositionCLIFramesBlurAVIAndBatch(t *testing.T) {
 			}
 			flags := []string{"--aspect", "1:1", "--output-height", "32"}
 			if native {
-				flags = []string{"--lrt-render-preset", path, "--video-range", "auto"}
+				flags = []string{"--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard"}
 			}
 			for _, blur := range []int{0, 2} {
 				args := append([]string{"render", "--crop-position", strconv.Itoa(position), dir, "--output", filepath.Join(t.TempDir(), "video.mp4"), "--ffmpeg", executable, "--motion-blur", strconv.Itoa(blur)}, flags...)
@@ -249,7 +249,7 @@ func TestCropPositionCLIFramesBlurAVIAndBatch(t *testing.T) {
 		}
 		flags := []string{"--aspect", "1:1", "--output-height", "32"}
 		if native {
-			flags = []string{"--lrt-render-preset", path, "--video-range", "auto"}
+			flags = []string{"--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard"}
 		}
 		markerCommand(t, append([]string{"render", dir, "--output", filepath.Join(t.TempDir(), "default.mp4"), "--ffmpeg", executable}, flags...)...)
 		assertPreviewEVFileBytes(t, capture, centered)

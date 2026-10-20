@@ -127,7 +127,7 @@ func TestNativeTimingPresetFramePixelsAudioAndBatch(t *testing.T) {
 					t.Fatal(err)
 				}
 				run := func(extra ...string) []byte {
-					args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "video.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto"}
+					args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "video.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard"}
 					markerCommand(t, append(args, extra...)...)
 					data, err := os.ReadFile(capture)
 					if err != nil {
@@ -162,7 +162,7 @@ func TestNativeTimingPresetFramePixelsAudioAndBatch(t *testing.T) {
 					t.Fatal("explicit dimensions disabled native timing")
 				}
 				if count == 3 && speed == .1 && blur == 0 {
-					markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto")
+					markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard")
 					assertPreviewEVFileBytes(t, capture, got)
 				}
 				assertPreviewEVFileBytes(t, path, presetBefore)
@@ -196,7 +196,7 @@ func TestNativeTimingActualAudioTailAndVideo(t *testing.T) {
 	preset.FadeOut, preset.FadeTime, preset.Audio, preset.AudioTrack = true, 1, true, audio
 	path := savePresetJSON(t, preset)
 	output := filepath.Join(t.TempDir(), "native.mp4")
-	markerCommand(t, "render", dir, "--output", output, "--lrt-render-preset", path, "--ffmpeg", ffmpeg, "--preset", "ultrafast", "--crf", "0", "--video-range", "auto")
+	markerCommand(t, "render", dir, "--output", output, "--lrt-render-preset", path, "--ffmpeg", ffmpeg, "--preset", "ultrafast", "--crf", "0", "--video-range", "auto", "--output-color", "standard")
 	data, err := exec.Command(ffprobe, "-v", "error", "-show_entries", "stream=codec_type,duration,nb_frames", "-of", "json", output).CombinedOutput()
 	if err != nil {
 		t.Fatalf("ffprobe: %s %v", data, err)

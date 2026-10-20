@@ -113,7 +113,7 @@ func TestNativeGeometryPresetPixelsAndOverrides(t *testing.T) {
 		preset.OutputResV = tc.resolution
 		path := savePresetJSON(t, map[string]any{"lastRenderSettings": preset, "renderConstrainCrop": tc.aspect > 0, "renderAR": tc.aspect})
 		for _, blur := range []int{0, 2} {
-			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "video.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto", "--motion-blur", strconv.Itoa(blur)}
+			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "video.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard", "--motion-blur", strconv.Itoa(blur)}
 			markerCommand(t, args...)
 			got, err := os.ReadFile(capture)
 			if err != nil {
@@ -138,13 +138,13 @@ func TestNativeGeometryPresetPixelsAndOverrides(t *testing.T) {
 			t.Fatal("native render modified source files")
 		}
 		if tc.width == 32 && tc.height == 24 {
-			markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto")
+			markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard")
 			got, err := os.ReadFile(capture)
 			if err != nil || !bytes.Equal(got, bytes.Join(expected, nil)) {
 				t.Fatal("batch did not preserve native preset geometry")
 			}
 			for _, flag := range []string{"--output-height", "--long-edge"} {
-				markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "override.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto", flag, "16")
+				markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "override.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard", flag, "16")
 				got, err := os.ReadFile(capture)
 				width, height := 21, 16
 				if flag == "--long-edge" {
@@ -181,7 +181,7 @@ func TestNativeGeometryActualMP4Dimensions(t *testing.T) {
 		preset.OutputResV = tc.resolution
 		path := savePresetJSON(t, preset)
 		output := filepath.Join(t.TempDir(), "native.mp4")
-		markerCommand(t, "render", dir, "--output", output, "--lrt-render-preset", path, "--video-range", "auto", "--ffmpeg", ffmpeg, "--preset", "ultrafast")
+		markerCommand(t, "render", dir, "--output", output, "--lrt-render-preset", path, "--video-range", "auto", "--output-color", "standard", "--ffmpeg", ffmpeg, "--preset", "ultrafast")
 		data, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,nb_frames", "-of", "json", output).CombinedOutput()
 		if err != nil {
 			t.Fatalf("ffprobe: %s %v", data, err)

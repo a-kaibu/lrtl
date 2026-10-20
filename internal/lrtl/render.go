@@ -230,8 +230,8 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		(options.OutputSharpen || options.OutputCAS) && !options.TimestampOverlay &&
 		options.Watermark == "" && fade.duration == 0
 	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
-		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma) &&
-		options.MotionBlurFrames == 0 && options.Interpolation == 0 && !options.TimestampOverlay && options.Watermark == "" && fade.duration == 0
+		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
+		(options.Interpolation == 0 || speed >= 1) && !options.TimestampOverlay && options.Watermark == "" && fade.duration == 0
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
@@ -755,6 +755,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		if err != nil {
 			return err
 		}
+		stream.color = outputFrameColor(nativeTemporal)
 		for target := 0; target < stream.count; target++ {
 			rgb, sourceIndex, prepareErr := stream.frame(target)
 			if prepareErr != nil {
@@ -780,7 +781,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				rgb = bytes.Clone(preparedRGB)
 			} else {
 				var blendErr error
-				rgb, blendErr = weightedRGB48Frames(blendWindow, weights)
+				if nativeTemporal {
+					rgb, blendErr = weightedWorkingFrames(blendWindow, weights)
+				} else {
+					rgb, blendErr = weightedRGB48Frames(blendWindow, weights)
+				}
 				if blendErr != nil {
 					return blendErr
 				}
