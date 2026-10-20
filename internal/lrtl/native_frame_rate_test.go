@@ -304,7 +304,7 @@ func TestNativeFrameRateSubtitleFailureRetention(t *testing.T) {
 	invalid.FrameRate = "NaN"
 	invalidPath := savePresetJSON(t, invalid)
 	unsupported := preset
-	unsupported.Interpolation, unsupported.Speed = 2, .5
+	unsupported.Interpolation, unsupported.Speed = 3, .5
 	unsupportedPath := savePresetJSON(t, unsupported)
 	for _, flags := range [][]string{
 		{"--lrt-preset-name", "missing"},

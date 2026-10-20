@@ -892,7 +892,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	outputDeflickerLuma := set.Bool("output-deflicker-luma", false, "smooth rendered luma using native ten-frame power mean")
 	outputDeflickerChroma := set.Bool("output-deflicker-chroma", false, "smooth rendered chroma using native ten-frame power mean")
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
-	interpolation := set.Int("interpolation", 0, "frame interpolation: 0 off, 1 blend; 2 supports speeds >=1 only")
+	interpolation := set.Int("interpolation", 0, "frame interpolation: 0 off, 1 blend, 2 motion compensated")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
@@ -1257,7 +1257,7 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	speed := set.Float64("speed", 1, "video playback speed (0.0625-16)")
 	motionBlur := set.Int("motion-blur", 0, "match the video's Motion Blur warm-up trim")
 	airplanes := set.Int("remove-airplanes", 0, "match the video's light-trail removal and frame trim (0-3)")
-	interpolation := set.Int("interpolation", 0, "match video interpolation: 0 off, 1 blend, 2 only speeds >=1")
+	interpolation := set.Int("interpolation", 0, "match video interpolation: 0 off, 1 blend, 2 motion compensated")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used for subtitle text")
 	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{

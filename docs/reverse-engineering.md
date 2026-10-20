@@ -1290,7 +1290,8 @@ The installed helper produced 108 graphs across three fps labels, twelve speeds
 and three interpolation modes. Mode 1 now has an independent pure Go blend,
 scene-change detection, rational intermediate clock, EOF hold and uniform
 pre-resampling fast-speed average. The mode-2 fast branch is the same observed
-filter and is supported; slow adaptive motion compensation remains unimplemented.
+filter and is supported; the slow bidirectional branch is now implemented and
+compared in the motion section below.
 Presets, explicit disabling, batch, subtitles and combined temporal filters use
 the same scheduler. Still exports do not interpolate.
 
@@ -1320,3 +1321,21 @@ priority. Tests cover shared timing, batch video equality, settings/source
 retention and failure retention. The comparison excludes the separate native
 UI fps helper and full color management. See
 [`lrt-rate-label-7.5.5.md`](../internal/lrtl/testdata/lrt-rate-label-7.5.5.md).
+
+## Bidirectional motion interpolation (LRT 7.5.5)
+
+The mode-2 helper chooses bidirectional estimation. That branch uses fixed
+16x16 blocks and 32x32 cost/overlap support, with predicted zonal search and
+prior vector history; its aobmc/vsbmc settings do not activate the separate
+bilateral adaptive/variable-size implementation. Pure Go now supports this
+actual branch. It computes integer weighted sums directly instead of storing
+32 vectors at every pixel, while preserving the native reference cap/order.
+
+720 complete 8/10-bit observations cover 96,085,440 samples across static,
+panning, accelerating, moving-object, noise and cut sequences. All hashes and
+frame counts match; 468 cases differ from simple blend. CLI/preset/batch/SRT,
+combined temporal filters, full output filter order, independent overlap
+reference, fuzzing, JPEG AVI and 18 actual H.264/H.265 cases are tested. Small
+outputs and future-input errors preserve existing destinations. Full native
+color management and gated whole-application render parity remain unverified.
+See [`lrt-motion-interpolation-7.5.5.md`](../internal/lrtl/testdata/lrt-motion-interpolation-7.5.5.md).

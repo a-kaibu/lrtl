@@ -116,9 +116,6 @@ func validateInterpolation(mode int, speed float64) error {
 	if mode < 0 || mode > 2 {
 		return fmt.Errorf("interpolation must be 0 (off), 1 (blend), or 2 (motion compensated)")
 	}
-	if mode == 2 && speed < 1 {
-		return fmt.Errorf("motion-compensated slow interpolation is not implemented; use --interpolation 1 for blend")
-	}
 	return nil
 }
 
@@ -135,7 +132,7 @@ func planInterpolatedVideoFrames(count int, speed float64, blur, airplanes, mode
 		return plan, err
 	}
 	if airplaneSourceCount(count, airplanes) < 3 {
-		return videoFramePlan{}, fmt.Errorf("blend interpolation needs at least three frames after light-trail filtering")
+		return videoFramePlan{}, fmt.Errorf("slow interpolation needs at least three frames after light-trail filtering")
 	}
 	clock, err := newInterpolationClock(rate, label, speed)
 	if err != nil {
@@ -168,6 +165,7 @@ type playbackFrameStream struct {
 	load                                                                        func(int) ([]byte, error)
 	lastRGB                                                                     []byte
 	lastSource                                                                  int
+	motion                                                                      *motionEstimator
 }
 
 func newPlaybackFrameStream(width, height, count, airplanes, mode int, speed float64, rate frameRate, label string, load func(int) ([]byte, error)) (*playbackFrameStream, error) {
@@ -182,6 +180,12 @@ func newPlaybackFrameStream(width, height, count, airplanes, mode int, speed flo
 			return nil, err
 		}
 		p.clock = clock
+		if mode == 2 && load != nil {
+			p.motion, err = newMotionEstimator(width, height)
+			if err != nil {
+				return nil, err
+			}
+		}
 		p.count = 0
 		if p.actual >= 3 {
 			p.count = clock.count(count)
@@ -236,6 +240,12 @@ func (p *playbackFrameStream) readThrough(last int) error {
 			}
 		}
 		p.cache[p.next] = input
+		if p.motion != nil && p.next > 0 {
+			f := p.next - 1
+			if err := p.motion.estimate(f, p.cache[max(0, f-1)].eight[0], p.cache[f].eight[0], input.eight[0]); err != nil {
+				return err
+			}
+		}
 		keep := 1
 		if p.mode > 0 {
 			keep = max(3, p.window)
@@ -255,6 +265,9 @@ func (p *playbackFrameStream) frame(target int) ([]byte, int, error) {
 	if target != p.emitted || target >= p.count {
 		return nil, 0, fmt.Errorf("playback requires sequential output frames")
 	}
+	if p.mode == 2 && p.speed < 1 && p.motion == nil {
+		return nil, 0, fmt.Errorf("motion playback requires an initialized frame estimator")
+	}
 	source, alpha := p.sample(target)
 	anchor := min(source, p.actual-1)
 	lookahead := anchor
@@ -270,12 +283,23 @@ func (p *playbackFrameStream) frame(target int) ([]byte, int, error) {
 	}
 	input := p.cache[anchor]
 	rgb := bytes.Clone(input.rgb)
+	var compensated [3][]byte
+	if p.mode == 2 && p.speed < 1 {
+		var err error
+		compensated, err = p.motion.interpolate(anchor, alpha, input.eight, p.cache[anchor+1].eight, p.scenes[anchor])
+		if err != nil {
+			return nil, 0, err
+		}
+	}
 	if p.mode > 0 {
 		filtered := input.planes
 		for c := range filtered {
 			filtered[c] = make([]uint16, p.width*p.height)
 			if p.speed < 1 {
-				blended := blendInterpolationPlane(input.eight[c], p.cache[anchor+1].eight[c], alpha, p.scenes[anchor])
+				blended := compensated[c]
+				if p.mode != 2 {
+					blended = blendInterpolationPlane(input.eight[c], p.cache[anchor+1].eight[c], alpha, p.scenes[anchor])
+				}
 				for i, v := range blended {
 					filtered[c][i] = uint16(v) * 4
 				}
@@ -305,6 +329,9 @@ func (p *playbackFrameStream) frame(target int) ([]byte, int, error) {
 func (p *playbackFrameStream) finish() error { return p.readThrough(p.actual - 1) }
 
 func validateInterpolationMemory(width, height, deflickerWidth, deflickerHeight, count, mode int, speed float64, options RenderOptions) error {
+	if mode == 2 && speed < 1 && (width < 32 || height < 32) {
+		return fmt.Errorf("motion interpolation requires output dimensions of at least 32x32")
+	}
 	if mode == 0 || speed == 1 {
 		return nil
 	}

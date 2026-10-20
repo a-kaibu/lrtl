@@ -195,14 +195,35 @@ func interpolationReferenceRGB(input [][]byte, width, height, eof, mode int, spe
 		scenes[f], previous = interpolationSceneChange(eight[f][0], eight[f+1][0], previous)
 	}
 	var output [][]byte
+	var motion *motionEstimator
+	if mode == 2 && speed < 1 {
+		motion, _ = newMotionEstimator(width, height)
+	}
 	for target, source := range sources {
 		anchor := min(source, len(input)-1)
 		filtered := planes[anchor]
+		var compensated [3][]byte
+		if motion != nil {
+			for motion.next <= anchor+1 {
+				f := motion.next
+				if err := motion.estimate(f, eight[max(0, f-1)][0], eight[f][0], eight[f+1][0]); err != nil {
+					panic(err)
+				}
+			}
+			var err error
+			compensated, err = motion.interpolate(anchor, alphas[target], eight[anchor], eight[anchor+1], scenes[anchor])
+			if err != nil {
+				panic(err)
+			}
+		}
 		if mode > 0 {
 			for p := range filtered {
 				filtered[p] = make([]uint16, width*height)
 				if speed < 1 {
-					blend := blendInterpolationPlane(eight[anchor][p], eight[anchor+1][p], alphas[target], scenes[anchor])
+					blend := compensated[p]
+					if motion == nil {
+						blend = blendInterpolationPlane(eight[anchor][p], eight[anchor+1][p], alphas[target], scenes[anchor])
+					}
 					for i, v := range blend {
 						filtered[p][i] = uint16(v) * 4
 					}
@@ -286,8 +307,8 @@ func TestInterpolationStreamOwnership(t *testing.T) {
 			t.Fatal("accepted invalid mode")
 		}
 	}
-	if err := validateInterpolation(2, .5); err == nil {
-		t.Fatal("accepted unimplemented slow MCI")
+	if err := validateInterpolation(2, .5); err != nil {
+		t.Fatal("rejected supported slow MCI", err)
 	}
 	if err := validateInterpolation(2, 2); err != nil {
 		t.Fatal(err)
@@ -339,9 +360,9 @@ func TestInterpolationCLIPresetBatchSubtitlesAndFilters(t *testing.T) {
 		input = append(input, raw[i:i+64*32*6])
 	}
 	for _, tc := range []struct {
-		speed            float64
-		air, noise, blur int
-	}{{.5, 0, 0, 0}, {.7, 0, 0, 0}, {.3, 1, 1, 2}, {1, 0, 0, 0}, {1.1, 0, 0, 0}, {1.5, 0, 0, 0}, {2.3, 1, 2, 2}, {4, 0, 0, 0}} {
+		speed                  float64
+		air, noise, blur, mode int
+	}{{.5, 0, 0, 0, 1}, {.7, 0, 0, 0, 1}, {.3, 1, 1, 2, 1}, {1, 0, 0, 0, 1}, {1.1, 0, 0, 0, 1}, {1.5, 0, 0, 0, 1}, {2.3, 1, 2, 2, 1}, {4, 0, 0, 0, 1}, {.5, 0, 0, 0, 2}, {.7, 0, 0, 0, 2}, {.3, 1, 1, 2, 2}, {1, 0, 0, 0, 2}, {2.3, 1, 2, 2, 2}} {
 		speed := float64(float32(tc.speed))
 		clean := input
 		if tc.noise > 0 {
@@ -350,8 +371,8 @@ func TestInterpolationCLIPresetBatchSubtitlesAndFilters(t *testing.T) {
 		if tc.air > 0 {
 			clean = airplaneReferenceRGB(clean, 64, 32, tc.air)
 		}
-		filtered, ids := interpolationReferenceRGB(clean, 64, 32, len(input), 1, speed, "24")
-		plan, err := planInterpolatedVideoFrames(len(input), speed, tc.blur, tc.air, 1, frameRate{24, 1}, "24")
+		filtered, ids := interpolationReferenceRGB(clean, 64, 32, len(input), tc.mode, speed, "24")
+		plan, err := planInterpolatedVideoFrames(len(input), speed, tc.blur, tc.air, tc.mode, frameRate{24, 1}, "24")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -366,7 +387,7 @@ func TestInterpolationCLIPresetBatchSubtitlesAndFilters(t *testing.T) {
 			}
 			want = append(want, rgb...)
 		}
-		flags := []string{"--interpolation", "1", "--speed", strconv.FormatFloat(tc.speed, 'f', -1, 64), "--denoise", strconv.Itoa(tc.noise), "--remove-airplanes", strconv.Itoa(tc.air), "--motion-blur", strconv.Itoa(tc.blur)}
+		flags := []string{"--interpolation", strconv.Itoa(tc.mode), "--speed", strconv.FormatFloat(tc.speed, 'f', -1, 64), "--denoise", strconv.Itoa(tc.noise), "--remove-airplanes", strconv.Itoa(tc.air), "--motion-blur", strconv.Itoa(tc.blur)}
 		if got := run(flags...); !bytes.Equal(got, want) {
 			t.Fatalf("interpolation layer order speed%g air%d noise%d blur%d", speed, tc.air, tc.noise, tc.blur)
 		}
@@ -374,7 +395,7 @@ func TestInterpolationCLIPresetBatchSubtitlesAndFilters(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		preset.Interpolation, preset.Speed, preset.OutputResV = 1, tc.speed, 32
+		preset.Interpolation, preset.Speed, preset.OutputResV = tc.mode, tc.speed, 32
 		preset.FrameRate = "24"
 		preset.Denoise, preset.DenoiseLevel = tc.noise > 0, tc.noise
 		preset.RemoveAirplanes, preset.RemoveAirplanesLevel = tc.air > 0, tc.air
@@ -390,7 +411,7 @@ func TestInterpolationCLIPresetBatchSubtitlesAndFilters(t *testing.T) {
 		}
 		assertPreviewEVFileBytes(t, path, presetBefore)
 		srt := filepath.Join(t.TempDir(), "match.srt")
-		markerCommand(t, "subtitles", dir, "--output", srt, "--interpolation", "1", "--speed", strconv.FormatFloat(tc.speed, 'f', -1, 64), "--remove-airplanes", strconv.Itoa(tc.air), "--motion-blur", strconv.Itoa(tc.blur), "--timestamp-format", "05")
+		markerCommand(t, "subtitles", dir, "--output", srt, "--interpolation", strconv.Itoa(tc.mode), "--speed", strconv.FormatFloat(tc.speed, 'f', -1, 64), "--remove-airplanes", strconv.Itoa(tc.air), "--motion-blur", strconv.Itoa(tc.blur), "--timestamp-format", "05")
 		blocks := strings.Split(strings.TrimSpace(strings.ReplaceAll(string(denoiseRead(t, srt)), "\r\n", "\n")), "\n\n")
 		if len(blocks) != plan.count() {
 			t.Fatal("subtitle and video counts differ")
@@ -544,6 +565,11 @@ func TestInterpolationHelperGraphs(t *testing.T) {
 			t.Fatal("measured graph differs from installed helper")
 		}
 	}
+	for _, row := range append(motionInterpolationObservations(t), motionInterpolation10Observations(t)...) {
+		if graphs[key(row.FPS, row.Speed, 2)] != row.Filter {
+			t.Fatal("motion graph differs from installed helper")
+		}
+	}
 	for _, helper := range helpers {
 		if helper.Mode == 2 && helper.Speed >= 1 && graphs[key(helper.FPS, helper.Speed, 1)] != strings.TrimPrefix(helper.Filter, ",") {
 			t.Fatal("fast interpolation modes differ")
@@ -612,7 +638,7 @@ func TestInterpolationPreservationAndOverrides(t *testing.T) {
 		}
 	}
 	for _, command := range []string{"render", "subtitles"} {
-		for _, flags := range [][]string{{"--interpolation", "-1"}, {"--interpolation", "3"}, {"--interpolation", "2", "--speed", "0.5"}} {
+		for _, flags := range [][]string{{"--interpolation", "-1"}, {"--interpolation", "3"}, {"--interpolation", "2", "--speed", "NaN"}} {
 			ext := ".avi"
 			if command == "subtitles" {
 				ext = ".srt"
@@ -753,6 +779,11 @@ func TestInterpolationJPEGAVI(t *testing.T) {
 }
 
 func TestInterpolationActualVideo(t *testing.T) {
+	verifyInterpolationActualVideo(t, outputSharpenFixture(t, 17), 64, 32, 1)
+}
+
+func verifyInterpolationActualVideo(t *testing.T, dir string, width, height, mode int) {
+	t.Helper()
 	ffmpeg, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		t.Skip("FFmpeg unavailable")
@@ -768,7 +799,6 @@ func TestInterpolationActualVideo(t *testing.T) {
 	if !bytes.Contains(filters, []byte(" zscale ")) {
 		t.Skip("zscale unavailable")
 	}
-	dir := outputSharpenFixture(t, 17)
 	before := batchFileSnapshot(t, dir)
 	frames, err := DiscoverSequence(dir)
 	if err != nil {
@@ -786,11 +816,15 @@ func TestInterpolationActualVideo(t *testing.T) {
 		}
 		input = append(input, rgb)
 	}
+	speeds := []float64{.5, .7, 2.3}
+	if mode == 2 {
+		speeds = []float64{.3, .5, .7}
+	}
 	for _, label := range []string{"24", "29.97", "23.976"} {
-		for _, value := range []float64{.5, .7, 2.3} {
+		for _, value := range speeds {
 			speed := float64(float32(value))
 			rate, _ := parseFrameRate(label)
-			filtered, _ := interpolationReferenceRGB(input, 64, 32, len(input), 1, speed, label)
+			filtered, _ := interpolationReferenceRGB(input, width, height, len(input), mode, speed, label)
 			var expected []int
 			for _, rgb := range filtered {
 				for i := 0; i < len(rgb); i += 6 {
@@ -808,7 +842,7 @@ func TestInterpolationActualVideo(t *testing.T) {
 						t.Skipf("encoder unavailable: %v", err)
 					}
 					output := filepath.Join(t.TempDir(), "interpolate"+ext)
-					markerCommand(t, "render", dir, "--output", output, "--ffmpeg", ffmpeg, "--codec", codec, "--subsampling", "444", "--video-range", "full", "--fps", label, "--crf", "0", "--preset", "ultrafast", "--interpolation", "1", "--speed", strconv.FormatFloat(value, 'f', -1, 64))
+					markerCommand(t, "render", dir, "--output", output, "--ffmpeg", ffmpeg, "--codec", codec, "--subsampling", "444", "--video-range", "full", "--fps", label, "--crf", "0", "--preset", "ultrafast", "--interpolation", strconv.Itoa(mode), "--speed", strconv.FormatFloat(value, 'f', -1, 64))
 					metadata, err := exec.Command(ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=pix_fmt,nb_frames,duration,avg_frame_rate", "-of", "json", output).CombinedOutput()
 					if err != nil {
 						t.Fatalf("probe %s %v", metadata, err)
@@ -853,7 +887,7 @@ func TestInterpolationActualVideo(t *testing.T) {
 					if codec == "h265" {
 						tag, container = "hvc1", "mov"
 					}
-					command := exec.Command(ffmpeg, "-v", "error", "-f", "rawvideo", "-pixel_format", "rgb48le", "-video_size", "64x32", "-framerate", rate.String(), "-i", "pipe:0", "-an", "-c:v", encoder, "-preset", "ultrafast", "-crf", "0", "-pix_fmt", "yuv444p10le", "-vf", videoRangeFilter("full", "yuv444p10le"), "-tag:v", tag, "-color_range", "pc", "-colorspace", "bt709", "-movflags", "+faststart+write_colr", "-f", container, reference)
+					command := exec.Command(ffmpeg, "-v", "error", "-f", "rawvideo", "-pixel_format", "rgb48le", "-video_size", fmt.Sprintf("%dx%d", width, height), "-framerate", rate.String(), "-i", "pipe:0", "-an", "-c:v", encoder, "-preset", "ultrafast", "-crf", "0", "-pix_fmt", "yuv444p10le", "-vf", videoRangeFilter("full", "yuv444p10le"), "-tag:v", tag, "-color_range", "pc", "-colorspace", "bt709", "-movflags", "+faststart+write_colr", "-f", container, reference)
 					command.Stdin = bytes.NewReader(bytes.Join(filtered, nil))
 					if result, err := command.CombinedOutput(); err != nil {
 						t.Fatalf("reference encode: %v %s", err, result)

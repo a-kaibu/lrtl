@@ -17,8 +17,10 @@ helper observations do not establish a gated full application render.
 Below speed 1, mode 1 generates `minterpolate=mi_mode=blend`, using a target fps
 computed by float32 division of the displayed label by speed and formatted to
 three decimals. Mode 2 instead specifies bidirectional adaptive overlapped
-motion compensation with variable-size blocks. That slow mode remains
-unimplemented. At speeds above 1, both modes use a uniform tmix window equal
+motion compensation with variable-size settings. The selected bidirectional
+branch is now implemented; see the [motion comparison](lrt-motion-interpolation-7.5.5.md)
+for its actual fixed-block execution and numerical scope. At speeds above 1,
+both modes use a uniform tmix window equal
 to Java round(speed), when that integer exceeds 1. Thus speeds in (1,1.5)
 only resample timestamps, and mode 2 at speeds >=1 is supported. Uniform tmix
 replicates the first image and rounds integer averages half upward, separately
@@ -76,8 +78,8 @@ differences are logged diagnostically; CRF 0 is not assumed lossless.
 
 RGB16/YUV10 conversion, RAW development and color management are independent
 Go approximations; transformed deltas retain the source RGB residual. These
-tests do not claim full application video pixel parity, HDR or slow motion
-compensation. Sources were checked against official FFmpeg
+tests do not claim full application video pixel parity or HDR. Slow motion
+compensation is compared separately in the motion dataset above. Sources were checked against official FFmpeg
 [minterpolate](https://github.com/FFmpeg/FFmpeg/blob/n8.0.1/libavfilter/vf_minterpolate.c),
 [fps](https://github.com/FFmpeg/FFmpeg/blob/n8.0.1/libavfilter/vf_fps.c) and
 [tmix](https://github.com/FFmpeg/FFmpeg/blob/n8.0.1/libavfilter/vf_mix.c) implementations.
