@@ -102,6 +102,7 @@ func ExportTIFFSequence(frames []Frame, output string, options RenderOptions) er
 	options.FrameRate = ""
 	options.FadeOutSeconds = 0
 	options.PlaybackSpeed = 1
+	options.Interpolation = 0
 	options.VideoRange = "auto"
 	options.OutputSharpen = false
 	options.OutputCAS = false

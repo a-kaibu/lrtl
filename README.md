@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `render --interpolation 1`で純Goのブレンド補間に対応しました。低速ではシーン変化を避けて中間画像を作り、高速では本体と同じ丸めた速度分の過去画像を均等合成します。保存プリセット・バッチ・字幕にも反映。8-bit／10-bitの2,304ケース、96,523,260サンプル分の出力ハッシュと枚数を比較しました。低速の動き補償（モード2）と色管理の完全一致は未対応です。
+
 - `render --output-deflicker-luma`／`--output-deflicker-chroma`と保存プリセットの動画デフリッカーに対応しました。純Goの10枚パワー平均を、短い連番・末尾を含む288ケース・686,556画素の参照と比較。プリセットでは出力クロップ前に測光し、ノイズ除去・光跡除去・速度変更より前に適用します。実動画、バッチ、無効化、異常時の保持もテストしています。色変換と本体全体の画素一致は未確認です。
 
 - `render --remove-airplanes 1..3`と保存プリセットの光跡除去に対応しました。純Goで3枚／5枚の時間中央値と中・強段階の輝度補正を実装し、102件・323,253画素と比較。速度変更時に末尾の処理画像を保持する動作と前後の切り詰めも100ケースで確認し、字幕へ反映しました。実動画・音声の長さ、処理順、バッチ、失敗時の保持をテストしています。色管理と本体の動画全体の完全一致は未確認です。
@@ -125,7 +127,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
-| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、本体の推定枚数に基づくフェード・音声時刻、映像レンジ、保存済みアスペクト比に対応。HDR・フレーム生成・追加フィルターなどはエラーにする | 一部 |
+| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、本体の推定枚数に基づくフェード・音声時刻、映像レンジ、保存済みアスペクト比に対応。動画デフリッカー・ノイズ除去・光跡除去・ブレンド補間も対応。HDR・広色域・低速の動き補償は未対応 | 一部 |
 | 選択範囲の手動キーフレーム | 選択画像への4/5つ星マーク設定・解除 | `mark-sequence`／`unmark-sequence`で一括設定・解除。ファイル名・評価・JSON・反転で対象を選択し、元評価の復元、HG保護、保存前検証、バックアップに対応。GUI操作との比較は未実施 | CLI実装済み |
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
@@ -146,6 +148,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264 MP4／H.265 MP4・MOV、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。H.264/H.265は`--subsampling 420`で8-bit、`422`／`444`で10-bit出力。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
+| フレーム補間 | 速度変更時のブレンド・動き補償 | `render --interpolation 1`と保存プリセットに対応。低速ブレンド・シーン判定・末尾保持・高速時の均等時間平均を純Goで実装し、2,304ケースの平面出力ハッシュ・枚数を比較。字幕、時間フィルターとの併用、実動画をテスト。モード2は通常／高速のみ対応し、低速の動き補償は未対応 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。速度変更後の過去Nフレームを合成し、本体と同じ先頭Nフレーム除去を行う。48件のフィルター実測で枚数・開始位置・フェード時刻を照合。字幕も`--motion-blur N`で開始位置を揃える。中間画像は先頭を保持。16-bit RGB処理で、LRTの10-bit YUVフィルター出力との画素完全一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed/lossy DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。`--dng-long-edge`でロッシーDNGを縮小可能。取り込み画面内の画像プレビューは未実装（既存連番には`preview-images`を使用可能） | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed/lossy DNGと隣接XMPを取り込む。`--dng-long-edge`でロッシーDNGの長辺を制限できる。`--dnglab PATH`でDNGLabを明示選択可能。ロッシーと縮小はAdobeバックエンドのみ。LRTプリセットとの画素一致、JPEG XLは未対応 | 一部 |
@@ -174,6 +177,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 非圧縮TIFF中間画像 | なし | なし | あり |
 | ProRes/H.265/DNxHR/True HDR | なし | なし | あり |
 | 透かし/撮影時刻/SRT字幕 | なし | なし | あり |
+| フレーム補間 | 速度変更時のブレンド・動き補償 | `render --interpolation 1`と保存プリセットに対応。低速ブレンド・シーン判定・末尾保持・高速時の均等時間平均を純Goで実装し、2,304ケースの平面出力ハッシュ・枚数を比較。字幕、時間フィルターとの併用、実動画をテスト。モード2は通常／高速のみ対応し、低速の動き補償は未対応 | 一部 |
 | Motion Blur Plus | なし | なし | あり |
 | 取り込み時のDNG変換 | なし | なし | あり |
 | 4スレッド超の並列処理 | なし | あり | あり |
@@ -628,11 +632,30 @@ lrtl subtitles C:\photos\sequence --output C:\photos\slow.srt --fps 29.97 --spee
 lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --speed 2
 ```
 
-本体の通常の速度フィルターに合わせ、フレームを間引き・複製します。2倍速では0始まりの元フレーム1/3/5…、半速では0/0/1/1…を出力します。光学フローや中間画素の生成は行わず、プリセットの`interpolation`が有効な場合は引き続きエラーにします。端点と単精度丸めのため、たとえば速度0.33333334で元画像が1枚なら出力は2枚となります。速度変更後にフレームが残らない短い連番は保存前にエラーにします。
+本体の通常の速度フィルターに合わせ、フレームを間引き・複製します。2倍速では0始まりの元フレーム1/3/5…、半速では0/0/1/1…を出力します。既定の`--interpolation 0`は中間画素を生成せず、`--interpolation 1`で後述のブレンド補間を選べます。端点と単精度丸めのため、たとえば速度0.33333334で元画像が1枚なら出力は2枚となります。速度変更後にフレームが残らない短い連番は保存前にエラーにします。
 
 XMP現像・Deflickerの解析対象は元の連番です。速度変更をMotion Blurより前、透かし・撮影日時表示・フェードをその後へ適用します。複製した画像の処理結果を再利用し、撮影日時は元画像と対応させます。字幕にも同じ間引き・複製を使います。音声の再生速度は変更しません。通常CLIは実出力枚数に音声とフェードを合わせ、保存プリセットでは次節の本体と同じ時間計算を使います。元画像やXMPは変更しません。
 
 本体から取得した20種類の通常速度フィルターを、FFmpeg 8.0.1で80ケースの短い合成連番へ適用し、Goのフレーム対応と比較しています。RGB48画素、XMP反映、Motion Blur／フェードの順序、撮影日時・字幕、AVI画素とフレーム数、バッチ／プリセット、間引かれる画像の破損時の出力保持、実NTSC MP4もテストしています。LRTの動画出力全体・速度と他の本体フィルターを組み合わせた結果の完全一致は未確認です。速度変更時のAVIは処理済みRGBからJPEGへ再エンコードします。
+
+### 速度変更時のフレーム補間
+
+`render --interpolation MODE`で動画の速度変更に使う補間を選びます。既定の`0`はフレームの複製／間引き、`1`はブレンド補間です。保存プリセットの`interpolation`も読み込み、`--interpolation 0`で明示的に解除できます。`2`は1倍以上では本体と同じ処理を使い、1倍未満の動き補償は未実装のためエラーにします。
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\slow.mp4 --speed 0.5 --interpolation 1
+lrtl render C:\photos\sequence --output C:\photos\fast.avi --speed 2.3 --interpolation 1
+lrtl subtitles C:\photos\sequence --output C:\photos\slow.srt --speed 0.5 --interpolation 1
+lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --speed 0.7 --interpolation 1
+```
+
+低速では本体と同じ8-bit平面のブレンドとシーン判定を使います。シーン変化の閾値を超える区間は近い画像を選びます。光跡除去後に最低3枚が必要です。最後の入力画像は次の区間を確定するために読み、最後に生成できた補間画像を終端まで保持します。高速では速度を整数へ四捨五入した枚数の過去画像を均等合成してから間引きます。1倍では補間せず、1倍超・1.5倍未満も平均処理を追加しません。Motion Blurはその後の出力フレームへ適用します。
+
+中間fpsの3桁丸め、タイムスタンプの切り捨て、終端時刻の変換により、出力枚数が単純な`N/speed`と違う場合があります。たとえば24 fps・元3枚・0.7倍のブレンド補間では3枚になり、補間なしでは4枚です。保存プリセットの音声・フェードは本体の推定枚数を使うため、この差が末尾にも現れます。`subtitles`へ同じfps・速度・補間・Motion Blur・光跡除去を指定すると、出力枚数と撮影時刻の対応が揃います。補間画像の撮影時刻は左側の元画像を使います。
+
+8-bitの1,728ケースと10-bitの576ケースで、全96,523,260サンプルの出力ハッシュと枚数を比較しています。実H.264／H.265の18ケースは、独立に計算した補間RGBを別途動画化し、復号した全平面を比較します。バッチ・保存設定・字幕・JPEG AVI・破損した後続画像・既存出力の保持もテストしています。中間TIFF・JPEGプレビューには適用しません。時間処理全体のバッファ見積もりが768 MiBを超える場合は出力前にエラーにします。
+
+本体の小画像SIMDシーン判定にはスカラー処理との差があり、ここではスカラーの計算を採用しています。RGB16とYUV10の変換は独自近似です。低速の動き補償、HDR、完全な色管理と本体全体の出力一致は未確認です。[比較範囲と再実行方法](internal/lrtl/testdata/lrt-interpolation-7.5.5.md)を参照してください。
 
 ### 小数速度の境界とプリセットの時間計算
 
@@ -672,9 +695,9 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --lrt-render-
 
 `encoder`、`frameRate`、`outputResV`、`outputQuality`を必須とし、省略可能な項目には本体のコンストラクターで観測した既定値を使います。読み込むのは指定したJSONだけで、LRTのグローバル設定を自動探索・変更しません。JSON内の音声が有効な場合、相対パスはそのJSONのフォルダーを基準に解決します。設定JSON全体の`renderConstrainCrop=true`では`renderAR`も使います。動画の拡張子は選んだコーデックに合わせて指定してください。
 
-CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`、`--cas`、`--denoise`、`--remove-airplanes`、`--output-deflicker-luma`、`--output-deflicker-chroma`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
+CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`、`--cas`、`--denoise`、`--remove-airplanes`、`--output-deflicker-luma`、`--output-deflicker-chroma`、`--interpolation`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
 
-HDR・広色域・フレーム生成が有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420／422／444を読み込み、明示した`--subsampling`を優先します。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
+HDR・広色域と低速の動き補償（interpolation=2）が有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420／422／444を読み込み、明示した`--subsampling`を優先します。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
 
 この対応に合わせ、`--codec prores-proxy|prores-lt|prores-4444`も追加しました。FFmpegにはProRes 4444用10-bit YUVを渡し、ffprobeでは4444・12-bitのデコード形式として報告されることを確認しています。完全な12-bit入力精度やアルファチャンネルの保持は実装していません。本体で生成した6種類のJSONと画質ヘルパー値、明示CLIとの画素入力・引数一致、設定と元画像の保持、バッチ転送、不正設定時の出力保持、実MOVのプロファイルをテストしています。
 

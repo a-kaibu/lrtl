@@ -156,7 +156,6 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 		name   string
 		active bool
 	}{
-		{"interpolation", preset.Interpolation != 0},
 		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
 	} {
 		if field.active {
@@ -191,6 +190,9 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 		}
 	}
 	options.NativeTiming = true
+	if !explicit["interpolation"] {
+		options.Interpolation = preset.Interpolation
+	}
 	if !explicit["output-deflicker-luma"] {
 		options.OutputDeflickerLuma = preset.DeflickerLuma
 	}

@@ -30,6 +30,10 @@ func writeSequenceSubtitlesWithMotionBlur(frames []Frame, output string, rate fr
 }
 
 func writeSequenceSubtitlesWithTemporalFilters(frames []Frame, output string, rate frameRate, speed float64, motionBlur, airplanes int, timestampFormat string, overwrite bool) error {
+	return writeSequenceSubtitlesWithInterpolation(frames, output, rate, rate.String(), speed, motionBlur, airplanes, 0, timestampFormat, overwrite)
+}
+
+func writeSequenceSubtitlesWithInterpolation(frames []Frame, output string, rate frameRate, label string, speed float64, motionBlur, airplanes, mode int, timestampFormat string, overwrite bool) error {
 	if len(frames) == 0 {
 		return fmt.Errorf("sequence contains no images")
 	}
@@ -40,7 +44,7 @@ func writeSequenceSubtitlesWithTemporalFilters(frames []Frame, output string, ra
 	if err != nil {
 		return err
 	}
-	timeline, err := planFilteredVideoFrames(len(frames), speed, motionBlur, airplanes)
+	timeline, err := planInterpolatedVideoFrames(len(frames), speed, motionBlur, airplanes, mode, rate, label)
 	if err != nil {
 		return err
 	}
@@ -77,30 +81,33 @@ func writeSequenceSubtitlesWithTemporalFilters(frames []Frame, output string, ra
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
 	writer := bufio.NewWriter(temporary)
-	index := 0
-	for sourceIndex, timestamp := range timestamps[:airplaneTimelineSourceCount(len(frames), speed, airplanes)] {
-		label := strings.NewReplacer("\r", " ", "\n", " ").Replace(timestamp.Format(timestampFormat))
-		if strings.Contains(label, "-->") {
+	stream, err := newPlaybackFrameStream(0, 0, len(frames), airplanes, mode, speed, rate, label, nil)
+	if err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	for index := 0; index < stream.count; index++ {
+		sourceIndex, _ := stream.sample(index)
+		if index < timeline.start || index >= timeline.end {
+			continue
+		}
+		text := strings.NewReplacer("\r", " ", "\n", " ").Replace(timestamps[sourceIndex].Format(timestampFormat))
+		if strings.Contains(text, "-->") {
 			_ = temporary.Close()
 			return fmt.Errorf("timestamp format produces the reserved SRT delimiter in frame %d", index+1)
 		}
-		for end := playbackOutputEnd(sourceIndex+1, speed); index < end; index++ {
-			if index < timeline.start || index >= timeline.end {
-				continue
-			}
-			outputIndex := index - timeline.start
-			startMS, startErr := rate.offsetMilliseconds(int64(outputIndex))
-			endMS, endErr := rate.offsetMilliseconds(int64(outputIndex + 1))
-			if startErr != nil || endErr != nil {
-				_ = temporary.Close()
-				return fmt.Errorf("subtitle timing exceeds supported duration")
-			}
-			start := srtTimecode(startMS)
-			end := srtTimecode(endMS)
-			if _, err := fmt.Fprintf(writer, "%d\n%s --> %s\n%s\n\n", outputIndex+1, start, end, label); err != nil {
-				_ = temporary.Close()
-				return fmt.Errorf("write temporary subtitles: %w", err)
-			}
+		outputIndex := index - timeline.start
+		startMS, startErr := rate.offsetMilliseconds(int64(outputIndex))
+		endMS, endErr := rate.offsetMilliseconds(int64(outputIndex + 1))
+		if startErr != nil || endErr != nil {
+			_ = temporary.Close()
+			return fmt.Errorf("subtitle timing exceeds supported duration")
+		}
+		start := srtTimecode(startMS)
+		end := srtTimecode(endMS)
+		if _, err := fmt.Fprintf(writer, "%d\n%s --> %s\n%s\n\n", outputIndex+1, start, end, text); err != nil {
+			_ = temporary.Close()
+			return fmt.Errorf("write temporary subtitles: %w", err)
 		}
 	}
 	if err := writer.Flush(); err != nil {

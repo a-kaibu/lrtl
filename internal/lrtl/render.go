@@ -23,6 +23,7 @@ type RenderOptions struct {
 	FrameRate             string
 	FadeOutSeconds        float64
 	PlaybackSpeed         float64
+	Interpolation         int
 	VideoRange            string
 	OutputSharpen         bool
 	OutputCAS             bool
@@ -191,11 +192,17 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 	trimWindow := options.MotionBlurFrames
 	airplaneLevel := options.RemoveAirplanes
+	interpolationMode := options.Interpolation
 	if imageWriter != nil {
 		trimWindow = 0 // Intermediate images retain their source correspondence.
 		airplaneLevel = 0
+		interpolationMode = 0
 	}
-	timeline, err := planFilteredVideoFrames(len(frames), speed, trimWindow, airplaneLevel)
+	label := options.FrameRate
+	if label == "" {
+		label = rate.String()
+	}
+	timeline, err := planInterpolatedVideoFrames(len(frames), speed, trimWindow, airplaneLevel, interpolationMode, rate, label)
 	if err != nil {
 		return err
 	}
@@ -206,10 +213,6 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 	if _, err := normalizeSubsampling(options.Subsampling); err != nil {
 		return err
-	}
-	label := options.FrameRate
-	if label == "" {
-		label = rate.String()
 	}
 	headTrim, tailTrim := nativeFilterTrim(trimWindow, airplaneLevel)
 	timing, err := planRenderTiming(options, len(frames), outputCount, headTrim+tailTrim, rate, label)
@@ -419,6 +422,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			return err
 		}
 	}
+	if err := validateInterpolationMemory(outputWidth, outputHeight, deflickerWidth, deflickerHeight, len(frames), interpolationMode, speed, options); err != nil {
+		return err
+	}
 	if options.MotionBlurFrames > 0 {
 		outputPixels := uint64(outputWidth) * uint64(outputHeight)
 		inputPixels := uint64(width) * uint64(height)
@@ -615,7 +621,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	}()
 
-	if options.MotionBlurFrames > 0 || speed != 1 || options.OutputDenoise > 0 || airplaneLevel > 0 || outputDeflickerEnabled {
+	if options.MotionBlurFrames > 0 || speed != 1 || options.OutputDenoise > 0 || airplaneLevel > 0 || outputDeflickerEnabled || interpolationMode > 0 {
 		prepareMotionBlurFrame := func(index int) ([]byte, error) {
 			frame := frames[index]
 			data, frameConfig := first, config
@@ -712,87 +718,85 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 		weights := lrtMotionBlurWeights(windowFrames)
 		queuedFrames := make([][]byte, 0, windowFrames)
-		target := 0
-		var lastFilteredRGB []byte
-		for sourceIndex := 0; sourceIndex < airplaneTimelineSourceCount(len(frames), speed, airplaneLevel); sourceIndex++ {
-			if sourceIndex < airplaneSourceCount(len(frames), airplaneLevel) {
-				var prepareErr error
-				lastFilteredRGB, prepareErr = prepareMotionBlurFrame(sourceIndex)
-				if prepareErr != nil {
-					return fmt.Errorf("prepare %s: %w", filepath.Base(frames[sourceIndex].Image), prepareErr)
-				}
+		stream, err := newPlaybackFrameStream(outputWidth, outputHeight, len(frames), airplaneLevel, interpolationMode, speed, rate, label, prepareMotionBlurFrame)
+		if err != nil {
+			return err
+		}
+		for target := 0; target < stream.count; target++ {
+			rgb, sourceIndex, prepareErr := stream.frame(target)
+			if prepareErr != nil {
+				return prepareErr
 			}
-			rgb := lastFilteredRGB
 			preparedRGB := rgb
-			for end := playbackOutputEnd(sourceIndex+1, speed); target < end; target++ {
-				rgb := preparedRGB
-				queuedFrames = append(queuedFrames, rgb)
-				if len(queuedFrames) > windowFrames {
-					queuedFrames = queuedFrames[1:]
-				}
-				if target < timeline.start || target >= timeline.end {
-					continue
-				}
-				blendWindow := make([][]byte, windowFrames)
-				padding := windowFrames - len(queuedFrames)
-				for i := 0; i < padding; i++ {
-					blendWindow[i] = queuedFrames[0]
-				}
-				copy(blendWindow[padding:], queuedFrames)
-				if windowFrames == 1 {
-					// Duplication without Motion Blur needs no per-channel blend.
-					// Own the output buffer because fade may modify it in place.
-					rgb = bytes.Clone(preparedRGB)
-				} else {
-					var blendErr error
-					rgb, blendErr = weightedRGB48Frames(blendWindow, weights)
-					if blendErr != nil {
-						return blendErr
-					}
-				}
-				if options.OutputSharpen || options.OutputCAS {
-					filterOutputRGB48(rgb, outputWidth, outputHeight, options)
-				}
-				var img image.Image
-				if overlayFace != nil || outputExtension == ".avi" {
-					img, err = imageFromRGB48(rgb, outputWidth, outputHeight)
-					if err != nil {
-						return err
-					}
-					if options.TimestampOverlay {
-						img = applyTimestampOverlay(img, captureTimes[sourceIndex].Format(options.TimestampFormat), overlayFace)
-					}
-					if options.Watermark != "" {
-						img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
-					}
-				}
-				if img != nil {
-					img = fadeVideoImage(img, fade.gain(target-timeline.start, rate))
-				}
-				if outputExtension == ".avi" {
-					var encoded bytes.Buffer
-					if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
-						return fmt.Errorf("encode %s as JPEG: %w", frames[sourceIndex].Image, err)
-					}
-					rgb = encoded.Bytes()
-				} else if overlayFace != nil {
-					rgb, err = imageRGB48(img)
-					if err != nil {
-						return fmt.Errorf("convert overlaid %s to RGB48: %w", frames[sourceIndex].Image, err)
-					}
-				}
-				if outputExtension != ".avi" && img == nil {
-					fadeRGB48(rgb, fade.gain(target-timeline.start, rate))
-				}
-				if err := writer.AddFrame(rgb); err != nil {
-					closeErr := writer.Close()
-					writerClosed = true
-					if closeErr != nil {
-						return fmt.Errorf("add frame %s: %w; %v", frames[sourceIndex].Image, err, closeErr)
-					}
-					return fmt.Errorf("add frame %s: %w", frames[sourceIndex].Image, err)
+			queuedFrames = append(queuedFrames, rgb)
+			if len(queuedFrames) > windowFrames {
+				queuedFrames = queuedFrames[1:]
+			}
+			if target < timeline.start || target >= timeline.end {
+				continue
+			}
+			blendWindow := make([][]byte, windowFrames)
+			padding := windowFrames - len(queuedFrames)
+			for i := 0; i < padding; i++ {
+				blendWindow[i] = queuedFrames[0]
+			}
+			copy(blendWindow[padding:], queuedFrames)
+			if windowFrames == 1 {
+				// Duplication without Motion Blur needs no per-channel blend.
+				// Own the output buffer because fade may modify it in place.
+				rgb = bytes.Clone(preparedRGB)
+			} else {
+				var blendErr error
+				rgb, blendErr = weightedRGB48Frames(blendWindow, weights)
+				if blendErr != nil {
+					return blendErr
 				}
 			}
+			if options.OutputSharpen || options.OutputCAS {
+				filterOutputRGB48(rgb, outputWidth, outputHeight, options)
+			}
+			var img image.Image
+			if overlayFace != nil || outputExtension == ".avi" {
+				img, err = imageFromRGB48(rgb, outputWidth, outputHeight)
+				if err != nil {
+					return err
+				}
+				if options.TimestampOverlay {
+					img = applyTimestampOverlay(img, captureTimes[sourceIndex].Format(options.TimestampFormat), overlayFace)
+				}
+				if options.Watermark != "" {
+					img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
+				}
+			}
+			if img != nil {
+				img = fadeVideoImage(img, fade.gain(target-timeline.start, rate))
+			}
+			if outputExtension == ".avi" {
+				var encoded bytes.Buffer
+				if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: options.Quality}); err != nil {
+					return fmt.Errorf("encode %s as JPEG: %w", frames[sourceIndex].Image, err)
+				}
+				rgb = encoded.Bytes()
+			} else if overlayFace != nil {
+				rgb, err = imageRGB48(img)
+				if err != nil {
+					return fmt.Errorf("convert overlaid %s to RGB48: %w", frames[sourceIndex].Image, err)
+				}
+			}
+			if outputExtension != ".avi" && img == nil {
+				fadeRGB48(rgb, fade.gain(target-timeline.start, rate))
+			}
+			if err := writer.AddFrame(rgb); err != nil {
+				closeErr := writer.Close()
+				writerClosed = true
+				if closeErr != nil {
+					return fmt.Errorf("add frame %s: %w; %v", frames[sourceIndex].Image, err, closeErr)
+				}
+				return fmt.Errorf("add frame %s: %w", frames[sourceIndex].Image, err)
+			}
+		}
+		if err := stream.finish(); err != nil {
+			return err
 		}
 		frames = nil
 	}

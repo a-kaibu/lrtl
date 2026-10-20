@@ -126,6 +126,7 @@ func GeneratePreviewImages(frames []Frame, output string, options RenderOptions)
 	options.FrameRate = ""
 	options.FadeOutSeconds = 0
 	options.PlaybackSpeed = 1
+	options.Interpolation = 0
 	options.VideoRange = "auto"
 	options.OutputSharpen = false
 	options.OutputCAS = false

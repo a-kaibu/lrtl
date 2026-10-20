@@ -892,6 +892,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	outputDeflickerLuma := set.Bool("output-deflicker-luma", false, "smooth rendered luma using native ten-frame power mean")
 	outputDeflickerChroma := set.Bool("output-deflicker-chroma", false, "smooth rendered chroma using native ten-frame power mean")
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
+	interpolation := set.Int("interpolation", 0, "frame interpolation: 0 off, 1 blend; 2 supports speeds >=1 only")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
@@ -955,6 +956,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--subsampling": true, "-subsampling": true,
 		"--denoise": true, "-denoise": true,
 		"--remove-airplanes": true, "-remove-airplanes": true,
+		"--interpolation": true, "-interpolation": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1030,6 +1032,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		FrameRate:             *fps,
 		FadeOutSeconds:        *fadeOut,
 		PlaybackSpeed:         *speed,
+		Interpolation:         *interpolation,
 		VideoRange:            *videoRange,
 		OutputSharpen:         *sharpen,
 		OutputCAS:             *cas,
@@ -1087,7 +1090,15 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	timeline, err := planFilteredVideoFrames(len(frames), actualSpeed, options.MotionBlurFrames, options.RemoveAirplanes)
+	actualRate, err := options.frameRate()
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	actualLabel := options.FrameRate
+	if actualLabel == "" {
+		actualLabel = actualRate.String()
+	}
+	timeline, err := planInterpolatedVideoFrames(len(frames), actualSpeed, options.MotionBlurFrames, options.RemoveAirplanes, options.Interpolation, actualRate, actualLabel)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -1096,6 +1107,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	features := make([]string, 0, 8)
+	if options.Interpolation > 0 {
+		features = append(features, fmt.Sprintf("interpolation mode %d", options.Interpolation))
+	}
 	selectedCodec := options.Codec
 	if selectedCodec == "" {
 		switch strings.ToLower(filepath.Ext(*output)) {
@@ -1244,6 +1258,7 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	speed := set.Float64("speed", 1, "video playback speed (0.0625-16)")
 	motionBlur := set.Int("motion-blur", 0, "match the video's Motion Blur warm-up trim")
 	airplanes := set.Int("remove-airplanes", 0, "match the video's light-trail removal and frame trim (0-3)")
+	interpolation := set.Int("interpolation", 0, "match video interpolation: 0 off, 1 blend, 2 only speeds >=1")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used for subtitle text")
 	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
@@ -1253,16 +1268,17 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 		"--motion-blur": true, "-motion-blur": true,
 		"--remove-airplanes": true, "-remove-airplanes": true,
 		"--timestamp-format": true, "-timestamp-format": true,
+		"--interpolation": true, "-interpolation": true,
 	})); err != nil {
 		if help, code := finishFlagParse(set, err); help {
-			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--timestamp-format LAYOUT] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]")
 			return code
 		} else {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--timestamp-format LAYOUT] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
@@ -1276,12 +1292,12 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	timeline, err := planFilteredVideoFrames(len(frames), actualSpeed, *motionBlur, *airplanes)
+	timeline, err := planInterpolatedVideoFrames(len(frames), actualSpeed, *motionBlur, *airplanes, *interpolation, rate, *fps)
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	outputCount := timeline.count()
-	if err := writeSequenceSubtitlesWithTemporalFilters(frames, *output, rate, actualSpeed, *motionBlur, *airplanes, *timestampFormat, *overwrite); err != nil {
+	if err := writeSequenceSubtitlesWithInterpolation(frames, *output, rate, *fps, actualSpeed, *motionBlur, *airplanes, *interpolation, *timestampFormat, *overwrite); err != nil {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %s fps: %s\n", outputCount, rate.String(), *output)

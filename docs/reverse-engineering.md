@@ -1283,3 +1283,23 @@ and the inspected caller order do not establish gated full-application output
 or complete color-management equivalence. See
 [`lrt-output-deflicker-7.5.5.md`](../internal/lrtl/testdata/lrt-output-deflicker-7.5.5.md)
 for scope and reproduction.
+
+## Playback blend interpolation (LRT 7.5.5)
+
+The installed helper produced 108 graphs across three fps labels, twelve speeds
+and three interpolation modes. Mode 1 now has an independent pure Go blend,
+scene-change detection, rational intermediate clock, EOF hold and uniform
+pre-resampling fast-speed average. The mode-2 fast branch is the same observed
+filter and is supported; slow adaptive motion compensation remains unimplemented.
+Presets, explicit disabling, batch, subtitles and combined temporal filters use
+the same scheduler. Still exports do not interpolate.
+
+2,304 bundled-FFmpeg references hash 96,523,260 8/10-bit plane samples and verify
+output counts. Input formulas are synthetic and reproducible. Widths 16/32 had
+native SIMD scene decisions differing from scalar; the native 64x32 and scalar
+17x13 comparison domains are recorded separately. Eighteen real H.264/H.265 cases
+compare every decoded sample against a separate offline-reference encode, plus
+metadata. Tests also cover JPEG AVI, ownership, input errors, dropped source
+tails, memory guards and retention. Full native color conversion and gated
+application output remain unverified. See
+[`lrt-interpolation-7.5.5.md`](../internal/lrtl/testdata/lrt-interpolation-7.5.5.md).

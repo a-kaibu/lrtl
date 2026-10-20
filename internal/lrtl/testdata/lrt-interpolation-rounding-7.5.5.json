@@ -1,0 +1,5 @@
+[
+{"fps":"23.90625","speed":0.5,"mode":1,"filter":",minterpolate='mi_mode=blend:fps=47.813',setpts=2.0*PTS, fps=24000/1001"},
+{"fps":"23.90725","speed":0.5,"mode":1,"filter":",minterpolate='mi_mode=blend:fps=47.814',setpts=2.0*PTS, fps=24000/1001"},
+{"fps":"29.90625","speed":0.5,"mode":1,"filter":",minterpolate='mi_mode=blend:fps=59.813',setpts=2.0*PTS, fps=30000/1001"}
+]
