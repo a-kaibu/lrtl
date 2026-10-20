@@ -1,0 +1,7 @@
+[
+{"strength":0.0,"filter":""},
+{"strength":0.25,"filter":",cas=strength=0.25"},
+{"strength":0.5,"filter":",cas=strength=0.50"},
+{"strength":0.9,"filter":",cas=strength=0.90"},
+{"strength":1.0,"filter":",cas=strength=1.00"}
+]

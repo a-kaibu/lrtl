@@ -156,7 +156,7 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}{
 		{"interpolation", preset.Interpolation != 0},
 		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
-		{"cas", preset.CAS}, {"removeAirplanes", preset.RemoveAirplanes},
+		{"removeAirplanes", preset.RemoveAirplanes},
 		{"denoise", preset.Denoise}, {"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
 	} {
 		if field.active {
@@ -168,6 +168,9 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}
 	if !explicit["sharpen"] {
 		options.OutputSharpen = preset.Sharpen
+	}
+	if !explicit["cas"] {
+		options.OutputCAS = preset.CAS
 	}
 	options.NativeTiming = true
 	if preset.OutputQuality < 0 || preset.OutputQuality > 5 {

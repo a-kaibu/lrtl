@@ -196,6 +196,32 @@ Tests cover measured planes, 16-bit precision/chroma/clipping, alpha composition
 buffer ownership during duplicate frames, ordering, AVI JPEG bypass/encoding,
 preset overrides and retention of source/XMP/preset/existing output files.
 
+## Contrast adaptive sharpening
+
+The native render builder appends `cas=strength=0.90` after unsharp and before
+range conversion and overlays. Five direct string-helper observations are in
+`testdata/lrt-cas-filter-7.5.5.json`. The gated full-render feature was not
+enabled or modified to obtain these observations.
+
+The independent pure Go 10-bit scalar CAS kernel matches 24 synthetic planes
+processed by the installed bundled FFmpeg 8.0.1 (12,288 samples). Stored
+observations cover eight patterns at three strengths; optional live tests
+repeat the comparison on every YUV444 plane. Production uses strength 0.9.
+Single-pixel/thin frames, float32 behavior, clipping and ownership are tested.
+See `testdata/lrt-cas-7.5.5.md` for provenance and references.
+
+`render --cas` and saved `cas` apply to AVI and external-encoder video,
+including batch renders and explicit false overrides. Speed, Motion Blur,
+ordinary sharpening, CAS, overlays and fade are checked for order and frame
+duplication. Invalid flags preserve existing output; TIFF/preview exports clear
+this video-only control. The RGB48 path derives approximate full-range BT.709
+Y/Cb/Cr, filters all planes and adds inverse-transformed deltas to preserve
+unaffected RGB16 detail. Native full-video/color-management parity and HDR are
+not established by the scalar-plane comparisons.
+Optional actual H.264 MP4/H.265 MOV tests also check format, frame count and
+6,144 decoded luma samples per codec against the Go-filtered RGB input, with
+bounded encode/decode error documented in the fixture notes.
+
 ## Explicit video range
 
 Three native color-filter-builder observations in

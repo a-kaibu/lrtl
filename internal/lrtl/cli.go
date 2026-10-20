@@ -886,6 +886,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
 	fadeOut := set.Float64("fade-out", 0, "fade video and audio to black/silence over the final seconds (0 off)")
 	sharpen := set.Bool("sharpen", false, "apply output luma sharpening before overlays and fade")
+	cas := set.Bool("cas", false, "apply contrast adaptive sharpening at native strength 0.90 before overlays and fade")
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
@@ -1025,6 +1026,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		PlaybackSpeed:     *speed,
 		VideoRange:        *videoRange,
 		OutputSharpen:     *sharpen,
+		OutputCAS:         *cas,
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
@@ -1103,6 +1105,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if options.OutputSharpen {
 		features = append(features, "output sharpening")
+	}
+	if options.OutputCAS {
+		features = append(features, "contrast adaptive sharpening (CAS 0.90)")
 	}
 	if value, _ := normalizeVideoRange(options.VideoRange); value != "auto" {
 		features = append(features, value+" video range")

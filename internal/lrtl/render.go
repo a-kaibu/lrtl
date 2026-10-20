@@ -25,6 +25,7 @@ type RenderOptions struct {
 	PlaybackSpeed     float64
 	VideoRange        string
 	OutputSharpen     bool
+	OutputCAS         bool
 	Quality           int
 	FFmpegPath        string
 	Codec             string
@@ -690,8 +691,8 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 						return blendErr
 					}
 				}
-				if options.OutputSharpen {
-					sharpenOutputRGB48(rgb, outputWidth, outputHeight)
+				if options.OutputSharpen || options.OutputCAS {
+					filterOutputRGB48(rgb, outputWidth, outputHeight, options)
 				}
 				var img image.Image
 				if overlayFace != nil || outputExtension == ".avi" {
@@ -801,8 +802,8 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					img = resizeFrame(img, outputWidth, outputHeight)
 				}
 			}
-			if options.OutputSharpen {
-				img, err = sharpenOutputImage(img)
+			if options.OutputSharpen || options.OutputCAS {
+				img, err = filterOutputImage(img, options)
 				if err != nil {
 					return err
 				}
@@ -829,7 +830,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || options.OutputSharpen || format != "jpeg" || fade.gain(index, rate) < 1 {
+		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || options.OutputSharpen || options.OutputCAS || format != "jpeg" || fade.gain(index, rate) < 1 {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
@@ -865,8 +866,8 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					img = resizeFrame(img, outputWidth, outputHeight)
 				}
 			}
-			if options.OutputSharpen {
-				img, err = sharpenOutputImage(img)
+			if options.OutputSharpen || options.OutputCAS {
+				img, err = filterOutputImage(img, options)
 				if err != nil {
 					return err
 				}
