@@ -341,7 +341,7 @@ func TestOutputSharpenJPEGAVIAndInvalidFlagRetention(t *testing.T) {
 }
 
 func TestOutputSharpenRenderOrderingAndDuplication(t *testing.T) {
-	dir := outputSharpenFixture(t, 4)
+	dir := outputSharpenFixture(t, 6)
 	before := batchFileSnapshot(t, dir)
 	executable, err := os.Executable()
 	if err != nil {

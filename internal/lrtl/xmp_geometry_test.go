@@ -193,13 +193,14 @@ func TestXMPGeometryCLIInterpolationAndAVIPixels(t *testing.T) {
 				t.Fatal(err)
 			}
 			scale := 1.0
+			sourceIndex := count + tc.motion
 			if apply {
-				scale = 1 + float64(count)*.25
+				scale = 1 + float64(sourceIndex)*.25
 			}
 			sx := (20.5-40)/scale + 40 - .5
 			want := float64(123+500*sx) / 257
-			if tc.motion == 2 && count > 0 {
-				previousScale := 1 + float64(count-1)*.25
+			if tc.motion == 2 {
+				previousScale := 1 + float64(sourceIndex-1)*.25
 				previous := float64(123+500*((20.5-40)/previousScale+40-.5)) / 257
 				// The two-frame causal blend uses weights 0.354 and 1.000.
 				want = (.354*previous + want) / 1.354
@@ -211,7 +212,7 @@ func TestXMPGeometryCLIInterpolationAndAVIPixels(t *testing.T) {
 			count++
 			data = data[end+2:]
 		}
-		if count != 3 {
+		if count != 3-tc.motion {
 			t.Fatalf("frames=%d", count)
 		}
 	}

@@ -122,7 +122,7 @@ func TestExportTIFFMatchesVideoRGB48Pipeline(t *testing.T) {
 	for _, kind := range []string{"plain", "basic-crop-resize", "motion-overlay", "deflicker"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := t.TempDir()
-			for i := 0; i < 3; i++ {
+			for i := 0; i < 5; i++ {
 				img := image.NewNRGBA64(image.Rect(0, 0, 64, 32))
 				for y := 0; y < 32; y++ {
 					for x := 0; x < 64; x++ {
@@ -193,7 +193,9 @@ func TestExportTIFFMatchesVideoRGB48Pipeline(t *testing.T) {
 					}
 				}
 			}
-			if !bytes.Equal(got, expected) {
+			// TIFF keeps every source correspondence; video removes its warm-up.
+			videoPixels := got[options.MotionBlurFrames*(len(got)/len(frames)):]
+			if !bytes.Equal(videoPixels, expected) {
 				t.Fatalf("export pixels differ from video pipeline: got %d bytes want %d", len(got), len(expected))
 			}
 			if !reflect.DeepEqual(before, batchFileSnapshot(t, dir)) {

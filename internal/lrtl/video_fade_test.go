@@ -98,13 +98,14 @@ func TestVideoFadeRGB48OrderingAndPrecision(t *testing.T) {
 				return data
 			}
 			control, faded := run(false), run(true)
-			if len(control) != 12*64*32*6 || len(faded) != len(control) {
+			count := 12 - blur
+			if len(control) != count*64*32*6 || len(faded) != len(control) {
 				t.Fatal("unexpected raw frame count")
 			}
-			for i := 0; i < 12; i++ {
+			for i := 0; i < count; i++ {
 				gain := 1.
-				if i > 8 {
-					gain = float64(12-i) / 4
+				if i > count-4 {
+					gain = float64(count-i) / 4
 				}
 				for offset := i * 64 * 32 * 6; offset < (i+1)*64*32*6; offset += 2 {
 					old := binary.LittleEndian.Uint16(control[offset:])

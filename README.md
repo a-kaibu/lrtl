@@ -138,7 +138,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264/H.265 MP4、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。埋め込みフォントを使用 | 一部 |
-| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。過去N枚を合成し、先頭は最初のフレームを複製して窓を満たす。16-bit RGB処理。LRTの10-bit YUVフィルター出力との画素一致は未確認 | 一部 |
+| Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と、確認できた`tmix`重み`(i/N)^1.5`（3桁丸め）を適用。速度変更後の過去Nフレームを合成し、本体と同じ先頭Nフレーム除去を行う。48件のフィルター実測で枚数・開始位置・フェード時刻を照合。字幕も`--motion-blur N`で開始位置を揃える。中間画像は先頭を保持。16-bit RGB処理で、LRTの10-bit YUVフィルター出力との画素完全一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed/lossy DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。`--dng-long-edge`でロッシーDNGを縮小可能。取り込み画面内の画像プレビューは未実装（既存連番には`preview-images`を使用可能） | 一部 |
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed/lossy DNGと隣接XMPを取り込む。`--dng-long-edge`でロッシーDNGの長辺を制限できる。`--dnglab PATH`でDNGLabを明示選択可能。ロッシーと縮小はAdobeバックエンドのみ。LRTプリセットとの画素一致、JPEG XLは未対応 | 一部 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。`batch-preview-images ROOT --output NEW_DIRECTORY`でJPEG連番・測光結果を並列生成し、任意で元XMPへPreview EVを保存。全連番の生成・XMP内容検証後に出力を公開 | 一部 |
@@ -536,6 +536,20 @@ LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分�
 ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告されず、fullの10-bit端点も4〜1019へクリップされました。limitedが一般的な用途に適します。H.264/H.265/DNxHRではfull／limitedのタグと実際の輝度値を確認しています。AVIはfull-range JPEGのためauto／fullを受け付け、limited指定は保存前にエラーにします。
 
 本体のレンジフィルター生成3ケース、全コーデック経路への引数、プリセット／バッチ／CLI上書き、元ファイル保持をテストしています。実際のH.264・H.265・ProRes・DNxHR出力について、黒・白・中間グレーとBT.709の行列情報も検査しています。本体の色変換済み中間画像とGoのRGB入力の完全一致を検証したものではありません。
+
+## Motion Blurと動画の開始位置
+
+`render --motion-blur N`は、過去Nフレームの重み付き合成後、先頭のN出力フレームを除去します。LRT 7.5.5の通常レンダーで観測した動作に合わせたもので、以前のlrtlの「全フレームを残す」挙動から変更しました。Nは2／3／4／5／10／15／20、0で無効です。速度変更を先に行うため、除去するのは元画像N枚ではなく、速度変更後のNフレームです。
+
+たとえば20枚を2倍速・`--motion-blur 2`で処理すると、10フレームを合成して先頭2フレームを除去し、8フレームの動画になります。fps=4なら動画・音声は2秒です。動画のフレーム数、音声の長さ、フェード、CLIの完了表示に同じ枚数を使います。全フレームが除去される設定は保存前にエラーにし、既存出力を保持します。除去する先頭画像も、破損やXMPの検証対象です。
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\motion.mp4 --speed 2 --motion-blur 2 --fps 4
+# SRTにも同じ速度・Motion Blurを指定すると、字幕の開始位置と長さが一致する
+lrtl subtitles C:\photos\sequence --output C:\photos\motion.srt --speed 2 --motion-blur 2 --fps 4
+```
+
+TIFFの`export`とJPEGの`preview-images`は、元画像との対応を保持するため先頭を除去しません。同じ合成を行い、動画はその後半と対応します。本体から取得した48件のフィルター（全7窓幅＋無効、3速度、2連番長）をLRT同梱FFmpegで実行し、動画の枚数と開始位置をテストしています。RGB16合成と本体のYUV10合成には丸め・色変換の差があるため、画素の完全一致は未確認です。実MP4の映像・音声の長さとフェード、AVIヘッダー・画素、字幕、失敗時の保持も回帰テストに含めています。
 
 ## 動画と字幕の再生速度
 

@@ -2,6 +2,37 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Motion Blur warm-up trimming
+
+`testdata/lrt-motion-trim-7.5.5.json` records 48 isolated ordinary native graph
+builder calls: window 0/2/3/4/5/10/15/20, speed 0.5/1/2, source count 6/31,
+24fps, fade enabled for one second. Native tmix is followed by
+`trim=start_frame=N:end_frame=int(float(sourceCount)/float(speed))` and
+`setpts=PTS-STARTPTS`. It drops N resampled frames, rather than N-1 input
+frames. Trim bounds and the native video fade fragment are stored verbatim.
+The bundled FFmpeg 8.0.1 executes the extracted native speed/fps/tmix/trim
+chain on synthetic 10-bit constant-luma frame IDs; every resulting frame's
+luma sample is stored separately. Empty native outputs are recorded too.
+
+Pure Go now warms the mix queue, removes that prefix, and uses the remaining
+count in AVI headers, FFmpeg frames/audio duration, fade planning and the CLI
+summary. The native float32 end bound also applies when it is shorter than
+the existing fps schedule. Empty timelines fail before creating/replacing an
+output. All sources are still prepared/validated, including discarded ones.
+Subtitles accept `--motion-blur N`, use the same count/source mapping and
+restart cue numbering/timestamps at zero. Image exports intentionally retain
+all source correspondences and therefore do not use the video trim.
+
+Stored count and fade observations match; optional FFmpeg replay verifies all
+48 temporal chains. Captured Go RGB16 results agree with the synthetic native
+Y10 samples within half a Y10 code, reflecting their different rounding
+precision. This is not a whole-frame native color-management equivalence test.
+Actual MP4 testing confirms 20 source frames at 2x, window2, 4fps produce eight
+frames and two-second audio/video, with fade matching the shortened duration.
+AVI source alignment, SRT labels/times, intermediate-image preservation and
+failure retention are covered separately. This changes the prior untrimmed
+video behavior for Motion Blur; no opt-in compatibility mode is needed.
+
 ## Output sharpening
 
 Four isolated native filter-builder calls establish the on/off mapping to
@@ -84,7 +115,7 @@ afade after its existing padding/trim filter. TIFF/preview image exports clear
 the video-only setting. Frame-count/index preservation, source retention,
 early JPEG passthrough, layering, invalid values, preset/batch forwarding and
 real decoded audio/video are regression tested. Native color-managed YUV pixel
-equivalence and native Motion Blur trimming remain outside this measurement.
+equivalence remains unverified; Motion Blur trimming is covered separately above.
 
 ## Saved native render presets
 
@@ -527,7 +558,7 @@ Tests cover path grammar and index bounds, numeric/boolean validation without mu
 - The installed LRTimelapse 7.5.5 release notes list DNxHR and HDR output as Pro features. lrtl maps FFmpeg `dnxhd` encoding to DNxHR LB/SQ/HQ (`yuv422p`), HQX (`yuv422p10le`), and 444 (`yuv444p10le`) profiles in MOV. The bundled FFmpeg encoder help confirms these profiles and pixel formats. The current RGB48 transport can preserve high precision sources into HQX/444, subject to the editing limits documented above. HDR transfer functions remain unsupported. See the official FFmpeg [DNxHR profile list](https://ffmpeg.org/doxygen/trunk/profiles_8c.html) and [encoder implementation](https://ffmpeg.org/doxygen/8.1/dnxhdenc_8c_source.html).
 - `import` copies supported still images from a folder, optionally recurses into subfolders, copies matching XMP sidecars, skips JPEGs, sorts by XMP/EXIF capture time, or renames by capture time. `--convert-dng` invokes a user-supplied DNGLab for supported RAW files while copying other images and matching XMP. It supports the DNGLab lossless/uncompressed choices but not lossy compression or resizing. `import-video` invokes user-supplied FFmpeg to extract all decoded video frames, or samples at a requested fps, to an ordered JPG/PNG sequence. Both import paths check output collisions; DNG conversion stages each output before publishing it. LRT sequence-state transfer, video preview/splitting, and DNG resizing remain unimplemented.
 - `timeshift` shifts scalar XMP `exif:DateTimeOriginal`, `exif:DateTimeDigitized`, and `xmp:CreateDate` values by a fixed duration. If no capture date is present in the sidecar, it reads the image's EXIF capture time and writes the shifted `exif:DateTimeOriginal` to a sidecar. It leaves `xmp:ModifyDate` and embedded image metadata unchanged. The operation previews by default and writes with sidecar backups only after `--write`; it is an XMP-sidecar operation, not a claim of exact parity with LRT's metadata UI.
-- The installed `RenderPreset` stores Motion Blur as an enable flag plus an integer level. Bytecode inspection of the render dialog shows its seven choices store 2, 3, 4, 5, 10, 15, or 20, and its getter returns those same values. Static inspection of `mQa`'s render command builder and `A(int,float)` shows LRT emits `tmix=frames=N:weights='...'`; it generates each weight as `(i/N)^1.5` for `i=1..N`, formats it to three decimal places, and joins values with spaces. Weights run from the oldest frame to the current frame, so the current frame receives weight 1. FFmpeg's `tmix` fills its first window by cloning the first frame and normalizes weights by their sum when no explicit scale is set. `render --motion-blur N` follows that frame schedule and weight curve in Pure Go. Pixel values remain an approximation because lrtl blends 16-bit RGB while the inspected LRT render filter runs on a 10-bit YUV444 path; no rendered pixel-by-pixel comparison has been made. See the [FFmpeg filter documentation](https://ffmpeg.org/ffmpeg-filters.html#tmix) and [`vf_mix.c`](https://www.ffmpeg.org/doxygen/8.1/vf__mix_8c_source.html) for `tmix` behavior.
+- The installed `RenderPreset` stores Motion Blur as an enable flag plus an integer level. Bytecode inspection of the render dialog shows its seven choices store 2, 3, 4, 5, 10, 15, or 20, and its getter returns those same values. Static inspection of `mQa`'s render command builder and `A(int,float)` shows LRT emits `tmix=frames=N:weights='...'`; it generates each weight as `(i/N)^1.5` for `i=1..N`, formats it to three decimal places, and joins values with spaces. Weights run from the oldest frame to the current frame, so the current frame receives weight 1. FFmpeg's `tmix` fills its first window by cloning the first frame and normalizes weights by their sum when no explicit scale is set. `render --motion-blur N` follows that frame schedule and weight curve in Pure Go, then trims the first N resampled video frames as described above. Pixel values remain an approximation because lrtl blends 16-bit RGB while the inspected LRT render filter runs on a 10-bit YUV444 path; no rendered pixel-by-pixel comparison has been made. See the [FFmpeg filter documentation](https://ffmpeg.org/ffmpeg-filters.html#tmix) and [`vf_mix.c`](https://www.ffmpeg.org/doxygen/8.1/vf__mix_8c_source.html) for `tmix` behavior.
 - The installed `RenderPreset` has an audio enable flag and audio-file path. Static inspection of the render setup shows LRT includes an audio input only when the flag is enabled and the configured file exists. `render --audio FILE` adds the first audio stream from one file to MP4/MOV via FFmpeg, encodes AAC at 192 kbit/s, resets audio timestamps, pads short audio with silence, and trims long audio to the output frame duration. This is a CLI workflow, not LRT's audio-track UI; MJPEG AVI audio and multi-track selection are not implemented.
 - `--raw-preview` walks classic TIFF IFD, ExifIFD, and SubIFD links, tests JPEG/PNG/TIFF interchange/strip segments, and selects the largest decodable embedded image for CR2/DNG/NEF/NRW/ARW/PEF/SRW/SR2/SRF/DCR/DCS/KDC/3FR/FFF extensions. Olympus ORF uses TIFF-layout directories with its recognized custom magic; previews in MakerNotes-only locations are not extracted. Panasonic RW2 uses the TIFF directory layout with magic 85 and its IFD0 tag 0x002e embedded JPEG. Fujifilm RAF uses the big-endian JPEG offset and length fields from its header. Sony SR2/SRF, Kodak DCR/DCS/KDC, and Hasselblad 3FR/FFF are passed through the classic TIFF IFD preview reader; only decodable embedded image segments are returned. For CR3, the parser looks for the Canon UUID preview record, bounds-checks its declared JPEG length, and validates the embedded JPEG. `render`, `keyframes`, `preview`, and `deflicker` can use those images when explicitly requested. This is the camera's embedded preview, not demosaicing, white-balance handling, or Camera Raw development; CR3 files without that UUID preview are not handled by this path. The CR3 layout was cross-checked against [ExifTool's public QuickTime parser notes](https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/QuickTime.pm#L761), RW2 against [libopenraw's RW2 notes](https://libopenraw.freedesktop.org/formats/rw2/) and [ExifTool's Panasonic tag definitions](https://github.com/exiftool/exiftool/blob/master/lib/Image/ExifTool/PanasonicRaw.pm#L193), and ORF/RAF against their [libopenraw format notes](https://libopenraw.freedesktop.org/formats/orf/) and [RAF header notes](https://libopenraw.freedesktop.org/formats/raf/); lrtl has independent Go parsing code.
 - `--raw-develop --dnglab PATH` invokes an independently installed DNGLab with `analyze --loglevel error --srgb <RAW>`, reads its 16-bit sRGB TIFF from stdout, and supplies that image to `render`, luminance-based `keyframes`, `preview`, and `deflicker`. Analysis commands can apply the supported global XMP basic adjustments or exposure-only `crs:Exposure2012`, plus rotated crop geometry, before measuring luminance; `render` has equivalent options. `--dnglab` selects the executable; otherwise `dnglab` must be available on `PATH`. The accepted sequence extensions follow the public DNGLab supported-format table. This integrates an external CLI rather than copying its code or bundling the LRTimelapse installation. It does not read Camera Raw XMP into DNGLab, and DNGLab's demosaic, white balance, tone, and color output are not expected to match Adobe Camera Raw. The upstream project describes DNGLab as alpha software and its Windows binary as untested. RAW developed output is capped at 1 GiB per frame in memory; video rendering preserves it through the supported tone/color/spatial operations and RGB48 transport until the output codec quantizes it.

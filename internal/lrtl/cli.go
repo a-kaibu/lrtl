@@ -911,7 +911,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
 	watermark := set.String("watermark", "", "burn fixed text into every frame")
 	watermarkPosition := set.String("watermark-position", "bottom-left", "watermark position: top-left, top-right, bottom-left, bottom-right, or center")
-	motionBlurFrames := set.Int("motion-blur", 0, "blend this many adjacent frames (0 off; 2, 3, 4, 5, 10, 15, 20)")
+	motionBlurFrames := set.Int("motion-blur", 0, "blend adjacent frames and discard N warm-up output frames (0 off; 2, 3, 4, 5, 10, 15, 20)")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop RAW with installed Adobe DNG Converter (or explicit DNGLab)")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
@@ -1069,10 +1069,11 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	outputCount, err := playbackFrameCount(len(frames), actualSpeed)
+	timeline, err := planVideoFrames(len(frames), actualSpeed, options.MotionBlurFrames)
 	if err != nil {
 		return reportError(stderr, err)
 	}
+	outputCount := timeline.count()
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
@@ -1203,23 +1204,25 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	output := set.String("output", "", "write timestamp subtitles to an SRT file")
 	fps := set.String("fps", "24", "video frame rate for subtitle timing (1-240; decimals or fractions)")
 	speed := set.Float64("speed", 1, "video playback speed (0.0625-16)")
+	motionBlur := set.Int("motion-blur", 0, "match the video's Motion Blur warm-up trim")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used for subtitle text")
 	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
 		"--speed": true, "-speed": true,
+		"--motion-blur": true, "-motion-blur": true,
 		"--timestamp-format": true, "-timestamp-format": true,
 	})); err != nil {
 		if help, code := finishFlagParse(set, err); help {
-			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--timestamp-format LAYOUT] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--timestamp-format LAYOUT] [--overwrite]")
 			return code
 		} else {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--timestamp-format LAYOUT] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--timestamp-format LAYOUT] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
@@ -1233,11 +1236,12 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	outputCount, err := playbackFrameCount(len(frames), actualSpeed)
+	timeline, err := planVideoFrames(len(frames), actualSpeed, *motionBlur)
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	if err := writeSequenceSubtitlesAtSpeed(frames, *output, rate, actualSpeed, *timestampFormat, *overwrite); err != nil {
+	outputCount := timeline.count()
+	if err := writeSequenceSubtitlesWithMotionBlur(frames, *output, rate, actualSpeed, *motionBlur, *timestampFormat, *overwrite); err != nil {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %s fps: %s\n", outputCount, rate.String(), *output)

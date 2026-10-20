@@ -125,6 +125,9 @@ func TestLRTRenderPresetGlobalSelectionAspectAndOverrides(t *testing.T) {
 func TestLRTRenderPresetCLIEquivalentManualAndBatch(t *testing.T) {
 	root := t.TempDir()
 	dir := batchInterpolationFixture(t, root, "sequence", false)
+	for _, name := range []string{"frame5.png", "frame6.png", "frame7.png"} {
+		writeRenderFrame(t, filepath.Join(dir, name), "png", 64, 32)
+	}
 	preset, err := decodeLRTRenderPreset(renderPresetObservations(t)[3].Preset)
 	if err != nil {
 		t.Fatal(err)

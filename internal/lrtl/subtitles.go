@@ -22,6 +22,10 @@ func writeSequenceSubtitlesAtRate(frames []Frame, output string, rate frameRate,
 }
 
 func writeSequenceSubtitlesAtSpeed(frames []Frame, output string, rate frameRate, speed float64, timestampFormat string, overwrite bool) error {
+	return writeSequenceSubtitlesWithMotionBlur(frames, output, rate, speed, 0, timestampFormat, overwrite)
+}
+
+func writeSequenceSubtitlesWithMotionBlur(frames []Frame, output string, rate frameRate, speed float64, motionBlur int, timestampFormat string, overwrite bool) error {
 	if len(frames) == 0 {
 		return fmt.Errorf("sequence contains no images")
 	}
@@ -32,7 +36,8 @@ func writeSequenceSubtitlesAtSpeed(frames []Frame, output string, rate frameRate
 	if err != nil {
 		return err
 	}
-	if _, err := playbackFrameCount(len(frames), speed); err != nil {
+	timeline, err := planVideoFrames(len(frames), speed, motionBlur)
+	if err != nil {
 		return err
 	}
 	if strings.ToLower(filepath.Ext(output)) != ".srt" {
@@ -76,15 +81,19 @@ func writeSequenceSubtitlesAtSpeed(frames []Frame, output string, rate frameRate
 			return fmt.Errorf("timestamp format produces the reserved SRT delimiter in frame %d", index+1)
 		}
 		for end := playbackOutputEnd(sourceIndex+1, speed); index < end; index++ {
-			startMS, startErr := rate.offsetMilliseconds(int64(index))
-			endMS, endErr := rate.offsetMilliseconds(int64(index + 1))
+			if index < timeline.start || index >= timeline.end {
+				continue
+			}
+			outputIndex := index - timeline.start
+			startMS, startErr := rate.offsetMilliseconds(int64(outputIndex))
+			endMS, endErr := rate.offsetMilliseconds(int64(outputIndex + 1))
 			if startErr != nil || endErr != nil {
 				_ = temporary.Close()
 				return fmt.Errorf("subtitle timing exceeds supported duration")
 			}
 			start := srtTimecode(startMS)
 			end := srtTimecode(endMS)
-			if _, err := fmt.Fprintf(writer, "%d\n%s --> %s\n%s\n\n", index+1, start, end, label); err != nil {
+			if _, err := fmt.Fprintf(writer, "%d\n%s --> %s\n%s\n\n", outputIndex+1, start, end, label); err != nil {
 				_ = temporary.Close()
 				return fmt.Errorf("write temporary subtitles: %w", err)
 			}

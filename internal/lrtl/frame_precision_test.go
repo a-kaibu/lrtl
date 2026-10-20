@@ -231,7 +231,7 @@ func TestFFmpegReceivesActual16BitSamplesFromTIFFAndPNG(t *testing.T) {
 
 func TestRGB48MotionBlurPipelineAndOverlay(t *testing.T) {
 	dir := t.TempDir()
-	for i, value := range []uint16{1000, 1004} {
+	for i, value := range []uint16{1000, 1004, 1008, 1012} {
 		img := image.NewNRGBA64(image.Rect(0, 0, 64, 48))
 		for y := 0; y < 48; y++ {
 			for x := 0; x < 64; x++ {
@@ -242,7 +242,7 @@ func TestRGB48MotionBlurPipelineAndOverlay(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		path := filepath.Join(dir, []string{"a.tiff", "b.tiff"}[i])
+		path := filepath.Join(dir, []string{"a.tiff", "b.tiff", "c.tiff", "d.tiff"}[i])
 		if err := os.WriteFile(path, data, 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -271,9 +271,9 @@ func TestRGB48MotionBlurPipelineAndOverlay(t *testing.T) {
 	if len(got) != 2*frameBytes {
 		t.Fatalf("captured bytes=%d", len(got))
 	}
-	// Top-left is outside the overlay. The toe doubles to 2000 and 2008,
-	// then weights .354:1 produce round((2000*.354+2008)/1.354)=2006.
-	for i, want := range []uint16{2000, 2006} {
+	// The first two mixed frames are trimmed. Remaining values combine
+	// 2008/2016 and 2016/2024 at weights .354:1, outside the overlay.
+	for i, want := range []uint16{2014, 2022} {
 		v := binary.LittleEndian.Uint16(got[i*frameBytes:])
 		if absInt(int(v)-int(want)) > 2 {
 			t.Fatalf("frame %d sample=%d want %d", i, v, want)

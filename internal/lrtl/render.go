@@ -180,10 +180,15 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err != nil {
 		return err
 	}
-	outputCount, err := playbackFrameCount(len(frames), speed)
+	trimWindow := options.MotionBlurFrames
+	if imageWriter != nil {
+		trimWindow = 0 // Intermediate images retain their source correspondence.
+	}
+	timeline, err := planVideoFrames(len(frames), speed, trimWindow)
 	if err != nil {
 		return err
 	}
+	outputCount := timeline.count()
 	videoRange, err := normalizeVideoRange(options.VideoRange)
 	if err != nil {
 		return err
@@ -636,6 +641,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				if len(queuedFrames) > windowFrames {
 					queuedFrames = queuedFrames[1:]
 				}
+				if target < timeline.start || target >= timeline.end {
+					continue
+				}
 				blendWindow := make([][]byte, windowFrames)
 				padding := windowFrames - len(queuedFrames)
 				for i := 0; i < padding; i++ {
@@ -670,7 +678,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					}
 				}
 				if img != nil {
-					img = fadeVideoImage(img, fade.gain(target, rate))
+					img = fadeVideoImage(img, fade.gain(target-timeline.start, rate))
 				}
 				if outputExtension == ".avi" {
 					var encoded bytes.Buffer
@@ -685,7 +693,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					}
 				}
 				if outputExtension != ".avi" && img == nil {
-					fadeRGB48(rgb, fade.gain(target, rate))
+					fadeRGB48(rgb, fade.gain(target-timeline.start, rate))
 				}
 				if err := writer.AddFrame(rgb); err != nil {
 					closeErr := writer.Close()

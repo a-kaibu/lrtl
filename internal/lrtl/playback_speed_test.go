@@ -145,13 +145,17 @@ func TestPlaybackSpeedRGBDataOrderAndEffects(t *testing.T) {
 	// source buffers must not accumulate gain changes across output frames.
 	data, _ := run("--speed", "0.5", "--motion-blur", "2", "--fade-out", "2")
 	rate := frameRate{4, 1}
-	fade, err := planVideoFade(20, rate, "4", 2)
+	fade, err := planVideoFade(18, rate, "4", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	weights := lrtMotionBlurWeights(2)
-	for i := 0; i < 20; i++ {
-		a, b := (max(0, i-1))/2, i/2
+	if len(data) != 18*frameSize {
+		t.Fatal("Motion Blur did not trim two resampled frames")
+	}
+	for i := 0; i < 18; i++ {
+		target := i + 2
+		a, b := (target-1)/2, target/2
 		for c := 0; c < frameSize; c += 2 {
 			oldA := binary.LittleEndian.Uint16(control[a*frameSize+c:])
 			oldB := binary.LittleEndian.Uint16(control[b*frameSize+c:])
