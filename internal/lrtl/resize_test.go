@@ -38,14 +38,12 @@ func TestResizeLanczosNativeFilterSelection(t *testing.T) {
 		if !strings.HasSuffix(tc.Scale, ":out_range=full:flags=lanczos") {
 			t.Fatalf("native scaling filter changed: %s", tc.Scale)
 		}
-		// Geometry selection is recorded too, but parity of preset dimension
-		// rounding/portrait semantics is a separate, still open requirement.
-		width, height, err := outputDimensions(tc.Width, tc.Height, 0, tc.OutputHeight, 0)
+		geometry, err := planNativeRenderGeometry(tc.Width, tc.Height, tc.OutputHeight, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.HasPrefix(tc.Scale, fmt.Sprintf("scale=w=%d:h=%d:", width, height)) {
-			t.Logf("native dimension selection remains different: source=%dx%d height=%d Go=%dx%d native=%s", tc.Width, tc.Height, tc.OutputHeight, width, height, tc.Scale)
+		if !strings.HasPrefix(tc.Scale, fmt.Sprintf("scale=w=%d:h=%d:", geometry.scaleWidth, geometry.scaleHeight)) {
+			t.Fatalf("native scale dimension selection differs: %+v native=%s", geometry, tc.Scale)
 		}
 	}
 }

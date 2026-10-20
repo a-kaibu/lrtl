@@ -32,6 +32,7 @@ type RenderOptions struct {
 	Preset            string
 	LongEdge          int
 	OutputHeight      int
+	NativeGeometry    bool
 	AspectRatio       float64
 	AudioPath         string
 	Overwrite         bool
@@ -351,6 +352,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 	width, height := orientedDimensions(config.Width, config.Height, firstOrientation)
 	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge, options.OutputHeight, options.AspectRatio)
+	var nativeGeometry nativeRenderGeometry
+	if options.NativeGeometry {
+		nativeGeometry, err = planNativeRenderGeometry(width, height, options.OutputHeight, options.AspectRatio)
+		outputWidth, outputHeight = nativeGeometry.crop.Dx(), nativeGeometry.crop.Dy()
+	}
 	if err != nil {
 		return err
 	}
@@ -371,7 +377,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			return fmt.Errorf("motion blur frame-buffer estimate exceeds 768 MiB; reduce --motion-blur or use --long-edge")
 		}
 	}
-	resizeFrames := outputWidth != width || outputHeight != height
+	resizeFrames := options.NativeGeometry || outputWidth != width || outputHeight != height
 	if options.TimestampOverlay || options.Watermark != "" {
 		if options.Watermark != "" {
 			if options.WatermarkPosition == "" {
@@ -603,11 +609,15 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if gain != 1 {
 				img = applyExposureGainFrame(img, gain)
 			}
-			if options.AspectRatio > 0 {
-				img = cropImageToAspect(img, options.AspectRatio)
-			}
-			if resizeFrames {
-				img = resizeFrame(img, outputWidth, outputHeight)
+			if options.NativeGeometry {
+				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
+			} else {
+				if options.AspectRatio > 0 {
+					img = cropImageToAspect(img, options.AspectRatio)
+				}
+				if resizeFrames {
+					img = resizeFrame(img, outputWidth, outputHeight)
+				}
 			}
 			return imageRGB48(img)
 		}
@@ -752,11 +762,15 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if applyXMP || options.Deflicker {
 				img = applyExposureGainFrame(img, gain)
 			}
-			if options.AspectRatio > 0 {
-				img = cropImageToAspect(img, options.AspectRatio)
-			}
-			if resizeFrames {
-				img = resizeFrame(img, outputWidth, outputHeight)
+			if options.NativeGeometry {
+				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
+			} else {
+				if options.AspectRatio > 0 {
+					img = cropImageToAspect(img, options.AspectRatio)
+				}
+				if resizeFrames {
+					img = resizeFrame(img, outputWidth, outputHeight)
+				}
 			}
 			if options.OutputSharpen {
 				img, err = sharpenOutputImage(img)
@@ -812,11 +826,15 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if applyXMP || options.Deflicker {
 				img = applyExposureGainFrame(img, gain)
 			}
-			if options.AspectRatio > 0 {
-				img = cropImageToAspect(img, options.AspectRatio)
-			}
-			if resizeFrames {
-				img = resizeFrame(img, outputWidth, outputHeight)
+			if options.NativeGeometry {
+				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
+			} else {
+				if options.AspectRatio > 0 {
+					img = cropImageToAspect(img, options.AspectRatio)
+				}
+				if resizeFrames {
+					img = resizeFrame(img, outputWidth, outputHeight)
+				}
 			}
 			if options.OutputSharpen {
 				img, err = sharpenOutputImage(img)

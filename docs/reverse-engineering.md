@@ -2,6 +2,33 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Native preset geometry
+
+`testdata/lrt-geometry-7.5.5.json` records480 direct ordinary renderer-builder
+calls:12 source dimensions, resolutions0/16/32/720/1080, and8 aspect choices.
+The independent planner matches every recorded scale size and crop rectangle,
+including native degenerate rectangles; those are rejected before publishing.
+NativeGeometry is enabled by preset import unless output-height/long-edge is
+explicit. Explicit aspect alone participates in the native geometry planner.
+Standalone CLI geometry retains its established literal-height/long-edge rules.
+
+The native path uses float32 aspect arithmetic, snaps near standard ratios,
+compares hundredths, restores dimensions within four pixels of the canvas,
+then aligns width to4 and height to2. Native requested resolution acts as a
+short-edge target for portrait aspect. Original0 uses the source canvas. The
+normal graph first removes odd raw dimensions, scales, then center-crops.
+Go expresses the initial crop in oriented coordinates, and tests all eight
+EXIF orientations against cropping the raw source before orientation.
+
+Captured RGB48 integration tests use native recorded rectangles and cover
+landscape/portrait/odd/Original/aspect changes, Motion Blur, preset and batch
+forwarding, explicit dimension overrides, source retention and failure output
+retention. Actual MP4 tests verify32x24->20x16, portrait32x64->32x64, and odd
+33x25->32x24. Scale working dimensions are capped at32768 per side and64MP;
+this is a Go resource limit, not a native observation. Only center placement
+is implemented. Arbitrary native UI crop offsets and full Camera Raw/color
+pipeline parity remain unverified. XMP rendering is still an independent path.
+
 ## Lanczos output resampling
 
 Six native graph-builder calls recorded in `testdata/lrt-scale-filter-7.5.5.json`
@@ -24,11 +51,9 @@ ratios, edge folding, normalization and source retention. This is a grayscale
 component comparison; native color-managed RGB/YUV/video parity is not proven.
 Residuals are largest on high-frequency upscaling. See fixture provenance.
 
-The native observations additionally reveal still-open geometry differences:
-32x24 at requested16 yields20x16, while Go currently rounds to21x16;
-32x64 at requested32 yields32x64, while Go's explicit height produces16x32.
-Native preset short-edge/portrait semantics and even dimension selection
-are not fixed by this resampling change. GUI/XMP geometry resamplers are
+The six native scale observations are now also matched by the saved-preset
+geometry planner above. Literal CLI height retains different semantics by
+design, with explicit override of presets. GUI/XMP geometry resamplers are
 unchanged. The overall compatibility goal remains incomplete.
 
 ## Motion Blur warm-up trimming

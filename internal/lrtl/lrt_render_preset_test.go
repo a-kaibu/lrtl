@@ -68,7 +68,7 @@ func TestLRTRenderPresetNativeFieldsAndQuality(t *testing.T) {
 			case "DNxHR":
 				wantCodec, wantCRF = []string{"dnxhr-lb", "dnxhr-sq", "dnxhr-hq", "dnxhr-hqx", "dnxhr-444", "dnxhr-hq"}[q], 18
 			}
-			if options.Codec != wantCodec || options.CRF != wantCRF || options.OutputHeight != 1080 || options.FrameRate != "29.97" {
+			if options.Codec != wantCodec || options.CRF != wantCRF || options.OutputHeight != 1080 || options.FrameRate != "29.97" || !options.NativeGeometry {
 				t.Fatalf("quality %d %s: %+v", q, encoder, options)
 			}
 			wantBlur := 0

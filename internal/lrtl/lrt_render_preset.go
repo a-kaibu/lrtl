@@ -229,8 +229,10 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	if _, err := options.frameRate(); err != nil {
 		return options, err
 	}
-	if !explicit["output-height"] && !explicit["long-edge"] {
+	options.NativeGeometry = !explicit["output-height"] && !explicit["long-edge"]
+	if options.NativeGeometry {
 		options.OutputHeight = preset.OutputResV
+		options.LongEdge = 0
 	}
 	if !explicit["aspect"] && preset.SavedAspectRatio != nil {
 		options.AspectRatio = *preset.SavedAspectRatio
