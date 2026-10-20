@@ -88,7 +88,7 @@ func proresProfile(codec string) (string, string, bool) {
 	return "", "", false
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange string) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb48le",
@@ -98,7 +98,12 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	if audioPath != "" {
 		arguments = append(arguments, "-i", audioPath, "-map", "0:v:0", "-map", "1:a:0")
 	}
-	arguments = append(arguments, "-frames:v", strconv.Itoa(frameCount))
+	// Native audio can intentionally extend beyond the actual video count at
+	// float boundaries. A video frame cap stops FFmpeg before that audio drains.
+	// The raw input pipe already ends after exactly the scheduled video frames.
+	if audioPath == "" || audioDuration == "" {
+		arguments = append(arguments, "-frames:v", strconv.Itoa(frameCount))
+	}
 	if audioPath == "" {
 		arguments = append(arguments, "-an")
 	}
@@ -131,6 +136,9 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	if audioPath != "" {
 		duration := strconv.FormatFloat(rate.seconds(frameCount), 'f', 9, 64)
+		if audioDuration != "" {
+			duration = audioDuration
+		}
 		audioFilter := "asetpts=PTS-STARTPTS,apad,atrim=duration=" + duration
 		if fade.duration > 0 {
 			audioFilter += ",afade=t=out:st=" + strconv.FormatFloat(fade.start, 'f', 3, 64) + ":d=" + strconv.FormatFloat(fade.duration, 'f', -1, 32)
@@ -138,8 +146,10 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		arguments = append(arguments,
 			"-c:a", "aac", "-b:a", "192k",
 			"-af", audioFilter,
-			"-t", duration, "-shortest",
 		)
+		if audioDuration == "" {
+			arguments = append(arguments, "-t", duration, "-shortest")
+		}
 	}
 	movFlags := "+faststart"
 	if videoRange != "auto" {

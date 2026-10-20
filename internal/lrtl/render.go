@@ -33,6 +33,7 @@ type RenderOptions struct {
 	LongEdge          int
 	OutputHeight      int
 	NativeGeometry    bool
+	NativeTiming      bool
 	CropPosition      *int
 	AspectRatio       float64
 	AudioPath         string
@@ -193,10 +194,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if label == "" {
 		label = rate.String()
 	}
-	fade, err := planVideoFade(outputCount, rate, label, options.FadeOutSeconds)
+	timing, err := planRenderTiming(options, len(frames), outputCount, trimWindow, rate, label)
 	if err != nil {
 		return err
 	}
+	fade := timing.fade
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
@@ -536,7 +538,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration)
 		if err != nil {
 			cleanup()
 			return err

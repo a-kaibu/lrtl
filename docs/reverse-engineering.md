@@ -2,6 +2,34 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Fractional scheduling and native preset timing
+
+36 further native mode-0 filters across12 fractional speeds and24/29.97/59.94
+were executed by bundled FFmpeg8.0.1 for lengths1/3/11/31/101/257/1001. The252
+maps cover166,242 output frames; Go agrees with every source interval and
+count. `lrt-speed-fractional-7.5.5.json` losslessly encodes each monotonic source
+map as cumulative ends, derived from actual frame IDs, not the Go equation.
+Optional replay covers all36 filters at length11, checking every output pixel.
+CLI raw frames and SRT labels are compared with selected stored mappings.
+
+`lrt-native-timing-7.5.5.json` records96 separate direct native graph calls,
+including video/audio fade and three-decimal atrim.24 nonempty cases have
+different fade timing from an actual-frame-count plan. Preset import now sets
+NativeTiming independently of NativeGeometry and explicit CLI overrides.
+Duration uses int(Float(sourceCount)/Float(speed)) minus the trim window,
+then Float division by displayed FPS. Video counts and SRT remain actual.
+Standalone CLI retains the prior actual-count timing; image exports clear
+NativeTiming. Rational FPS labels retain the existing lrtl fallback extension.
+
+Native audio is allowed to drain to its filter end, without video-frame,
+output-time or shortest-stream caps. Raw-video EOF still supplies the exact
+scheduled frame count; atrim makes padded audio finite. Actual H.264/AAC tests
+confirm11 sources at1.1x/24fps produce9 frames/0.375s video and0.417s audio,
+with native fade gain on decoded video and PCM, including the short audio tail.
+Source/preset retention, preset/manual dimension overrides, batch forwarding,
+and actual RGB48 fade wiring are tested. These are component observations and
+our own encoder integration, not a complete native LRT export comparison.
+
 ## Crop placement
 
 `testdata/lrt-crop-position-7.5.5.json` stores288 direct ordinary renderer
@@ -93,8 +121,9 @@ chain on synthetic 10-bit constant-luma frame IDs; every resulting frame's
 luma sample is stored separately. Empty native outputs are recorded too.
 
 Pure Go now warms the mix queue, removes that prefix, and uses the remaining
-count in AVI headers, FFmpeg frames/audio duration, fade planning and the CLI
-summary. The native float32 end bound also applies when it is shorter than
+count in AVI headers, FFmpeg video frames and the CLI summary. Standalone
+audio/fade uses that count; preset duration estimates are described above.
+The native float32 end bound also applies when it is shorter than
 the existing fps schedule. Empty timelines fail before creating/replacing an
 output. All sources are still prepared/validated, including discarded ones.
 Subtitles accept `--motion-blur N`, use the same count/source mapping and
@@ -168,9 +197,9 @@ native versus FFmpeg observation boundaries and the precise rounding rules.
 Scheduling occurs after source preparation and before temporal blending. Every
 source is still validated even if it will be dropped; repeated outputs reuse
 prepared RGB data. Captured overlay dates and SRT labels use the source index,
-while fade/audio duration and encoder frame count use the actual output count.
-The native duration estimate can differ at float boundaries; complete combined
-filter timing parity remains unverified. Tests cover RGB48 identity and XMP,
+while encoder frame count uses the actual output count. Standalone fade/audio
+use actual count; preset timing now follows the separate native estimate above.
+Full combined color-managed pipeline parity remains unverified. Tests cover RGB48 identity and XMP,
 blend/fade order, AVI pixel/count output, metadata/subtitles, preset/batch
 forwarding, invalid/empty schedules, corrupt dropped inputs without publication,
 and optional actual NTSC H.264 metadata. Experimental interpolation stays

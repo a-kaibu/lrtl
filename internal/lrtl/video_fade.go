@@ -12,6 +12,14 @@ import (
 
 type videoFade struct{ start, duration float64 }
 
+func displayedVideoDuration(frames int, rate frameRate, label string) float32 {
+	fps, err := strconv.ParseFloat(strings.TrimSpace(label), 32)
+	if err != nil || fps <= 0 || math.IsNaN(fps) || math.IsInf(fps, 0) {
+		fps = float64(rate.numerator) / float64(rate.denominator)
+	}
+	return float32(frames) / float32(fps)
+}
+
 func planVideoFade(frames int, rate frameRate, label string, seconds float64) (videoFade, error) {
 	if math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds < 0 {
 		return videoFade{}, fmt.Errorf("fade-out seconds must be a finite nonnegative number")
@@ -21,11 +29,7 @@ func planVideoFade(frames int, rate frameRate, label string, seconds float64) (v
 	}
 	// Native duration uses Float frame count / Float displayed FPS; rational
 	// rate strings are a lrtl extension and use the exact ratio as the input.
-	fps, err := strconv.ParseFloat(strings.TrimSpace(label), 32)
-	if err != nil || fps <= 0 || math.IsNaN(fps) || math.IsInf(fps, 0) {
-		fps = float64(rate.numerator) / float64(rate.denominator)
-	}
-	total := float32(frames) / float32(fps)
+	total := displayedVideoDuration(frames, rate, label)
 	duration := total
 	if seconds < float64(total) {
 		duration = float32(seconds)

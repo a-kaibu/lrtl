@@ -29,11 +29,12 @@ the prepared RGB data. Overlay capture times retain source correspondence.
 Audio retains normal speed and uses actual output duration for padding/trim.
 SRT uses the same schedule. TIFF/preview exports clear the video-only speed.
 
-The complete native pipeline's Motion Blur trimming and experimental blend/MCI
-interpolation are not covered. The native filter builder estimates duration
-with int(float(frameCount)/speed), which can differ from actual filtered count
-at float boundaries such as one-third. Go instead gives fade/audio the actual
-output count; full combined native timing parity is not claimed. Non-unit
+These original80 cases do not cover Motion Blur trimming or experimental blend/MCI
+interpolation. Motion Blur trimming and native duration estimates are now covered
+by separate fixtures. The native estimate int(float(frameCount)/speed) can
+differ from actual filtered count at float boundaries. Preset imports now use
+that estimate for fade/audio; standalone CLI keeps actual-count timing. See
+lrt-native-timing-7.5.5.md for the further252 maps and96 timing calls. Non-unit
 speed AVI goes through the RGB/JPEG processing path, so it does not preserve
 original compressed JPEG bytes. Output/input pixel precision, processing order,
 timestamps/subtitles, preset/CLI overrides, batch forwarding, corrupt dropped

@@ -169,6 +169,7 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	if !explicit["sharpen"] {
 		options.OutputSharpen = preset.Sharpen
 	}
+	options.NativeTiming = true
 	if preset.OutputQuality < 0 || preset.OutputQuality > 5 {
 		return options, fmt.Errorf("LRT outputQuality must be between 0 and 5")
 	}
