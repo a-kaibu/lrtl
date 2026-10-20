@@ -202,7 +202,7 @@ func TestNativeGeometryInvalidAndFailureRetention(t *testing.T) {
 	for _, tc := range []struct {
 		width, height, resolution int
 		aspect                    float64
-	}{{0, 32, 16, 0}, {32, 0, 16, 0}, {32, 32, -1, 0}, {32, 32, 1, 0}, {32, 32, 16, math.NaN()}, {32, 32, 16, math.Inf(1)}, {32, 32, 16, 17}, {32, 24, 0, 1.0 / 16}, {6016, 4016, 1080, 1.0 / 16}} {
+	}{{0, 32, 16, 0}, {32, 0, 16, 0}, {32, 32, -1, 0}, {32, 32, 1, 0}, {32, 32, 16, math.NaN()}, {32, 32, 16, math.Inf(1)}, {32, 32, 16, 17}, {32, 24, 0, 1.0 / 16}, {6016, 4016, 4320, 1.0 / 16}, {6016, 4016, 9000, 1}} {
 		if _, err := planNativeRenderGeometry(tc.width, tc.height, tc.resolution, tc.aspect); err == nil {
 			t.Fatalf("accepted invalid or oversized geometry %+v", tc)
 		}
@@ -256,7 +256,7 @@ func TestNativeRenderGeometry480Observations(t *testing.T) {
 		if plan != want {
 			t.Fatalf("source %dx%d res%d aspect%g: %+v want %+v", tc.Width, tc.Height, tc.OutputHeight, tc.Aspect, plan, want)
 		}
-		invalid := width == 0 || height == 0 || scaleW > 32768 || scaleH > 32768 || uint64(scaleW)*uint64(scaleH) > 64*1024*1024
+		invalid := width == 0 || height == 0 || width > 32768 || height > 32768 || uint64(width)*uint64(height) > 64*1024*1024
 		if (err != nil) != invalid {
 			t.Fatalf("geometry error status source=%dx%d res=%d aspect=%g invalid=%v: %v", tc.Width, tc.Height, tc.OutputHeight, tc.Aspect, invalid, err)
 		}

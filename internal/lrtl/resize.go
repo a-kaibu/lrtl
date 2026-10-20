@@ -3,6 +3,7 @@ package lrtl
 import (
 	"image"
 	"image/color"
+	"image/draw"
 	"math"
 )
 
@@ -26,16 +27,20 @@ func lanczos3Weight(distance float64) float64 {
 // before sampling to suppress aliasing. Out-of-image weights fold onto the
 // closest edge sample, instead of truncating and renormalizing the kernel.
 func lanczos3Contributions(input, output int) [][]resizeTap {
-	result := make([][]resizeTap, output)
+	return lanczos3ContributionsRange(input, output, 0, output)
+}
+
+func lanczos3ContributionsRange(input, output, start, end int) [][]resizeTap {
+	result := make([][]resizeTap, end-start)
 	if input == output {
 		for i := range result {
-			result[i] = []resizeTap{{index: i, weight: 1}}
+			result[i] = []resizeTap{{index: start + i, weight: 1}}
 		}
 		return result
 	}
 	scale := math.Min(1, float64(output)/float64(input))
 	for i := range result {
-		center := (float64(i)+.5)*float64(input)/float64(output) - .5
+		center := (float64(start+i)+.5)*float64(input)/float64(output) - .5
 		first := int(math.Ceil(center - 3/scale))
 		last := int(math.Floor(center + 3/scale))
 		sum := 0.
@@ -68,9 +73,26 @@ func resizeFrame(img image.Image, width, height int) image.Image {
 	if bounds.Dx() == width && bounds.Dy() == height {
 		return img
 	}
-	horizontal := lanczos3Contributions(bounds.Dx(), width)
-	vertical := lanczos3Contributions(bounds.Dy(), height)
-	result := newFrameImage(image.Rect(0, 0, width, height), img)
+	return resizeFrameRegion(img, width, height, image.Rect(0, 0, width, height))
+}
+
+// Region coordinates belong to the complete scaled image. Compute only those
+// pixels while keeping the full image's phase, support and edge normalization.
+func resizeFrameRegion(img image.Image, width, height int, region image.Rectangle) image.Image {
+	bounds := img.Bounds()
+	if width <= 0 || height <= 0 || bounds.Empty() || region.Empty() || !region.In(image.Rect(0, 0, width, height)) {
+		panic("invalid resize region")
+	}
+	if bounds.Dx() == width && bounds.Dy() == height && region == image.Rect(0, 0, width, height) {
+		return img
+	}
+	result := newFrameImage(image.Rect(0, 0, region.Dx(), region.Dy()), img)
+	if bounds.Dx() == width && bounds.Dy() == height {
+		draw.Draw(result, result.Bounds(), img, bounds.Min.Add(region.Min), draw.Src)
+		return result
+	}
+	horizontal := lanczos3ContributionsRange(bounds.Dx(), width, region.Min.X, region.Max.X)
+	vertical := lanczos3ContributionsRange(bounds.Dy(), height, region.Min.Y, region.Max.Y)
 	output64, _ := result.(*image.NRGBA64)
 	output8, _ := result.(*image.NRGBA)
 	precise, hasRGBA64 := img.(image.RGBA64Image)
@@ -95,7 +117,7 @@ func resizeFrame(img image.Image, width, height int) image.Image {
 				available = available[:len(available)-1]
 				clear(row)
 			} else {
-				row = make([]float64, width*4)
+				row = make([]float64, region.Dx()*4)
 			}
 			for x, contributions := range horizontal {
 				for _, contribution := range contributions {
@@ -115,7 +137,7 @@ func resizeFrame(img image.Image, width, height int) image.Image {
 			}
 			rows[tap.index] = row
 		}
-		for x := 0; x < width; x++ {
+		for x := 0; x < region.Dx(); x++ {
 			var channels [4]float64
 			for _, tap := range taps {
 				row := rows[tap.index][x*4:]

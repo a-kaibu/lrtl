@@ -27,8 +27,10 @@ graph removes odd input edges before scale and crops to the target afterward.
 These observations were used to design an independent Go planner, which
 matches all480 scale sizes and crop rectangles. No native implementation is
 included. Some observed extreme Original crops have zero width/height; Go
-rejects them rather than producing an invalid file. Go's scale limit of32768
-per side and64MP is an implementation limit, not a native behavior claim.
+rejects them rather than producing an invalid file. Go's final-output limit
+of32768 per side and64MP is an implementation limit, not a native behavior
+claim. The former intermediate scale limit is removed by regional resampling;
+see lrt-region-geometry-7.5.5.md for additional large-canvas observations.
 
 Regular tests compare stored observations without Java or FFmpeg. Integration
 tests separately verify raw RGB48 preparation with native recorded rectangles,

@@ -2,6 +2,34 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Regional native resampling
+
+The native geometry path now calculates only its final crop region on the
+virtual scaled canvas. Contribution ranges use the complete canvas coordinate
+system, preserving phase/support/edge folding and the order of floating-point
+operations for each retained pixel. Intermediate horizontal rows are only
+region-wide. Ordinary full resize uses the same implementation over the whole
+region; identity retains the original image/color model, including YCbCr low
+bits. The existing odd-input crop/copy behavior is unchanged.
+
+Tests compare whole-resize-plus-copy with regional results across10 source
+variants,8 sizes and5 regions, including8/16-bit RGBA/NRGBA, Gray/Gray16,
+palette, generic Image, JPEG/YCbCr, nonzero bounds, alpha and identity. Four
+new direct native scale/crop observations cover virtual canvases over64MP,
+including4320x69120. Small windows use fewer than20,000 source samples and
+do not construct those canvases. The final output, not virtual scale, is
+limited to32768 per side and64MP. Motion Blur's separate budget still applies.
+
+The previously rejected native6144x12288->6144x384 plan now runs through the
+CLI and real H.264 encoding; decoded pixels/count/size and source preservation
+are tested. Optional FFmpeg replay of its native scale/crop component checks
+the constant16-bit plane. A one-iteration Windows/Go1.26.9 resampling benchmark
+allocates21,709,096 bytes for that region, versus603,979,776 bytes for the
+old full RGBA64 canvas alone. This is not total renderer/process memory.
+The64x32 window benchmark allocates46,320 bytes on this machine. Neither
+timings nor these machine-specific allocation totals are portable test gates.
+Native color-management/complete encoder equivalence remains unproven.
+
 ## Fractional scheduling and native preset timing
 
 36 further native mode-0 filters across12 fractional speeds and24/29.97/59.94
@@ -76,8 +104,10 @@ Captured RGB48 integration tests use native recorded rectangles and cover
 landscape/portrait/odd/Original/aspect changes, Motion Blur, preset and batch
 forwarding, explicit dimension overrides, source retention and failure output
 retention. Actual MP4 tests verify32x24->20x16, portrait32x64->32x64, and odd
-33x25->32x24. Scale working dimensions are capped at32768 per side and64MP;
-this is a Go resource limit, not a native observation. Non-center placement
+33x25->32x24. Final output dimensions are capped at32768 per side and64MP;
+virtual scale dimensions are not capped by that allocation limit now that
+only the output region is computed. This is a Go resource limit, not a native
+observation. Non-center placement
 is now covered separately above. Saved UI state and full Camera Raw/color
 pipeline parity remain unverified. XMP rendering is still an independent path.
 

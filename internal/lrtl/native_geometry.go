@@ -104,8 +104,8 @@ func planNativeRenderGeometry(width, height, resolution int, aspect float64) (na
 	if width < 2 || height < 2 || scaleW < 1 || scaleH < 1 || cropW < 1 || cropH < 1 || left < 0 || top < 0 {
 		return plan, fmt.Errorf("native preset geometry leaves no valid output; change resolution or aspect ratio")
 	}
-	if scaleW > 32768 || scaleH > 32768 || uint64(scaleW)*uint64(scaleH) > 64*1024*1024 {
-		return plan, fmt.Errorf("native preset scale exceeds 32768 pixels per side or 64 megapixels; reduce resolution or aspect ratio")
+	if cropW > 32768 || cropH > 32768 || uint64(cropW)*uint64(cropH) > 64*1024*1024 {
+		return plan, fmt.Errorf("native preset output exceeds 32768 pixels per side or 64 megapixels; reduce resolution or aspect ratio")
 	}
 	return plan, nil
 }
@@ -145,6 +145,5 @@ func cropNativeEvenFrame(img image.Image, orientation uint16) image.Image {
 
 func applyNativeRenderGeometry(img image.Image, orientation uint16, plan nativeRenderGeometry) image.Image {
 	img = cropNativeEvenFrame(img, orientation)
-	img = resizeFrame(img, plan.scaleWidth, plan.scaleHeight)
-	return copyFrameRectangle(img, plan.crop)
+	return resizeFrameRegion(img, plan.scaleWidth, plan.scaleHeight, plan.crop)
 }

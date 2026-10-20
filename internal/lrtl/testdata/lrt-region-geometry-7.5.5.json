@@ -1,0 +1,6 @@
+[
+{"width":32,"height":64,"outputHeight":384,"aspect":16.0,"crop":"6144:384:0:5952","scale":"scale=w=6144:h=12288:out_range=full:flags=lanczos"},
+{"width":6016,"height":4016,"outputHeight":4320,"aspect":2.5,"crop":"10800:4320:0:1440","scale":"scale=w=10800:h=7200:out_range=full:flags=lanczos"},
+{"width":6016,"height":4016,"outputHeight":1080,"aspect":0.0625,"crop":"1080:17280:12420:0","scale":"scale=w=25920:h=17280:out_range=full:flags=lanczos"},
+{"width":32,"height":512,"outputHeight":4320,"aspect":1.0,"crop":"4320:4320:0:32400","scale":"scale=w=4320:h=69120:out_range=full:flags=lanczos"}
+]
