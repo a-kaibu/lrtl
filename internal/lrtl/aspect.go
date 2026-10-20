@@ -43,8 +43,16 @@ func aspectCropBounds(bounds image.Rectangle, aspectRatio float64) image.Rectang
 }
 
 func cropImageToAspect(img image.Image, aspectRatio float64) image.Image {
+	return cropImageToAspectAtPosition(img, aspectRatio, 50)
+}
+
+func cropImageToAspectAtPosition(img image.Image, aspectRatio float64, position int) image.Image {
 	bounds := img.Bounds()
 	cropBounds := aspectCropBounds(bounds, aspectRatio)
+	w, h := cropBounds.Dx(), cropBounds.Dy()
+	x := bounds.Min.X + cropPositionOffset(bounds.Dx()-w, position)
+	y := bounds.Min.Y + cropPositionOffset(bounds.Dy()-h, position)
+	cropBounds = image.Rect(x, y, x+w, y+h)
 	if cropBounds == bounds {
 		return img
 	}

@@ -33,6 +33,7 @@ type RenderOptions struct {
 	LongEdge          int
 	OutputHeight      int
 	NativeGeometry    bool
+	CropPosition      *int
 	AspectRatio       float64
 	AudioPath         string
 	Overwrite         bool
@@ -162,6 +163,10 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 func renderSequence(frames []Frame, output string, options RenderOptions, imageWriter func(int, int) (renderFrameWriter, error)) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
+	}
+	cropPosition, err := options.cropPosition()
+	if err != nil {
+		return err
 	}
 	rate, err := options.frameRate()
 	if err != nil {
@@ -354,7 +359,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	outputWidth, outputHeight, err := outputDimensions(width, height, options.LongEdge, options.OutputHeight, options.AspectRatio)
 	var nativeGeometry nativeRenderGeometry
 	if options.NativeGeometry {
-		nativeGeometry, err = planNativeRenderGeometry(width, height, options.OutputHeight, options.AspectRatio)
+		nativeGeometry, err = planNativeRenderGeometryAtPosition(width, height, options.OutputHeight, options.AspectRatio, cropPosition)
 		outputWidth, outputHeight = nativeGeometry.crop.Dx(), nativeGeometry.crop.Dy()
 	}
 	if err != nil {
@@ -613,7 +618,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
 			} else {
 				if options.AspectRatio > 0 {
-					img = cropImageToAspect(img, options.AspectRatio)
+					img = cropImageToAspectAtPosition(img, options.AspectRatio, cropPosition)
 				}
 				if resizeFrames {
 					img = resizeFrame(img, outputWidth, outputHeight)
@@ -766,7 +771,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
 			} else {
 				if options.AspectRatio > 0 {
-					img = cropImageToAspect(img, options.AspectRatio)
+					img = cropImageToAspectAtPosition(img, options.AspectRatio, cropPosition)
 				}
 				if resizeFrames {
 					img = resizeFrame(img, outputWidth, outputHeight)
@@ -830,7 +835,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
 			} else {
 				if options.AspectRatio > 0 {
-					img = cropImageToAspect(img, options.AspectRatio)
+					img = cropImageToAspectAtPosition(img, options.AspectRatio, cropPosition)
 				}
 				if resizeFrames {
 					img = resizeFrame(img, outputWidth, outputHeight)

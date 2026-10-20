@@ -2,6 +2,30 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Crop placement
+
+`testdata/lrt-crop-position-7.5.5.json` stores288 direct ordinary renderer
+builder calls: six dimensions, resolutions0/32, aspects.5/1/1.7777778, and
+positions0/1/25/33/50/67/99/100. Native coordinates use truncation of
+float32(excess)*float32(position/100). All observed crop rectangles match.
+The new `render --crop-position` option and batch forwarding apply this to
+native post-scale geometry and to standalone pre-scale aspect cropping.
+Omitted Go API pointer and omitted CLI flag preserve center50. The literal
+CLI center retains exact integer division even for excess sizes above2^24.
+
+No saved crop-position field was identified in the inspected settings model;
+the observed native batch setup passes literal50. No invented JSON import is
+added. Positions are explicitly supplied by CLI/Go API. Render-only CLI
+exposure is intentional; export/preview command flags remain unchanged.
+Go callers using shared RenderOptions can pass the pointer to image exports.
+
+Tests cover every native rectangle, precision/alpha, nonzero source bounds,
+endpoints/default/no-op, both geometry paths, Motion Blur order, exact AVI
+JPEG preparation, batch/default forwarding, invalid-value failure retention
+and source/preset retention. Actual MP4 decoded RGB tests distinguish left
+and right crops. These comparisons do not establish full native color-managed
+rendering or saved-UI-state equivalence; XMP crop animation is independent.
+
 ## Native preset geometry
 
 `testdata/lrt-geometry-7.5.5.json` records480 direct ordinary renderer-builder
@@ -25,8 +49,8 @@ landscape/portrait/odd/Original/aspect changes, Motion Blur, preset and batch
 forwarding, explicit dimension overrides, source retention and failure output
 retention. Actual MP4 tests verify32x24->20x16, portrait32x64->32x64, and odd
 33x25->32x24. Scale working dimensions are capped at32768 per side and64MP;
-this is a Go resource limit, not a native observation. Only center placement
-is implemented. Arbitrary native UI crop offsets and full Camera Raw/color
+this is a Go resource limit, not a native observation. Non-center placement
+is now covered separately above. Saved UI state and full Camera Raw/color
 pipeline parity remain unverified. XMP rendering is still an independent path.
 
 ## Lanczos output resampling

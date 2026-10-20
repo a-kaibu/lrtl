@@ -12,6 +12,39 @@ type nativeRenderGeometry struct {
 	crop                    image.Rectangle
 }
 
+func (options RenderOptions) cropPosition() (int, error) {
+	position := 50
+	if options.CropPosition != nil {
+		position = *options.CropPosition
+	}
+	if position < 0 || position > 100 {
+		return 0, fmt.Errorf("crop position must be an integer between 0 and 100")
+	}
+	return position, nil
+}
+
+func cropPositionOffset(excess, position int) int {
+	if position == 50 {
+		return excess / 2 // Preserve the existing literal-CLI center on large inputs.
+	}
+	return min(excess, max(0, int(float32(excess)*(float32(position)/100))))
+}
+
+func planNativeRenderGeometryAtPosition(width, height, resolution int, aspect float64, position int) (nativeRenderGeometry, error) {
+	if _, err := (RenderOptions{CropPosition: &position}).cropPosition(); err != nil {
+		return nativeRenderGeometry{}, err
+	}
+	plan, err := planNativeRenderGeometry(width, height, resolution, aspect)
+	if err != nil {
+		return plan, err
+	}
+	w, h := plan.crop.Dx(), plan.crop.Dy()
+	x := cropPositionOffset(plan.scaleWidth-w, position)
+	y := cropPositionOffset(plan.scaleHeight-h, position)
+	plan.crop = image.Rect(x, y, x+w, y+h)
+	return plan, nil
+}
+
 func nativeAspectRatio(ratio float32) float32 {
 	for _, standard := range []float32{3, 2.5, 2, 1.7777778, 1.5, 1, .6666667, .5625, .5, .4} {
 		if float64(ratio) >= float64(standard)*.99 && float64(ratio) <= float64(standard)*1.01 {

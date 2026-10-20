@@ -893,7 +893,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	preset := set.String("preset", "medium", "H.264/H.265 speed/size preset")
 	longEdge := set.Int("long-edge", 0, "downscale so the longest side is at most this many pixels (0 keeps input size)")
 	outputHeight := set.Int("output-height", 0, "set the output height and preserve aspect ratio (0 keeps input size)")
-	aspectValue := set.String("aspect", "", "center-crop to WIDTH:HEIGHT aspect ratio (for example 16:9)")
+	aspectValue := set.String("aspect", "", "crop to WIDTH:HEIGHT aspect ratio (for example 16:9)")
+	cropPosition := set.Int("crop-position", 50, "crop placement from left/top 0 to right/bottom 100 (50 center)")
 	audioPath := set.String("audio", "", "add an audio file to MP4/MOV output and fit it to video duration")
 	overwrite := set.Bool("overwrite", false, "replace an existing output file")
 	deflicker := set.Bool("deflicker", false, "apply global luminance deflicker while rendering")
@@ -944,6 +945,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--watermark": true, "-watermark": true,
 		"--watermark-position": true, "-watermark-position": true,
 		"--motion-blur": true, "-motion-blur": true,
+		"--crop-position": true, "-crop-position": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1029,6 +1031,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		LongEdge:          *longEdge,
 		OutputHeight:      *outputHeight,
 		AspectRatio:       aspectRatio,
+		CropPosition:      cropPosition,
 		AudioPath:         *audioPath,
 		Overwrite:         *overwrite,
 		Deflicker:         deflickerEnabled,
