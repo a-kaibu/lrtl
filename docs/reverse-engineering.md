@@ -222,6 +222,36 @@ Optional actual H.264 MP4/H.265 MOV tests also check format, frame count and
 6,144 decoded luma samples per codec against the Go-filtered RGB input, with
 bounded encode/decode error documented in the fixture notes.
 
+## Output denoising
+
+Four direct native graph-helper observations establish the saved denoise levels:
+adaptive temporal averaging with windows 5/5/7/13, followed by CDF 9/7 wavelet
+soft/garrote thresholding. The strongest level adds a twice-median/Gaussian
+lighten preclean branch, which negotiates an 8-bit intermediate. Go implements
+these scalar operations independently and connects them before speed/tmix.
+The application feature gates were not modified to obtain the graphs.
+
+`testdata/lrt-denoise-planes-8.0.1.json` stores 354 observations and 644,058
+output values. Each record distinguishes default CPU dispatch from scalar
+`-cpuflags 0` execution. All recorded values match. Three additional complete
+output hashes cover 6/6/10 wavelet steps and 4,281,091 samples. The fixture notes
+describe small-frame SIMD differences (strong preclean at 17x13 and complete
+strong graph at 16x8) that Go does not reproduce. Default 32x16 graph samples
+match, but these tests do not establish all-dimension/native-render parity.
+
+The bounded streaming cache validates future frames, reads each source once
+and follows the measured EOF padding behavior. Denoising adds no trim. Tests
+check source ownership, speed/Motion Blur/sharpen/CAS/overlay/fade order,
+preset defaults/overrides, batch forwarding, AVI encoding/JPEG bypass,
+still-export isolation, invalid settings and source/output preservation.
+Eight optional actual H.264 MP4/H.265 MOV cases decode 16,384 luma samples each
+against the Go-filtered RGB reference with bounded encoding error.
+
+Like CAS, this path uses independent approximate full-range BT.709 RGB48/YUV10
+conversion and adds filter deltas to original RGB16 samples. Complete native
+color management, Camera Raw and HDR equivalence remain unverified. See
+`testdata/lrt-denoise-7.5.5.md` for exact settings, provenance and reproduction.
+
 ## Explicit video range
 
 Three native color-filter-builder observations in

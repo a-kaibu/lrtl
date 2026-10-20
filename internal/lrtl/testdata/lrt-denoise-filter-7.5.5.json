@@ -1,0 +1,6 @@
+[
+{"level":1,"filter":",atadenoise=0a=0.03:0b=0.04:1a=0.10:1b=0.10:s=5,vaguedenoiser=threshold=2:method=soft:nsteps=2:percent=80"},
+{"level":2,"filter":",atadenoise=0a=0.05:0b=0.15:1a=0.20:1b=0.40:2a=0.20:2b=0.40:s=5,vaguedenoiser=threshold=4:method=garrote:nsteps=6:percent=80"},
+{"level":3,"filter":",atadenoise=0a=0.08:0b=0.17:1a=0.20:1b=0.60:2a=0.20:2b=0.60:s=7,vaguedenoiser=threshold=4:method=garrote:nsteps=6:percent=80"},
+{"level":4,"filter":",split=2[orig][med];[med]removegrain=m0=4:m1=4:m2=4,removegrain=m0=4:m1=4:m2=4,gblur=sigma=0.5[med_filtered];[orig][med_filtered]blend=all_mode=lighten,atadenoise=0a=0.10:0b=0.20:1a=0.30:1b=0.80:2a=0.30:2b=0.80:s=13,vaguedenoiser=threshold=6:method=garrote:nsteps=10:percent=80"}
+]

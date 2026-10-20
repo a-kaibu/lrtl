@@ -26,6 +26,7 @@ type RenderOptions struct {
 	VideoRange        string
 	OutputSharpen     bool
 	OutputCAS         bool
+	OutputDenoise     int
 	Quality           int
 	FFmpegPath        string
 	Codec             string
@@ -166,6 +167,9 @@ func RenderSequence(frames []Frame, output string, options RenderOptions) error 
 func renderSequence(frames []Frame, output string, options RenderOptions, imageWriter func(int, int) (renderFrameWriter, error)) error {
 	if len(frames) == 0 {
 		return errors.New("sequence contains no images")
+	}
+	if err := validateOutputDenoise(options.OutputDenoise); err != nil {
+		return err
 	}
 	cropPosition, err := options.cropPosition()
 	if err != nil {
@@ -390,6 +394,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err != nil {
 		return err
 	}
+	if err := validateOutputDenoiseMemory(outputWidth, outputHeight, len(frames), options.OutputDenoise, options.MotionBlurFrames); err != nil {
+		return err
+	}
 	if options.MotionBlurFrames > 0 {
 		outputPixels := uint64(outputWidth) * uint64(outputHeight)
 		inputPixels := uint64(width) * uint64(height)
@@ -586,7 +593,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	}()
 
-	if options.MotionBlurFrames > 0 || speed != 1 {
+	if options.MotionBlurFrames > 0 || speed != 1 || options.OutputDenoise > 0 {
 		prepareMotionBlurFrame := func(index int) ([]byte, error) {
 			frame := frames[index]
 			data, frameConfig := first, config
@@ -650,6 +657,10 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				}
 			}
 			return imageRGB48(img)
+		}
+		if options.OutputDenoise > 0 {
+			denoiser := newOutputDenoiser(outputWidth, outputHeight, len(frames), options.OutputDenoise, prepareMotionBlurFrame)
+			prepareMotionBlurFrame = denoiser.frame
 		}
 
 		windowFrames := options.MotionBlurFrames

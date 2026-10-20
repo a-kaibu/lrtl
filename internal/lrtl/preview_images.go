@@ -129,6 +129,7 @@ func GeneratePreviewImages(frames []Frame, output string, options RenderOptions)
 	options.VideoRange = "auto"
 	options.OutputSharpen = false
 	options.OutputCAS = false
+	options.OutputDenoise = 0
 	options.NativeTiming = false
 	options.Subsampling = ""
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {

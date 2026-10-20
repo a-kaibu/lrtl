@@ -33,13 +33,14 @@ type lrtRenderPreset struct {
 	CAS              bool     `json:"cas"`
 	RemoveAirplanes  bool     `json:"removeAirplanes"`
 	Denoise          bool     `json:"denoise"`
+	DenoiseLevel     int      `json:"denoiseLevel"`
 	DeflickerLuma    bool     `json:"deflickerLuma"`
 	DeflickerChroma  bool     `json:"deflickerChroma"`
 }
 
 func decodeLRTRenderPreset(data []byte) (lrtRenderPreset, error) {
 	// Native JSON deserialization starts with the RenderPreset constructor.
-	preset := lrtRenderPreset{Encoder: "h264", FrameRate: "29.97", OutputResV: 1080, OutputQuality: 1, SubSampling: "420", Speed: 1, FadeTime: 3}
+	preset := lrtRenderPreset{Encoder: "h264", FrameRate: "29.97", OutputResV: 1080, OutputQuality: 1, SubSampling: "420", Speed: 1, FadeTime: 3, DenoiseLevel: 1}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return preset, err
@@ -157,7 +158,7 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 		{"interpolation", preset.Interpolation != 0},
 		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
 		{"removeAirplanes", preset.RemoveAirplanes},
-		{"denoise", preset.Denoise}, {"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
+		{"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
 	} {
 		if field.active {
 			unsupported = append(unsupported, field.name)
@@ -171,6 +172,15 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}
 	if !explicit["cas"] {
 		options.OutputCAS = preset.CAS
+	}
+	if !explicit["denoise"] {
+		options.OutputDenoise = 0
+		if preset.Denoise {
+			if preset.DenoiseLevel < 1 || preset.DenoiseLevel > 4 {
+				return options, fmt.Errorf("enabled LRT denoiseLevel must be from 1 to 4")
+			}
+			options.OutputDenoise = preset.DenoiseLevel
+		}
 	}
 	options.NativeTiming = true
 	if preset.OutputQuality < 0 || preset.OutputQuality > 5 {

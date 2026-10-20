@@ -887,6 +887,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	fadeOut := set.Float64("fade-out", 0, "fade video and audio to black/silence over the final seconds (0 off)")
 	sharpen := set.Bool("sharpen", false, "apply output luma sharpening before overlays and fade")
 	cas := set.Bool("cas", false, "apply contrast adaptive sharpening at native strength 0.90 before overlays and fade")
+	denoise := set.Int("denoise", 0, "output noise reduction: 0 disabled, 1-4 native denoise levels")
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
@@ -949,6 +950,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--motion-blur": true, "-motion-blur": true,
 		"--crop-position": true, "-crop-position": true,
 		"--subsampling": true, "-subsampling": true,
+		"--denoise": true, "-denoise": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1027,6 +1029,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		VideoRange:        *videoRange,
 		OutputSharpen:     *sharpen,
 		OutputCAS:         *cas,
+		OutputDenoise:     *denoise,
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
@@ -1108,6 +1111,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if options.OutputCAS {
 		features = append(features, "contrast adaptive sharpening (CAS 0.90)")
+	}
+	if options.OutputDenoise > 0 {
+		features = append(features, fmt.Sprintf("output denoise level %d", options.OutputDenoise))
 	}
 	if value, _ := normalizeVideoRange(options.VideoRange); value != "auto" {
 		features = append(features, value+" video range")

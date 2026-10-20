@@ -59,6 +59,22 @@ func casPlane10(input []uint16, width, height int, strength float32) []uint16 {
 // the original RGB16 samples, retaining detail below a 10-bit code step.
 // RGB/YUV conversion is independent of LRT's color management.
 func casOutputRGB48(rgb []byte, width, height int) {
+	planes := outputYUV10(rgb, width, height)
+	peak := casPeak(0.9)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			i := y*width + x
+			var delta [3]float64
+			for p := range planes {
+				filtered := casSample10(planes[p], width, height, x, y, peak)
+				delta[p] = float64(int(filtered)-int(planes[p][i])) * (65535.0 / 1023)
+			}
+			addOutputYUVDelta(rgb[i*6:], delta)
+		}
+	}
+}
+
+func outputYUV10(rgb []byte, width, height int) [3][]uint16 {
 	var planes [3][]uint16
 	for i := range planes {
 		planes[i] = make([]uint16, width*height)
@@ -76,26 +92,19 @@ func casOutputRGB48(rgb []byte, width, height int) {
 		planes[1][i] = quantize(0.5 + (b-luma)/1.8556)
 		planes[2][i] = quantize(0.5 + (r-luma)/1.5748)
 	}
-	peak := casPeak(0.9)
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			i := y*width + x
-			var delta [3]float64
-			for p := range planes {
-				filtered := casSample10(planes[p], width, height, x, y, peak)
-				delta[p] = float64(int(filtered)-int(planes[p][i])) * (65535.0 / 1023)
-			}
-			changes := [3]float64{
-				delta[0] + 1.5748*delta[2],
-				delta[0] - (0.0722*1.8556/0.7152)*delta[1] - (0.2126*1.5748/0.7152)*delta[2],
-				delta[0] + 1.8556*delta[1],
-			}
-			for channel, change := range changes {
-				p := rgb[i*6+channel*2:]
-				value := int(binary.LittleEndian.Uint16(p)) + int(math.Round(change))
-				binary.LittleEndian.PutUint16(p, uint16(min(65535, max(0, value))))
-			}
-		}
+	return planes
+}
+
+func addOutputYUVDelta(rgb []byte, delta [3]float64) {
+	changes := [3]float64{
+		delta[0] + 1.5748*delta[2],
+		delta[0] - (0.0722*1.8556/0.7152)*delta[1] - (0.2126*1.5748/0.7152)*delta[2],
+		delta[0] + 1.8556*delta[1],
+	}
+	for channel, change := range changes {
+		p := rgb[channel*2:]
+		value := int(binary.LittleEndian.Uint16(p)) + int(math.Round(change))
+		binary.LittleEndian.PutUint16(p, uint16(min(65535, max(0, value))))
 	}
 }
 

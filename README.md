@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `render --denoise 1..4`と保存プリセットの動画ノイズ除去に対応しました。純Goで時間方向の平均化、CDF 9/7ウェーブレット、最強段階の点状ノイズ前処理を実装。354件・644,058画素の観測値と、最大10段の変換を含む約428万画素の全出力ハッシュを比較しました。速度変更・Motion Blurより前に処理し、プリセット解除、バッチ、実動画、異常時の保持もテストしています。RGB/YUV変換と一部の本体SIMD動作には差があります。
+
 - `render --cas`と保存プリセットの`cas`に対応しました。純Goで本体のCAS 0.90に相当する10-bit輝度・色差フィルターを実装し、同梱FFmpegの24パターン・12,288画素と一致を確認しました。通常シャープ・Motion Blur・字幕・フェードの処理順、プリセット解除、AVIとバッチ、元ファイル保持をテストしています。RGB/YUV変換は独自近似です。
 
 - `deflicker`と`batch-deflicker`で`--calculation lrt-7.5.5`を選べるようにしました。本体108ケースで検証した計算コアをヒストグラム測光・内部補正スロットの保存・複数パスへ接続しました。個別/一括の最終XMP一致、日時順ROI、RAW変換経路、既存補正の移行、バックアップ・解除・失敗時の保存中止をテストしています。複数パスの画素現像はGo側で行い、Camera Rawを使う本体全体との一致は未検証です。
@@ -146,6 +148,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。`batch-preview-images ROOT --output NEW_DIRECTORY`でJPEG連番・測光結果を並列生成し、任意で元XMPへPreview EVを保存。全連番の生成・XMP内容検証後に出力を公開 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
 | 出力時シャープ | 動画レンダー時の追加シャープ・CAS | `render --sharpen`／`--cas`と保存済みの両設定に対応。純Goで7×7輝度シャープとCAS 0.90の輝度・色差処理を実装。LRT同梱FFmpegの10-bit実測で通常シャープ6パターン・3072画素、CAS 24パターン・12,288画素を比較。Motion Blur→通常シャープ→CAS→透かし→フェードの順に適用。RGB/YUV変換は独自近似で、本体の動画全体との画素一致は未確認 | 一部 |
+| 動画ノイズ除去 | 4段階の時間・空間ノイズ除去 | `render --denoise 1..4`と保存済み`denoise`／`denoiseLevel`に対応。純Goの時間平均とウェーブレット、最強段階の点状ノイズ前処理。速度変更・Motion Blurより前に適用。354件の平面/連番観測と深い変換の全出力ハッシュを比較。RGB/YUV変換は独自近似。本体の小画像SIMD処理には差があり、色管理の完全一致は未確認 | 一部 |
 | 出力時リサイズ | レンダー解像度へのLanczos拡大縮小 | 純GoのLanczos3へ変更し、画像の端へ重みを折り返す。16-bit画素とアルファを保持。同梱FFmpegの16-bitグレー24ケース・16,338画素でRMSEを旧方式の約980から約44へ削減。プリセット読込は本体480件の寸法に一致し、最終領域だけを計算して大きな中間画像を作らない。RGB/YUV・固定小数点処理の完全一致は未確認 | 一部 |
 | クロップ位置 | レンダー時の切り出し位置 | `render --crop-position 0..100`で左／上から右／下へ指定。50は従来の中央。保存プリセットの寸法処理と通常の`--aspect`の両方に対応し、本体288件の矩形と比較。AVI・MP4・Motion Blur・バッチ・保持テスト済み。保存JSONの位置フィールドは見つかっておらず自動読込は行わない | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
@@ -663,9 +666,9 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --lrt-render-
 
 `encoder`、`frameRate`、`outputResV`、`outputQuality`を必須とし、省略可能な項目には本体のコンストラクターで観測した既定値を使います。読み込むのは指定したJSONだけで、LRTのグローバル設定を自動探索・変更しません。JSON内の音声が有効な場合、相対パスはそのJSONのフォルダーを基準に解決します。設定JSON全体の`renderConstrainCrop=true`では`renderAR`も使います。動画の拡張子は選んだコーデックに合わせて指定してください。
 
-CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`、`--cas`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
+CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`、`--cas`、`--denoise`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
 
-HDR・広色域・フレーム生成・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420／422／444を読み込み、明示した`--subsampling`を優先します。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
+HDR・広色域・フレーム生成・飛行機除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420／422／444を読み込み、明示した`--subsampling`を優先します。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
 
 この対応に合わせ、`--codec prores-proxy|prores-lt|prores-4444`も追加しました。FFmpegにはProRes 4444用10-bit YUVを渡し、ffprobeでは4444・12-bitのデコード形式として報告されることを確認しています。完全な12-bit入力精度やアルファチャンネルの保持は実装していません。本体で生成した6種類のJSONと画質ヘルパー値、明示CLIとの画素入力・引数一致、設定と元画像の保持、バッチ転送、不正設定時の出力保持、実MOVのプロファイルをテストしています。
 
@@ -698,6 +701,30 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --cas
 処理順はリサイズ・速度変更・Motion Blur→通常の`--sharpen`→CAS→撮影日時・透かし→フェードです。輝度と色差の全3成分を処理するため、輝度だけの通常シャープとは画素結果が異なります。AVIの処理は純Goで動作し、静止画の`export`／`preview-images`には適用しません。
 
 同梱FFmpeg 8.0.1の10-bit平面で、黒・白・一定値・中央／隅の点・境界・ランプ・ノイズを3強度で比較し、24パターン・12,288画素の計算が一致しました。実際のRGB48動画入力ではBT.709のY/Cb/Crを独自近似し、処理による差分をRGB16へ戻します。変更がない成分の細かい階調を保持しますが、LRTの色管理・RGB/YUV変換を含む全画素の一致やHDRには対応していません。[検証条件](internal/lrtl/testdata/lrt-cas-7.5.5.md)を参照してください。
+
+### 動画のノイズ除去
+
+`render --denoise LEVEL`で動画用のノイズ除去を有効にします。`0`が無効、`1`〜`4`が本体の4段階に対応します。保存プリセットの`denoise=true`／`denoiseLevel`を読み込み、明示したCLI値を優先します。`--denoise 0`で解除できます。
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\clean.avi --denoise 2
+lrtl render C:\photos\sequence --output C:\photos\clean.mp4 --denoise 3 --cas
+lrtl render C:\photos\sequence --output C:\photos\clean.mp4 --lrt-render-preset C:\photos\preset.json --denoise 0
+lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --denoise 2
+```
+
+| 段階 | 時間方向の窓 | 空間処理 |
+|---|---|---|
+| 1 | 5枚 | 弱いウェーブレット処理 |
+| 2 | 5枚 | ウェーブレット処理 |
+| 3 | 7枚 | 同じ空間処理＋広い時間窓 |
+| 4 | 13枚 | 点状ノイズの前処理＋強いウェーブレット処理 |
+
+リサイズ・クロップの後、速度変更・Motion Blur・シャープ・CAS・撮影日時・透かし・フェードの前に適用します。先読みするため、後ろの画像も時間方向の補正に使います。動画の枚数と撮影日時の対応は維持し、静止画の`export`／`preview-images`には適用しません。AVIのノイズ除去はFFmpegなしで動作します。XMPのノイズ軽減スライダーやAdobeのAI Denoiseとは別の動画処理です。
+
+時間方向の判定・端の処理、CDF 9/7変換、最強段階の8-bit中間変換を、同梱FFmpeg 8.0.1の354件・644,058出力値と比較しています。最大10段の変換も約428万画素の全出力ハッシュで確認しました。通常CPU実行と`-cpuflags 0`の観測を区別しており、本体SIMD経路の一部小画像では差が残ります。RGB48とYUV10の変換は独自近似で、本体の色管理・HDRや動画全体の完全な画素一致は未対応です。
+
+ノイズ除去とMotion Blurを合わせたフレームバッファーの推定が768 MiBを超える場合は、出力作成前にエラーにします。`--long-edge`／`--output-height`、ノイズ除去の段階、Motion Blurの窓を下げてください。元画像やXMPは変更しません。[観測値・SIMD差・検証条件](internal/lrtl/testdata/lrt-denoise-7.5.5.md)を記録しています。
 
 ## 動画と字幕のフレームレート
 

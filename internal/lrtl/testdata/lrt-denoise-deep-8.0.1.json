@@ -1,0 +1,32 @@
+[
+  {
+    "cpuFlags": "0",
+    "filter": "vaguedenoiser=threshold=4:method=garrote:nsteps=6:percent=80",
+    "height": 129,
+    "level": 2,
+    "pattern": "noise-13-23-7-mod101",
+    "sha256": "d2be631ae2ee672b256da873cb2e126abe1f7b95943b68b10f0cf7739ef7e74a",
+    "steps": 6,
+    "width": 129
+  },
+  {
+    "cpuFlags": "0",
+    "filter": "vaguedenoiser=threshold=4:method=garrote:nsteps=6:percent=80",
+    "height": 257,
+    "level": 3,
+    "pattern": "noise-13-23-7-mod101",
+    "sha256": "0709ac5fac4268544b8b88ec9cb581fa7a9958839cc95076b10fbdc8f260cebb",
+    "steps": 6,
+    "width": 257
+  },
+  {
+    "cpuFlags": "0",
+    "filter": "vaguedenoiser=threshold=6:method=garrote:nsteps=10:percent=80",
+    "height": 2049,
+    "level": 4,
+    "pattern": "noise-13-23-7-mod101",
+    "sha256": "266fc708f63e3fd02b5c4961510794a0780f2b65fdaca285171042435ea6e6a1",
+    "steps": 10,
+    "width": 2049
+  }
+]
