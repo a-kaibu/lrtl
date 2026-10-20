@@ -1,5 +1,11 @@
 # Native output denoise observations
 
+For the full-range RGB16 input/output path, see the subsequent
+[native temporal color measurements](lrt-native-temporal-color-7.5.5.md).
+Those add YUV-domain processing and range-aware 8/10-bit luma conversion
+for level 4. The original raw-plane observations below used unspecified
+range and continue to cover that separate numerical convention.
+
 LRTimelapse 7.5.5 build 1059 stores an enable flag `denoise` and integer
 `denoiseLevel` (constructor default 1). The render builder selects four graphs,
 after scaling/cropping and before airplane removal, speed/tmix, output sharpening,

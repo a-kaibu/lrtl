@@ -229,6 +229,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	nativeSpatial := imageWriter == nil && outputColor == "lrt-7.5.5" &&
 		(options.OutputSharpen || options.OutputCAS) && !options.TimestampOverlay &&
 		options.Watermark == "" && fade.duration == 0
+	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
+		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma) &&
+		options.MotionBlurFrames == 0 && options.Interpolation == 0 && !options.TimestampOverlay && options.Watermark == "" && fade.duration == 0
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
@@ -609,9 +612,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
 		encoding := ffmpegFrameEncoding{outputColor: outputColor}
+		nativeTemporal = nativeTemporal && outputWidth%2 == 0 && outputHeight%2 == 0
+		nativeSpatial = nativeSpatial || nativeTemporal
 		nativeSpatial = nativeSpatial && outputWidth%2 == 0 && outputHeight%2 == 0
 		if nativeSpatial {
 			encoding.spatial = &nativeSpatialFilter{outputWidth, outputHeight, options.OutputSharpen, options.OutputCAS}
+			encoding.workingYUV = nativeTemporal
 		}
 		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration, options.Subsampling, encoding)
 		if err != nil {
@@ -705,10 +711,18 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					img = resizeFrame(img, outputWidth, outputHeight)
 				}
 			}
-			return imageRGB48(img)
+			rgb, err := imageRGB48(img)
+			if err != nil {
+				return nil, err
+			}
+			if nativeTemporal {
+				return nativeSDRWorkingFrame(rgb, img.Bounds().Dx(), img.Bounds().Dy())
+			}
+			return rgb, nil
 		}
 		if outputDeflickerEnabled {
 			filter := newOutputDeflicker(deflickerWidth, deflickerHeight, len(frames), options.OutputDeflickerLuma, options.OutputDeflickerChroma, prepareMotionBlurFrame)
+			filter.color = outputFrameColor(nativeTemporal)
 			prepareMotionBlurFrame = filter.frame
 			if options.NativeGeometry {
 				prepareMotionBlurFrame = func(index int) ([]byte, error) {
@@ -722,10 +736,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 		if options.OutputDenoise > 0 {
 			denoiser := newOutputDenoiser(outputWidth, outputHeight, len(frames), options.OutputDenoise, prepareMotionBlurFrame)
+			denoiser.color = outputFrameColor(nativeTemporal)
 			prepareMotionBlurFrame = denoiser.frame
 		}
 		if airplaneLevel > 0 {
 			remover := newAirplaneRemover(outputWidth, outputHeight, len(frames), airplaneLevel, prepareMotionBlurFrame)
+			remover.color = outputFrameColor(nativeTemporal)
 			prepareMotionBlurFrame = remover.frame
 		}
 

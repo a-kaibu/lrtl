@@ -45,6 +45,7 @@ type outputDeflicker struct {
 	lastMean                                       [3]float32
 	cache                                          map[int][]byte
 	load                                           func(int) ([]byte, error)
+	color                                          outputFrameColor
 }
 
 func newOutputDeflicker(width, height, count int, luma, chroma bool, load func(int) ([]byte, error)) *outputDeflicker {
@@ -60,7 +61,7 @@ func (d *outputDeflicker) read() ([3]float32, error) {
 	if len(rgb) != d.width*d.height*6 {
 		return means, fmt.Errorf("output deflicker source frame %d has inconsistent dimensions", d.next+1)
 	}
-	planes := outputYUV10(rgb, d.width, d.height)
+	planes := d.color.planes(rgb, d.width, d.height)
 	for p := range planes {
 		means[p] = outputDeflickerMean(planes[p])
 	}
@@ -104,7 +105,7 @@ func (d *outputDeflicker) frame(index int) ([]byte, error) {
 		}
 	}
 	rgb := bytes.Clone(d.cache[index])
-	original := outputYUV10(rgb, d.width, d.height)
+	original := d.color.planes(rgb, d.width, d.height)
 	filtered := original
 	for p := range filtered {
 		if (p == 0 && !d.luma) || (p > 0 && !d.chroma) {
@@ -112,13 +113,7 @@ func (d *outputDeflicker) frame(index int) ([]byte, error) {
 		}
 		filtered[p] = outputDeflickerPlane(original[p], d.means[p])
 	}
-	for i := 0; i < d.width*d.height; i++ {
-		var delta [3]float64
-		for p := range delta {
-			delta[p] = float64(int(filtered[p][i])-int(original[p][i])) * (65535.0 / 1023)
-		}
-		addOutputYUVDelta(rgb[i*6:], delta)
-	}
+	d.color.apply(rgb, original, filtered)
 	d.emitted++
 	return rgb, nil
 }

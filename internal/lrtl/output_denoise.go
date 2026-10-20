@@ -38,6 +38,7 @@ type outputDenoiser struct {
 	width, height, count, level, next, emitted int
 	cache                                      map[int]denoiseInputFrame
 	load                                       func(int) ([]byte, error)
+	color                                      outputFrameColor
 }
 
 func newOutputDenoiser(width, height, count, level int, load func(int) ([]byte, error)) *outputDenoiser {
@@ -63,11 +64,11 @@ func (d *outputDenoiser) frame(index int) ([]byte, error) {
 		if len(rgb) != d.width*d.height*6 {
 			return nil, fmt.Errorf("denoise source frame %d has inconsistent dimensions", d.next+1)
 		}
-		planes := outputYUV10(rgb, d.width, d.height)
+		planes := d.color.planes(rgb, d.width, d.height)
 		frame := denoiseInputFrame{rgb: rgb, original: planes, clean: planes}
 		if d.level == 4 {
 			for p := range frame.clean {
-				frame.clean[p] = denoisePreclean10(planes[p], d.width, d.height)
+				frame.clean[p] = denoisePreclean10Range(planes[p], d.width, d.height, bool(d.color) && p == 0)
 			}
 		}
 		d.cache[d.next] = frame
@@ -90,13 +91,7 @@ func (d *outputDenoiser) frame(index int) ([]byte, error) {
 		filtered[p] = waveletDenoise10(temporal, d.width, d.height, settings)
 	}
 	rgb := bytes.Clone(center.rgb)
-	for i := 0; i < d.width*d.height; i++ {
-		var delta [3]float64
-		for p := range delta {
-			delta[p] = float64(int(filtered[p][i])-int(center.original[p][i])) * (65535.0 / 1023)
-		}
-		addOutputYUVDelta(rgb[i*6:], delta)
-	}
+	d.color.apply(rgb, center.original, filtered)
 	d.emitted++
 	return rgb, nil
 }
@@ -313,6 +308,10 @@ func waveletDenoise10(input []uint16, width, height int, settings outputDenoiseS
 // The strongest native preset first fills dark point defects with the lighter
 // of the original and a blurred, twice-median-filtered frame.
 func denoisePreclean10(input []uint16, width, height int) []uint16 {
+	return denoisePreclean10Range(input, width, height, false)
+}
+
+func denoisePreclean10Range(input []uint16, width, height int, fullLuma bool) []uint16 {
 	median := func(input []uint16) []uint16 {
 		output := append([]uint16(nil), input...)
 		for y := 1; y < height-1; y++ {
@@ -344,14 +343,25 @@ func denoisePreclean10(input []uint16, width, height int) []uint16 {
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			i := y*width + x
-			quantized[i] = uint16(min(255, (int(input[i])+phases[y%2][x%2])/4))
+			v := int(input[i])
+			// Full-range luma depth reduction removes replicated high bits
+			// before dithering; chroma retains the plain shift convention.
+			if fullLuma {
+				v -= v >> 8
+			}
+			quantized[i] = uint16(min(255, (v+phases[y%2][x%2])/4))
 		}
 	}
 	filtered := median(median(quantized))
 	blurred := gaussianOutputPlane(filtered, width, height, .5, 255)
 	output := make([]uint16, len(input))
 	for i, v := range blurred {
-		output[i] = max(input[i], v*4)
+		expanded := v * 4
+		// Full-range luma expands 8-bit endpoints by bit replication.
+		if fullLuma {
+			expanded |= v >> 6
+		}
+		output[i] = max(input[i], expanded)
 	}
 	return output
 }

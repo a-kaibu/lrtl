@@ -53,7 +53,9 @@ go test ./internal/lrtl -run '^$' -fuzz '^FuzzNativeSDRConversion$' -fuzztime 10
 This path is enabled by `--output-color lrt-7.5.5` (also the saved preset
 default), with sharpen and/or CAS, even output dimensions and no timestamp,
 watermark or fade. Existing RGB conversion is retained for the other
-combinations. Go time filters still use the previous BT.709 approximation,
-and Go resize/RAW/XMP processing is not a reproduction of Camera Raw or
+combinations. Supported time filters now have a separate
+[native temporal YUV path](lrt-native-temporal-color-7.5.5.md); other temporal
+combinations retain the previous BT.709 approximation. Go resize/RAW/XMP
+processing is not a reproduction of Camera Raw or
 native swscale geometry. Matching the measured spatial path does not imply
 complete LRT application, HDR, ICC or all filter-combination parity.

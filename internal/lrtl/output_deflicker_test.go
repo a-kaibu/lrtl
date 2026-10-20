@@ -172,7 +172,7 @@ func TestOutputDeflickerRenderPresetBatchAndLayering(t *testing.T) {
 	for _, mode := range [][2]bool{{true, false}, {false, true}, {true, true}} {
 		flags := []string{"--output-deflicker-luma=" + strconv.FormatBool(mode[0]), "--output-deflicker-chroma=" + strconv.FormatBool(mode[1])}
 		run := func(extra ...string) []byte {
-			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "out.mp4"), "--ffmpeg", executable}
+			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "out.mp4"), "--ffmpeg", executable, "--output-color", "standard"}
 			markerCommand(t, append(args, extra...)...)
 			return denoiseRead(t, capture)
 		}
@@ -191,7 +191,7 @@ func TestOutputDeflickerRenderPresetBatchAndLayering(t *testing.T) {
 		if !bytes.Equal(run("--lrt-render-preset", path), want) {
 			t.Fatal("preset lost deflicker")
 		}
-		markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path)
+		markerCommand(t, "batch-render", dir, "--output", t.TempDir(), "--", "--ffmpeg", executable, "--lrt-render-preset", path, "--output-color", "standard")
 		if !bytes.Equal(denoiseRead(t, capture), want) {
 			t.Fatal("batch lost deflicker")
 		}
@@ -313,7 +313,7 @@ func TestOutputDeflickerNativeCropOrder(t *testing.T) {
 			}
 			preset.DeflickerLuma, preset.DeflickerChroma, preset.OutputResV = true, true, resolution
 			path := savePresetJSON(t, preset)
-			markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "crop.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--aspect", "1:1", "--crop-position", strconv.Itoa(position))
+			markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "crop.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path, "--aspect", "1:1", "--crop-position", strconv.Itoa(position), "--output-color", "standard")
 			if !bytes.Equal(expected, denoiseRead(t, capture)) {
 				t.Fatalf("native crop %d resolution %d occurred before measurement", position, resolution)
 			}

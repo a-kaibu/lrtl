@@ -114,7 +114,7 @@ func TestNativeSpatialWriterValidation(t *testing.T) {
 		profile                    string
 		width, height, filterWidth int
 	}{{"standard", 2, 2, 2}, {"lrt-7.5.5", 3, 2, 3}, {"lrt-7.5.5", 2, 3, 2}, {"lrt-7.5.5", -2, 2, -2}, {"lrt-7.5.5", 2, 2, 4}} {
-		encoding := ffmpegFrameEncoding{tc.profile, &nativeSpatialFilter{tc.filterWidth, tc.height, true, true}}
+		encoding := ffmpegFrameEncoding{outputColor: tc.profile, spatial: &nativeSpatialFilter{tc.filterWidth, tc.height, true, true}}
 		_, err := newFFmpegFrameWriter("missing-ffmpeg", filepath.Join(t.TempDir(), "output.mov"), "mov", "prores", tc.width, tc.height, frameRate{24, 1}, 1, 0, "ultrafast", "", videoFade{}, "full", "", "", encoding)
 		if err == nil || !strings.Contains(err.Error(), "native spatial filtering requires") {
 			t.Fatalf("invalid native input reached FFmpeg: %+v %v", tc, err)
@@ -168,12 +168,27 @@ func TestNativeSpatialRoutingAndFallback(t *testing.T) {
 			baselineArgs = append(baselineArgs, "--output", filepath.Join(t.TempDir(), "baseline.mp4"), "--sharpen=false", "--cas=false")
 			markerCommand(t, baselineArgs...)
 			baseline := denoiseRead(t, capture)
+			baselineFlags := string(denoiseRead(t, capture+".json"))
+			workingBaseline := strings.Contains(baselineFlags, `"-pixel_format","yuv444p10le"`)
 			if len(raw) != len(baseline) || len(raw)%(64*32*6) != 0 {
 				t.Fatal("native routing changed frame count")
 			}
 			filter := nativeSpatialFilter{64, 32, true, true}
 			for i := 0; i < len(raw); i += 64 * 32 * 6 {
-				want, err := filter.frame(baseline[i : i+64*32*6])
+				var want []byte
+				var err error
+				if workingBaseline {
+					var planes [3][]uint16
+					for p := range planes {
+						planes[p] = make([]uint16, 64*32)
+						for j := range planes[p] {
+							planes[p][j] = binary.LittleEndian.Uint16(baseline[i+(p*64*32+j)*2:])
+						}
+					}
+					want = filter.filterPlanes(planes, 64*32*6)
+				} else {
+					want, err = filter.frame(baseline[i : i+64*32*6])
+				}
 				if err != nil || !bytes.Equal(raw[i:i+64*32*6], want) {
 					t.Fatalf("spatial filter applied in wrong stage for %v frame%d: %v", extra, i/(64*32*6), err)
 				}

@@ -46,7 +46,9 @@ to guarantee identical decoded samples across all codecs/builds.
 These initial comparisons cover final encoding only. The subsequent
 [native spatial path](lrt-native-spatial-color-7.5.5.md) adds pure Go initial
 RGB16-to-YUV10 conversion and YUV-domain unsharp/CAS for even output sizes
-without overlays or fade, with 84 additional real video comparisons. Time
-filters and other combinations still use their BT.709 RGB/YUV approximation.
+without overlays or fade, with 84 additional real video comparisons. The
+[native temporal path](lrt-native-temporal-color-7.5.5.md) adds deflicker,
+denoise and airplane removal under its listed conditions, with 72 scalar
+reference video comparisons. Other combinations retain the RGB approximation.
 JPEG decoding, ICC, nonidentity geometry, HDR/wide gamut and complete native
 application video parity are outside this comparison.

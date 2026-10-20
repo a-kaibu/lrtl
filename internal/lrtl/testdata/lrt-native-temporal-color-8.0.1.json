@@ -1,0 +1,146 @@
+[
+  {
+    "Name": "noise1",
+    "CPUFlags": "native",
+    "Bytes": 208896,
+    "Hash": "79eac795e95bf1d0827dd3af19fe0dbe07d751c5cefa528ab803e7e76504b55b"
+  },
+  {
+    "Name": "noise1",
+    "CPUFlags": "0",
+    "Bytes": 208896,
+    "Hash": "79eac795e95bf1d0827dd3af19fe0dbe07d751c5cefa528ab803e7e76504b55b"
+  },
+  {
+    "Name": "noise2",
+    "CPUFlags": "native",
+    "Bytes": 208896,
+    "Hash": "d33b46e3c6c97e16f2849d3caf0bef889cc5f5184b3a7fbfc55cdba3a46e20d7"
+  },
+  {
+    "Name": "noise2",
+    "CPUFlags": "0",
+    "Bytes": 208896,
+    "Hash": "d33b46e3c6c97e16f2849d3caf0bef889cc5f5184b3a7fbfc55cdba3a46e20d7"
+  },
+  {
+    "Name": "noise3",
+    "CPUFlags": "native",
+    "Bytes": 208896,
+    "Hash": "0652bd7f01470d03f5013074e822416539807f71ee6c4157707152d82f173c64"
+  },
+  {
+    "Name": "noise3",
+    "CPUFlags": "0",
+    "Bytes": 208896,
+    "Hash": "0652bd7f01470d03f5013074e822416539807f71ee6c4157707152d82f173c64"
+  },
+  {
+    "Name": "noise4",
+    "CPUFlags": "native",
+    "Bytes": 208896,
+    "Hash": "f6fd5631a81bbc98076140e35c907292a4c3e00b6c5e68e8eead52a60e2f0b56"
+  },
+  {
+    "Name": "noise4",
+    "CPUFlags": "0",
+    "Bytes": 208896,
+    "Hash": "f6fd5631a81bbc98076140e35c907292a4c3e00b6c5e68e8eead52a60e2f0b56"
+  },
+  {
+    "Name": "air1",
+    "CPUFlags": "native",
+    "Bytes": 172032,
+    "Hash": "3e126579fce7d32fafff674d9b914142588c1c3c5f3befb5914d915f3133efb3"
+  },
+  {
+    "Name": "air1",
+    "CPUFlags": "0",
+    "Bytes": 172032,
+    "Hash": "3e126579fce7d32fafff674d9b914142588c1c3c5f3befb5914d915f3133efb3"
+  },
+  {
+    "Name": "air2",
+    "CPUFlags": "native",
+    "Bytes": 172032,
+    "Hash": "5b0b8df3a977692acbf8ca16addaa9b36435db96e1e50946b06148787c26dc5a"
+  },
+  {
+    "Name": "air2",
+    "CPUFlags": "0",
+    "Bytes": 172032,
+    "Hash": "5b0b8df3a977692acbf8ca16addaa9b36435db96e1e50946b06148787c26dc5a"
+  },
+  {
+    "Name": "air3",
+    "CPUFlags": "native",
+    "Bytes": 147456,
+    "Hash": "27e501763f2bef9e1d1c66b3313ccc66932ef6af0c4202c2a8b17ade8470f6e0"
+  },
+  {
+    "Name": "air3",
+    "CPUFlags": "0",
+    "Bytes": 147456,
+    "Hash": "27e501763f2bef9e1d1c66b3313ccc66932ef6af0c4202c2a8b17ade8470f6e0"
+  },
+  {
+    "Name": "df-y",
+    "CPUFlags": "native",
+    "Bytes": 208896,
+    "Hash": "b3e6e3e8720f3391997232948ec348a5d70a552d07a799aea1e0607187b73fdc"
+  },
+  {
+    "Name": "df-y",
+    "CPUFlags": "0",
+    "Bytes": 208896,
+    "Hash": "b3e6e3e8720f3391997232948ec348a5d70a552d07a799aea1e0607187b73fdc"
+  },
+  {
+    "Name": "df-uv",
+    "CPUFlags": "native",
+    "Bytes": 208896,
+    "Hash": "c6124c787bcf492a1f910966f8a9efc01c7d903b8ef1b2297b155cde4b1414ba"
+  },
+  {
+    "Name": "df-uv",
+    "CPUFlags": "0",
+    "Bytes": 208896,
+    "Hash": "c6124c787bcf492a1f910966f8a9efc01c7d903b8ef1b2297b155cde4b1414ba"
+  },
+  {
+    "Name": "df-all",
+    "CPUFlags": "native",
+    "Bytes": 208896,
+    "Hash": "85c77a6fea0308ee3d1784a5e18489f669939199bc4e0e995f56663bbe5450f4"
+  },
+  {
+    "Name": "df-all",
+    "CPUFlags": "0",
+    "Bytes": 208896,
+    "Hash": "85c77a6fea0308ee3d1784a5e18489f669939199bc4e0e995f56663bbe5450f4"
+  },
+  {
+    "Name": "combined",
+    "CPUFlags": "native",
+    "Bytes": 172032,
+    "Hash": "0a02b712637a701646251ab1eb4696b2464596d8c9a591d53a25cae17b5b098e"
+  },
+  {
+    "Name": "combined",
+    "CPUFlags": "0",
+    "Bytes": 172032,
+    "Hash": "0a02b712637a701646251ab1eb4696b2464596d8c9a591d53a25cae17b5b098e"
+  },
+  {
+    "Name": "combined-strong",
+    "CPUFlags": "native",
+    "Bytes": 147456,
+    "Hash": "8cc207aa3a05cb2de7c495300d4dd12b2faaf354e180b5a190a9279dec282b1d"
+  },
+  {
+    "Name": "combined-strong",
+    "CPUFlags": "0",
+    "Bytes": 147456,
+    "Hash": "cc4ed33c20a476b4f91e8a63355a866582b2ff7fd6d0f83fddb7ca16ce08ca4b"
+  }
+]

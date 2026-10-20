@@ -29,11 +29,12 @@ func (buffer *cappedBuffer) Write(data []byte) (int, error) {
 }
 
 type ffmpegFrameWriter struct {
-	command *exec.Cmd
-	input   io.WriteCloser
-	stderr  cappedBuffer
-	closed  bool
-	spatial *nativeSpatialFilter
+	command    *exec.Cmd
+	input      io.WriteCloser
+	stderr     cappedBuffer
+	closed     bool
+	spatial    *nativeSpatialFilter
+	workingYUV bool
 }
 
 func resolveFFmpeg(path string) (string, error) {
@@ -92,20 +93,26 @@ func proresProfile(codec string) (string, string, bool) {
 type ffmpegFrameEncoding struct {
 	outputColor string
 	spatial     *nativeSpatialFilter
+	workingYUV  bool
 }
 
 func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string, encoding ...ffmpegFrameEncoding) (*ffmpegFrameWriter, error) {
 	profile := "standard"
 	var spatial *nativeSpatialFilter
+	workingYUV := false
 	if len(encoding) > 0 {
 		profile = encoding[0].outputColor
 		spatial = encoding[0].spatial
+		workingYUV = encoding[0].workingYUV
 	}
 	profile, err := normalizeOutputColor(profile)
 	if err != nil {
 		return nil, err
 	}
 	nativeColor := profile == "lrt-7.5.5"
+	if workingYUV && spatial == nil {
+		return nil, fmt.Errorf("native working YUV requires a planar output filter")
+	}
 	colorFilter := videoRangeFilter
 	if nativeColor {
 		colorFilter = nativeSDRColorFilter
@@ -221,7 +228,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	if err != nil {
 		return nil, fmt.Errorf("open FFmpeg input: %w", err)
 	}
-	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}, spatial: spatial}
+	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}, spatial: spatial, workingYUV: workingYUV}
 	command.Stderr = &writer.stderr
 	if err := command.Start(); err != nil {
 		_ = input.Close()
@@ -236,7 +243,11 @@ func (writer *ffmpegFrameWriter) AddFrame(frame []byte) error {
 	}
 	if writer.spatial != nil {
 		var err error
-		frame, err = writer.spatial.frame(frame)
+		if writer.workingYUV {
+			frame, err = writer.spatial.workingFrame(frame)
+		} else {
+			frame, err = writer.spatial.frame(frame)
+		}
 		if err != nil {
 			return err
 		}

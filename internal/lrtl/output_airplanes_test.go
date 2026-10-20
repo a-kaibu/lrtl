@@ -425,7 +425,7 @@ func TestAirplaneRemovalPresetBatchAndValidation(t *testing.T) {
 		preset.RemoveAirplanes, preset.RemoveAirplanesLevel, preset.OutputResV = true, level, 32
 		path := savePresetJSON(t, preset)
 		presetBefore := denoiseRead(t, path)
-		markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "direct.mp4"), "--ffmpeg", executable, "--remove-airplanes", strconv.Itoa(level))
+		markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "direct.mp4"), "--ffmpeg", executable, "--remove-airplanes", strconv.Itoa(level), "--output-color", "lrt-7.5.5")
 		want := denoiseRead(t, capture)
 		markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "preset.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path)
 		if !bytes.Equal(want, denoiseRead(t, capture)) {

@@ -51,6 +51,18 @@ func (f *nativeSpatialFilter) frame(rgb []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return f.filterPlanes(planes, len(rgb)), nil
+}
+
+func (f *nativeSpatialFilter) workingFrame(frame []byte) ([]byte, error) {
+	if f.width <= 0 || f.height <= 0 || len(frame)%6 != 0 || len(frame)/6/f.width != f.height || len(frame)/6%f.width != 0 {
+		return nil, fmt.Errorf("invalid native working frame dimensions")
+	}
+	planes := outputFrameColor(true).planes(frame, f.width, f.height)
+	return f.filterPlanes(planes, len(frame)), nil
+}
+
+func (f *nativeSpatialFilter) filterPlanes(planes [3][]uint16, size int) []byte {
 	if f.sharpen {
 		planes[0] = sharpenLuma10(planes[0], f.width, f.height)
 	}
@@ -61,11 +73,11 @@ func (f *nativeSpatialFilter) frame(rgb []byte) ([]byte, error) {
 	}
 	// FFmpeg receives the already converted and filtered planar samples. No
 	// RGB round trip or second matrix conversion can alter chroma or clipping.
-	out := make([]byte, len(rgb))
+	out := make([]byte, size)
 	for p := range planes {
 		for i, v := range planes[p] {
 			binary.LittleEndian.PutUint16(out[(p*len(planes[p])+i)*2:], v)
 		}
 	}
-	return out, nil
+	return out
 }

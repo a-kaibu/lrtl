@@ -98,6 +98,7 @@ type airplaneRemover struct {
 	width, height, count, level, next, emitted int
 	cache                                      map[int]airplaneInput
 	load                                       func(int) ([]byte, error)
+	color                                      outputFrameColor
 }
 
 func newAirplaneRemover(width, height, count, level int, load func(int) ([]byte, error)) *airplaneRemover {
@@ -121,7 +122,7 @@ func (a *airplaneRemover) frame(index int) ([]byte, error) {
 		if len(rgb) != a.width*a.height*6 {
 			return nil, fmt.Errorf("airplane removal source frame %d has inconsistent dimensions", a.next+1)
 		}
-		a.cache[a.next] = airplaneInput{rgb, outputYUV10(rgb, a.width, a.height)}
+		a.cache[a.next] = airplaneInput{rgb, a.color.planes(rgb, a.width, a.height)}
 		a.next++
 	}
 	anchor := a.cache[index]
@@ -145,13 +146,7 @@ func (a *airplaneRemover) frame(index int) ([]byte, error) {
 	// tmedian timestamps each window from its first frame, not its center.
 	// Preserve the RGB16 residual of that same anchor when applying YUV deltas.
 	rgb := bytes.Clone(anchor.rgb)
-	for i := 0; i < a.width*a.height; i++ {
-		var delta [3]float64
-		for p := range delta {
-			delta[p] = float64(int(filtered[p][i])-int(anchor.planes[p][i])) * (65535.0 / 1023)
-		}
-		addOutputYUVDelta(rgb[i*6:], delta)
-	}
+	a.color.apply(rgb, anchor.planes, filtered)
 	a.emitted++
 	return rgb, nil
 }
