@@ -2,6 +2,32 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Output sharpening
+
+Four isolated native filter-builder calls establish the on/off mapping to
+`unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=0.4`, for both saved video
+ranges. LRT's normal graph places it after speed/tmix and before overlays/fade;
+its input is already yuv444p10le. Six synthetic 32x16 10-bit luma planes were
+processed by the installed bundled FFmpeg 8.0.1; all 3072 samples match the
+independent Go plane kernel. See the adjacent fixture provenance notes.
+
+The measured high-depth arithmetic has a much weaker gain than the 8-bit
+path: one rounded 12-bit binomial convolution followed by a signed 24-bit
+fixed-point gain shift. Go intentionally matches these measurements rather
+than applying an ordinary 0.4 gain directly to RGB16. Output rendering derives
+full-range BT.709 luma independently and adds the resulting difference to
+RGB48. This conversion, channel clipping, and its position relative to final
+YUV/range conversion are approximations; native whole-video parity is not
+established. Very small plane widths and other FFmpeg versions are not covered
+by the stored native plane comparison.
+
+`--sharpen` and saved `sharpen` work with explicit false override and batch
+forwarding. The Go effect runs after resizing/speed/temporal blending, before
+overlays and fade. TIFF/preview image exports clear this video-only setting.
+Tests cover measured planes, 16-bit precision/chroma/clipping, alpha composition,
+buffer ownership during duplicate frames, ordering, AVI JPEG bypass/encoding,
+preset overrides and retention of source/XMP/preset/existing output files.
+
 ## Explicit video range
 
 Three native color-filter-builder observations in

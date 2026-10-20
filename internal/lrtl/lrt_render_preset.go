@@ -156,7 +156,7 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}{
 		{"interpolation", preset.Interpolation != 0},
 		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
-		{"sharpen", preset.Sharpen}, {"cas", preset.CAS}, {"removeAirplanes", preset.RemoveAirplanes},
+		{"cas", preset.CAS}, {"removeAirplanes", preset.RemoveAirplanes},
 		{"denoise", preset.Denoise}, {"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
 	} {
 		if field.active {
@@ -165,6 +165,9 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}
 	if len(unsupported) > 0 {
 		return options, fmt.Errorf("LRT render preset uses unsupported controls: %s", strings.Join(unsupported, ", "))
+	}
+	if !explicit["sharpen"] {
+		options.OutputSharpen = preset.Sharpen
 	}
 	if preset.OutputQuality < 0 || preset.OutputQuality > 5 {
 		return options, fmt.Errorf("LRT outputQuality must be between 0 and 5")

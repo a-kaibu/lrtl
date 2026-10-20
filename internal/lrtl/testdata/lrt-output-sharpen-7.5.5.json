@@ -1,0 +1,6 @@
+[
+{"videoRange":0,"enabled":false,"filter":""},
+{"videoRange":0,"enabled":true,"filter":"unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=0.4"},
+{"videoRange":1,"enabled":false,"filter":""},
+{"videoRange":1,"enabled":true,"filter":"unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=0.4"}
+]

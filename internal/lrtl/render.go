@@ -25,6 +25,7 @@ type RenderOptions struct {
 	FadeOutSeconds    float64
 	PlaybackSpeed     float64
 	VideoRange        string
+	OutputSharpen     bool
 	Quality           int
 	FFmpegPath        string
 	Codec             string
@@ -652,6 +653,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 						return blendErr
 					}
 				}
+				if options.OutputSharpen {
+					sharpenOutputRGB48(rgb, outputWidth, outputHeight)
+				}
 				var img image.Image
 				if overlayFace != nil || outputExtension == ".avi" {
 					img, err = imageFromRGB48(rgb, outputWidth, outputHeight)
@@ -756,6 +760,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
 			}
+			if options.OutputSharpen {
+				img, err = sharpenOutputImage(img)
+				if err != nil {
+					return err
+				}
+			}
 			if options.TimestampOverlay {
 				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), overlayFace)
 			}
@@ -778,7 +788,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || format != "jpeg" || fade.gain(index, rate) < 1 {
+		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || options.OutputSharpen || format != "jpeg" || fade.gain(index, rate) < 1 {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
@@ -809,6 +819,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			}
 			if resizeFrames {
 				img = resizeFrame(img, outputWidth, outputHeight)
+			}
+			if options.OutputSharpen {
+				img, err = sharpenOutputImage(img)
+				if err != nil {
+					return err
+				}
 			}
 			if options.TimestampOverlay {
 				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), overlayFace)

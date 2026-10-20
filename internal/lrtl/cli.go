@@ -884,6 +884,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores-proxy|prores-lt|prores|prores-hq|prores-4444|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
 	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
 	fadeOut := set.Float64("fade-out", 0, "fade video and audio to black/silence over the final seconds (0 off)")
+	sharpen := set.Bool("sharpen", false, "apply output luma sharpening before overlays and fade")
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
@@ -1019,6 +1020,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		FadeOutSeconds:    *fadeOut,
 		PlaybackSpeed:     *speed,
 		VideoRange:        *videoRange,
+		OutputSharpen:     *sharpen,
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
@@ -1087,6 +1089,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	features = append(features, strings.ToUpper(selectedCodec)+" codec")
+	if options.OutputSharpen {
+		features = append(features, "output sharpening")
+	}
 	if value, _ := normalizeVideoRange(options.VideoRange); value != "auto" {
 		features = append(features, value+" video range")
 	}

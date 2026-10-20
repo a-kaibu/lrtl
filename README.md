@@ -143,6 +143,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | DNG変換 | 取り込み時のロスレス/ロッシーDNG変換、サイズ縮小（Pro） | `import --convert-dng`はAdobe DNG Converterを既定で使い、lossless/uncompressed/lossy DNGと隣接XMPを取り込む。`--dng-long-edge`でロッシーDNGの長辺を制限できる。`--dnglab PATH`でDNGLabを明示選択可能。ロッシーと縮小はAdobeバックエンドのみ。LRTプリセットとの画素一致、JPEG XLは未対応 | 一部 |
 | バッチ・並列処理 | バッチプレビュー/補正、マルチスレッド処理 | `batch-render ROOT --output DIRECTORY`で複数の画像連番を動画化。既定でルート自身と直下、`--recursive`で全階層から連番フォルダーを検索し、`--workers`で並列数を指定。`--`以降で通常の`render`オプションを共通指定できる。`batch-interpolate ROOT`は同じ探索範囲でXMPを一括補間し、並列解析・全連番の内容検証・バックアップ付き保存に対応。`batch-deflicker ROOT`は複数パス・RAW/XMP解析・リセットを一括実行し、全連番の内容検証後に保存。`batch-holy-grail ROOT`はEXIF/LRT入力・自動形状・評価マーク・リセットを一括解析し、全連番の内容検証後に保存。`batch-preview-images ROOT --output NEW_DIRECTORY`でJPEG連番・測光結果を並列生成し、任意で元XMPへPreview EVを保存。全連番の生成・XMP内容検証後に出力を公開 | 一部 |
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
+| 出力時シャープ | 動画レンダー時の追加シャープ | `render --sharpen`とプリセットの`sharpen`に対応。純Goで7×7の輝度処理を実装し、LRT同梱FFmpegの10-bit輝度実測6パターン・3072画素と比較。Motion Blurの後、透かし・フェードの前へ適用。RGB/YUV変換は独自近似で、本体の動画全体との画素一致は未確認。CASは未対応 | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
 
 ### LRTimelapse 7のライセンス別機能
@@ -582,11 +583,26 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --lrt-render-
 
 `encoder`、`frameRate`、`outputResV`、`outputQuality`を必須とし、省略可能な項目には本体のコンストラクターで観測した既定値を使います。読み込むのは指定したJSONだけで、LRTのグローバル設定を自動探索・変更しません。JSON内の音声が有効な場合、相対パスはそのJSONのフォルダーを基準に解決します。設定JSON全体の`renderConstrainCrop=true`では`renderAR`も使います。動画の拡張子は選んだコーデックに合わせて指定してください。
 
-CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
+CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
 
-HDR・広色域・フレーム生成・追加シャープ・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420に限ります。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
+HDR・広色域・フレーム生成・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420に限ります。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
 
 この対応に合わせ、`--codec prores-proxy|prores-lt|prores-4444`も追加しました。FFmpegにはProRes 4444用10-bit YUVを渡し、ffprobeでは4444・12-bitのデコード形式として報告されることを確認しています。完全な12-bit入力精度やアルファチャンネルの保持は実装していません。本体で生成した6種類のJSONと画質ヘルパー値、明示CLIとの画素入力・引数一致、設定と元画像の保持、バッチ転送、不正設定時の出力保持、実MOVのプロファイルをテストしています。
+
+### 出力時シャープ
+
+`render --sharpen`は、リサイズ・速度変更・Motion Blurの後、撮影日時・透かし・フェードの前に輝度のシャープ処理を追加します。AVIでも外部ライブラリやFFmpegを使わず純Goで動作します。XMPの`crs:Sharpness`を使う現像処理とは別の、動画専用オプションです。`export`や`preview-images`の静止画には適用しません。
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\video.avi --sharpen
+lrtl render C:\photos\sequence --output C:\photos\video.mp4 --sharpen
+lrtl render C:\photos\sequence --output C:\photos\video.mp4 --lrt-render-preset C:\photos\preset.json --sharpen=false
+lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --sharpen
+```
+
+保存プリセットの`sharpen`を読み込み、CLIの`--sharpen`／`--sharpen=false`を優先します。既定は無効です。LRT 7.5.5の生成フィルター4件と、同梱FFmpeg 8.0.1で処理した32×16の10-bit輝度6パターン（計3072画素）を観察してテストに保存しました。7×7の二項カーネル、端の画素の複製、固定小数点の丸めを比較しています。同梱版の10-bit経路は8-bit経路より効果が弱く、その実測に合わせています。
+
+動画処理ではRGB48からBT.709の10-bit輝度を近似し、得られた差をRGB各成分へ加えます。クリップしない範囲の色差とRGB16の細部を保持しますが、RGB/YUV変換・レンジ変換を含むLRTの出力動画全体との画素一致は未確認です。処理順、速度によるフレーム複製、16-bit値・アルファの黒背景合成、JPEG保持、AVI画素、プリセット解除、バッチ転送、元画像/XMPと既存出力の保持を回帰テストに含めています。実測値の出所と再照合方法は[観察ノート](internal/lrtl/testdata/lrt-output-sharpen-7.5.5.md)を参照してください。
 
 ## 動画と字幕のフレームレート
 
