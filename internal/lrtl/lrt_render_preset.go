@@ -260,6 +260,9 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}
 	if !explicit["fps"] {
 		options.FrameRate = preset.FrameRate
+		options.NativeFPS = true
+	} else {
+		options.NativeFPS = false
 	}
 	if _, err := options.frameRate(); err != nil {
 		return options, err

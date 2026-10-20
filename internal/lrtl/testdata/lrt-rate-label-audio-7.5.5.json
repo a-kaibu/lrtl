@@ -1,0 +1,7 @@
+[
+{"fps":"3.4","audioFade":"afade=t=out:st=3.412:d=1.0","audioTrim":"atrim=duration=4.412","window":0,"speed":1.0,"sourceFrames":15,"trim":"","fade":"fade=t=out:st=3.412:d=1.0","temporal":"setpts=N/(3000/1001)/TB"},
+{"fps":"3.5","audioFade":"afade=t=out:st=3.286:d=1.0","audioTrim":"atrim=duration=4.286","window":0,"speed":1.0,"sourceFrames":15,"trim":"","fade":"fade=t=out:st=3.286:d=1.0","temporal":"setpts=N/(4000/1001)/TB"},
+{"fps":"24.5","audioFade":"afade=t=out:st=0.000:d=0.6122449","audioTrim":"atrim=duration=0.612","window":0,"speed":1.0,"sourceFrames":15,"trim":"","fade":"fade=t=out:st=0.000:d=0.6122449","temporal":"setpts=N/(25000/1001)/TB"},
+{"fps":"23.90625","audioFade":"afade=t=out:st=0.000:d=0.627451","audioTrim":"atrim=duration=0.627","window":0,"speed":1.0,"sourceFrames":15,"trim":"","fade":"fade=t=out:st=0.000:d=0.627451","temporal":"setpts=N/(24000/1001)/TB"},
+{"fps":"24.0009","audioFade":"afade=t=out:st=0.000:d=0.6249766","audioTrim":"atrim=duration=0.625","window":0,"speed":1.0,"sourceFrames":15,"trim":"","fade":"fade=t=out:st=0.000:d=0.6249766","temporal":"setpts=N/(24)/TB"}
+]

@@ -21,6 +21,7 @@ type RenderOptions struct {
 	LRTPreview            string
 	FPS                   int
 	FrameRate             string
+	NativeFPS             bool
 	FadeOutSeconds        float64
 	PlaybackSpeed         float64
 	Interpolation         int
@@ -198,10 +199,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		airplaneLevel = 0
 		interpolationMode = 0
 	}
-	label := options.FrameRate
-	if label == "" {
-		label = rate.String()
-	}
+	label := options.frameRateLabel()
 	timeline, err := planInterpolatedVideoFrames(len(frames), speed, trimWindow, airplaneLevel, interpolationMode, rate, label)
 	if err != nil {
 		return err

@@ -100,6 +100,7 @@ func ExportTIFFSequence(frames []Frame, output string, options RenderOptions) er
 	// renderer validates them before starting any destination.
 	options.FPS, options.Quality = 24, 90
 	options.FrameRate = ""
+	options.NativeFPS = false
 	options.FadeOutSeconds = 0
 	options.PlaybackSpeed = 1
 	options.Interpolation = 0

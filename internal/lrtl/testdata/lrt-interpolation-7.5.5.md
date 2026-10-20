@@ -5,9 +5,10 @@ fps labels (24, 29.97, 23.976), twelve float speeds and modes 0/1/2. All 108
 returned filter strings are recorded in `lrt-interpolation-filter-7.5.5.json`.
 Three additional returned graphs in `lrt-interpolation-rounding-7.5.5.json`
 check Java's half-up decimal formatting (47.8125 becomes 47.813, not 47.812).
-Those unusual labels also expose native NTSC label mapping; only the helper's
-intermediate-fps rounding is asserted for these additional cases. Complete
-native rate-label mapping beyond the ordinary preset choices is unverified.
+Those unusual labels also expose native NTSC label mapping. The broader
+[rate-label comparison](lrt-rate-label-7.5.5.md) now records 156 labels and
+282 complete playback graphs. Standalone CLI decimals retain their literal
+semantics; the native mapping is applied when loading a stored preset fps.
 The caller uses this helper when speed differs from float32 1, and normally
 resets timestamps without interpolation at speed 1. The complete caller gates
 nonzero modes; no activation state or license checks were modified. Direct

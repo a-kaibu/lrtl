@@ -1303,3 +1303,20 @@ metadata. Tests also cover JPEG AVI, ownership, input errors, dropped source
 tails, memory guards and retention. Full native color conversion and gated
 application output remain unverified. See
 [`lrt-interpolation-7.5.5.md`](../internal/lrtl/testdata/lrt-interpolation-7.5.5.md).
+
+## Stored fps label conversion and subtitle presets (LRT 7.5.5)
+
+The static rate helper and half-speed generator were run for 156 labels. Native
+labels within .001 of their nearest integer become integer fps; others become
+roundedInteger*1000/1001. Stored preset fps now uses this mapping, including the
+observed Java exponent/hex/suffix forms. Explicit CLI fps remains literal.
+282 bundled-FFmpeg graphs verify full output hashes, counts and source IDs for
+the translated rate and original-label interpolation clock. Five full native
+graph-builder observations and real H.264/AAC outputs verify independent raw
+label audio/fade durations, including audio shorter and longer than video.
+
+Subtitles can load the same direct/named render preset and retain explicit flag
+priority. Tests cover shared timing, batch video equality, settings/source
+retention and failure retention. The comparison excludes the separate native
+UI fps helper and full color management. See
+[`lrt-rate-label-7.5.5.md`](../internal/lrtl/testdata/lrt-rate-label-7.5.5.md).

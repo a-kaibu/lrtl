@@ -1094,10 +1094,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	actualLabel := options.FrameRate
-	if actualLabel == "" {
-		actualLabel = actualRate.String()
-	}
+	actualLabel := options.frameRateLabel()
 	timeline, err := planInterpolatedVideoFrames(len(frames), actualSpeed, options.MotionBlurFrames, options.RemoveAirplanes, options.Interpolation, actualRate, actualLabel)
 	if err != nil {
 		return reportError(stderr, err)
@@ -1254,6 +1251,8 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("subtitles", stderr)
 	output := set.String("output", "", "write timestamp subtitles to an SRT file")
+	lrtPreset := set.String("lrt-render-preset", "", "match timing from a saved LRT render preset or settings JSON")
+	lrtPresetName := set.String("lrt-preset-name", "", "choose an exact native render preset name")
 	fps := set.String("fps", "24", "video frame rate for subtitle timing (1-240; decimals or fractions)")
 	speed := set.Float64("speed", 1, "video playback speed (0.0625-16)")
 	motionBlur := set.Int("motion-blur", 0, "match the video's Motion Blur warm-up trim")
@@ -1269,35 +1268,55 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 		"--remove-airplanes": true, "-remove-airplanes": true,
 		"--timestamp-format": true, "-timestamp-format": true,
 		"--interpolation": true, "-interpolation": true,
+		"--lrt-render-preset": true, "-lrt-render-preset": true,
+		"--lrt-preset-name": true, "-lrt-preset-name": true,
 	})); err != nil {
 		if help, code := finishFlagParse(set, err); help {
-			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]")
 			return code
 		} else {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	rate, err := parseFrameRate(*fps)
+	options := RenderOptions{FPS: 24, FrameRate: *fps, PlaybackSpeed: *speed, MotionBlurFrames: *motionBlur, RemoveAirplanes: *airplanes, Interpolation: *interpolation, VideoRange: "auto"}
+	if *lrtPresetName != "" && *lrtPreset == "" {
+		return reportError(stderr, fmt.Errorf("--lrt-preset-name requires --lrt-render-preset"))
+	}
+	if *lrtPreset != "" {
+		preset, err := loadLRTRenderPreset(*lrtPreset, *lrtPresetName)
+		if err != nil {
+			return reportError(stderr, fmt.Errorf("LRT render preset: %w", err))
+		}
+		explicit := map[string]bool{}
+		set.Visit(func(parsed *flag.Flag) { explicit[parsed.Name] = true })
+		options, err = applyLRTRenderPreset(options, preset, *lrtPreset, explicit)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		fmt.Fprintf(stdout, "LRT render preset: %s\n", preset.Name)
+	}
+	rate, err := options.frameRate()
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	actualSpeed, err := validatePlaybackSpeed(*speed)
+	actualSpeed, err := options.playbackSpeed()
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	timeline, err := planInterpolatedVideoFrames(len(frames), actualSpeed, *motionBlur, *airplanes, *interpolation, rate, *fps)
+	label := options.frameRateLabel()
+	timeline, err := planInterpolatedVideoFrames(len(frames), actualSpeed, options.MotionBlurFrames, options.RemoveAirplanes, options.Interpolation, rate, label)
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	outputCount := timeline.count()
-	if err := writeSequenceSubtitlesWithInterpolation(frames, *output, rate, *fps, actualSpeed, *motionBlur, *airplanes, *interpolation, *timestampFormat, *overwrite); err != nil {
+	if err := writeSequenceSubtitlesWithInterpolation(frames, *output, rate, label, actualSpeed, options.MotionBlurFrames, options.RemoveAirplanes, options.Interpolation, *timestampFormat, *overwrite); err != nil {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %s fps: %s\n", outputCount, rate.String(), *output)

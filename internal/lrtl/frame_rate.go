@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"regexp"
 	"strconv"
@@ -59,9 +60,60 @@ func (rate frameRate) String() string {
 
 func (options RenderOptions) frameRate() (frameRate, error) {
 	if options.FrameRate != "" {
+		if options.NativeFPS {
+			return parseNativeFrameRate(options.FrameRate)
+		}
 		return parseFrameRate(options.FrameRate)
 	}
 	return parseFrameRate(strconv.Itoa(options.FPS))
+}
+
+// Native stored fps labels are parsed as Java floating-point literals. Keep
+// this separate from the CLI's exact decimal/fraction interface.
+func nativeFrameRateLabel(text string) string {
+	text = strings.TrimFunc(text, func(r rune) bool { return r <= 32 })
+	if len(text) > 0 && !strings.Contains(text, "/") {
+		switch text[len(text)-1] {
+		case 'f', 'F', 'd', 'D':
+			text = text[:len(text)-1]
+		}
+	}
+	return text
+}
+
+func parseNativeFrameRate(text string) (frameRate, error) {
+	if len(text) > 64 {
+		return frameRate{}, fmt.Errorf("native fps label exceeds 64 characters")
+	}
+	label := nativeFrameRateLabel(text)
+	if strings.Contains(label, "_") {
+		return frameRate{}, fmt.Errorf("invalid native fps label: %q", text)
+	}
+	// Fraction labels are an lrtl extension. The native rate helper passes
+	// them through, although its other Float.parseFloat consumers reject them.
+	if strings.Contains(label, "/") {
+		return parseFrameRate(label)
+	}
+	value, err := strconv.ParseFloat(label, 64)
+	if err != nil || math.IsNaN(value) || math.IsInf(value, 0) || value <= 0 || value > 241 {
+		return frameRate{}, fmt.Errorf("invalid native fps label: %q", text)
+	}
+	nearest := math.Floor(value + .5)
+	translated := strconv.FormatFloat(nearest, 'f', 0, 64)
+	if math.Abs(value-nearest) >= .001 {
+		translated = strconv.FormatFloat(nearest*1000, 'f', 0, 64) + "/1001"
+	}
+	return parseFrameRate(translated)
+}
+
+func (options RenderOptions) frameRateLabel() string {
+	if options.FrameRate != "" {
+		if options.NativeFPS {
+			return nativeFrameRateLabel(options.FrameRate)
+		}
+		return options.FrameRate
+	}
+	return strconv.Itoa(options.FPS)
 }
 
 func (rate frameRate) seconds(frames int) float64 {

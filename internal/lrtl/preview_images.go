@@ -124,6 +124,7 @@ func GeneratePreviewImages(frames []Frame, output string, options RenderOptions)
 	}
 	options.FPS = 24
 	options.FrameRate = ""
+	options.NativeFPS = false
 	options.FadeOutSeconds = 0
 	options.PlaybackSpeed = 1
 	options.Interpolation = 0
