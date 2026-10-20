@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `render --output-deflicker-luma`／`--output-deflicker-chroma`と保存プリセットの動画デフリッカーに対応しました。純Goの10枚パワー平均を、短い連番・末尾を含む288ケース・686,556画素の参照と比較。プリセットでは出力クロップ前に測光し、ノイズ除去・光跡除去・速度変更より前に適用します。実動画、バッチ、無効化、異常時の保持もテストしています。色変換と本体全体の画素一致は未確認です。
+
 - `render --remove-airplanes 1..3`と保存プリセットの光跡除去に対応しました。純Goで3枚／5枚の時間中央値と中・強段階の輝度補正を実装し、102件・323,253画素と比較。速度変更時に末尾の処理画像を保持する動作と前後の切り詰めも100ケースで確認し、字幕へ反映しました。実動画・音声の長さ、処理順、バッチ、失敗時の保持をテストしています。色管理と本体の動画全体の完全一致は未確認です。
 
 - `render --denoise 1..4`と保存プリセットの動画ノイズ除去に対応しました。純Goで時間方向の平均化、CDF 9/7ウェーブレット、最強段階の点状ノイズ前処理を実装。354件・644,058画素の観測値と、最大10段の変換を含む約428万画素の全出力ハッシュを比較しました。速度変更・Motion Blurより前に処理し、プリセット解除、バッチ、実動画、異常時の保持もテストしています。RGB/YUV変換と一部の本体SIMD動作には差があります。
@@ -151,6 +153,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | GUI | シーケンス一覧、カーブ表示、プレビュー編集 | `lrtl gui`でループバック限定のローカルWeb UIを起動。画像一覧/サムネイル、全フレームのXMP Exposure2012と解析した画像輝度のグラフ表示、クリックによるフレーム選択、選択フレームの131数値プロパティ編集と対応範囲のXMP値を適用する静止画プレビュー、元画像上のドラッグによるクロップ矩形/回転角度の編集と5★保存、4/5つ星マーク、輝度分析で候補一覧を出し選択保存、JPEG/PNG/TIFFまたはRAW内蔵プレビュー/Adobe DNG Converterによる現像を使った候補分析、XMP補間、動画レンダーを操作できる。レンダーは比率/解像度、音声、選択JSON/ファイル名フィルター、撮影日時と透かし、モーションブラー、H.264/H.265品質も指定可能。書き込みとレンダー開始前に確認を求め、XMPの既存バックアップを作成。グラフからの現像値編集、LRT連続画像Visual Preview、Camera Raw現像プレビュー、フォルダー選択ダイアログ、フレーム移動/削除は未対応 | 一部 |
 | 出力時シャープ | 動画レンダー時の追加シャープ・CAS | `render --sharpen`／`--cas`と保存済みの両設定に対応。純Goで7×7輝度シャープとCAS 0.90の輝度・色差処理を実装。LRT同梱FFmpegの10-bit実測で通常シャープ6パターン・3072画素、CAS 24パターン・12,288画素を比較。Motion Blur→通常シャープ→CAS→透かし→フェードの順に適用。RGB/YUV変換は独自近似で、本体の動画全体との画素一致は未確認 | 一部 |
 | 動画ノイズ除去 | 4段階の時間・空間ノイズ除去 | `render --denoise 1..4`と保存済み`denoise`／`denoiseLevel`に対応。純Goの時間平均とウェーブレット、最強段階の点状ノイズ前処理。速度変更・Motion Blurより前に適用。354件の平面/連番観測と深い変換の全出力ハッシュを比較。RGB/YUV変換は独自近似。本体の小画像SIMD処理には差があり、色管理の完全一致は未確認 | 一部 |
+| レンダー時のLuma/Chroma Deflicker | 輝度・色差の時間方向の補正 | `--output-deflicker-luma`／`--output-deflicker-chroma`と保存済み`deflickerLuma`／`deflickerChroma`に対応。純Goの10枚パワー平均、短い連番と末尾の挙動を288ケース・686,556画素で比較。実動画・バッチ・処理順をテスト。RGB/YUV変換と本体全体の出力一致は未確認 | 一部 |
 | 飛行機の光跡除去 | 時間中央値による一時的な光跡の抑制 | `render --remove-airplanes 1..3`と保存済み`removeAirplanes`／`removeAirplanesLevel`に対応。弱・中は3枚、強は5枚の中央値。中・強の輝度・ハイライト・色差制限も実装。速度変更・Motion Blur、字幕・音声・フェードの時間計算、バッチをテスト。本体の生成ヘルパーと呼び出し式から得た観測との比較で、色管理・全アプリ出力の一致は未確認 | 一部 |
 | 出力時リサイズ | レンダー解像度へのLanczos拡大縮小 | 純GoのLanczos3へ変更し、画像の端へ重みを折り返す。16-bit画素とアルファを保持。同梱FFmpegの16-bitグレー24ケース・16,338画素でRMSEを旧方式の約980から約44へ削減。プリセット読込は本体480件の寸法に一致し、最終領域だけを計算して大きな中間画像を作らない。RGB/YUV・固定小数点処理の完全一致は未確認 | 一部 |
 | クロップ位置 | レンダー時の切り出し位置 | `render --crop-position 0..100`で左／上から右／下へ指定。50は従来の中央。保存プリセットの寸法処理と通常の`--aspect`の両方に対応し、本体288件の矩形と比較。AVI・MP4・Motion Blur・バッチ・保持テスト済み。保存JSONの位置フィールドは見つかっておらず自動読込は行わない | 一部 |
@@ -669,9 +672,9 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --lrt-render-
 
 `encoder`、`frameRate`、`outputResV`、`outputQuality`を必須とし、省略可能な項目には本体のコンストラクターで観測した既定値を使います。読み込むのは指定したJSONだけで、LRTのグローバル設定を自動探索・変更しません。JSON内の音声が有効な場合、相対パスはそのJSONのフォルダーを基準に解決します。設定JSON全体の`renderConstrainCrop=true`では`renderAR`も使います。動画の拡張子は選んだコーデックに合わせて指定してください。
 
-CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`、`--cas`、`--denoise`、`--remove-airplanes`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
+CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`、`--sharpen`、`--cas`、`--denoise`、`--remove-airplanes`、`--output-deflicker-luma`、`--output-deflicker-chroma`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
 
-HDR・広色域・フレーム生成・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420／422／444を読み込み、明示した`--subsampling`を優先します。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
+HDR・広色域・フレーム生成が有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420／422／444を読み込み、明示した`--subsampling`を優先します。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
 
 この対応に合わせ、`--codec prores-proxy|prores-lt|prores-4444`も追加しました。FFmpegにはProRes 4444用10-bit YUVを渡し、ffprobeでは4444・12-bitのデコード形式として報告されることを確認しています。完全な12-bit入力精度やアルファチャンネルの保持は実装していません。本体で生成した6種類のJSONと画質ヘルパー値、明示CLIとの画素入力・引数一致、設定と元画像の保持、バッチ転送、不正設定時の出力保持、実MOVのプロファイルをテストしています。
 
@@ -728,6 +731,22 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --denoise 2
 時間方向の判定・端の処理、CDF 9/7変換、最強段階の8-bit中間変換を、同梱FFmpeg 8.0.1の354件・644,058出力値と比較しています。最大10段の変換も約428万画素の全出力ハッシュで確認しました。通常CPU実行と`-cpuflags 0`の観測を区別しており、本体SIMD経路の一部小画像では差が残ります。RGB48とYUV10の変換は独自近似で、本体の色管理・HDRや動画全体の完全な画素一致は未対応です。
 
 ノイズ除去とMotion Blurを合わせたフレームバッファーの推定が768 MiBを超える場合は、出力作成前にエラーにします。`--long-edge`／`--output-height`、ノイズ除去の段階、Motion Blurの窓を下げてください。元画像やXMPは変更しません。[観測値・SIMD差・検証条件](internal/lrtl/testdata/lrt-denoise-7.5.5.md)を記録しています。
+
+### レンダー時の輝度・色差デフリッカー
+
+`--output-deflicker-luma`で輝度、`--output-deflicker-chroma`で色差のフレーム間変化を補正します。保存プリセットの`deflickerLuma`／`deflickerChroma`も読み込み、明示した`--output-deflicker-luma=false`／`--output-deflicker-chroma=false`を優先します。XMP露出を解析・変更する既存の`deflicker`／`render --deflicker`とは別の、動画出力だけの処理です。
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\smooth.mp4 --output-deflicker-luma --output-deflicker-chroma
+lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --output-deflicker-chroma
+lrtl render C:\photos\sequence --output C:\photos\smooth.mp4 --lrt-render-preset C:\photos\preset.json --output-deflicker-luma=false
+```
+
+本体の生成ヘルパーが指定する10枚のパワー平均を純Goで適用します。各フレームと後続9枚の平面平均を使い、フレーム数・撮影時刻は変えません。10枚未満の連番では未使用スロットがゼロのまま計算されるため、一定の明るさでも暗くなる場合があります。末尾は本体フィルターの縮小するキューと平均値スロットの更新を再現します。
+
+保存プリセットでは、全体リサイズ後・出力クロップ前に測光・補正します。通常のCLIでは指定したアスペクト比・出力寸法へ変換した画像を使います。その後、ノイズ除去→光跡除去→速度変更→Motion Blur→Sharpen/CAS→オーバーレイ→フェードの順に処理します。中間TIFF・JPEGプレビューには適用しません。最大10枚のRGB16入力を保持し、併用する時間フィルターを含むバッファ見積もりが768 MiBを超える場合は出力前にエラーにします。
+
+288ケース・686,556画素の平面参照、短い連番と末尾、クロップ位置、処理順、プリセット・バッチ、JPEG AVI、実H.264/H.265の18ケース、失敗時の既存出力保持をテストしています。RGB16/YUV10変換は独自の近似で、本体全体の画素一致は未確認です。参照の採取範囲と再実行方法は[測定記録](internal/lrtl/testdata/lrt-output-deflicker-7.5.5.md)を参照してください。
 
 ### 飛行機の光跡除去
 

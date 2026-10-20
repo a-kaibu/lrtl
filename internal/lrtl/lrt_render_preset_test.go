@@ -192,7 +192,7 @@ func TestLRTRenderPresetRejectsUnsupportedBeforeSaving(t *testing.T) {
 	if err := json.Unmarshal(renderPresetObservations(t)[0].Preset, &original); err != nil {
 		t.Fatal(err)
 	}
-	for field, value := range map[string]any{"speed": 0, "interpolation": 1, "gamut": 1, "dynamicRange": 1, "deflickerLuma": true, "deflickerChroma": true, "subSampling": "411", "encoder": "unknown", "outputQuality": 6, "frameRate": "NaN", "outputResV": -1} {
+	for field, value := range map[string]any{"speed": 0, "interpolation": 1, "gamut": 1, "dynamicRange": 1, "subSampling": "411", "encoder": "unknown", "outputQuality": 6, "frameRate": "NaN", "outputResV": -1} {
 		t.Run(field, func(t *testing.T) {
 			mutated := map[string]any{}
 			for key, item := range original {

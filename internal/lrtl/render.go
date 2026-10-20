@@ -18,49 +18,51 @@ import (
 )
 
 type RenderOptions struct {
-	LRTPreview        string
-	FPS               int
-	FrameRate         string
-	FadeOutSeconds    float64
-	PlaybackSpeed     float64
-	VideoRange        string
-	OutputSharpen     bool
-	OutputCAS         bool
-	OutputDenoise     int
-	RemoveAirplanes   int
-	Quality           int
-	FFmpegPath        string
-	Codec             string
-	Subsampling       string
-	CRF               int
-	Preset            string
-	LongEdge          int
-	OutputHeight      int
-	NativeGeometry    bool
-	NativeTiming      bool
-	CropPosition      *int
-	AspectRatio       float64
-	AudioPath         string
-	Overwrite         bool
-	Deflicker         bool
-	Reference         image.Rectangle
-	SmoothRadius      int
-	DeflickerPasses   int
-	DeflickerSmoother string
-	Constant          bool
-	ApplyXMPExposure  bool
-	ApplyXMPBasic     bool
-	ApplyXMPCrop      bool
-	AutoOrient        bool
-	TimestampOverlay  bool
-	TimestampFormat   string
-	Watermark         string
-	WatermarkPosition string
-	MotionBlurFrames  int
-	RawPreview        bool
-	RawDevelop        bool
-	DNGLabPath        string
-	DNGConverterPath  string
+	LRTPreview            string
+	FPS                   int
+	FrameRate             string
+	FadeOutSeconds        float64
+	PlaybackSpeed         float64
+	VideoRange            string
+	OutputSharpen         bool
+	OutputCAS             bool
+	OutputDenoise         int
+	RemoveAirplanes       int
+	OutputDeflickerLuma   bool
+	OutputDeflickerChroma bool
+	Quality               int
+	FFmpegPath            string
+	Codec                 string
+	Subsampling           string
+	CRF                   int
+	Preset                string
+	LongEdge              int
+	OutputHeight          int
+	NativeGeometry        bool
+	NativeTiming          bool
+	CropPosition          *int
+	AspectRatio           float64
+	AudioPath             string
+	Overwrite             bool
+	Deflicker             bool
+	Reference             image.Rectangle
+	SmoothRadius          int
+	DeflickerPasses       int
+	DeflickerSmoother     string
+	Constant              bool
+	ApplyXMPExposure      bool
+	ApplyXMPBasic         bool
+	ApplyXMPCrop          bool
+	AutoOrient            bool
+	TimestampOverlay      bool
+	TimestampFormat       string
+	Watermark             string
+	WatermarkPosition     string
+	MotionBlurFrames      int
+	RawPreview            bool
+	RawDevelop            bool
+	DNGLabPath            string
+	DNGConverterPath      string
 }
 
 func (options RenderOptions) deflickerSmoother() string {
@@ -407,6 +409,16 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err := validateAirplaneMemory(outputWidth, outputHeight, len(frames), airplaneLevel, options.OutputDenoise, options.MotionBlurFrames); err != nil {
 		return err
 	}
+	outputDeflickerEnabled := imageWriter == nil && (options.OutputDeflickerLuma || options.OutputDeflickerChroma)
+	deflickerWidth, deflickerHeight := outputWidth, outputHeight
+	if outputDeflickerEnabled && options.NativeGeometry {
+		deflickerWidth, deflickerHeight = nativeGeometry.scaleWidth, nativeGeometry.scaleHeight
+	}
+	if outputDeflickerEnabled {
+		if err := validateOutputDeflickerMemory(deflickerWidth, deflickerHeight, outputWidth, outputHeight, len(frames), options.OutputDenoise, airplaneLevel, options.MotionBlurFrames); err != nil {
+			return err
+		}
+	}
 	if options.MotionBlurFrames > 0 {
 		outputPixels := uint64(outputWidth) * uint64(outputHeight)
 		inputPixels := uint64(width) * uint64(height)
@@ -603,7 +615,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	}()
 
-	if options.MotionBlurFrames > 0 || speed != 1 || options.OutputDenoise > 0 || airplaneLevel > 0 {
+	if options.MotionBlurFrames > 0 || speed != 1 || options.OutputDenoise > 0 || airplaneLevel > 0 || outputDeflickerEnabled {
 		prepareMotionBlurFrame := func(index int) ([]byte, error) {
 			frame := frames[index]
 			data, frameConfig := first, config
@@ -657,7 +669,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				img = applyExposureGainFrame(img, gain)
 			}
 			if options.NativeGeometry {
-				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
+				if outputDeflickerEnabled {
+					img = resizeFrame(cropNativeEvenFrame(img, orientation), deflickerWidth, deflickerHeight)
+				} else {
+					img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
+				}
 			} else {
 				if options.AspectRatio > 0 {
 					img = cropImageToAspectAtPosition(img, options.AspectRatio, cropPosition)
@@ -667,6 +683,19 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				}
 			}
 			return imageRGB48(img)
+		}
+		if outputDeflickerEnabled {
+			filter := newOutputDeflicker(deflickerWidth, deflickerHeight, len(frames), options.OutputDeflickerLuma, options.OutputDeflickerChroma, prepareMotionBlurFrame)
+			prepareMotionBlurFrame = filter.frame
+			if options.NativeGeometry {
+				prepareMotionBlurFrame = func(index int) ([]byte, error) {
+					rgb, err := filter.frame(index)
+					if err != nil {
+						return nil, err
+					}
+					return cropOutputRGB48(rgb, deflickerWidth, nativeGeometry.crop), nil
+				}
+			}
 		}
 		if options.OutputDenoise > 0 {
 			denoiser := newOutputDenoiser(outputWidth, outputHeight, len(frames), options.OutputDenoise, prepareMotionBlurFrame)

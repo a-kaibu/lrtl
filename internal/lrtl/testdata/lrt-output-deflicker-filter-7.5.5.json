@@ -1,0 +1,6 @@
+[
+{"luma":false,"chroma":false,"filter":""},
+{"luma":false,"chroma":true,"filter":",extractplanes=y+u+v[y_in][u_in][v_in];[y_in]copy[y_out];[u_in]deflicker=mode=pm:size=10[u_out];[v_in]deflicker=mode=pm:size=10[v_out];[y_out][u_out][v_out]mergeplanes=format=yuv444p10le:map0s=0:map0p=0:map1s=1:map1p=0:map2s=2:map2p=0"},
+{"luma":true,"chroma":false,"filter":",extractplanes=y+u+v[y_in][u_in][v_in];[y_in]deflicker=mode=pm:size=10[y_out];[u_in]copy[u_out];[v_in]copy[v_out];[y_out][u_out][v_out]mergeplanes=format=yuv444p10le:map0s=0:map0p=0:map1s=1:map1p=0:map2s=2:map2p=0"},
+{"luma":true,"chroma":true,"filter":",extractplanes=y+u+v[y_in][u_in][v_in];[y_in]deflicker=mode=pm:size=10[y_out];[u_in]deflicker=mode=pm:size=10[u_out];[v_in]deflicker=mode=pm:size=10[v_out];[y_out][u_out][v_out]mergeplanes=format=yuv444p10le:map0s=0:map0p=0:map1s=1:map1p=0:map2s=2:map2p=0"}
+]

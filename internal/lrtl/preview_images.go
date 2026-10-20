@@ -131,6 +131,8 @@ func GeneratePreviewImages(frames []Frame, output string, options RenderOptions)
 	options.OutputCAS = false
 	options.OutputDenoise = 0
 	options.RemoveAirplanes = 0
+	options.OutputDeflickerLuma = false
+	options.OutputDeflickerChroma = false
 	options.NativeTiming = false
 	options.Subsampling = ""
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {

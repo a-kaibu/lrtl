@@ -158,7 +158,6 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}{
 		{"interpolation", preset.Interpolation != 0},
 		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
-		{"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
 	} {
 		if field.active {
 			unsupported = append(unsupported, field.name)
@@ -192,6 +191,12 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 		}
 	}
 	options.NativeTiming = true
+	if !explicit["output-deflicker-luma"] {
+		options.OutputDeflickerLuma = preset.DeflickerLuma
+	}
+	if !explicit["output-deflicker-chroma"] {
+		options.OutputDeflickerChroma = preset.DeflickerChroma
+	}
 	if preset.OutputQuality < 0 || preset.OutputQuality > 5 {
 		return options, fmt.Errorf("LRT outputQuality must be between 0 and 5")
 	}

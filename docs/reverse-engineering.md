@@ -1264,3 +1264,22 @@ Inspection of the photo interval calculation found outgoing millisecond interval
 A local reflection harness populated synthetic frame records and executed the installed grouping model and its minimum-length filter. `internal/lrtl/testdata/lrt-7.5.5-interval-split.json` records 240 cases: lengths 1–24, tolerance 0/1/1000/1001/5000 ms, minimum lengths 1/2/3/5/10, random interval changes, constant runs, ramps, duplicate times, isolated gaps and the final -1 sentinel. The Go test compares exact ordered group membership and separately checks that every frame occurs once. Only numerical observations are included; the probe, decompilation output and product code are not distributed.
 
 lrtl applies the grouping to capture-time-sorted import copies. Its `sequence_NNN_timestamp` and `single_images` folders preserve all images and sidecars. Native folder renaming, moving files out of the currently loaded sequence and GUI behavior are outside this comparison. Timestamp decoding is lrtl's existing XMP/EXIF reader; this does not establish equality with the product's timestamp parser for every metadata representation.
+
+## Render Luma/Chroma Deflicker (7.5.5)
+
+The installed static filter helper was run for all four boolean combinations.
+Enabled Y/U/V planes independently use the ten-frame power mean; the caller
+places this before output crop, denoise and light-trail removal. The CLI now
+supports `--output-deflicker-luma` and `--output-deflicker-chroma`, preset fields,
+explicit false overrides and batch forwarding. Native preset rendering measures
+the entire scaled canvas before crop. Standalone CLI filters its prepared canvas.
+
+288 bundled-FFmpeg observations cover 686,556 exact 10-bit plane samples at two
+dimensions and eight sequence lengths, including short clips, zero planes and
+EOF queue shrinkage. A bounded Go stream is compared to an offline reference;
+CLI tests include crop position, stage order, JPEG AVI, still exports, future
+input failure retention and 18 real H.264/H.265 outputs. Direct helper graphs
+and the inspected caller order do not establish gated full-application output
+or complete color-management equivalence. See
+[`lrt-output-deflicker-7.5.5.md`](../internal/lrtl/testdata/lrt-output-deflicker-7.5.5.md)
+for scope and reproduction.

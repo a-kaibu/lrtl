@@ -889,6 +889,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	cas := set.Bool("cas", false, "apply contrast adaptive sharpening at native strength 0.90 before overlays and fade")
 	denoise := set.Int("denoise", 0, "output noise reduction: 0 disabled, 1-4 native denoise levels")
 	airplanes := set.Int("remove-airplanes", 0, "remove transient light trails: 0 disabled, 1-3 native levels (shortens video)")
+	outputDeflickerLuma := set.Bool("output-deflicker-luma", false, "smooth rendered luma using native ten-frame power mean")
+	outputDeflickerChroma := set.Bool("output-deflicker-chroma", false, "smooth rendered chroma using native ten-frame power mean")
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
@@ -1025,46 +1027,48 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		frames = matched
 	}
 	options := RenderOptions{
-		FrameRate:         *fps,
-		FadeOutSeconds:    *fadeOut,
-		PlaybackSpeed:     *speed,
-		VideoRange:        *videoRange,
-		OutputSharpen:     *sharpen,
-		OutputCAS:         *cas,
-		OutputDenoise:     *denoise,
-		RemoveAirplanes:   *airplanes,
-		Quality:           *quality,
-		FFmpegPath:        *ffmpeg,
-		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
-		Subsampling:       *subsampling,
-		CRF:               *crf,
-		Preset:            *preset,
-		LongEdge:          *longEdge,
-		OutputHeight:      *outputHeight,
-		AspectRatio:       aspectRatio,
-		CropPosition:      cropPosition,
-		AudioPath:         *audioPath,
-		Overwrite:         *overwrite,
-		Deflicker:         deflickerEnabled,
-		Reference:         reference,
-		SmoothRadius:      *smoothRadius,
-		DeflickerSmoother: *deflickerSmoother,
-		DeflickerPasses:   *passes,
-		Constant:          *constant,
-		ApplyXMPExposure:  *applyXMPExposure,
-		ApplyXMPBasic:     *applyXMPBasic,
-		ApplyXMPCrop:      *applyXMPCrop,
-		AutoOrient:        *autoOrient,
-		LRTPreview:        *lrtPreview,
-		TimestampOverlay:  timestampOverlayEnabled,
-		TimestampFormat:   *timestampFormat,
-		Watermark:         *watermark,
-		WatermarkPosition: strings.ToLower(strings.TrimSpace(*watermarkPosition)),
-		MotionBlurFrames:  *motionBlurFrames,
-		RawPreview:        *rawPreview,
-		RawDevelop:        *rawDevelop,
-		DNGLabPath:        *dnglab,
-		DNGConverterPath:  *dngConverter,
+		FrameRate:             *fps,
+		FadeOutSeconds:        *fadeOut,
+		PlaybackSpeed:         *speed,
+		VideoRange:            *videoRange,
+		OutputSharpen:         *sharpen,
+		OutputCAS:             *cas,
+		OutputDenoise:         *denoise,
+		RemoveAirplanes:       *airplanes,
+		OutputDeflickerLuma:   *outputDeflickerLuma,
+		OutputDeflickerChroma: *outputDeflickerChroma,
+		Quality:               *quality,
+		FFmpegPath:            *ffmpeg,
+		Codec:                 strings.ToLower(strings.TrimSpace(*codec)),
+		Subsampling:           *subsampling,
+		CRF:                   *crf,
+		Preset:                *preset,
+		LongEdge:              *longEdge,
+		OutputHeight:          *outputHeight,
+		AspectRatio:           aspectRatio,
+		CropPosition:          cropPosition,
+		AudioPath:             *audioPath,
+		Overwrite:             *overwrite,
+		Deflicker:             deflickerEnabled,
+		Reference:             reference,
+		SmoothRadius:          *smoothRadius,
+		DeflickerSmoother:     *deflickerSmoother,
+		DeflickerPasses:       *passes,
+		Constant:              *constant,
+		ApplyXMPExposure:      *applyXMPExposure,
+		ApplyXMPBasic:         *applyXMPBasic,
+		ApplyXMPCrop:          *applyXMPCrop,
+		AutoOrient:            *autoOrient,
+		LRTPreview:            *lrtPreview,
+		TimestampOverlay:      timestampOverlayEnabled,
+		TimestampFormat:       *timestampFormat,
+		Watermark:             *watermark,
+		WatermarkPosition:     strings.ToLower(strings.TrimSpace(*watermarkPosition)),
+		MotionBlurFrames:      *motionBlurFrames,
+		RawPreview:            *rawPreview,
+		RawDevelop:            *rawDevelop,
+		DNGLabPath:            *dnglab,
+		DNGConverterPath:      *dngConverter,
 	}
 	if *lrtPreset != "" {
 		saved, err := loadLRTRenderPreset(*lrtPreset, *lrtPresetName)
@@ -1120,6 +1124,12 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if options.RemoveAirplanes > 0 {
 		features = append(features, fmt.Sprintf("airplane removal level %d", options.RemoveAirplanes))
+	}
+	if options.OutputDeflickerLuma {
+		features = append(features, "output luma deflicker")
+	}
+	if options.OutputDeflickerChroma {
+		features = append(features, "output chroma deflicker")
 	}
 	if value, _ := normalizeVideoRange(options.VideoRange); value != "auto" {
 		features = append(features, value+" video range")
