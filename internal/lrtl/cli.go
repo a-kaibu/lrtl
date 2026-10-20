@@ -884,6 +884,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	codec := set.String("codec", "", "MP4: h264|h265; MOV: prores-proxy|prores-lt|prores|prores-hq|prores-4444|dnxhr-lb|dnxhr-sq|dnxhr-hq|dnxhr-hqx|dnxhr-444; defaults by extension")
 	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
 	fadeOut := set.Float64("fade-out", 0, "fade video and audio to black/silence over the final seconds (0 off)")
+	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
 	crf := set.Int("crf", 18, "H.264/H.265 quality (0-51; lower is higher quality)")
@@ -922,6 +923,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--codec": true, "-codec": true,
 		"--fps": true, "-fps": true,
 		"--fade-out": true, "-fade-out": true,
+		"--speed": true, "-speed": true,
 		"--quality": true, "-quality": true,
 		"--ffmpeg": true, "-ffmpeg": true,
 		"--crf": true, "-crf": true,
@@ -950,6 +952,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *output == "" {
 		return reportError(stderr, fmt.Errorf("--output is required"))
+	}
+	if _, err := validatePlaybackSpeed(*speed); err != nil {
+		return reportError(stderr, err)
 	}
 	if *lrtPresetName != "" && *lrtPreset == "" {
 		return reportError(stderr, fmt.Errorf("--lrt-preset-name requires --lrt-render-preset"))
@@ -1010,6 +1015,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	options := RenderOptions{
 		FrameRate:         *fps,
 		FadeOutSeconds:    *fadeOut,
+		PlaybackSpeed:     *speed,
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
@@ -1054,6 +1060,14 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "LRT render preset: %s\n", saved.Name)
 	}
+	actualSpeed, err := options.playbackSpeed()
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	outputCount, err := playbackFrameCount(len(frames), actualSpeed)
+	if err != nil {
+		return reportError(stderr, err)
+	}
 	if err := RenderSequence(frames, *output, options); err != nil {
 		return reportError(stderr, err)
 	}
@@ -1070,6 +1084,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	features = append(features, strings.ToUpper(selectedCodec)+" codec")
+	if actualSpeed != 1 {
+		features = append(features, fmt.Sprintf("%gx speed from %d source frames", actualSpeed, len(frames)))
+	}
 	if options.FadeOutSeconds > 0 {
 		features = append(features, fmt.Sprintf("%g-second fade out", options.FadeOutSeconds))
 	}
@@ -1127,9 +1144,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		features = append(features, "text watermark")
 	}
 	if len(features) > 0 {
-		fmt.Fprintf(stdout, "Rendered %d frames at %s fps with %s: %s\n", len(frames), options.FrameRate, strings.Join(features, " and "), *output)
+		fmt.Fprintf(stdout, "Rendered %d frames at %s fps with %s: %s\n", outputCount, options.FrameRate, strings.Join(features, " and "), *output)
 	} else {
-		fmt.Fprintf(stdout, "Rendered %d frames at %s fps: %s\n", len(frames), options.FrameRate, *output)
+		fmt.Fprintf(stdout, "Rendered %d frames at %s fps: %s\n", outputCount, options.FrameRate, *output)
 	}
 	return 0
 }
@@ -1174,22 +1191,24 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("subtitles", stderr)
 	output := set.String("output", "", "write timestamp subtitles to an SRT file")
 	fps := set.String("fps", "24", "video frame rate for subtitle timing (1-240; decimals or fractions)")
+	speed := set.Float64("speed", 1, "video playback speed (0.0625-16)")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used for subtitle text")
 	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
+		"--speed": true, "-speed": true,
 		"--timestamp-format": true, "-timestamp-format": true,
 	})); err != nil {
 		if help, code := finishFlagParse(set, err); help {
-			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--timestamp-format LAYOUT] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--timestamp-format LAYOUT] [--overwrite]")
 			return code
 		} else {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--timestamp-format LAYOUT] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--fps N] [--speed X] [--timestamp-format LAYOUT] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
@@ -1199,10 +1218,18 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	if err := writeSequenceSubtitlesAtRate(frames, *output, rate, *timestampFormat, *overwrite); err != nil {
+	actualSpeed, err := validatePlaybackSpeed(*speed)
+	if err != nil {
 		return reportError(stderr, err)
 	}
-	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %s fps: %s\n", len(frames), rate.String(), *output)
+	outputCount, err := playbackFrameCount(len(frames), actualSpeed)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	if err := writeSequenceSubtitlesAtSpeed(frames, *output, rate, actualSpeed, *timestampFormat, *overwrite); err != nil {
+		return reportError(stderr, err)
+	}
+	fmt.Fprintf(stdout, "Wrote timestamp subtitles for %d frames at %s fps: %s\n", outputCount, rate.String(), *output)
 	return 0
 }
 

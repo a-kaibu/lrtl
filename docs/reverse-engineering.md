@@ -2,6 +2,26 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Playback speed scheduling
+
+`--speed` supports 1/16 through 16 in render, batch forwarding and subtitles;
+saved native speed is imported with explicit CLI override. The normal mode-0
+native helper emitted 20 PTS/fps filters; executing them with FFmpeg on short
+frame-ID sequences produced 80 mapping cases. Go matches every count and
+source index. See `testdata/lrt-speed-7.5.5.json` and its adjacent notes for
+native versus FFmpeg observation boundaries and the precise rounding rules.
+
+Scheduling occurs after source preparation and before temporal blending. Every
+source is still validated even if it will be dropped; repeated outputs reuse
+prepared RGB data. Captured overlay dates and SRT labels use the source index,
+while fade/audio duration and encoder frame count use the actual output count.
+The native duration estimate can differ at float boundaries; complete combined
+filter timing parity remains unverified. Tests cover RGB48 identity and XMP,
+blend/fade order, AVI pixel/count output, metadata/subtitles, preset/batch
+forwarding, invalid/empty schedules, corrupt dropped inputs without publication,
+and optional actual NTSC H.264 metadata. Experimental interpolation stays
+unsupported, and non-unit speed AVI may recompress JPEG data.
+
 ## Fade out during rendering
 
 Sixteen direct filter-builder calls are recorded in
@@ -35,7 +55,7 @@ Six native serialized objects and measured H.264/H.265 CRFs are in
 `testdata/lrt-render-preset-7.5.5.json`; the adjacent notes distinguish direct
 observations from inspected encoder profile switches. Go maps fps, height,
 quality/codec profiles, Motion Blur and audio to its existing renderer. Known
-unsupported enabled filters, speed/interpolation and color/HDR modes fail
+unsupported enabled filters, interpolation and color/HDR modes fail
 instead of being silently discarded. H.264/H.265 imports require 420 sampling.
 New ProRes Proxy/LT/4444 backends cover the native profile choices alongside
 the existing 422/HQ paths. FFmpeg receives 10-bit YUV; its 4444 decoder reports

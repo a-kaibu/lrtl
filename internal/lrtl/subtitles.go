@@ -18,10 +18,21 @@ func writeSequenceSubtitles(frames []Frame, output string, fps int, timestampFor
 }
 
 func writeSequenceSubtitlesAtRate(frames []Frame, output string, rate frameRate, timestampFormat string, overwrite bool) error {
+	return writeSequenceSubtitlesAtSpeed(frames, output, rate, 1, timestampFormat, overwrite)
+}
+
+func writeSequenceSubtitlesAtSpeed(frames []Frame, output string, rate frameRate, speed float64, timestampFormat string, overwrite bool) error {
 	if len(frames) == 0 {
 		return fmt.Errorf("sequence contains no images")
 	}
 	if _, err := parseFrameRate(rate.String()); err != nil {
+		return err
+	}
+	speed, err := validatePlaybackSpeed(speed)
+	if err != nil {
+		return err
+	}
+	if _, err := playbackFrameCount(len(frames), speed); err != nil {
 		return err
 	}
 	if strings.ToLower(filepath.Ext(output)) != ".srt" {
@@ -57,23 +68,26 @@ func writeSequenceSubtitlesAtRate(frames []Frame, output string, rate frameRate,
 	temporaryPath := temporary.Name()
 	defer os.Remove(temporaryPath)
 	writer := bufio.NewWriter(temporary)
-	for index, timestamp := range timestamps {
+	index := 0
+	for sourceIndex, timestamp := range timestamps {
 		label := strings.NewReplacer("\r", " ", "\n", " ").Replace(timestamp.Format(timestampFormat))
 		if strings.Contains(label, "-->") {
 			_ = temporary.Close()
 			return fmt.Errorf("timestamp format produces the reserved SRT delimiter in frame %d", index+1)
 		}
-		startMS, startErr := rate.offsetMilliseconds(int64(index))
-		endMS, endErr := rate.offsetMilliseconds(int64(index + 1))
-		if startErr != nil || endErr != nil {
-			_ = temporary.Close()
-			return fmt.Errorf("subtitle timing exceeds supported duration")
-		}
-		start := srtTimecode(startMS)
-		end := srtTimecode(endMS)
-		if _, err := fmt.Fprintf(writer, "%d\n%s --> %s\n%s\n\n", index+1, start, end, label); err != nil {
-			_ = temporary.Close()
-			return fmt.Errorf("write temporary subtitles: %w", err)
+		for end := playbackOutputEnd(sourceIndex+1, speed); index < end; index++ {
+			startMS, startErr := rate.offsetMilliseconds(int64(index))
+			endMS, endErr := rate.offsetMilliseconds(int64(index + 1))
+			if startErr != nil || endErr != nil {
+				_ = temporary.Close()
+				return fmt.Errorf("subtitle timing exceeds supported duration")
+			}
+			start := srtTimecode(startMS)
+			end := srtTimecode(endMS)
+			if _, err := fmt.Fprintf(writer, "%d\n%s --> %s\n%s\n\n", index+1, start, end, label); err != nil {
+				_ = temporary.Close()
+				return fmt.Errorf("write temporary subtitles: %w", err)
+			}
 		}
 	}
 	if err := writer.Flush(); err != nil {
