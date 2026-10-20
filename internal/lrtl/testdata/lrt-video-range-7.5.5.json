@@ -1,0 +1,5 @@
+[
+{"videoRange":0,"source":"BT709","filter":",zscale=rangein=full:range=limited:matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709"},
+{"videoRange":1,"source":"BT709","filter":",zscale=rangein=full:range=full:matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709"},
+{"videoRange":2,"source":"BT709","filter":",zscale=rangein=full:range=limited:matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709"}
+]

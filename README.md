@@ -117,7 +117,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
-| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、フェード、保存済みアスペクト比に対応。HDR・フレーム生成・追加フィルターなどはエラーにする | 一部 |
+| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、フェード、映像レンジ、保存済みアスペクト比に対応。HDR・フレーム生成・追加フィルターなどはエラーにする | 一部 |
 | 選択範囲の手動キーフレーム | 選択画像への4/5つ星マーク設定・解除 | `mark-sequence`／`unmark-sequence`で一括設定・解除。ファイル名・評価・JSON・反転で対象を選択し、元評価の復元、HG保護、保存前検証、バックアップに対応。GUI操作との比較は未実施 | CLI実装済み |
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
@@ -513,6 +513,29 @@ LRTimelapse側では2*/3*が内部HGキーフレームで、4*/5*の編集キー
 
 EXIFモードと`--lrt-input`はどちらも近似で、LRTimelapseと数値一致する機能ではありません。後者はLRTが既にXMPへ記録した入力値を利用し、`preview-ev --write`で同版から復元したヒストグラム計算値を生成できます。既存のLRTプレビューと保存済みROIは`preview-ev --lrt-preview camera --lrt-reference --write`で測光できます。プレビュー画像の生成経路全体との一致は未検証です。Piaの平滑化部品は合成数値列で実測比較済みですが、全ワークフローの比較は未完了です。`preview`は静的な輝度グラフを出しますが、Lightroomの現像画像プレビューは未実装です。センサー感度の誤差、レンズ透過率、自然な明るさの推移も解析しません。RAW現像やXMPの画素反映をする機能ではありません。
 
+## MP4/MOVの映像レンジ
+
+`render --video-range auto|limited|full`で、SDRの映像レンジを指定できます。明示したlimited／fullには、FFmpegの`zscale`フィルター（libzimgを含むビルド）が必要です。
+
+| 指定 | 処理 |
+|---|---|
+| auto（既定） | 従来のFFmpeg変換・コーデック既定値を使う |
+| limited | 8-bitはY=16〜235、10-bitはY=64〜940へ変換する |
+| full | 8-bitはY=0〜255、10-bitはY=0〜1023へ変換する。ProResには後述の制約がある |
+
+```powershell
+lrtl render C:\photos\sequence --output C:\photos\limited.mp4 --video-range limited
+lrtl render C:\photos\sequence --output C:\photos\full.mp4 --codec h265 --video-range full
+lrtl render C:\photos\sequence --output C:\photos\full.mov --codec dnxhr-hqx --video-range full
+lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --video-range limited
+```
+
+LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分岐と同じlimitedとして読み込みます。CLIで明示した値を優先し、`--video-range auto`で従来の経路を選べます。元のRGB48入力を16-bitのままレンジ変換し、色差変換のBT.709行列情報とレンジ指定をMP4/MOVへ渡します。転送特性・ICC色管理全体・HDRの再現は引き続き未対応です。
+
+ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告されず、fullの10-bit端点も4〜1019へクリップされました。limitedが一般的な用途に適します。H.264/H.265/DNxHRではfull／limitedのタグと実際の輝度値を確認しています。AVIはfull-range JPEGのためauto／fullを受け付け、limited指定は保存前にエラーにします。
+
+本体のレンジフィルター生成3ケース、全コーデック経路への引数、プリセット／バッチ／CLI上書き、元ファイル保持をテストしています。実際のH.264・H.265・ProRes・DNxHR出力について、黒・白・中間グレーとBT.709の行列情報も検査しています。本体の色変換済み中間画像とGoのRGB入力の完全一致を検証したものではありません。
+
 ## 動画と字幕の再生速度
 
 `render --speed MULTIPLIER`で、出力fpsを保ったまま連番の再生速度を変更できます。`1`が通常、`2`が2倍速、`0.5`が半速です。範囲は0.0625〜16で、AVIは追加ソフトなしで利用できます。LRTプリセットの`speed`も読み込み、CLIで明示した値を優先します。
@@ -559,9 +582,9 @@ lrtl batch-render C:\photos\sequences --output C:\photos\videos -- --lrt-render-
 
 `encoder`、`frameRate`、`outputResV`、`outputQuality`を必須とし、省略可能な項目には本体のコンストラクターで観測した既定値を使います。読み込むのは指定したJSONだけで、LRTのグローバル設定を自動探索・変更しません。JSON内の音声が有効な場合、相対パスはそのJSONのフォルダーを基準に解決します。設定JSON全体の`renderConstrainCrop=true`では`renderAR`も使います。動画の拡張子は選んだコーデックに合わせて指定してください。
 
-CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
+CLIで明示した`--fps`、`--codec`、`--crf`、`--output-height`／`--long-edge`、`--aspect`、`--motion-blur`、`--audio`、`--speed`、`--fade-out`、`--video-range`を優先します。H.264の画質0〜5はCRF 22/18/15/10/8/0、H.265は22/20/16/10/8/0へ対応させます。ProResの画質0〜4はProxy/LT/422/HQ/4444、DNxHRはLB/SQ/HQ/HQX/444を選びます。両者の画質5は本体の既定分岐に合わせ、それぞれHQ/HQへ割り当てます。Motion Blurは有効なときだけ保存されたフレーム数を使います。
 
-HDR・広色域・full range・フレーム生成・追加シャープ・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420に限ります。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
+HDR・広色域・フレーム生成・追加シャープ・CAS・飛行機除去・ノイズ除去・レンダー時のLuma/Chroma Deflickerが有効なプリセットは、出力を作る前にエラーにします。H.264/H.265のsubSamplingは420に限ります。色管理・フィルター結果・本体の出力画素全体との一致を保証するものではありません。
 
 この対応に合わせ、`--codec prores-proxy|prores-lt|prores-4444`も追加しました。FFmpegにはProRes 4444用10-bit YUVを渡し、ffprobeでは4444・12-bitのデコード形式として報告されることを確認しています。完全な12-bit入力精度やアルファチャンネルの保持は実装していません。本体で生成した6種類のJSONと画質ヘルパー値、明示CLIとの画素入力・引数一致、設定と元画像の保持、バッチ転送、不正設定時の出力保持、実MOVのプロファイルをテストしています。
 

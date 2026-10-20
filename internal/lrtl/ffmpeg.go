@@ -88,7 +88,7 @@ func proresProfile(codec string) (string, string, bool) {
 	return "", "", false
 }
 
-func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade) (*ffmpegFrameWriter, error) {
+func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange string) (*ffmpegFrameWriter, error) {
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
 		"-f", "rawvideo", "-pixel_format", "rgb48le",
@@ -106,21 +106,28 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	case "h264":
 		arguments = append(arguments,
 			"-c:v", "libx264", "-preset", preset, "-crf", strconv.Itoa(crf),
-			"-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-tag:v", "avc1")
+			"-pix_fmt", "yuv420p", "-vf", videoRangeFilter(videoRange, "yuv420p"), "-tag:v", "avc1")
 	case "h265":
 		arguments = append(arguments,
 			"-c:v", "libx265", "-preset", preset, "-crf", strconv.Itoa(crf),
-			"-pix_fmt", "yuv420p", "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2", "-tag:v", "hvc1")
+			"-pix_fmt", "yuv420p", "-vf", videoRangeFilter(videoRange, "yuv420p"), "-tag:v", "hvc1")
 	default:
 		if profile, pixelFormat, supported := proresProfile(codec); supported {
-			arguments = append(arguments, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", pixelFormat, "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
+			arguments = append(arguments, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat))
 		} else if profile, pixelFormat, supported := dnxhrProfile(codec); supported {
 			arguments = append(arguments,
 				"-c:v", "dnxhd", "-profile:v", profile,
-				"-pix_fmt", pixelFormat, "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2")
+				"-pix_fmt", pixelFormat, "-vf", videoRangeFilter(videoRange, pixelFormat))
 		} else {
 			return nil, fmt.Errorf("unsupported FFmpeg video codec %q", codec)
 		}
+	}
+	if videoRange != "auto" {
+		metadata := "tv"
+		if videoRange == "full" {
+			metadata = "pc"
+		}
+		arguments = append(arguments, "-color_range", metadata, "-colorspace", "bt709")
 	}
 	if audioPath != "" {
 		duration := strconv.FormatFloat(rate.seconds(frameCount), 'f', 9, 64)
@@ -134,7 +141,11 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			"-t", duration, "-shortest",
 		)
 	}
-	arguments = append(arguments, "-movflags", "+faststart", "-f", container, output)
+	movFlags := "+faststart"
+	if videoRange != "auto" {
+		movFlags += "+write_colr"
+	}
+	arguments = append(arguments, "-movflags", movFlags, "-f", container, output)
 	command := exec.Command(executable, arguments...)
 	input, err := command.StdinPipe()
 	if err != nil {

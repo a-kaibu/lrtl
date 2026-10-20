@@ -126,6 +126,7 @@ func GeneratePreviewImages(frames []Frame, output string, options RenderOptions)
 	options.FrameRate = ""
 	options.FadeOutSeconds = 0
 	options.PlaybackSpeed = 1
+	options.VideoRange = "auto"
 	if err := renderSequence(frames, staging, options, func(width, height int) (renderFrameWriter, error) {
 		manifest.Width, manifest.Height = width, height
 		return &previewImageWriter{directory: staging, manifest: manifest, quality: options.Quality}, nil

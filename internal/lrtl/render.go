@@ -24,6 +24,7 @@ type RenderOptions struct {
 	FrameRate         string
 	FadeOutSeconds    float64
 	PlaybackSpeed     float64
+	VideoRange        string
 	Quality           int
 	FFmpegPath        string
 	Codec             string
@@ -182,6 +183,10 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err != nil {
 		return err
 	}
+	videoRange, err := normalizeVideoRange(options.VideoRange)
+	if err != nil {
+		return err
+	}
 	label := options.FrameRate
 	if label == "" {
 		label = rate.String()
@@ -219,6 +224,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 	if imageWriter == nil && outputExtension != ".avi" && outputExtension != ".mp4" && outputExtension != ".mov" {
 		return fmt.Errorf("output must use the .avi, .mp4, or .mov extension: %s", output)
+	}
+	if outputExtension == ".avi" && videoRange == "limited" {
+		return fmt.Errorf("limited video range requires MP4 or MOV; MJPEG AVI uses full-range JPEG")
 	}
 	if strings.TrimSpace(options.AudioPath) != "" {
 		if outputExtension == ".avi" {
@@ -521,7 +529,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
-		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade)
+		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange)
 		if err != nil {
 			cleanup()
 			return err

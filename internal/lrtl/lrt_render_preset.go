@@ -155,7 +155,7 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 		active bool
 	}{
 		{"interpolation", preset.Interpolation != 0},
-		{"videoRange", preset.VideoRange != 0}, {"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
+		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
 		{"sharpen", preset.Sharpen}, {"cas", preset.CAS}, {"removeAirplanes", preset.RemoveAirplanes},
 		{"denoise", preset.Denoise}, {"deflickerLuma", preset.DeflickerLuma}, {"deflickerChroma", preset.DeflickerChroma},
 	} {
@@ -168,6 +168,15 @@ func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path st
 	}
 	if preset.OutputQuality < 0 || preset.OutputQuality > 5 {
 		return options, fmt.Errorf("LRT outputQuality must be between 0 and 5")
+	}
+	if !explicit["video-range"] {
+		options.VideoRange = "limited"
+		if preset.VideoRange == 1 {
+			options.VideoRange = "full"
+		}
+	}
+	if _, err := normalizeVideoRange(options.VideoRange); err != nil {
+		return options, err
 	}
 	if !explicit["speed"] {
 		value, err := validatePlaybackSpeed(preset.Speed)

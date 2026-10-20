@@ -2,6 +2,25 @@
 
 These notes record observed interfaces and public workflow behavior used to design the independent `lrtl` implementation. They do not reproduce LRTimelapse code.
 
+## Explicit video range
+
+Three native color-filter-builder observations in
+`testdata/lrt-video-range-7.5.5.json` establish full output for videoRange==1 and
+limited output otherwise, with full input range. Preset imports now apply that
+choice; `--video-range auto|limited|full` provides explicit override. Auto keeps
+the previous encoder path. Explicit ranges use RGB48->GBR16->zscale YUV709,
+output range signaling and colr matrix metadata. They require libzimg/zscale.
+Image exports clear the video-only option; AVI accepts auto/full only.
+
+Optional actual-video tests extract decoded luma from black/white/midpoint
+16-bit inputs and inspect metadata for H.264/H.265/ProRes/DNxHR. Limited output
+has standard 8/10-bit endpoints; H.264/H.265/DNxHR full range has full endpoints
+and pc signaling. The measured ProRes encoder clamps full 10-bit endpoints to
+4/1019, and its range is not reported by ffprobe; colr ensures the matrix is
+still available. The fixture notes record those limits and distinguish native
+component observations from our own FFmpeg pipeline. Full native color-managed
+pixel equivalence and transfer/ICC/HDR handling remain unverified.
+
 ## Playback speed scheduling
 
 `--speed` supports 1/16 through 16 in render, batch forwarding and subtitles;

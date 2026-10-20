@@ -101,7 +101,7 @@ func TestLRTRenderPresetGlobalSelectionAspectAndOverrides(t *testing.T) {
 			t.Fatalf("relative audio: %s %v", options.AudioPath, err)
 		}
 		explicit := map[string]bool{"codec": true, "crf": true, "fps": true, "long-edge": true, "aspect": true, "audio": true, "motion-blur": true}
-		base := RenderOptions{PlaybackSpeed: 1, FrameRate: "24", Codec: "h264", CRF: 31, LongEdge: 320, AspectRatio: 2, MotionBlurFrames: 0, AudioPath: ""}
+		base := RenderOptions{VideoRange: "limited", PlaybackSpeed: 1, FrameRate: "24", Codec: "h264", CRF: 31, LongEdge: 320, AspectRatio: 2, MotionBlurFrames: 0, AudioPath: ""}
 		options, err = applyLRTRenderPreset(base, preset, path, explicit)
 		if err != nil || options != base {
 			t.Fatalf("overrides changed: %+v %v", options, err)
@@ -161,7 +161,7 @@ func TestLRTRenderPresetCLIEquivalentManualAndBatch(t *testing.T) {
 	}
 	output := filepath.Join(t.TempDir(), "preset.mp4")
 	presetPixels, presetFlags := run("render", dir, "--output", output, "--ffmpeg", executable, "--lrt-render-preset", path)
-	manualPixels, manualFlags := run("render", dir, "--output", filepath.Join(t.TempDir(), "manual.mp4"), "--ffmpeg", executable, "--fps", "29.97", "--codec", "h264", "--crf", "10", "--output-height", "24", "--motion-blur", "5")
+	manualPixels, manualFlags := run("render", dir, "--output", filepath.Join(t.TempDir(), "manual.mp4"), "--ffmpeg", executable, "--fps", "29.97", "--codec", "h264", "--crf", "10", "--video-range", "limited", "--output-height", "24", "--motion-blur", "5")
 	if !bytes.Equal(presetPixels, manualPixels) || !reflect.DeepEqual(presetFlags, manualFlags) {
 		t.Fatal("saved preset differs from explicit render controls")
 	}
@@ -189,7 +189,7 @@ func TestLRTRenderPresetRejectsUnsupportedBeforeSaving(t *testing.T) {
 	if err := json.Unmarshal(renderPresetObservations(t)[0].Preset, &original); err != nil {
 		t.Fatal(err)
 	}
-	for field, value := range map[string]any{"speed": 0, "interpolation": 1, "videoRange": 1, "gamut": 1, "dynamicRange": 1, "sharpen": true, "cas": true, "removeAirplanes": true, "denoise": true, "deflickerLuma": true, "deflickerChroma": true, "subSampling": "444", "encoder": "unknown", "outputQuality": 6, "frameRate": "NaN", "outputResV": -1} {
+	for field, value := range map[string]any{"speed": 0, "interpolation": 1, "gamut": 1, "dynamicRange": 1, "sharpen": true, "cas": true, "removeAirplanes": true, "denoise": true, "deflickerLuma": true, "deflickerChroma": true, "subSampling": "444", "encoder": "unknown", "outputQuality": 6, "frameRate": "NaN", "outputResV": -1} {
 		t.Run(field, func(t *testing.T) {
 			mutated := map[string]any{}
 			for key, item := range original {

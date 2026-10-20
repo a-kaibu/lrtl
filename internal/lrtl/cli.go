@@ -885,6 +885,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	fps := set.String("fps", "24", "frame rate (1-240); decimal NTSC rate or fraction such as 30000/1001")
 	fadeOut := set.Float64("fade-out", 0, "fade video and audio to black/silence over the final seconds (0 off)")
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
+	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
 	crf := set.Int("crf", 18, "H.264/H.265 quality (0-51; lower is higher quality)")
@@ -924,6 +925,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--fps": true, "-fps": true,
 		"--fade-out": true, "-fade-out": true,
 		"--speed": true, "-speed": true,
+		"--video-range": true, "-video-range": true,
 		"--quality": true, "-quality": true,
 		"--ffmpeg": true, "-ffmpeg": true,
 		"--crf": true, "-crf": true,
@@ -1016,6 +1018,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		FrameRate:         *fps,
 		FadeOutSeconds:    *fadeOut,
 		PlaybackSpeed:     *speed,
+		VideoRange:        *videoRange,
 		Quality:           *quality,
 		FFmpegPath:        *ffmpeg,
 		Codec:             strings.ToLower(strings.TrimSpace(*codec)),
@@ -1084,6 +1087,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	features = append(features, strings.ToUpper(selectedCodec)+" codec")
+	if value, _ := normalizeVideoRange(options.VideoRange); value != "auto" {
+		features = append(features, value+" video range")
+	}
 	if actualSpeed != 1 {
 		features = append(features, fmt.Sprintf("%gx speed from %d source frames", actualSpeed, len(frames)))
 	}
