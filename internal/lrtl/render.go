@@ -30,6 +30,7 @@ type RenderOptions struct {
 	InputColor            string
 	OutputGamut           string
 	DynamicRange          string
+	DetectDynamicRange    bool // Allow the native ICC PQ suffix to override a preset's dynamic range.
 	OutputSharpen         bool
 	OutputCAS             bool
 	OutputDenoise         int
@@ -216,6 +217,10 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		return err
 	}
 	outputColor, err := normalizeOutputColor(options.OutputColor)
+	if err != nil {
+		return err
+	}
+	options, err = resolveRenderICC(frames, options, outputColor == "lrt-7.5.5" && imageWriter == nil)
 	if err != nil {
 		return err
 	}

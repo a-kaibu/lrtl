@@ -5,6 +5,11 @@ their coded sample values through the supported Go working-plane pipeline,
 and performs the measured final conversion/encoding with the existing FFmpeg.
 No CGo library or additional dependency is introduced.
 
+Input gamut can now be detected from the first selected image's ICC description.
+See [ICC input recognition](lrt-icc-input-7.5.5.md) for native label rules,
+explicit override behavior, parser tests, and the distinction from ICC color
+conversion. The explicit input declarations below remain supported.
+
 ```powershell
 # Prepared BT.2020 SDR intermediate images to BT.2020 SDR video
 lrtl render C:\photos\prepared --output C:\photos\wide.mp4 --output-color lrt-7.5.5 --input-color bt2020 --output-gamut bt2020 --dynamic-range sdr --codec h265
@@ -79,12 +84,13 @@ and invalid configurations preserving existing files. The pure Go planner is
 fuzzed separately from the external encoder comparisons.
 
 Saved `gamut`/`dynamicRange` values 0/1 map to the new options. PQ requires a
-BT.2020 target; wide targets require explicitly declared BT.2020 source, as
-the native conversion helper does. Standard output remains SDR. Codec-specific
+BT.2020 target; wide targets require BT.2020 source, detected from ICC or
+declared explicitly, as the native conversion helper does. Standard output
+remains SDR. Codec-specific
 depth still applies to ProRes/DNxHR profiles; the 10-bit automatic switch is
 for the measured H.264/H.265 selector.
 
-ICC detection/conversion, Camera Raw HDR development, scene-linear HDR
+ICC color conversion, Camera Raw HDR development, scene-linear HDR
 adjustments, arbitrary input-transfer selection, general tone mapping and
 complete licensed-application rendering remain unimplemented or unverified.
 The pixel comparisons use opaque synthetic RGB16 PNGs and the selected
