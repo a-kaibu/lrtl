@@ -24,8 +24,8 @@ The implementations are pure Go and require no CGo.
 
 ## Output comparisons
 
-`lrt-native-slow-color-8.0.1.json` contains 22 full-output byte counts and
-SHA-256 values from the installed bundled FFmpeg 8.0.1 with `-cpuflags 0`.
+`lrt-native-slow-color-8.0.1.json` contains the original 22 scalar full-output
+byte counts/hashes plus 22 normal-CPU observations from bundled FFmpeg 8.0.1.
 Inputs have 11 opaque RGB16 PNG frames: a 64x32 changing gradient/light point
 from `nativePlaybackFixture`, or a 64x64 textured horizontal pan from
 `motionImageFixture`. No native image assets or binary code are included.
@@ -36,7 +36,7 @@ including deflicker/denoise/airplane removal/Blur/spatial filtering. Reference
 graphs are independently assembled from the recorded installed LRT 7.5.5
 helper graphs and original PNG inputs; they do not call Go filters.
 
-The regular suite checks all 22 Go outputs against saved scalar hashes,
+The regular suite checks all 22 Go outputs against saved selected-CPU hashes,
 without requiring FFmpeg. The live test compares every output byte and
 asserts 8-bit encoder input. It also requires MCI and blend to produce
 different results on the moving image sequence. 132 real video cases cover
@@ -56,9 +56,11 @@ go test ./internal/lrtl -run '^(TestNativeSlow|TestNativeWorkingEightBit)' -coun
 go test ./internal/lrtl -run '^$' -fuzz '^FuzzNativeSlowWorkingColor$' -fuzztime 10s
 ```
 
-These are scalar helper-graph comparisons, not complete licensed application
-renders. Existing CPU-dependent scene/Gaussian differences are not eliminated
-by this change. Native geometry resampling, ICC, Camera Raw, HDR/wide gamut,
+These are selected-CPU helper-graph comparisons, not complete licensed
+application renders. The [Gaussian arithmetic update](lrt-gaussian-arithmetic-7.5.5.md)
+selects fused feedback on AVX2/FMA hosts and scalar feedback otherwise.
+CPU-dependent scene and small-frame threading differences remain.
+Native geometry resampling, ICC, Camera Raw, HDR/wide gamut,
 overlay/fade parity and complete LRT application output remain outside scope
 of these measurements. Even output dimensions and no timestamp, watermark or
 fade are required for this native working path.

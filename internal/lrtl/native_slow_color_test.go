@@ -76,8 +76,8 @@ func TestNativeSlowPlanesAgainstFFmpeg(t *testing.T) {
 			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "go.mp4"), "--output-color", "lrt-7.5.5", "--ffmpeg", fake, "--fps", "24"}
 			markerCommand(t, append(args, nativeSlowCLI(tc)...)...)
 			got := denoiseRead(t, capture)
-			want := nativeColorCommand(t, executable, nil, "-v", "error", "-cpuflags", "0", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", nativeSlowReferenceGraph(t, tc), "-pix_fmt", "yuv444p", "-f", "rawvideo", "pipe:1")
-			t.Logf("REFERENCE name=%s bytes=%d sha256=%x", tc.name, len(want), sha256.Sum256(want))
+			want := nativeFilterReferenceCommand(t, executable, nil, "-v", "error", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", nativeSlowReferenceGraph(t, tc), "-pix_fmt", "yuv444p", "-f", "rawvideo", "pipe:1")
+			t.Logf("REFERENCE name=%s cpu=%s bytes=%d sha256=%x", tc.name, nativeFilterReferenceCPU(), len(want), sha256.Sum256(want))
 			if !bytes.Equal(got, want) {
 				differences, maxDelta := 0, 0
 				for i := 0; i < min(len(got), len(want)); i++ {
@@ -122,11 +122,11 @@ func TestNativeSlowActualVideos(t *testing.T) {
 
 func TestNativeSlowOfflineReferences(t *testing.T) {
 	var rows []struct {
-		Name, Hash string
-		Bytes      int
+		Name, Hash, CPUFlags string
+		Bytes                int
 	}
-	if err := json.Unmarshal(denoiseRead(t, "testdata/lrt-native-slow-color-8.0.1.json"), &rows); err != nil || len(rows) != 22 {
-		t.Fatalf("expected 22 slow color references: %v", err)
+	if err := json.Unmarshal(denoiseRead(t, "testdata/lrt-native-slow-color-8.0.1.json"), &rows); err != nil || len(rows) != 44 {
+		t.Fatalf("expected 44 slow color references: %v", err)
 	}
 	fixtures := map[bool]string{false: nativePlaybackFixture(t, 11), true: motionImageFixture(t, 11, "pan-x")}
 	executable, err := os.Executable()
@@ -142,7 +142,7 @@ func TestNativeSlowOfflineReferences(t *testing.T) {
 			got := denoiseRead(t, capture)
 			found := false
 			for _, row := range rows {
-				if row.Name == tc.name {
+				if row.Name == tc.name && row.CPUFlags == nativeFilterReferenceCPU() {
 					found = true
 					if len(got) != row.Bytes || fmt.Sprintf("%x", sha256.Sum256(got)) != row.Hash {
 						t.Fatalf("native slow reference mismatch: %s bytes%d hash%x", tc.name, len(got), sha256.Sum256(got))

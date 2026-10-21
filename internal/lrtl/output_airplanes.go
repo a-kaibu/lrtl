@@ -70,10 +70,14 @@ func temporalMedian10(window [][]uint16) []uint16 {
 }
 
 func airplaneLuma10(input []uint16, width, height, level int) []uint16 {
+	return airplaneLuma10Arithmetic(input, width, height, level, false)
+}
+
+func airplaneLuma10Arithmetic(input []uint16, width, height, level int, fused bool) []uint16 {
 	if level == 1 {
 		return append([]uint16(nil), input...)
 	}
-	blurred := gaussianOutputPlane(input, width, height, 15, 1023)
+	blurred := gaussianOutputPlaneArithmetic(input, width, height, 15, 1023, fused)
 	amount, knee, gain := .20, 918.0, 2.0
 	if level == 3 {
 		amount, knee, gain = .35, 867, 3
@@ -134,7 +138,7 @@ func (a *airplaneRemover) frame(index int) ([]byte, error) {
 		}
 		filtered[p] = temporalMedian10(window)
 		if p == 0 {
-			filtered[p] = airplaneLuma10(filtered[p], a.width, a.height, a.level)
+			filtered[p] = airplaneLuma10Arithmetic(filtered[p], a.width, a.height, a.level, bool(a.color) && nativeGaussianFused())
 		} else if a.level > 1 {
 			// The native lutyuv overrides only Y; its default clipval
 			// expressions constrain 10-bit YUV chroma to 64..960.

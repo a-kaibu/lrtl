@@ -105,8 +105,8 @@ func TestNativePlaybackPlanesAgainstFFmpeg(t *testing.T) {
 			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "go.mp4"), "--output-color", "lrt-7.5.5", "--ffmpeg", fake, "--fps", "24"}
 			markerCommand(t, append(args, nativePlaybackCLI(tc)...)...)
 			got := denoiseRead(t, capture)
-			want := nativeColorCommand(t, executable, nil, "-v", "error", "-cpuflags", "0", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", nativePlaybackReferenceGraph(t, tc), "-pix_fmt", "yuv444p10le", "-f", "rawvideo", "pipe:1")
-			t.Logf("REFERENCE name=%s bytes=%d sha256=%x", tc.name, len(want), sha256.Sum256(want))
+			want := nativeFilterReferenceCommand(t, executable, nil, "-v", "error", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", nativePlaybackReferenceGraph(t, tc), "-pix_fmt", "yuv444p10le", "-f", "rawvideo", "pipe:1")
+			t.Logf("REFERENCE name=%s cpu=%s bytes=%d sha256=%x", tc.name, nativeFilterReferenceCPU(), len(want), sha256.Sum256(want))
 			if !bytes.Equal(got, want) {
 				differences, maxDelta := 0, 0
 				for i := 0; i+1 < min(len(got), len(want)); i += 2 {
@@ -158,11 +158,11 @@ func TestWeightedWorkingFramesValidation(t *testing.T) {
 
 func TestNativePlaybackOfflineReferences(t *testing.T) {
 	var rows []struct {
-		Name, Hash string
-		Bytes      int
+		Name, Hash, CPUFlags string
+		Bytes                int
 	}
-	if err := json.Unmarshal(denoiseRead(t, "testdata/lrt-native-playback-color-8.0.1.json"), &rows); err != nil || len(rows) != 22 {
-		t.Fatalf("expected 22 native playback references: %v", err)
+	if err := json.Unmarshal(denoiseRead(t, "testdata/lrt-native-playback-color-8.0.1.json"), &rows); err != nil || len(rows) != 44 {
+		t.Fatalf("expected 44 native playback references: %v", err)
 	}
 	dir := nativePlaybackFixture(t, 41)
 	executable, err := os.Executable()
@@ -178,7 +178,7 @@ func TestNativePlaybackOfflineReferences(t *testing.T) {
 			got := denoiseRead(t, capture)
 			found := false
 			for _, row := range rows {
-				if row.Name == tc.name {
+				if row.Name == tc.name && row.CPUFlags == nativeFilterReferenceCPU() {
 					found = true
 					if len(got) != row.Bytes || fmt.Sprintf("%x", sha256.Sum256(got)) != row.Hash {
 						t.Fatalf("native playback hash changed: %s bytes%d hash%x", tc.name, len(got), sha256.Sum256(got))
@@ -322,7 +322,7 @@ func TestNativePlaybackCropBeforeBlur(t *testing.T) {
 		markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "go.mp4"), "--ffmpeg", fake, "--lrt-render-preset", path, "--aspect", "1:1", "--crop-position", strconv.Itoa(position))
 		got := denoiseRead(t, capture)
 		graph := strings.Replace(nativePlaybackReferenceGraph(t, tc), "setsar=1/1", fmt.Sprintf("setsar=1/1,crop=32:32:%d:0", 32*position/100), 1)
-		want := nativeColorCommand(t, executable, nil, "-v", "error", "-cpuflags", "0", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", graph, "-f", "rawvideo", "-pix_fmt", "yuv444p10le", "pipe:1")
+		want := nativeFilterReferenceCommand(t, executable, nil, "-v", "error", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", graph, "-f", "rawvideo", "-pix_fmt", "yuv444p10le", "pipe:1")
 		if !bytes.Equal(got, want) {
 			t.Fatalf("native crop/blur at position%d differs: bytes%d/%d hashes%x/%x", position, len(got), len(want), sha256.Sum256(got), sha256.Sum256(want))
 		}

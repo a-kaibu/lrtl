@@ -35,13 +35,14 @@ installed bundled FFmpeg 8.0.1 and runs the separately recorded installed
 LRT 7.5.5 helper graphs. No license state was modified; these are helper-graph
 comparisons, not a complete licensed application render.
 
-The regular suite compares all 12 Go outputs with the saved scalar hashes,
-without requiring FFmpeg. The opt-in live test compares every sample against
-both CPU variants. All scalar cases match exactly. Native CPU has exactly
-one differing component (delta 2) in the strongest combined fixture due to
-the known Gaussian SIMD rounding boundary. The live test pins the native
-reference hash and asserts that precise exception; it does not treat the
-case as bit-identical. Other CPU/build combinations are not certified.
+The regular suite compares all 12 Go outputs with the saved selected-CPU
+hashes, without requiring FFmpeg. The opt-in live test compares every sample
+against both CPU variants. The subsequent [Gaussian arithmetic update](lrt-gaussian-arithmetic-7.5.5.md)
+uses fused feedback on AVX2/FMA hosts and removes the former one-component,
+two-code difference from the normal CPU fixture. Hosts without that dispatch
+retain scalar arithmetic. The selected profile must match exactly; the known
+difference from the other profile remains separately pinned. Other CPU/build
+combinations are not certified.
 
 A staged comparison isolates this fixture difference: after deflicker and
 level 4 denoise the CPU outputs are equal; after airplane removal there is
@@ -49,10 +50,10 @@ one component differing by one code; after unsharp/CAS it differs by two.
 The live test asserts each stage, rather than suppressing a general tolerance.
 
 72 real video cases compare the Go renderer against the independently
-constructed scalar reference graph: 12 cases × H.264 420 8-bit / H.265 444
+constructed selected-CPU reference graph: 12 cases × H.264 420 8-bit / H.265 444
 10-bit / ProRes HQ 422 10-bit × full/limited. All decoded YUV bytes and ffprobe
 dimensions, fps, frame count, pixel format and color metadata must match.
-The scalar reference choice is explicit because of the SIMD difference above.
+Reference CPU selection follows the Gaussian dispatch described above.
 
 Three additional full-plane comparisons cover left/center/right square
 cropping after deflicker measurement, using saved native presets. Preset,

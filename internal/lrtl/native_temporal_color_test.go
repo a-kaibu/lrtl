@@ -138,7 +138,7 @@ func TestNativeTemporalOfflineReferences(t *testing.T) {
 			got := denoiseRead(t, capture)
 			found := false
 			for _, row := range rows {
-				if row.Name == tc.name && row.CPUFlags == "0" {
+				if row.Name == tc.name && row.CPUFlags == nativeFilterReferenceCPU() {
 					found = true
 					if len(got) != row.Bytes || fmt.Sprintf("%x", sha256.Sum256(got)) != row.Hash {
 						t.Fatalf("temporal plane reference mismatch: %s bytes%d hash%x", tc.name, len(got), sha256.Sum256(got))
@@ -146,7 +146,7 @@ func TestNativeTemporalOfflineReferences(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Fatal("missing scalar reference", tc.name)
+				t.Fatal("missing selected CPU reference", tc.name)
 			}
 		})
 	}
@@ -193,9 +193,13 @@ func TestNativeTemporalPlanesAgainstFFmpeg(t *testing.T) {
 						}
 						// Native Gaussian SIMD changes one rounding boundary in the
 						// strongest combined fixture. Keep the exact observed exception
-						// visible; scalar planes below must still match byte for byte.
-						if cpu == "native" && tc.name == "combined-strong" && len(got) == len(want) && differences == 1 && maxDelta == 2 && fmt.Sprintf("%x", sha256.Sum256(want)) == "8cc207aa3a05cb2de7c495300d4dd12b2faaf354e180b5a190a9279dec282b1d" {
-							t.Log("observed native SIMD difference: one component by two codes; scalar parity required")
+						// visible; the selected profile must match byte for byte.
+						exceptionHash := "8cc207aa3a05cb2de7c495300d4dd12b2faaf354e180b5a190a9279dec282b1d"
+						if nativeGaussianFused() {
+							exceptionHash = "cc4ed33c20a476b4f91e8a63355a866582b2ff7fd6d0f83fddb7ca16ce08ca4b"
+						}
+						if cpu != nativeFilterReferenceCPU() && tc.name == "combined-strong" && len(got) == len(want) && differences == 1 && maxDelta == 2 && fmt.Sprintf("%x", sha256.Sum256(want)) == exceptionHash {
+							t.Log("observed difference from the other CPU profile; selected profile must match exactly")
 							return
 						}
 						t.Fatalf("%s: count%d/%d differing%d max%d hashes%x/%x", tc.name, len(got), len(want), differences, maxDelta, sha256.Sum256(got), sha256.Sum256(want))
@@ -255,14 +259,14 @@ func verifyNativeFilteredVideos(t *testing.T, executable, dir string, flags []st
 				markerCommand(t, append(args, flags...)...)
 				reference := filepath.Join(t.TempDir(), "reference"+suffix)
 				graph := referenceGraph + ",zscale=rangein=full:range=" + videoRange + ":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format=" + pix
-				args = []string{"-v", "error", "-cpuflags", "0", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
+				args = []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
 				args = append(args, enc...)
 				metadata := "tv"
 				if videoRange == "full" {
 					metadata = "pc"
 				}
 				args = append(args, "-pix_fmt", pix, "-color_range", metadata, "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "unspecified", "-mov_gamma", "2.4", "-movflags", "+write_colr+write_gama+prefer_icc+faststart", reference)
-				nativeColorCommand(t, executable, nil, args...)
+				nativeFilterReferenceCommand(t, executable, nil, args...)
 				decode := func(path string) []byte {
 					return nativeColorCommand(t, executable, nil, "-v", "error", "-i", path, "-pix_fmt", pix, "-f", "rawvideo", "pipe:1")
 				}

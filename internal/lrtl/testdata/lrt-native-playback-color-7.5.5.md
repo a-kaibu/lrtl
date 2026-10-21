@@ -18,8 +18,9 @@ n8.0.1 [tmix kernel](https://github.com/FFmpeg/FFmpeg/blob/n8.0.1/libavfilter/vf
 
 ## Recorded output references
 
-`lrt-native-playback-color-8.0.1.json` contains 22 byte counts and SHA-256 hashes
-from the installed bundled FFmpeg 8.0.1 using `-cpuflags 0`. Each input has
+`lrt-native-playback-color-8.0.1.json` contains the original 22 scalar byte
+counts/hashes plus 22 normal-CPU observations from bundled FFmpeg 8.0.1.
+Each input has
 41 opaque 64x32 RGB16 PNG frames; `nativePlaybackFixture` generates them with
 the same published synthetic formula as the earlier temporal fixture.
 
@@ -32,16 +33,16 @@ initial RGB conversion and all filters are performed by FFmpeg in that
 reference, without calling Go filtering functions. These are helper-graph
 comparisons, not a complete licensed LRT application render.
 
-The regular suite compares all 22 Go output buffers with the saved scalar
-hashes without FFmpeg. The opt-in test compares every sample with live native
+The regular suite compares all 22 Go output buffers with the saved selected
+CPU hashes without FFmpeg. The opt-in test compares every sample with live
 reference graphs. No arbitrary image tolerance is used. The earlier temporal
-[SIMD discrepancy](lrt-native-temporal-color-7.5.5.md) remains outside this
-scalar reference claim.
+SIMD discrepancy is addressed by the [Gaussian arithmetic update](lrt-gaussian-arithmetic-7.5.5.md).
+Small-frame native threading issues remain outside this claim.
 
 132 real videos cover all 22 cases × H.264 420 8-bit / H.265 444 10-bit /
 ProRes HQ 422 10-bit × full/limited. Every decoded YUV byte and ffprobe
 frame count, frame rate, dimensions, pixel format and color metadata must
-match the independently encoded scalar reference. These use the same shared
+match the independently encoded selected-CPU reference. These use the same shared
 video comparison helper as the 72 earlier temporal cases.
 
 Additional tests cover saved combined presets and batch forwarding, original

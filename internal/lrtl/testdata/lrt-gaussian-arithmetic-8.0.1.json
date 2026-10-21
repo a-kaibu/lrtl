@@ -1,0 +1,1922 @@
+[
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 4,
+    "Hash": "1c0a7e4650519320d7adbb7660717f1f3d87f0595fdeebd5eb126eff33a805a0"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 4,
+    "Hash": "1c0a7e4650519320d7adbb7660717f1f3d87f0595fdeebd5eb126eff33a805a0"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 4,
+    "Hash": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 4,
+    "Hash": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 4,
+    "Hash": "b852e730035169e2f4a81261770e8a5b4a4c5ae3334d5020d7c3513375ddb235"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 4,
+    "Hash": "b852e730035169e2f4a81261770e8a5b4a4c5ae3334d5020d7c3513375ddb235"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 4,
+    "Hash": "918bd027f59087bef8e055f9b587b25486d58c606d8658d4ce7b1199274f6744"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 4,
+    "Hash": "918bd027f59087bef8e055f9b587b25486d58c606d8658d4ce7b1199274f6744"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 4,
+    "Hash": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 4,
+    "Hash": "df3f619804a92fdb4057192dc43dd748ea778adc52bc498ce80524c014b81119"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 4,
+    "Hash": "bb72b4e4eb29dc59328668f32e0511e3ac0e5ce4026b1591965216e49ca1f5d7"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 4,
+    "Hash": "bb72b4e4eb29dc59328668f32e0511e3ac0e5ce4026b1591965216e49ca1f5d7"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 8,
+    "Hash": "da498ea82777e7fdaa90343290b5f71c511d26d3bf3b4dbe20d7042accb0b35a"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 8,
+    "Hash": "da498ea82777e7fdaa90343290b5f71c511d26d3bf3b4dbe20d7042accb0b35a"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 8,
+    "Hash": "245bbd9d484dcf27c714e2690cd6544973de5d54aa9cd82eab23d6046a65faa8"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 8,
+    "Hash": "245bbd9d484dcf27c714e2690cd6544973de5d54aa9cd82eab23d6046a65faa8"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 8,
+    "Hash": "0acad6ffdd2e986a47bf804e587a32bea9e21fa31760c7a8782e7b648d718f54"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 8,
+    "Hash": "0acad6ffdd2e986a47bf804e587a32bea9e21fa31760c7a8782e7b648d718f54"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 8,
+    "Hash": "74d44a38b8eea9babaef79b0fdff46784a812c0dc5edc2124347f66436655c66"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 8,
+    "Hash": "74d44a38b8eea9babaef79b0fdff46784a812c0dc5edc2124347f66436655c66"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 8,
+    "Hash": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 8,
+    "Hash": "af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 8,
+    "Hash": "5a89968efe86afd5a11f2d08f7c2ab813972dbc3af9f17bf098d16240366e12a"
+  },
+  {
+    "Width": 2,
+    "Height": 2,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 8,
+    "Hash": "5a89968efe86afd5a11f2d08f7c2ab813972dbc3af9f17bf098d16240366e12a"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 64,
+    "Hash": "10f954854f6e1959c2f2f7a583cdab4adb820b9e64ca2f371be7edae5f6c1df4"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 64,
+    "Hash": "10f954854f6e1959c2f2f7a583cdab4adb820b9e64ca2f371be7edae5f6c1df4"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 64,
+    "Hash": "032883036ab2d580625ca717ae1f20a852db7235355040c79904ce08025459b7"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 64,
+    "Hash": "032883036ab2d580625ca717ae1f20a852db7235355040c79904ce08025459b7"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 64,
+    "Hash": "783d912dbb6723fa8a705d2445b9882effe42e0a83901b4000669dc474cc66db"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 64,
+    "Hash": "783d912dbb6723fa8a705d2445b9882effe42e0a83901b4000669dc474cc66db"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 64,
+    "Hash": "a5b9268ea84cee03cfe4a36f07e16b4874ad29a20f486fa638868e0c2bfc616b"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 64,
+    "Hash": "a5b9268ea84cee03cfe4a36f07e16b4874ad29a20f486fa638868e0c2bfc616b"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 64,
+    "Hash": "80366a410d32d47a27b8d280b0057727594e351d445010dc7666471d157ef64c"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 64,
+    "Hash": "80366a410d32d47a27b8d280b0057727594e351d445010dc7666471d157ef64c"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 64,
+    "Hash": "7c8975e1e60a5c8337f28edf8c33c3b180360b7279644a9bc1af3c51e6220bf5"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 64,
+    "Hash": "7c8975e1e60a5c8337f28edf8c33c3b180360b7279644a9bc1af3c51e6220bf5"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 128,
+    "Hash": "9a2157919be8a7922cd50cc0df78ef6670d3688082be4b21c99e843f8f03915f"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 128,
+    "Hash": "9a2157919be8a7922cd50cc0df78ef6670d3688082be4b21c99e843f8f03915f"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 128,
+    "Hash": "49079e3e416253d28f7e1b71bef27db762c0d1b7fd946fa7273da9d6795236db"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 128,
+    "Hash": "49079e3e416253d28f7e1b71bef27db762c0d1b7fd946fa7273da9d6795236db"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 128,
+    "Hash": "e0434eee192f88f23e5ea57ab354984ed8d00b05730e05f4459345bffc3f278a"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 128,
+    "Hash": "e0434eee192f88f23e5ea57ab354984ed8d00b05730e05f4459345bffc3f278a"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 128,
+    "Hash": "e90ace0aebf202e0fb57b44c4d26641785bb02d7c6f907380653ad278f79d746"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 128,
+    "Hash": "e90ace0aebf202e0fb57b44c4d26641785bb02d7c6f907380653ad278f79d746"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 128,
+    "Hash": "b433ffba7eb88502c2b32e30a383949c3acb64674f78e9a21e28d50249f8c6b0"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 128,
+    "Hash": "b433ffba7eb88502c2b32e30a383949c3acb64674f78e9a21e28d50249f8c6b0"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 128,
+    "Hash": "ffa248cba7868c08897fa589d56dfee42405549e3769bad789e041b1fa8effaf"
+  },
+  {
+    "Width": 8,
+    "Height": 8,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 128,
+    "Hash": "ffa248cba7868c08897fa589d56dfee42405549e3769bad789e041b1fa8effaf"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 153,
+    "Hash": "e2a71fbc9b68da2d631c4d19aedea9c30e783c6ab118abe7a9c7f035db440ff3"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 153,
+    "Hash": "e2a71fbc9b68da2d631c4d19aedea9c30e783c6ab118abe7a9c7f035db440ff3"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 153,
+    "Hash": "bda4a5a2814c0c99811316161b89e41454ca8c38492cbb6fcd15cef57fac8cce"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 153,
+    "Hash": "bda4a5a2814c0c99811316161b89e41454ca8c38492cbb6fcd15cef57fac8cce"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 153,
+    "Hash": "b1f400d39b8a3c20896381970ab6a199b2b12cecf44bcf5201ed3cc67bf6de7d"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 153,
+    "Hash": "b1f400d39b8a3c20896381970ab6a199b2b12cecf44bcf5201ed3cc67bf6de7d"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 153,
+    "Hash": "f67ecd89bc695f83652cb0c287baedc7a5ca0066a085eee653577964757646d4"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 153,
+    "Hash": "f67ecd89bc695f83652cb0c287baedc7a5ca0066a085eee653577964757646d4"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 153,
+    "Hash": "8c883910c99826a3f24ba4255e5f33505165eb84d8a2713d6f8870d5a2f89537"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 153,
+    "Hash": "8c883910c99826a3f24ba4255e5f33505165eb84d8a2713d6f8870d5a2f89537"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 153,
+    "Hash": "3e6295152b0753ae81878bcb2658591e64076bb680342c7455748c9bd2e81c23"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 153,
+    "Hash": "3e6295152b0753ae81878bcb2658591e64076bb680342c7455748c9bd2e81c23"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 306,
+    "Hash": "26146fbfd3163a4afaa58ebb9f5a393397b1e322fa61160bc58deee143544459"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 306,
+    "Hash": "26146fbfd3163a4afaa58ebb9f5a393397b1e322fa61160bc58deee143544459"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 306,
+    "Hash": "f81ff4e2ed0008701ad8d0b080062884bf1ea639f0eec0808f3b186370a7a2e4"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 306,
+    "Hash": "f81ff4e2ed0008701ad8d0b080062884bf1ea639f0eec0808f3b186370a7a2e4"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 306,
+    "Hash": "7f36e0482b1a4c2e9428b1019804cebb536184bc244cd78d6a930eb6d0680e00"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 306,
+    "Hash": "7f36e0482b1a4c2e9428b1019804cebb536184bc244cd78d6a930eb6d0680e00"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 306,
+    "Hash": "0da0e35df22c9cb2aa130df748b0e72320dad91c552c232bbb74bc39e98c9a53"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 306,
+    "Hash": "0da0e35df22c9cb2aa130df748b0e72320dad91c552c232bbb74bc39e98c9a53"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 306,
+    "Hash": "4859c9c1c308373303a71bb790f90625ea08dd06c51676a9637126f96350eb26"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 306,
+    "Hash": "4859c9c1c308373303a71bb790f90625ea08dd06c51676a9637126f96350eb26"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 306,
+    "Hash": "61f253bf6ee18dde2b98a73542b114f00061a3a6f52298eb5f7eea1503f07c13"
+  },
+  {
+    "Width": 17,
+    "Height": 9,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 306,
+    "Hash": "61f253bf6ee18dde2b98a73542b114f00061a3a6f52298eb5f7eea1503f07c13"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 527,
+    "Hash": "cf5627597f5d951e26289b5e32b022765e8ea9682738ade44a59851445cd16a8"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 527,
+    "Hash": "cf5627597f5d951e26289b5e32b022765e8ea9682738ade44a59851445cd16a8"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 527,
+    "Hash": "c70e4b2ecf55ab6bf350e1f4054dc638a2c33a157da2f8e58aea750891b83147"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 527,
+    "Hash": "c70e4b2ecf55ab6bf350e1f4054dc638a2c33a157da2f8e58aea750891b83147"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 527,
+    "Hash": "bb2e579ab78984da94caecc387c43a75b2892b3e5ae7a0e82cf4692a0fc2c818"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 527,
+    "Hash": "bb2e579ab78984da94caecc387c43a75b2892b3e5ae7a0e82cf4692a0fc2c818"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 527,
+    "Hash": "4c9f354d45b39f830687490e9d76ff0486b99fa119ebd1e90b4498acb986dce7"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 527,
+    "Hash": "4c9f354d45b39f830687490e9d76ff0486b99fa119ebd1e90b4498acb986dce7"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 527,
+    "Hash": "780c7ca3d00047bd8d2b9e6df253e40c54f722a67e24ddf7c2cc67001008b9d8"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 527,
+    "Hash": "780c7ca3d00047bd8d2b9e6df253e40c54f722a67e24ddf7c2cc67001008b9d8"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 527,
+    "Hash": "a6d43c9e95539e3f93ae25d4851aba1645284ccd47118132ad2b8e197c3ff852"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 527,
+    "Hash": "a6d43c9e95539e3f93ae25d4851aba1645284ccd47118132ad2b8e197c3ff852"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 1054,
+    "Hash": "a32119ace3b2c3021f240da8fff29af7cbe459c1afb3e253ea6fadb1e699424f"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 1054,
+    "Hash": "a32119ace3b2c3021f240da8fff29af7cbe459c1afb3e253ea6fadb1e699424f"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 1054,
+    "Hash": "bc5b54dc46ea07e5530402a11bb442a27fd4a48166c940d54d467d5ac1aff334"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 1054,
+    "Hash": "bc5b54dc46ea07e5530402a11bb442a27fd4a48166c940d54d467d5ac1aff334"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 1054,
+    "Hash": "4f6c1ab27c028a310b77a0668d7d030d0b2674ec5c6c0dd96d801535b972c742"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 1054,
+    "Hash": "4f6c1ab27c028a310b77a0668d7d030d0b2674ec5c6c0dd96d801535b972c742"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 1054,
+    "Hash": "9847282a9c38aae0b5e1b523e3381ab832da51e814080320f6e48b48b824955e"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 1054,
+    "Hash": "9847282a9c38aae0b5e1b523e3381ab832da51e814080320f6e48b48b824955e"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 1054,
+    "Hash": "248a9045389f105792665181b2e455c9d5cfc2a446bf3de6ab898b390dd60b97"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 1054,
+    "Hash": "248a9045389f105792665181b2e455c9d5cfc2a446bf3de6ab898b390dd60b97"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 1054,
+    "Hash": "37b3ca41329aa27f750152bbd405b27c413607bcfcf57b4753bc47b2b39f5d7f"
+  },
+  {
+    "Width": 31,
+    "Height": 17,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 1054,
+    "Hash": "37b3ca41329aa27f750152bbd405b27c413607bcfcf57b4753bc47b2b39f5d7f"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 512,
+    "Hash": "d7ac77eaea663b01c035e6a84b23445b2442f4baa72766202e29add760c6b435"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 512,
+    "Hash": "d7ac77eaea663b01c035e6a84b23445b2442f4baa72766202e29add760c6b435"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 512,
+    "Hash": "369466a937eff40894f2f77bb20c9c213e5c9d3373a3a4293e993072b3e3fcc6"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 512,
+    "Hash": "369466a937eff40894f2f77bb20c9c213e5c9d3373a3a4293e993072b3e3fcc6"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 512,
+    "Hash": "24dd53544b98c8c5ed137732fbcdc2d5514a5d455b47ce8d24a36292d06038e0"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 512,
+    "Hash": "24dd53544b98c8c5ed137732fbcdc2d5514a5d455b47ce8d24a36292d06038e0"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 512,
+    "Hash": "95637df5e700673430d1e0d32196d5b1b3c1258ed26d8d76fb1a4106457c5571"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 512,
+    "Hash": "95637df5e700673430d1e0d32196d5b1b3c1258ed26d8d76fb1a4106457c5571"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 512,
+    "Hash": "af180db282dc0af24787454316712050157c543de6d52001928614f3e34afa79"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 512,
+    "Hash": "af180db282dc0af24787454316712050157c543de6d52001928614f3e34afa79"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 512,
+    "Hash": "f1ab5159c74c5b5b3a653886ccca5a857debab4f48805e00b125e9c499253c4b"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 512,
+    "Hash": "f1ab5159c74c5b5b3a653886ccca5a857debab4f48805e00b125e9c499253c4b"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 1024,
+    "Hash": "3208bff8df85adc3386fabe3e5cecf356612a74af8bfc055c44807f7fa958f1b"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 1024,
+    "Hash": "3208bff8df85adc3386fabe3e5cecf356612a74af8bfc055c44807f7fa958f1b"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 1024,
+    "Hash": "760b1f286f5fc1a82f857b5dd328ca82180b05047f68a898e34ef6e3345178d9"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 1024,
+    "Hash": "760b1f286f5fc1a82f857b5dd328ca82180b05047f68a898e34ef6e3345178d9"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 1024,
+    "Hash": "b46f2d17331f45a0276b0d07b0802a4b1d7c4a95b0b12dba2a300a8e8637673a"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 1024,
+    "Hash": "b46f2d17331f45a0276b0d07b0802a4b1d7c4a95b0b12dba2a300a8e8637673a"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 1024,
+    "Hash": "f8a5f32b5f593c66faec84d694800fb4ca83c7b3d5665624e3cb61ccea3ed688"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 1024,
+    "Hash": "f8a5f32b5f593c66faec84d694800fb4ca83c7b3d5665624e3cb61ccea3ed688"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 1024,
+    "Hash": "8dbd6b5108661a668c78c33f69205322dc39e16315f269c2611bf59c21abb7ce"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 1024,
+    "Hash": "8dbd6b5108661a668c78c33f69205322dc39e16315f269c2611bf59c21abb7ce"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 1024,
+    "Hash": "42c9bbadf6e00e108819fb71eab657e0ad752263704ea53b201f82e3bdf3981f"
+  },
+  {
+    "Width": 32,
+    "Height": 16,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 1024,
+    "Hash": "42c9bbadf6e00e108819fb71eab657e0ad752263704ea53b201f82e3bdf3981f"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 2048,
+    "Hash": "1e0aee9cdd5f5d865f4d0a6f8ba1ee82600bd40ca8ca4be82ae9210d3ad6d8a9"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 2048,
+    "Hash": "1e0aee9cdd5f5d865f4d0a6f8ba1ee82600bd40ca8ca4be82ae9210d3ad6d8a9"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 2048,
+    "Hash": "83892fc75e019c2a470e134a1b86932e67198e359cfd9ef81ec0bf6f93685e46"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 2048,
+    "Hash": "83892fc75e019c2a470e134a1b86932e67198e359cfd9ef81ec0bf6f93685e46"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 2048,
+    "Hash": "069d1edb51e1e1acb3afffe73545e781863e3cf04333b0eda6202debbf348855"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 2048,
+    "Hash": "069d1edb51e1e1acb3afffe73545e781863e3cf04333b0eda6202debbf348855"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 2048,
+    "Hash": "0577920569e3f8db80fe05bb78f7094791c8b042409dc5be4ec39541092b26bb"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 2048,
+    "Hash": "0577920569e3f8db80fe05bb78f7094791c8b042409dc5be4ec39541092b26bb"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 2048,
+    "Hash": "6ce74629b45b8ebd3a8c638a677360668dd0b4eda2b398c9ebc6a114629c4ba8"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 2048,
+    "Hash": "6ce74629b45b8ebd3a8c638a677360668dd0b4eda2b398c9ebc6a114629c4ba8"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 2048,
+    "Hash": "ccf94d89e94a13eadaf801c26bd578110c7a4565de23254bd3b9eb29285f9e30"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 2048,
+    "Hash": "ccf94d89e94a13eadaf801c26bd578110c7a4565de23254bd3b9eb29285f9e30"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 4096,
+    "Hash": "9e3785cc41df0fc119fced1c897abf76bdafa517204f1ce5d70a5a768d210e91"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 4096,
+    "Hash": "9e3785cc41df0fc119fced1c897abf76bdafa517204f1ce5d70a5a768d210e91"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 4096,
+    "Hash": "a68325a054bc1de82bc91b7bccd58fdc67f51623bf1c849eac9b4c3e9265e19f"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 4096,
+    "Hash": "a68325a054bc1de82bc91b7bccd58fdc67f51623bf1c849eac9b4c3e9265e19f"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 4096,
+    "Hash": "b79b7b55ef657ffa83e5e56e1076937e861aa42d0aeddedc4ae88b0ba853a97e"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 4096,
+    "Hash": "b79b7b55ef657ffa83e5e56e1076937e861aa42d0aeddedc4ae88b0ba853a97e"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 4096,
+    "Hash": "9b36b52159b139b3e14ad600c01b188095a158ed39bf71837cfce81d59cc5642"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 4096,
+    "Hash": "9b36b52159b139b3e14ad600c01b188095a158ed39bf71837cfce81d59cc5642"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 4096,
+    "Hash": "f41b0d329605e3e027cb2ff37971c3e5048267fafbd711383c377b4f3b32ae85"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 4096,
+    "Hash": "f41b0d329605e3e027cb2ff37971c3e5048267fafbd711383c377b4f3b32ae85"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 4096,
+    "Hash": "dafd8b92de46f393a18c10225559a24513e526ec786fb496984b5cb2245df339"
+  },
+  {
+    "Width": 64,
+    "Height": 32,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 4096,
+    "Hash": "dafd8b92de46f393a18c10225559a24513e526ec786fb496984b5cb2245df339"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 2145,
+    "Hash": "3afa79cf9f18e4ceef504a7f55075ef95194dbe54dc5df7c9eda3b24c7d33814"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 2145,
+    "Hash": "3afa79cf9f18e4ceef504a7f55075ef95194dbe54dc5df7c9eda3b24c7d33814"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 2145,
+    "Hash": "5b3e9a3fc2fc39fa5eb62989b6700a4328ded64b6c85657bc73b9ebe8b112188"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 2145,
+    "Hash": "5b3e9a3fc2fc39fa5eb62989b6700a4328ded64b6c85657bc73b9ebe8b112188"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 2145,
+    "Hash": "2cdfa734905077c4e51533d1963a689df297b2c1f4c52c76787b63c59f897301"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 2145,
+    "Hash": "2cdfa734905077c4e51533d1963a689df297b2c1f4c52c76787b63c59f897301"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 2145,
+    "Hash": "39c7262ce17c6b51b9775ad2d537e8ef9fdc7cd44e76d29eaa4fb6562b1c8f0e"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 2145,
+    "Hash": "39c7262ce17c6b51b9775ad2d537e8ef9fdc7cd44e76d29eaa4fb6562b1c8f0e"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 2145,
+    "Hash": "23105543658925b04483d9a631ccf364ee5b9a328555554dbf78c462ab4444de"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 2145,
+    "Hash": "23105543658925b04483d9a631ccf364ee5b9a328555554dbf78c462ab4444de"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 2145,
+    "Hash": "c7fbeda13501678681d1413017564afa203eb9fe2d557a615df6a325f6a23f76"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 2145,
+    "Hash": "c7fbeda13501678681d1413017564afa203eb9fe2d557a615df6a325f6a23f76"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 4290,
+    "Hash": "1a5dd99bb50b2c3b7e7e0f4b19c74aef504c0a5c7af22104cee16432292182d8"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 4290,
+    "Hash": "1a5dd99bb50b2c3b7e7e0f4b19c74aef504c0a5c7af22104cee16432292182d8"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 4290,
+    "Hash": "bddf19a5a55f01c12caa637fa94c78df8f515b2fd6b0ba7d2fc0b87d351d081c"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 4290,
+    "Hash": "bddf19a5a55f01c12caa637fa94c78df8f515b2fd6b0ba7d2fc0b87d351d081c"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 4290,
+    "Hash": "f6f88a1b81b180212fc52ab5f7aff5f6ae518dfd9add7a8ac5154574cacdd92b"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 4290,
+    "Hash": "f6f88a1b81b180212fc52ab5f7aff5f6ae518dfd9add7a8ac5154574cacdd92b"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 4290,
+    "Hash": "1b1bfdc73457b2b08dc5b2a1dbcb154284cb43e6f03b9b6a956ace8555bbf64c"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 4290,
+    "Hash": "1b1bfdc73457b2b08dc5b2a1dbcb154284cb43e6f03b9b6a956ace8555bbf64c"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 4290,
+    "Hash": "9037219649ed3babed653ac800a8363c1894e08bcc3520ec115c629313be30ea"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 4290,
+    "Hash": "9037219649ed3babed653ac800a8363c1894e08bcc3520ec115c629313be30ea"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 4290,
+    "Hash": "e82dd39eee6c5c76f370a1ef4218d47862f803b06b2202289cff13858010bdf7"
+  },
+  {
+    "Width": 65,
+    "Height": 33,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 4290,
+    "Hash": "e82dd39eee6c5c76f370a1ef4218d47862f803b06b2202289cff13858010bdf7"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 8255,
+    "Hash": "e9d15b81a00b5aa70f06b96cd8dc96910ea8b39e6ec253b9b04d22f59c155ef4"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 8255,
+    "Hash": "e9d15b81a00b5aa70f06b96cd8dc96910ea8b39e6ec253b9b04d22f59c155ef4"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 8255,
+    "Hash": "37f5e84f32466b2f70b438794b4b43a00d2b3f70017c30957eaeb3b8fb7d0b1f"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 8255,
+    "Hash": "37f5e84f32466b2f70b438794b4b43a00d2b3f70017c30957eaeb3b8fb7d0b1f"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 8255,
+    "Hash": "827af0556017868106e3198e75868e3cc7df51c1f1d97ce6c715c6ebf2ccb412"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 8255,
+    "Hash": "827af0556017868106e3198e75868e3cc7df51c1f1d97ce6c715c6ebf2ccb412"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 8255,
+    "Hash": "3cfd5e978fa3e5fd61d6e86ee5fca56089a7ae44c66885c20663f8772f49b211"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 8255,
+    "Hash": "e4d80ee14012fea64b44d3f035dc0416430b7ae6af0f5f50c8bb96f31f389e5b"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 8255,
+    "Hash": "02185b208a9ab4f222a5d1248a0acfb457945897ee454f8eb95aa174b4c86303"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 8255,
+    "Hash": "a4d2b35e1c1ac726111b6ced2b998fe027f1e37ffd59d0b26cece4f957e27a24"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 8255,
+    "Hash": "ac7cce66706fe5631fde62e27253d227ede8dbcca41ba32f6ab218ac6a6539d3"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 8,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 8255,
+    "Hash": "ac7cce66706fe5631fde62e27253d227ede8dbcca41ba32f6ab218ac6a6539d3"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 16510,
+    "Hash": "c65939c623eb79c663e02f0e45a6434ec018a785a1b36cfc53edb36ac4b75ff0"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 16510,
+    "Hash": "c65939c623eb79c663e02f0e45a6434ec018a785a1b36cfc53edb36ac4b75ff0"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 16510,
+    "Hash": "bafde98d3425ab394c889dd46c2d9df6e14bd1dd7e4e3c034bf9fcc569824476"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 16510,
+    "Hash": "bafde98d3425ab394c889dd46c2d9df6e14bd1dd7e4e3c034bf9fcc569824476"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 16510,
+    "Hash": "551c32655e5d15ce7d3a2aec34f98103c74a1b35484632b10a06a292b2c59bd7"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 0.5,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 16510,
+    "Hash": "551c32655e5d15ce7d3a2aec34f98103c74a1b35484632b10a06a292b2c59bd7"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "0",
+    "Bytes": 16510,
+    "Hash": "dedff30ed65e4b0260ba707625a884edb7d2bd9b8aee848e64e570082bc2e933"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "noise",
+    "CPUFlags": "native",
+    "Bytes": 16510,
+    "Hash": "dedff30ed65e4b0260ba707625a884edb7d2bd9b8aee848e64e570082bc2e933"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "0",
+    "Bytes": 16510,
+    "Hash": "9eeecc5897898030151691b8fac5beb4adebf2e45f006d090fbcd3bedbb44fcc"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "ramp",
+    "CPUFlags": "native",
+    "Bytes": 16510,
+    "Hash": "9eeecc5897898030151691b8fac5beb4adebf2e45f006d090fbcd3bedbb44fcc"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "0",
+    "Bytes": 16510,
+    "Hash": "0a784a62a36b3fc30ffaa578014b78aacaa65f27c76d437b12c4acda9bc78c94"
+  },
+  {
+    "Width": 127,
+    "Height": 65,
+    "Depth": 10,
+    "Sigma": 15.0,
+    "Pattern": "impulse",
+    "CPUFlags": "native",
+    "Bytes": 16510,
+    "Hash": "0a784a62a36b3fc30ffaa578014b78aacaa65f27c76d437b12c4acda9bc78c94"
+  }
+]

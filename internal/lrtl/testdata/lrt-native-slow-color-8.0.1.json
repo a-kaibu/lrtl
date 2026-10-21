@@ -1,111 +1,265 @@
 [
   {
     "Name": "mode1-speed0.0625",
+    "CPUFlags": "0",
     "Bytes": 1081344,
     "Hash": "2ae31ef70a8a727607f29fa52e34d5abfbeb36414b7effffac505d5b2f56b95e"
   },
   {
     "Name": "mode1-speed0.3",
+    "CPUFlags": "0",
     "Bytes": 227328,
     "Hash": "670c823d129490013260937b600ec75207b68a616e2c04edc44f795d36a5e6ea"
   },
   {
     "Name": "mode1-speed0.5",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "7acdc4ec2190cdc99de844f046c46b94dcacb1422499949c59d131a0157035ed"
   },
   {
     "Name": "mode1-speed0.7",
+    "CPUFlags": "0",
     "Bytes": 92160,
     "Hash": "903d7251c64d6d4e3b89e28ae61806709df27f087d62195bca505b2d0456992b"
   },
   {
     "Name": "mode1-speed0.9",
+    "CPUFlags": "0",
     "Bytes": 73728,
     "Hash": "8f5c46ffa47ca5d528f6a90d9e5be653b5a44c59dc6c503dc6587a4625f1e2ab"
   },
   {
     "Name": "mode1-spatial1",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "c10dbbe1f280541cd6041e1ad08d2de2b10c03a2f906a58a2b6e280dceccc5ce"
   },
   {
     "Name": "mode1-spatial2",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "ef4007275cdf23e8ba4dfa7013141609eb5ee3a38d14770d337c4ddbb977bc93"
   },
   {
     "Name": "mode1-spatial3",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "abc5a69cf074072e4330d0bc06dbebe4b997ee2f5f22e22cf9ba8c2106ea8a93"
   },
   {
     "Name": "pan-mode1-speed0.3",
+    "CPUFlags": "0",
     "Bytes": 417792,
     "Hash": "f53974c2cf49003bc7eeb5a0a7b7130153aa4411c4f362970dd7eafaa28b5bdf"
   },
   {
     "Name": "pan-mode1-speed0.5",
+    "CPUFlags": "0",
     "Bytes": 245760,
     "Hash": "fc82c51c13fcea94e10f5084771a527a77248e7141a6a95ea4a5d0d7768e28d8"
   },
   {
     "Name": "mode2-speed0.0625",
+    "CPUFlags": "0",
     "Bytes": 1081344,
     "Hash": "79fa1f02e4084406f22b21aac6fb713acd2dfa10da5c277a33dae9bf69bdacce"
   },
   {
     "Name": "mode2-speed0.3",
+    "CPUFlags": "0",
     "Bytes": 227328,
     "Hash": "cfdbb53414c399e9bba64221bca6e96c398d234bcebc2da032b7cf9a04ffa726"
   },
   {
     "Name": "mode2-speed0.5",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "d7374b715871abf242ad17169b8defa485b7a74b80d9240f8dbb70b1325a1842"
   },
   {
     "Name": "mode2-speed0.7",
+    "CPUFlags": "0",
     "Bytes": 92160,
     "Hash": "c4556a466c56d316b0a8ccd546b7d10ed41e042261d5d5cba003dcf3ba6eb283"
   },
   {
     "Name": "mode2-speed0.9",
+    "CPUFlags": "0",
     "Bytes": 73728,
     "Hash": "a4d00df7ac2a375feced2f590d643c6c646c70c5e84c0c17ff0b7ab16c7bfa52"
   },
   {
     "Name": "mode2-spatial1",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "1ac1874057353f068104eb25f6ca7febbcf5465b45982e848f4c7dd5db5d424d"
   },
   {
     "Name": "mode2-spatial2",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "8ea1ba18eb2905373c55c5801f6184d39dcb7edd610e4a7fa2bb3bc131cb3edc"
   },
   {
     "Name": "mode2-spatial3",
+    "CPUFlags": "0",
     "Bytes": 135168,
     "Hash": "0a06cd625eba7f70e4dbb86bdc4844a5e4abd6415a28653ba01f0fc45822b40d"
   },
   {
     "Name": "pan-mode2-speed0.3",
+    "CPUFlags": "0",
     "Bytes": 417792,
     "Hash": "b64071a19946d140a0ed2577a4d2e6548dfd32c95757d4d735e04d0c774f82c3"
   },
   {
     "Name": "pan-mode2-speed0.5",
+    "CPUFlags": "0",
     "Bytes": 245760,
     "Hash": "4c6fe1298be19dc43cda0b92515a94f4913e7385e3950f1a690df244f42a8bb5"
   },
   {
     "Name": "combined",
+    "CPUFlags": "0",
     "Bytes": 67584,
     "Hash": "8d7ead779ee424d062886847f465372eca9d0a4c4e0c59e79988c066cddc1aca"
   },
   {
     "Name": "combined-strong",
+    "CPUFlags": "0",
+    "Bytes": 116736,
+    "Hash": "00732cede213f7e80ad6663b4904a095b470e73aee88a1925e561f54483c4efd"
+  },
+  {
+    "Name": "mode1-speed0.0625",
+    "CPUFlags": "native",
+    "Bytes": 1081344,
+    "Hash": "2ae31ef70a8a727607f29fa52e34d5abfbeb36414b7effffac505d5b2f56b95e"
+  },
+  {
+    "Name": "mode1-speed0.3",
+    "CPUFlags": "native",
+    "Bytes": 227328,
+    "Hash": "670c823d129490013260937b600ec75207b68a616e2c04edc44f795d36a5e6ea"
+  },
+  {
+    "Name": "mode1-speed0.5",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "7acdc4ec2190cdc99de844f046c46b94dcacb1422499949c59d131a0157035ed"
+  },
+  {
+    "Name": "mode1-speed0.7",
+    "CPUFlags": "native",
+    "Bytes": 92160,
+    "Hash": "903d7251c64d6d4e3b89e28ae61806709df27f087d62195bca505b2d0456992b"
+  },
+  {
+    "Name": "mode1-speed0.9",
+    "CPUFlags": "native",
+    "Bytes": 73728,
+    "Hash": "8f5c46ffa47ca5d528f6a90d9e5be653b5a44c59dc6c503dc6587a4625f1e2ab"
+  },
+  {
+    "Name": "mode1-spatial1",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "c10dbbe1f280541cd6041e1ad08d2de2b10c03a2f906a58a2b6e280dceccc5ce"
+  },
+  {
+    "Name": "mode1-spatial2",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "ef4007275cdf23e8ba4dfa7013141609eb5ee3a38d14770d337c4ddbb977bc93"
+  },
+  {
+    "Name": "mode1-spatial3",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "abc5a69cf074072e4330d0bc06dbebe4b997ee2f5f22e22cf9ba8c2106ea8a93"
+  },
+  {
+    "Name": "pan-mode1-speed0.3",
+    "CPUFlags": "native",
+    "Bytes": 417792,
+    "Hash": "f53974c2cf49003bc7eeb5a0a7b7130153aa4411c4f362970dd7eafaa28b5bdf"
+  },
+  {
+    "Name": "pan-mode1-speed0.5",
+    "CPUFlags": "native",
+    "Bytes": 245760,
+    "Hash": "fc82c51c13fcea94e10f5084771a527a77248e7141a6a95ea4a5d0d7768e28d8"
+  },
+  {
+    "Name": "mode2-speed0.0625",
+    "CPUFlags": "native",
+    "Bytes": 1081344,
+    "Hash": "79fa1f02e4084406f22b21aac6fb713acd2dfa10da5c277a33dae9bf69bdacce"
+  },
+  {
+    "Name": "mode2-speed0.3",
+    "CPUFlags": "native",
+    "Bytes": 227328,
+    "Hash": "cfdbb53414c399e9bba64221bca6e96c398d234bcebc2da032b7cf9a04ffa726"
+  },
+  {
+    "Name": "mode2-speed0.5",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "d7374b715871abf242ad17169b8defa485b7a74b80d9240f8dbb70b1325a1842"
+  },
+  {
+    "Name": "mode2-speed0.7",
+    "CPUFlags": "native",
+    "Bytes": 92160,
+    "Hash": "c4556a466c56d316b0a8ccd546b7d10ed41e042261d5d5cba003dcf3ba6eb283"
+  },
+  {
+    "Name": "mode2-speed0.9",
+    "CPUFlags": "native",
+    "Bytes": 73728,
+    "Hash": "a4d00df7ac2a375feced2f590d643c6c646c70c5e84c0c17ff0b7ab16c7bfa52"
+  },
+  {
+    "Name": "mode2-spatial1",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "1ac1874057353f068104eb25f6ca7febbcf5465b45982e848f4c7dd5db5d424d"
+  },
+  {
+    "Name": "mode2-spatial2",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "8ea1ba18eb2905373c55c5801f6184d39dcb7edd610e4a7fa2bb3bc131cb3edc"
+  },
+  {
+    "Name": "mode2-spatial3",
+    "CPUFlags": "native",
+    "Bytes": 135168,
+    "Hash": "0a06cd625eba7f70e4dbb86bdc4844a5e4abd6415a28653ba01f0fc45822b40d"
+  },
+  {
+    "Name": "pan-mode2-speed0.3",
+    "CPUFlags": "native",
+    "Bytes": 417792,
+    "Hash": "b64071a19946d140a0ed2577a4d2e6548dfd32c95757d4d735e04d0c774f82c3"
+  },
+  {
+    "Name": "pan-mode2-speed0.5",
+    "CPUFlags": "native",
+    "Bytes": 245760,
+    "Hash": "4c6fe1298be19dc43cda0b92515a94f4913e7385e3950f1a690df244f42a8bb5"
+  },
+  {
+    "Name": "combined",
+    "CPUFlags": "native",
+    "Bytes": 67584,
+    "Hash": "8d7ead779ee424d062886847f465372eca9d0a4c4e0c59e79988c066cddc1aca"
+  },
+  {
+    "Name": "combined-strong",
+    "CPUFlags": "native",
     "Bytes": 116736,
     "Hash": "00732cede213f7e80ad6663b4904a095b470e73aee88a1925e561f54483c4efd"
   }

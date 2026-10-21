@@ -68,7 +68,7 @@ func (d *outputDenoiser) frame(index int) ([]byte, error) {
 		frame := denoiseInputFrame{rgb: rgb, original: planes, clean: planes}
 		if d.level == 4 {
 			for p := range frame.clean {
-				frame.clean[p] = denoisePreclean10Range(planes[p], d.width, d.height, bool(d.color) && p == 0)
+				frame.clean[p] = denoisePreclean10Arithmetic(planes[p], d.width, d.height, bool(d.color) && p == 0, bool(d.color) && nativeGaussianFused())
 			}
 		}
 		d.cache[d.next] = frame
@@ -312,6 +312,10 @@ func denoisePreclean10(input []uint16, width, height int) []uint16 {
 }
 
 func denoisePreclean10Range(input []uint16, width, height int, fullLuma bool) []uint16 {
+	return denoisePreclean10Arithmetic(input, width, height, fullLuma, false)
+}
+
+func denoisePreclean10Arithmetic(input []uint16, width, height int, fullLuma, fused bool) []uint16 {
 	median := func(input []uint16) []uint16 {
 		output := append([]uint16(nil), input...)
 		for y := 1; y < height-1; y++ {
@@ -353,7 +357,7 @@ func denoisePreclean10Range(input []uint16, width, height int, fullLuma bool) []
 		}
 	}
 	filtered := median(median(quantized))
-	blurred := gaussianOutputPlane(filtered, width, height, .5, 255)
+	blurred := gaussianOutputPlaneArithmetic(filtered, width, height, .5, 255, fused)
 	output := make([]uint16, len(input))
 	for i, v := range blurred {
 		expanded := v * 4
@@ -369,6 +373,10 @@ func denoisePreclean10Range(input []uint16, width, height int, fullLuma bool) []
 // One-step symmetric recursive Gaussian approximation at the plane's native
 // precision. Callers supply positive sigma and an 8-bit or 10-bit peak.
 func gaussianOutputPlane(input []uint16, width, height int, sigma float64, peak int) []uint16 {
+	return gaussianOutputPlaneArithmetic(input, width, height, sigma, peak, false)
+}
+
+func gaussianOutputPlaneArithmetic(input []uint16, width, height int, sigma float64, peak int, fused bool) []uint16 {
 	buffer := make([]float32, len(input))
 	for i, v := range input {
 		buffer[i] = float32(v)
@@ -379,19 +387,23 @@ func gaussianOutputPlane(input []uint16, width, height int, sigma float64, peak 
 	boundary := float32(1 / (1 - decay))
 	scale := float32(decay / lambda)
 	scale = float32(scale * scale)
+	accumulate := func(previous, current float32) float32 {
+		if fused {
+			return gaussianFeedbackFMA32(feedback, previous, current)
+		}
+		return float32(current + float32(feedback*previous))
+	}
 	pass := func(start, stride, count int) {
 		buffer[start] = float32(buffer[start] * boundary)
 		for i := 1; i < count; i++ {
 			index := start + i*stride
-			term := float32(feedback * buffer[index-stride])
-			buffer[index] = float32(buffer[index] + term)
+			buffer[index] = accumulate(buffer[index-stride], buffer[index])
 		}
 		end := start + (count-1)*stride
 		buffer[end] = float32(buffer[end] * boundary)
 		for i := count - 2; i >= 0; i-- {
 			index := start + i*stride
-			term := float32(feedback * buffer[index+stride])
-			buffer[index] = float32(buffer[index] + term)
+			buffer[index] = accumulate(buffer[index+stride], buffer[index])
 		}
 	}
 	for y := 0; y < height; y++ {

@@ -7,6 +7,7 @@ require (
 	github.com/evanoberholster/imagemeta v0.3.1
 	github.com/icza/mjpeg v0.0.0-20230330134156-38318e5ab8f4
 	golang.org/x/image v0.29.0
+	golang.org/x/sys v0.5.0
 )
 
 require (
@@ -16,6 +17,5 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rs/zerolog v1.29.0 // indirect
 	github.com/tinylib/msgp v1.1.8 // indirect
-	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
 )
