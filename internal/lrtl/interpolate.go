@@ -354,7 +354,7 @@ func buildPlanWithMaskFormat(frames []Frame, smoothness int, maskFormat string) 
 			}
 		}
 	}
-	maskTransitions, err := planMaskTransitionsWithFormat(packets, normalKeyframes, smoothness, maskFormat)
+	maskTransitions, err := planMaskTransitionsWithFormat(packets, normalKeyframes, smoothness, maskFormat, frames)
 	if err != nil {
 		return nil, err
 	}

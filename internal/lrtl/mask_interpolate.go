@@ -801,12 +801,16 @@ func planMaskTransitions(packets []*XMPPacket, keyframeIndices []int, smoothness
 	return planMaskTransitionsWithFormat(packets, keyframeIndices, transitionSmoothness, "auto")
 }
 
-func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, transitionSmoothness int, format string) ([][]maskTransitionChange, error) {
+func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, transitionSmoothness int, format string, frameSources ...[]Frame) ([][]maskTransitionChange, error) {
 	format, err := transitionMaskFormat(packets, format)
 	if err != nil {
 		return nil, err
 	}
+	radialKeys := map[maskTransitionKey]bool{}
 	normalizesAngle := func(key maskTransitionKey) bool {
+		if radialKeys[key] {
+			return false
+		}
 		if !lrtNormalizesMaskAngle(key) {
 			return false
 		}
@@ -820,6 +824,35 @@ func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, 
 			return nil, fmt.Errorf("frame %d local corrections: %w", index+1, err)
 		}
 		indexes[index] = indexed
+	}
+	var radialSizes []radialMaskSize
+	var radialMarks []int
+	if format == "modern" && len(packets) > 1 {
+		needed := false
+		for _, k := range keyframeIndices {
+			if k >= 0 && k < len(indexes) {
+				for key, node := range indexes[k] {
+					if radialTransitionKey(key) && completeRadialShape(node) {
+						needed = true
+					}
+				}
+			}
+		}
+		if needed {
+			for i, packet := range packets {
+				if rating, valid := packet.Rating(); valid && rating > 0 {
+					radialMarks = append(radialMarks, i)
+				}
+			}
+			var frames []Frame
+			if len(frameSources) > 0 {
+				frames = frameSources[0]
+			}
+			radialSizes, err = radialMaskFrameSizes(packets, frames)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	keyframeSet := make(map[int]bool, len(keyframeIndices))
 	prepared := prepareMaskTransitionInputs(indexes)
@@ -846,10 +879,21 @@ func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, 
 		}
 	}
 	seriesByKey := make(map[maskTransitionKey][]map[string]float64, len(allKeys))
+	radialByKey := make(map[maskTransitionKey][]map[string]float64)
 	copiesByKey := make(map[maskTransitionKey]map[string]float64, len(allKeys))
 	luminanceRangeByKey := make(map[maskTransitionKey]string, len(allKeys))
 	hasLuminanceRangeByKey := make(map[maskTransitionKey]bool, len(allKeys))
 	for key := range allKeys {
+		if len(radialSizes) > 0 {
+			series, active, err := radialTransitionSeries(indexes, keyframeIndices, key, radialSizes, transitionSmoothness, radialMarks)
+			if err != nil {
+				return nil, fmt.Errorf("crs:%s[%d] radial geometry: %w", key.collection, key.correctionIndex, err)
+			}
+			if active {
+				radialKeys[key] = true
+				radialByKey[key] = series
+			}
+		}
 		copies := maskNumericCopyReferences(keyframeIndices, prepared.Indexes, key)
 		copiesByKey[key] = copies
 		for i, index := range prepared.Indexes {
@@ -927,6 +971,11 @@ func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, 
 					proposed[name] = value
 				}
 			}
+			if !keyframeSet[target] && radialKeys[key] {
+				for name, value := range radialByKey[key][target] {
+					proposed[name] = value
+				}
+			}
 			if normalizesAngle(key) {
 				if angle, found := current["Angle"]; found {
 					_, hasInterpolatedAngle := proposed["Angle"]
@@ -959,7 +1008,14 @@ func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, 
 					continue
 				}
 				values[property] = formatNumber(value)
-				if copy {
+				radialProperty := false
+				if radialKeys[key] {
+					_, radialProperty = radialByKey[key][target][property]
+				}
+				// Keep restored geometry at binary64 precision. Rounding its angle
+				// to 12 significant digits can exceed the equality threshold and
+				// produce a redundant sidecar backup on every repeated transition.
+				if copy || radialProperty {
 					values[property] = strconv.FormatFloat(value, 'g', -1, 64)
 				}
 			}
