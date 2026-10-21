@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- 準備済みBT.2020画像から、BT.709 SDR／BT.2020 SDR／BT.2020 PQの動画を出力できるようになりました。`--output-color lrt-7.5.5 --input-color bt2020 --output-gamut bt2020 --dynamic-range sdr|pq`を使います。保存プリセットの色設定、10-bit選択、HDRメタデータに対応し、本体の162色設定・48形式選択・94実動画で比較。通常SDRのH.264／ProResに不足していた色タグも修正しました。ICC自動判定とRAWのHDR現像は未対応です。[対応条件と制約](internal/lrtl/testdata/lrt-wide-output-color-7.5.5.md)を参照してください。
+
 - `render --timestamp-style lrt-7.5.5 --timestamp-every N`で、本体のArial/libass撮影日時字幕を動画へ合成できるようになりました。既存FFmpegの最終色変換→字幕→フェードの順に合わせています。本体が返した合成コマンド3件・字幕66動画で比較し、既存フェードも変換後へ修正しました。偶数寸法の通常SDR MP4/MOV向けで、固定テキスト透かしとの併用は未対応です。[検査範囲](internal/lrtl/testdata/lrt-timestamp-burn-7.5.5.md)を参照してください。
 
 - `subtitles --profile lrt-7.5.5 --every N`で本体の撮影日時SRT用の時刻・表示間隔に対応しました。本体ヘルパーの1,344件と文字列単位で一致。fpsの別解釈、単精度、6桁切り捨て、元連番を基準にした区間を再現します。標準モードは従来の動画同期を維持します。動画への合成は上記のネイティブ字幕スタイルで対応しました。[測定記録](internal/lrtl/testdata/lrt-timestamp-clock-7.5.5.md)を参照してください。
@@ -143,13 +145,13 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - **単独で完了できる作業:** JPEG/PNG/TIFFの連番を並べ、追加ソフトなしでMJPEG AVIを生成できます。キーフレームと数値XMPの編集・補間、連番プレビュー、Deflicker、クロップ、字幕などもCLIで利用できます。
 - **LRT相当を目指して一部実装:** 画像列からの自動キーフレーム提案、Holy Grail補正、XMP値の画像適用、GUIでのフレーム選択・編集、MP4/MOV出力、RAW対応。これらは個々の経路が使えますが、LRTとの操作性・演算結果・対応形式の完全一致は確認できていません。
-- **到達していない範囲:** Camera Raw/Lightroomと同等のRAW現像、HDR処理、LRT Visual Previewと同等のプレビュー、未対応のマスク形式やGeometry補正は未実装または近似です。詳しい境界は下表と各コマンドの説明を参照してください。
+- **到達していない範囲:** Camera Raw/Lightroomと同等のRAW現像、RAWのHDR現像・ICC色管理、LRT Visual Previewと同等のプレビュー、未対応のマスク形式やGeometry補正は未実装または近似です。詳しい境界は下表と各コマンドの説明を参照してください。
 
 下表の「一部」はLRTLの基本処理が未完成という意味ではなく、LRTの対応機能全体との比較です。たとえば画像連番からの基本動画生成は達成済みですが、LRTの全コーデック・色深度・HDRとの同等性はありません。
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
-| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、本体の推定枚数に基づくフェード・音声時刻、映像レンジ、保存済みアスペクト比に対応。動画デフリッカー・ノイズ除去・光跡除去・ブレンド／モーション補間も対応。HDR・広色域は未対応 | 一部 |
+| レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、本体の推定枚数に基づくフェード・音声時刻、映像レンジ、保存済みアスペクト比に対応。動画デフリッカー・ノイズ除去・光跡除去・ブレンド／モーション補間も対応。`gamut`／`dynamicRange`でBT.2020 SDR/PQ設定も読める。BT.2020中間画像と明示的な`--input-color bt2020`が必要 | 一部 |
 | 選択範囲の手動キーフレーム | 選択画像への4/5つ星マーク設定・解除 | `mark-sequence`／`unmark-sequence`で一括設定・解除。ファイル名・評価・JSON・反転で対象を選択し、元評価の復元、HG保護、保存前検証、バックアップに対応。GUI操作との比較は未実施 | CLI実装済み |
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
@@ -168,7 +170,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 動画生成 | 現像済みフレームを動画にレンダー | JPEG/PNG/TIFFとRAW現像画像をMJPEG AVI、外部FFmpegによるH.264 MP4／H.265 MP4・MOVまたはProRes 422/422 HQ MOVに出力。EXIF向き、XMPの全体8項目/HSL色別補正/簡易Temperature・Tint/ポイントカーブ/グラデーションと現行形式の輝度範囲マスクによるローカル露出・トーン・色・WB/クロップ、任意アスペクト比への中央クロップ、Deflicker、撮影日時焼き込みに対応。1–240 fpsの整数・小数・分数（23.976/29.97/47.952/59.94はNTSCの/1001指定として扱う）に対応し、`--output-height`で出力高を指定し、`--long-edge`で長辺上限まで縮小。全フレームはEXIF向き適用後の解像度が同じ必要 | 一部 |
 | RAW・DNG | RAW処理、DNG変換 | `--raw-develop`でインストール済みAdobe DNG Converterを自動検出し、未圧縮Linear DNGのセンサー実画素をGoで16-bit sRGBへ現像。対応Opcodeと埋め込みHue/Sat・Lookテーブル・ProfileToneCurve・BaselineExposureOffsetを適用。レンダー、キーフレーム解析、Preview EV、Deflicker、長期撮影解析、GUIプレビュー/動画生成で利用可能。`--dng-converter PATH`で場所を明示でき、`--dnglab PATH`で従来バックエンドも選択可能。`import --convert-dng`はAdobeによるlossless/uncompressed/lossy DNG取り込みとロッシーDNGの長辺縮小に対応。内蔵JPEGを使う`--raw-preview`も維持。Camera Rawの全プロファイル/Opcode/現像値の完全再現は未対応 | 一部 |
 | 解像度・中間画像 | 720p〜8K/Originalなどライセンス別解像度、Pro向け非圧縮TIFF中間画像 | `--aspect W:H`で1:16〜16:1の任意比率へ中央クロップし、`--output-height H`で出力高を指定。`--long-edge N`は長辺上限まで縮小。`export`で既存レンダーと同じ画像処理を使う非圧縮RGB 16-bit TIFF連番を新規フォルダーへ保存。RAW現像、対応XMP値の適用、Deflicker、Motion Blurにも対応。LRTのプリセット/UI、Camera Rawとの画素一致は未対応 | 一部 |
-| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264 MP4／H.265 MP4・MOV、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。H.264/H.265は`--subsampling 420`で8-bit、`422`／`444`で10-bit出力。Rec.2020/HDRは未対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。HDR・ICC色管理は未対応 | 一部 |
+| コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264 MP4／H.265 MP4・MOV、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。H.264/H.265は通常SDRの`--subsampling 420`で8-bit、`422`／`444`で10-bit出力。ネイティブBT.2020/PQは4:2:0も10-bit。準備済みBT.2020画像からのBT.2020 SDR/PQ出力に対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。RAWのHDR現像・ICC自動判定/変換は未対応 | 一部 |
+| BT.2020・PQ出力 | 広色域・HDRの動画エンコード | `--input-color bt2020 --output-gamut bt2020 --dynamic-range sdr\|pq`と本体プリセットに対応。既存FFmpegで最終変換・メタデータを設定し、162色プラン・48形式選択・94実動画を比較。素材は対象の伝達特性で符号化済みのRGB画像が必要。ICC変換や一般的なHDRトーンマッピングではない | 一部 |
 | 最終SDR色変換 | 本体の出力レンジ・色差変換・メタデータ | `--output-color lrt-7.5.5`と保存プリセットの既定で、full-range YUV444 10-bitを経由する最終エンコードに対応。144平面ケース・実動画12ケースを比較。内部フィルター、ICC、HDR・広色域まで含む全体一致は未対応 | 一部 |
 | オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。`subtitles --profile lrt-7.5.5 --every N`は本体のSRT時計と元フレーム単位の表示間隔に対応し、1,344件の実測と比較。動画表示は既定のGoフォントに加え、`--timestamp-style lrt-7.5.5`でArial/libass方式へ対応。通常SDR・偶数寸法・透かしなしで66実動画を比較 | 一部 |
 | フレーム補間 | 速度変更時のブレンド・動き補償 | `--interpolation 1`でブレンド、`2`で低速の双方向モーション補償。保存プリセット・字幕・バッチに対応。ブレンド2,304ケース、モーション720ケースの平面出力ハッシュ・枚数を比較。通常SDRプロファイルでは低速時の8-bitへの切り替えと後段Blur/Sharpen/CASも同じ深度で処理し、追加の22経路・132実動画を比較。ICC/HDRを含む本体動画全体の完全一致は未確認 | 一部 |
@@ -575,6 +578,8 @@ LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分�
 
 `--output-color lrt-7.5.5`は、本体の通常SDR出力に合わせ、RGB48→full-range YUV444 10-bit→指定レンジ・色差形式の順に変換し、BT.709・レンジ・MOVガンマ情報を渡します。**保存プリセットではこのプロファイルが既定**です。このとき`--video-range auto`もlimitedへ解決します。`--output-color standard`で通常の経路を明示できます。MP4/MOVとlibzimg入りFFmpegが必要です。プリセットの画像フィルターだけをAVIに使う場合も`--output-color standard`を明示してください。バッチでも`--`以降に同じ指定を渡せます。
 
+広色域／PQは、`--input-color bt2020`で準備済み中間画像の解釈を明示し、`--output-gamut bt2020 --dynamic-range sdr|pq`を指定します。PQ指定時の素材もPQ符号化済みである必要があります。ICCを読み取ってsRGB素材を変換する機能ではありません。BT.2020からBT.709 SDRへの変換も本体のBT.2020-10解釈で行い、一般的なPQ→SDRトーンマッピングは行いません。HDRの実メタデータ検査はH.265で行っています。本体由来のH.264/PQなどの色タグの不整合も含め、[色出力の測定記録](internal/lrtl/testdata/lrt-wide-output-color-7.5.5.md)を参照してください。
+
 通常SDRプロファイルでシャープ／CASを指定し、出力寸法が偶数、字幕・透かしなしの場合、Goで本体と同じ固定小数点RGB16→YUV10変換を行い、シャープ→CASの結果をYUVのままエンコーダーへ渡します。RGBへ差分を戻す従来経路で発生した色差クリップを避けます。`standard`、奇数寸法、字幕・透かし併用は従来のRGB経路です。
 
 実動画の比較範囲は、等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、字幕・透かしなしで偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間では補間時に8-bitへ切り替え、後段も8-bitのYUVのまま処理します。[低速補間の測定記録](internal/lrtl/testdata/lrt-native-slow-color-7.5.5.md)を参照してください。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、最強併用で以前残っていた1成分・2段階の差は、[AVX2/FMAの演算対応](internal/lrtl/testdata/lrt-gaussian-arithmetic-7.5.5.md)で解消しました。JPEGの復号差、ICC、リサイズを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
@@ -591,7 +596,7 @@ ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告さ�
 lrtl render C:\photos\sequence --output C:\photos\master.mov --codec h265 --subsampling 444 --video-range limited
 ```
 
-H.264／H.265だけに適用する設定です。ProRes／DNxHRは各プロファイルの形式を使います。FFmpegが要求した形式に対応するか出力作成前に確認し、未対応なら既存出力を保持してエラーにします（FFmpegの[非対応pixel formatの代替選択](https://ffmpeg.org/ffmpeg.html#Advanced-Video-options)を防ぐため）。SDR出力の対応であり、HDRや本体との色管理・全画素の一致は未対応です。
+H.264／H.265だけに適用する設定です。ProRes／DNxHRは各プロファイルの形式を使います。FFmpegが要求した形式に対応するか出力作成前に確認し、未対応なら既存出力を保持してエラーにします（FFmpegの[非対応pixel formatの代替選択](https://ffmpeg.org/ffmpeg.html#Advanced-Video-options)を防ぐため）。`standard`は従来のSDR形式です。ネイティブBT.2020/PQ出力では4:2:0も10-bitを選びます。準備済み画像の94動画を比較していますが、ICCや任意素材の全画素一致は未確認です。
 
 本体ヘルパーの36観測、CLI／プリセット／バッチ、形式非対応時の出力保持をテストしています。外部FFmpegが利用できる環境では18種類の実動画を生成し、bit深度・色差形式・レンジ・16-bit入力から残る輝度階調も検査します。追加で2枚入力のMOV／MP4の表示・デコード時刻を確認します。旧x265で短い入力の時刻が不正になる問題を避けるため、H.265の出力が1〜2枚ならBフレームを無効にします。観測条件は[検証メモ](internal/lrtl/testdata/lrt-h26x-format-7.5.5.md)に記載しています。
 

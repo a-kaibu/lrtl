@@ -151,19 +151,20 @@ func loadLRTRenderPreset(path, name string) (lrtRenderPreset, error) {
 }
 
 func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path string, explicit map[string]bool) (RenderOptions, error) {
-	unsupported := []string{}
-	for _, field := range []struct {
-		name   string
-		active bool
-	}{
-		{"gamut", preset.Gamut != 0}, {"dynamicRange", preset.DynamicRange != 0},
-	} {
-		if field.active {
-			unsupported = append(unsupported, field.name)
+	if preset.Gamut < 0 || preset.Gamut > 1 || preset.DynamicRange < 0 || preset.DynamicRange > 1 {
+		return options, fmt.Errorf("LRT gamut and dynamicRange must be 0 or 1")
+	}
+	if !explicit["output-gamut"] {
+		options.OutputGamut = "bt709"
+		if preset.Gamut == 1 {
+			options.OutputGamut = "bt2020"
 		}
 	}
-	if len(unsupported) > 0 {
-		return options, fmt.Errorf("LRT render preset uses unsupported controls: %s", strings.Join(unsupported, ", "))
+	if !explicit["dynamic-range"] {
+		options.DynamicRange = "sdr"
+		if preset.DynamicRange == 1 {
+			options.DynamicRange = "pq"
+		}
 	}
 	if !explicit["sharpen"] {
 		options.OutputSharpen = preset.Sharpen

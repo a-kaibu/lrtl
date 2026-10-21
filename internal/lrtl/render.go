@@ -27,6 +27,9 @@ type RenderOptions struct {
 	Interpolation         int
 	VideoRange            string
 	OutputColor           string
+	InputColor            string
+	OutputGamut           string
+	DynamicRange          string
 	OutputSharpen         bool
 	OutputCAS             bool
 	OutputDenoise         int
@@ -216,6 +219,16 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err != nil {
 		return err
 	}
+	colorSpec, err := renderNativeColorSpec(options)
+	if err != nil {
+		return err
+	}
+	if (colorSpec.source == "BT2020" || colorSpec.gamut != 0 || colorSpec.dynamic != 0) && (outputColor != "lrt-7.5.5" || imageWriter != nil) {
+		return fmt.Errorf("wide-gamut input/output requires the native video output-color profile")
+	}
+	if colorSpec.source == "BT2020" && (options.RawDevelop || options.RawPreview || options.ApplyXMPBasic || options.ApplyXMPExposure || options.Deflicker) {
+		return fmt.Errorf("BT2020 input requires prepared RGB images; RAW development and sRGB pixel adjustments are not supported")
+	}
 	style := strings.ToLower(strings.TrimSpace(options.TimestampStyle))
 	if style == "" {
 		style = "standard"
@@ -226,7 +239,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	nativeTimestamp := options.TimestampOverlay && style == "lrt-7.5.5"
 	nativeOutputFade := imageWriter == nil && outputColor == "lrt-7.5.5" && strings.ToLower(filepath.Ext(output)) != ".avi"
 	if nativeTimestamp && (outputColor != "lrt-7.5.5" || options.Watermark != "" || imageWriter != nil || strings.ToLower(filepath.Ext(output)) == ".avi") {
-		return fmt.Errorf("native timestamp style requires SDR MP4/MOV output with --output-color lrt-7.5.5 and no text watermark")
+		return fmt.Errorf("native timestamp style requires MP4/MOV output with --output-color lrt-7.5.5 and no text watermark")
 	}
 	if _, err := normalizeSubsampling(options.Subsampling); err != nil {
 		return err
@@ -339,7 +352,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 		ffmpegPath = resolvedPath
 		if options.Codec == "h264" || options.Codec == "h265" {
-			format, err := h26xPixelFormat(options.Subsampling)
+			format, err := colorSpec.h26xPixelFormat(options.Subsampling)
 			if err != nil {
 				return err
 			}
@@ -648,7 +661,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
-		encoding := ffmpegFrameEncoding{outputColor: outputColor}
+		encoding := ffmpegFrameEncoding{outputColor: outputColor, color: colorSpec}
 		encoding.timestamp = nativeBurn
 		nativeTemporal = nativeTemporal && outputWidth%2 == 0 && outputHeight%2 == 0
 		nativeSpatial = nativeSpatial || nativeTemporal

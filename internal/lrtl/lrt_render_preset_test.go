@@ -100,8 +100,8 @@ func TestLRTRenderPresetGlobalSelectionAspectAndOverrides(t *testing.T) {
 		if err != nil || options.AudioPath != filepath.Join(filepath.Dir(path), "music.wav") {
 			t.Fatalf("relative audio: %s %v", options.AudioPath, err)
 		}
-		explicit := map[string]bool{"codec": true, "subsampling": true, "crf": true, "fps": true, "long-edge": true, "aspect": true, "audio": true, "motion-blur": true, "output-color": true}
-		base := RenderOptions{NativeTiming: true, VideoRange: "limited", OutputColor: "standard", PlaybackSpeed: 1, FrameRate: "24", Codec: "h264", CRF: 31, LongEdge: 320, AspectRatio: 2, MotionBlurFrames: 0, AudioPath: ""}
+		explicit := map[string]bool{"codec": true, "subsampling": true, "crf": true, "fps": true, "long-edge": true, "aspect": true, "audio": true, "motion-blur": true, "output-color": true, "output-gamut": true, "dynamic-range": true}
+		base := RenderOptions{NativeTiming: true, VideoRange: "limited", OutputColor: "standard", OutputGamut: "bt709", DynamicRange: "sdr", PlaybackSpeed: 1, FrameRate: "24", Codec: "h264", CRF: 31, LongEdge: 320, AspectRatio: 2, MotionBlurFrames: 0, AudioPath: ""}
 		options, err = applyLRTRenderPreset(base, preset, path, explicit)
 		if err != nil || options != base {
 			t.Fatalf("overrides changed: %+v %v", options, err)

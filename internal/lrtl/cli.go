@@ -894,7 +894,10 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	speed := set.Float64("speed", 1, "playback speed multiplier (0.0625-16; 1 normal)")
 	interpolation := set.Int("interpolation", 0, "frame interpolation: 0 off, 1 blend, 2 motion compensated")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
-	outputColor := set.String("output-color", "standard", "MP4/MOV color conversion: standard or native SDR lrt-7.5.5 (preset default)")
+	outputColor := set.String("output-color", "standard", "MP4/MOV color conversion: standard or lrt-7.5.5 (preset default)")
+	inputColor := set.String("input-color", "bt709", "prepared image color interpretation: bt709 or bt2020")
+	outputGamut := set.String("output-gamut", "bt709", "native output gamut: bt709 or bt2020")
+	dynamicRange := set.String("dynamic-range", "sdr", "native output dynamic range: sdr or pq")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
 	ffmpeg := set.String("ffmpeg", "", "FFmpeg executable for MP4 or MOV output; defaults to PATH")
 	crf := set.Int("crf", 18, "H.264/H.265 quality (0-51; lower is higher quality)")
@@ -960,6 +963,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--subsampling": true, "-subsampling": true,
 		"--denoise": true, "-denoise": true,
 		"--output-color": true, "-output-color": true,
+		"--input-color": true, "-input-color": true, "--output-gamut": true, "-output-gamut": true, "--dynamic-range": true, "-dynamic-range": true,
 		"--remove-airplanes": true, "-remove-airplanes": true,
 		"--interpolation": true, "-interpolation": true,
 	})
@@ -1047,6 +1051,9 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		Interpolation:         *interpolation,
 		VideoRange:            *videoRange,
 		OutputColor:           *outputColor,
+		InputColor:            *inputColor,
+		OutputGamut:           *outputGamut,
+		DynamicRange:          *dynamicRange,
 		OutputSharpen:         *sharpen,
 		OutputCAS:             *cas,
 		OutputDenoise:         *denoise,
@@ -1120,7 +1127,14 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	features := make([]string, 0, 8)
 	if options.OutputColor == "lrt-7.5.5" {
-		features = append(features, "native SDR output color")
+		label := "native SDR output color"
+		if strings.EqualFold(options.OutputGamut, "bt2020") {
+			label = "native BT.2020 SDR output color"
+			if strings.EqualFold(options.DynamicRange, "pq") {
+				label = "native BT.2020 PQ output color"
+			}
+		}
+		features = append(features, label)
 	}
 	if options.Interpolation > 0 {
 		features = append(features, fmt.Sprintf("interpolation mode %d", options.Interpolation))

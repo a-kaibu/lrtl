@@ -98,6 +98,7 @@ type ffmpegFrameEncoding struct {
 	workingYUV   bool
 	workingDepth int
 	timestamp    nativeTimestampBurn
+	color        nativeColorSpec
 }
 
 func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string, encoding ...ffmpegFrameEncoding) (*ffmpegFrameWriter, error) {
@@ -105,10 +106,15 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	var spatial *nativeSpatialFilter
 	workingYUV := false
 	workingDepth := 10
+	colorSpec := nativeColorSpec{source: "BT709"}
 	if len(encoding) > 0 {
 		profile = encoding[0].outputColor
 		spatial = encoding[0].spatial
 		workingYUV = encoding[0].workingYUV
+		colorSpec = encoding[0].color
+		if colorSpec.source == "" {
+			colorSpec.source = "BT709"
+		}
 		if encoding[0].workingDepth != 0 {
 			workingDepth = encoding[0].workingDepth
 		}
@@ -118,6 +124,13 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		return nil, err
 	}
 	nativeColor := profile == "lrt-7.5.5"
+	if nativeColor {
+		if err := colorSpec.validate(); err != nil {
+			return nil, err
+		}
+	} else if colorSpec.source != "BT709" || colorSpec.gamut != 0 || colorSpec.dynamic != 0 {
+		return nil, fmt.Errorf("wide color settings require native output-color")
+	}
 	if workingDepth != 8 && workingDepth != 10 || workingDepth == 8 && !workingYUV {
 		return nil, fmt.Errorf("invalid native working depth")
 	}
@@ -126,7 +139,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	colorFilter := videoRangeFilter
 	if nativeColor {
-		colorFilter = nativeSDRColorFilter
+		colorFilter = func(value, pix string) string { return colorSpec.filter(value, pix, false) }
 		if videoRange == "auto" {
 			videoRange = "limited"
 		}
@@ -140,7 +153,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		if workingDepth == 8 {
 			inputFormat = "yuv444p"
 		}
-		colorFilter = nativeSDRPlanarColorFilter
+		colorFilter = func(value, pix string) string { return colorSpec.filter(value, pix, true) }
 	}
 	directory := ""
 	captionFilter := ""
@@ -204,15 +217,18 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	switch codec {
 	case "h264":
-		pixelFormat, err := h26xPixelFormat(subsampling)
+		pixelFormat, err := colorSpec.h26xPixelFormat(subsampling)
 		if err != nil {
 			return nil, err
 		}
 		arguments = append(arguments,
 			"-c:v", "libx264", "-preset", preset, "-crf", strconv.Itoa(crf),
 			"-pix_fmt", pixelFormat, "-vf", colorFilter(videoRange, pixelFormat), "-tag:v", "avc1")
+		if nativeColor {
+			arguments = append(arguments, "-x264-params", colorSpec.x264Params(videoRange))
+		}
 	case "h265":
-		pixelFormat, err := h26xPixelFormat(subsampling)
+		pixelFormat, err := colorSpec.h26xPixelFormat(subsampling)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +236,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			"-c:v", "libx265", "-preset", preset, "-crf", strconv.Itoa(crf),
 			"-pix_fmt", pixelFormat, "-vf", colorFilter(videoRange, pixelFormat), "-tag:v", "hvc1")
 		if nativeColor {
-			arguments = append(arguments, "-x265-params", "colorprim=bt709:range="+videoRange+":transfer=bt709:colormatrix=bt709")
+			arguments = append(arguments, "-x265-params", colorSpec.x265Params(videoRange))
 		}
 		// Older x265 leaves its B-frame delay timestamp uninitialized until
 		// the third input frame. A shorter sequence needs no B-frame reorder.
@@ -230,6 +246,9 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	default:
 		if profile, pixelFormat, supported := proresProfile(codec); supported {
 			arguments = append(arguments, "-c:v", "prores_ks", "-profile:v", profile, "-pix_fmt", pixelFormat, "-vf", colorFilter(videoRange, pixelFormat))
+			if nativeColor {
+				arguments = append(arguments, "-bsf:v", colorSpec.proresMetadata())
+			}
 		} else if profile, pixelFormat, supported := dnxhrProfile(codec); supported {
 			arguments = append(arguments,
 				"-c:v", "dnxhd", "-profile:v", profile,
@@ -243,10 +262,14 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		if videoRange == "full" {
 			metadata = "pc"
 		}
-		arguments = append(arguments, "-color_range", metadata, "-colorspace", "bt709")
+		matrix := "bt709"
+		if nativeColor {
+			matrix = colorSpec.matrix()
+		}
+		arguments = append(arguments, "-color_range", metadata, "-colorspace", matrix)
 	}
 	if nativeColor {
-		arguments = append(arguments, "-color_primaries", "bt709", "-color_trc", "unspecified")
+		arguments = append(arguments, "-color_primaries", colorSpec.primaries(), "-color_trc", colorSpec.transfer())
 	}
 	if audioPath != "" {
 		duration := strconv.FormatFloat(rate.seconds(frameCount), 'f', 9, 64)
@@ -271,7 +294,12 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	if nativeColor {
 		movFlags = "+write_colr+write_gama+prefer_icc+faststart"
-		arguments = append(arguments, "-mov_gamma", "2.4")
+		if colorSpec.dynamic == 0 {
+			arguments = append(arguments, "-mov_gamma", "2.4")
+		} else {
+			movFlags = "+write_colr+faststart"
+			arguments = append(arguments, "-metadata:s:v:0", "master_display=\"G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,0.005)\"", "-metadata:s:v:0", "max_cll=\"1000,400\"")
+		}
 	}
 	arguments = append(arguments, "-movflags", movFlags, "-f", container, output)
 	command := exec.Command(executable, arguments...)

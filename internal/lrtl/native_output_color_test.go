@@ -298,6 +298,7 @@ func verifyNativeColorActualImages(t *testing.T, mode int, sampling string) {
 					}
 					filter = strings.Replace(filter, ",zscale=", spatial+",zscale=", 1)
 					args := []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d."+extension), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-frames:v", "3", "-an", "-vf", filter}
+					enc = append(enc, nativeSDRReferenceEncoderMetadata(codec, value)...)
 					args = append(args, enc...)
 					metadata := "tv"
 					if value == "full" {
