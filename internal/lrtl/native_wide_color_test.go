@@ -226,6 +226,17 @@ func TestNativeWideColorMeasuredPixelFormats(t *testing.T) {
 }
 
 func TestNativeWideColorCallerTimestampFade(t *testing.T) {
+	nativeWideCallerTimestampFade(t, false)
+}
+
+func TestNativeWatermarkWideCallerTimestampFade(t *testing.T) {
+	if _, err := nativeWatermarkFont(); err != nil {
+		t.Skip(err)
+	}
+	nativeWideCallerTimestampFade(t, true)
+}
+
+func nativeWideCallerTimestampFade(t *testing.T, watermark bool) {
 	exe, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		t.Skip("FFmpeg required")
@@ -251,10 +262,17 @@ func TestNativeWideColorCallerTimestampFade(t *testing.T) {
 			t.Run(fmt.Sprintf("%d-%d/%s", row.Gamut, row.DynamicRange, value), func(t *testing.T) {
 				preset := savePresetJSON(t, lrtRenderPreset{Encoder: "h265", FrameRate: "24", OutputResV: 32, Speed: 1, Gamut: row.Gamut, DynamicRange: row.DynamicRange, FadeOut: true, FadeTime: 1, Sharpen: true})
 				out, ref := filepath.Join(t.TempDir(), "go.mp4"), filepath.Join(t.TempDir(), "ref.mp4")
-				markerCommand(t, "render", dir, "--output", out, "--ffmpeg", exe, "--lrt-render-preset", preset, "--input-color", "bt2020", "--timestamp-style", "lrt-7.5.5", "--timestamp-every", "3", "--video-range", value, "--crf", "0", "--preset", "ultrafast")
+				flags := []string{"render", dir, "--output", out, "--ffmpeg", exe, "--lrt-render-preset", preset, "--input-color", "bt2020", "--timestamp-style", "lrt-7.5.5", "--timestamp-every", "3", "--video-range", value, "--crf", "0", "--preset", "ultrafast"}
+				if watermark {
+					flags = append(flags, "--watermark", "LRTL", "--watermark-style", "lrt-7.5.5")
+				}
+				markerCommand(t, flags...)
 				graph := strings.TrimSuffix(row.Graph, "[v]")
 				graph = strings.ReplaceAll(graph, "wide-timestamp-reference.srt", filepath.Base(name))
 				graph = strings.ReplaceAll(graph, "range=limited:", "range="+value+":")
+				if watermark {
+					graph = strings.Replace(graph, ",subtitles=", nativeWatermarkReferenceFilter(t, "LRTL")+",subtitles=", 1)
+				}
 				primary, matrix, trc, pix := "bt709", "bt709", "unspecified", "yuv420p"
 				if row.Gamut == 1 {
 					primary, matrix, pix = "bt2020", "bt2020nc", "yuv420p10le"

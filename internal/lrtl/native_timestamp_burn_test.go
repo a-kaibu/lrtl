@@ -334,6 +334,9 @@ func TestNativeTimestampBurnPresetBatchPaths(t *testing.T) {
 	preset := savePresetJSON(t, lrtRenderPreset{Encoder: "h264", FrameRate: "24", OutputResV: 32, Speed: 1, Sharpen: true, CAS: true, FadeOut: true, FadeTime: 1})
 	output := filepath.Join(root, "native.mp4")
 	flags := []string{"--ffmpeg", exe, "--lrt-render-preset", preset, "--timestamp-style", "lrt-7.5.5", "--timestamp-every", "3", "--crf", "0", "--preset", "ultrafast"}
+	if _, err := nativeWatermarkFont(); err == nil {
+		flags = append(flags, "--watermark", "LRTL", "--watermark-style", "lrt-7.5.5")
+	}
 	markerCommand(t, append([]string{"render", dir, "--output", output}, flags...)...)
 	decode := func(path string) []byte {
 		return nativeColorCommand(t, exe, nil, "-v", "error", "-i", path, "-pix_fmt", "yuv420p", "-f", "rawvideo", "pipe:1")

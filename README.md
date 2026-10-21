@@ -12,11 +12,13 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `--watermark-style lrt-7.5.5`で本体のArial透かしに対応しました。固定位置・幅別の文字サイズ・色・影・文字置換と、最終色変換→透かし→字幕→フェードの順を再現します。本体ヘルパー105件・合成グラフ3件と、SDR／広色域／PQの42動画で比較しました。保存設定の透かしも読み込めます。[測定範囲と残る差](internal/lrtl/testdata/lrt-watermark-7.5.5.md)を参照してください。
+
 - `render --output-color lrt-7.5.5`は、最初の選択画像のICC名からBT.2020とPQを自動判定します。JPEG／PNG／TIFFを純Goで読み取り、明示的な入力色・ダイナミックレンジ指定を優先します。付属ExifToolとの比較と、破損メタデータで既存出力を保持するテストを追加しました。[判定条件と検査範囲](internal/lrtl/testdata/lrt-icc-input-7.5.5.md)を参照してください。
 
 - 準備済みBT.2020画像から、BT.709 SDR／BT.2020 SDR／BT.2020 PQの動画を出力できるようになりました。`--output-color lrt-7.5.5 --input-color bt2020 --output-gamut bt2020 --dynamic-range sdr|pq`を使います。保存プリセットの色設定、10-bit選択、HDRメタデータに対応し、本体の162色設定・48形式選択・94実動画で比較。通常SDRのH.264／ProResに不足していた色タグも修正しました。JPEG／PNG／TIFF内のICC名から入力BT.2020とPQを自動判定します。ICC色変換とRAWのHDR現像は未対応です。[対応条件と制約](internal/lrtl/testdata/lrt-wide-output-color-7.5.5.md)を参照してください。
 
-- `render --timestamp-style lrt-7.5.5 --timestamp-every N`で、本体のArial/libass撮影日時字幕を動画へ合成できるようになりました。既存FFmpegの最終色変換→字幕→フェードの順に合わせています。本体が返した合成コマンド3件・字幕66動画で比較し、既存フェードも変換後へ修正しました。偶数寸法の通常SDR MP4/MOV向けで、固定テキスト透かしとの併用は未対応です。[検査範囲](internal/lrtl/testdata/lrt-timestamp-burn-7.5.5.md)を参照してください。
+- `render --timestamp-style lrt-7.5.5 --timestamp-every N`で、本体のArial/libass撮影日時字幕を動画へ合成できるようになりました。既存FFmpegの最終色変換→字幕→フェードの順に合わせています。本体が返した合成コマンド3件・字幕66動画で比較し、既存フェードも変換後へ修正しました。偶数寸法の通常SDR MP4/MOV向けで、`--watermark-style lrt-7.5.5`による透かしとの併用にも対応しました。[検査範囲](internal/lrtl/testdata/lrt-timestamp-burn-7.5.5.md)を参照してください。
 
 - `subtitles --profile lrt-7.5.5 --every N`で本体の撮影日時SRT用の時刻・表示間隔に対応しました。本体ヘルパーの1,344件と文字列単位で一致。fpsの別解釈、単精度、6桁切り捨て、元連番を基準にした区間を再現します。標準モードは従来の動画同期を維持します。動画への合成は上記のネイティブ字幕スタイルで対応しました。[測定記録](internal/lrtl/testdata/lrt-timestamp-clock-7.5.5.md)を参照してください。
 
@@ -26,9 +28,9 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - 通常SDRの低速ブレンド／モーション補間もYUV経路へ対応しました。本体と同じfull-range輝度の10→8-bit変換を行い、補間後のBlur・シャープ／CAS・エンコーダー入力を8-bitで維持します。0.0625〜0.9倍速の22経路、移動画像、単独/併用フィルターと132実動画をスカラー参照と比較。字幕・透かし併用や奇数寸法は既存RGB経路です。
 
-- 通常SDRのYUV経路をMotion Blur全7段階と高速補間へ広げました。時間平均のfloat32積算、整数の均等平均、前後トリムを反映し、22経路とH.264／H.265／ProResの132実動画をスカラー参照と比較しています。補間なしの低速複製もYUVのまま処理できます。低速ブレンド／モーション補間のYUV経路も対応しました（上記参照）。字幕・透かし併用は既存RGB経路です。
+- 通常SDRのYUV経路をMotion Blur全7段階と高速補間へ広げました。時間平均のfloat32積算、整数の均等平均、前後トリムを反映し、22経路とH.264／H.265／ProResの132実動画をスカラー参照と比較しています。補間なしの低速複製もYUVのまま処理できます。低速ブレンド／モーション補間のYUV経路も対応しました（上記参照）。標準スタイルの字幕・透かし併用は既存RGB経路です。本体スタイルはYUV経路を維持します。
 
-- 通常SDRで、動画デフリッカー→ノイズ除去→光跡除去→シャープ／CASまでYUVのまま処理する経路を追加しました。最強ノイズ除去のfull-range輝度の8/10-bit変換も修正。12経路のスカラー参照、H.264／H.265／ProResの72実動画で全画素を比較しています。字幕・透かし併用時の時間処理は既存RGB経路です。AVX2/FMA対応CPUで残っていた最強併用の差は、上記のGaussian演算対応で解消しました。
+- 通常SDRで、動画デフリッカー→ノイズ除去→光跡除去→シャープ／CASまでYUVのまま処理する経路を追加しました。最強ノイズ除去のfull-range輝度の8/10-bit変換も修正。12経路のスカラー参照、H.264／H.265／ProResの72実動画で全画素を比較しています。標準スタイルの字幕・透かし併用時は既存RGB経路です。本体スタイルはYUV経路を維持します。AVX2/FMA対応CPUで残っていた最強併用の差は、上記のGaussian演算対応で解消しました。
 
 - 通常SDRのシャープ／CASで、純Goの固定小数点RGB16→YUV10変換を使い、YUVのまま出力できるようにしました。24件の保存済み参照、16-bitの灰色・RGB全入力値と乱数のnative／scalar比較、シャープ・CAS・両方を適用した84実動画ケースで確認しています。偶数寸法かつ字幕・透かしなしの経路で有効です。時間フィルターとの併用条件と残る差は以下を参照してください。
 
@@ -175,7 +177,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | コーデック・色・HDR | H.264/MP4、Pro向けH.265/ProRes/DNxHR、HDRワークフロー | 純GoのMJPEG AVIとFFmpegのlibx264/libx265/prores_ks/dnxhd経由のH.264 MP4／H.265 MP4・MOV、ProRes 422/422 HQとDNxHR LB/SQ/HQ/HQX/444 MOV。MP4/MOVは`--audio FILE`でAAC音声を追加可能。H.264/H.265は通常SDRの`--subsampling 420`で8-bit、`422`／`444`で10-bit出力。ネイティブBT.2020/PQは4:2:0も10-bit。準備済みBT.2020画像からのBT.2020 SDR/PQ出力に対応。FFmpegへRGB 16-bitで渡し、ProRes/DNxHR HQX/444は10-bit出力へ変換。16-bit入力の向き・クロップ・縮小・露出・Motion Blur・字幕を通して対応済みXMP基本現像の全体/局所調整も16-bit画素で処理。ICC名による入力判定に対応。RAWのHDR現像・ICC色変換は未対応 | 一部 |
 | BT.2020・PQ出力 | 広色域・HDRの動画エンコード | `--input-color bt2020 --output-gamut bt2020 --dynamic-range sdr\|pq`と本体プリセットに対応。既存FFmpegで最終変換・メタデータを設定し、162色プラン・48形式選択・94実動画を比較。素材は対象の伝達特性で符号化済みのRGB画像が必要。ICC変換や一般的なHDRトーンマッピングではない | 一部 |
 | 最終SDR色変換 | 本体の出力レンジ・色差変換・メタデータ | `--output-color lrt-7.5.5`と保存プリセットの既定で、full-range YUV444 10-bitを経由する最終エンコードに対応。144平面ケース・実動画12ケースを比較。内部フィルター、ICC、HDR・広色域まで含む全体一致は未対応 | 一部 |
-| オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。`subtitles --profile lrt-7.5.5 --every N`は本体のSRT時計と元フレーム単位の表示間隔に対応し、1,344件の実測と比較。動画表示は既定のGoフォントに加え、`--timestamp-style lrt-7.5.5`でArial/libass方式へ対応。通常SDR・偶数寸法・透かしなしで66実動画を比較 | 一部 |
+| オーバーレイ・字幕 | 透かし、撮影時刻表示、SRT字幕出力 | `render --watermark TEXT`で任意テキストを各フレームに焼き込み、位置を5種類から選択可能。`render --timestamp-overlay`で撮影日時も表示し、`subtitles`で同じ日時情報からSRT字幕を出力。`subtitles --profile lrt-7.5.5 --every N`は本体のSRT時計と元フレーム単位の表示間隔に対応し、1,344件の実測と比較。動画表示は既定のGoフォントに加え、`--timestamp-style lrt-7.5.5`でArial/libass方式へ対応。通常SDR・偶数寸法で66実動画を比較。`--watermark-style lrt-7.5.5`で本体のArial透かし、固定位置、文字サイズ、色・影、字幕・フェードとの合成順に対応し、42動画を追加比較。LRT設定JSONのrenderCopyrightEnabled／renderCopyrightTextも読み込む | 一部 |
 | フレーム補間 | 速度変更時のブレンド・動き補償 | `--interpolation 1`でブレンド、`2`で低速の双方向モーション補償。保存プリセット・字幕・バッチに対応。ブレンド2,304ケース、モーション720ケースの平面出力ハッシュ・枚数を比較。通常SDRプロファイルでは低速時の8-bitへの切り替えと後段Blur/Sharpen/CASも同じ深度で処理し、追加の22経路・132実動画を比較。ICC/HDRを含む本体動画全体の完全一致は未確認 | 一部 |
 | Motion Blur Plus | 書き出し動画への低/中/高モーションブラー | `render --motion-blur N`でLRTの7種類のフレーム数と`(i/N)^1.5`の3桁重みを適用。先頭Nフレーム除去と字幕の開始位置に対応。通常SDR・偶数寸法・字幕/透かしなしでは10-bit YUVをfloat32で積算し、高速補間や動画デフリッカー・ノイズ/光跡除去と併用可能。22経路・132実動画をスカラー参照と比較。低速ブレンド/モーション補間後は8-bit YUVで合成。字幕/透かしなどは既存RGB経路で、全体一致は未確認 | 一部 |
 | 取り込み | フォルダー/カードまたは動画ファイルからの取り込み、サブフォルダー作成、日時順整列、JPG省略、日時リネーム | `import SOURCE --output DIRECTORY`で写真ファイルと対応XMPをコピー。任意で再帰検索、撮影日時順、JPEG/JPG除外、撮影日時へのリネーム、撮影間隔による連番分割、dry-runに対応。`--convert-dng`で対応RAWをlossless/uncompressed/lossy DNGへ変換し、他の画像とXMPを取り込み。`import-video VIDEO --output DIRECTORY`でFFmpegから動画の全フレームまたは指定fpsのフレームをJPG/PNG連番へ抽出。`--split-intervals`で本体の間隔変化・最小連番長による分割に対応。`--dng-long-edge`でロッシーDNGを縮小可能。取り込み画面内の画像プレビューは未実装（既存連番には`preview-images`を使用可能） | 一部 |
@@ -495,6 +497,9 @@ lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\dated.mp4" --timesta
 # 任意の透かし文字を左下へ焼き込む（5種類の位置から選択）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\watermarked.mp4" --watermark "Kota Timelapse" --watermark-position bottom-left
 
+# 本体と同じArial透かし（位置は固定、ネイティブ字幕との併用も可能）
+lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\native-watermark.mp4" --output-color lrt-7.5.5 --watermark "Kota Timelapse" --watermark-style lrt-7.5.5
+
 # ファイル名にLEFTを含むフレームだけをレンダー（大文字小文字を区別しない）
 lrtl render "D:\Timelapse\Developed" --output "D:\Timelapse\left-camera.mp4" --filename-contains LEFT
 
@@ -535,7 +540,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `--motion-blur N`は出力前に時間方向へ隣接フレームを合成します。選べる窓幅はLRTのRenderPresetで確認した2、3、4、5、10、15、20枚で、0は無効です。インストール済みLRTのレンダー引数生成処理から、`tmix=frames=N:weights='...'`と各重み`(i/N)^1.5`（`i=1..N`、小数3桁）を確認しました。重みは古いフレームから現在フレームへ向かって増え、FFmpegの既定スケールで合計1に正規化されます。各出力フレームは現在と過去N-1枚から作り、先頭では最初のフレームを複製して窓を満たします。XMP/露出補正、クロップ、リサイズを先に行い、指定時刻の文字焼き込みは合成後に行います。lrtlはPure Goの16-bit RGBで同じ重みと時間窓を計算します。LRTのレンダー経路は10-bit YUV444でフィルター処理するため、数値上の重みと窓の一致は確認済みですが、画素値の完全一致は未確認です。一時フレームバッファーの推定量が768 MiBを超える場合は処理を開始しません。大きなフレームでは`--long-edge`または窓幅を下げてください。
 
-`--timestamp-overlay`と`subtitles`は、各サイドカーの`exif:DateTimeOriginal`、`xmp:CreateDate`、`xmp:ModifyDate`の順で日時を探し、なければ画像内EXIFの撮影/作成/更新日時を使います。全フレームの日時が必要です。`subtitles`は各画像の撮影日時を、そのフレームが動画上に表示される区間のSRT字幕として書き出します。`--fps`は動画のフレームレートと合わせてください。既定の表示形式は`2006-01-02 15:04:05`で、`--timestamp-format`へGoの日時レイアウトを渡して変更できます。`subtitles --profile lrt-7.5.5 --every N`は、本体のSRT生成と同じ元連番を基準にし、fps・速度を単精度へ変換した時刻を有効数字6桁で切り捨てます。`--every -1`は本体の字幕用fps、正の値は元フレーム間隔です。低速時は本体の剰余計算により隣接フレームも選ばれる場合があります。このモードは動画の補間・前後トリムをSRTへ反映しません。既定の`standard`は従来どおり動画の最終区間へ合わせます。`render --timestamp-overlay`は既定のGoフォントで日時を右下に焼き込みます。`--timestamp-style lrt-7.5.5`は本体のArial/libassスタイルを選び、`--timestamp-every N`で元フレーム単位の表示間隔を指定できます（-1は本体の字幕用fps）。`--output-color lrt-7.5.5`、偶数寸法のMP4/MOV、固定テキスト透かしなしが必要です。既存FFmpegのsubtitles/libassとインストール済みフォントを使います。`render --watermark TEXT`は埋め込みGoフォントで固定テキストを重ね、`--watermark-position top-left|top-right|bottom-left|bottom-right|center`で配置を選べます（既定は左下）。両方を指定すると日時と透かしを同じフレームに表示します。
+`--timestamp-overlay`と`subtitles`は、各サイドカーの`exif:DateTimeOriginal`、`xmp:CreateDate`、`xmp:ModifyDate`の順で日時を探し、なければ画像内EXIFの撮影/作成/更新日時を使います。全フレームの日時が必要です。`subtitles`は各画像の撮影日時を、そのフレームが動画上に表示される区間のSRT字幕として書き出します。`--fps`は動画のフレームレートと合わせてください。既定の表示形式は`2006-01-02 15:04:05`で、`--timestamp-format`へGoの日時レイアウトを渡して変更できます。`subtitles --profile lrt-7.5.5 --every N`は、本体のSRT生成と同じ元連番を基準にし、fps・速度を単精度へ変換した時刻を有効数字6桁で切り捨てます。`--every -1`は本体の字幕用fps、正の値は元フレーム間隔です。低速時は本体の剰余計算により隣接フレームも選ばれる場合があります。このモードは動画の補間・前後トリムをSRTへ反映しません。既定の`standard`は従来どおり動画の最終区間へ合わせます。`render --timestamp-overlay`は既定のGoフォントで日時を右下に焼き込みます。`--timestamp-style lrt-7.5.5`は本体のArial/libassスタイルを選び、`--timestamp-every N`で元フレーム単位の表示間隔を指定できます（-1は本体の字幕用fps）。`--output-color lrt-7.5.5`、偶数寸法のMP4/MOV、透かしとの併用時は`--watermark-style lrt-7.5.5`が必要です。既存FFmpegのsubtitles/libassとインストール済みフォントを使います。`render --watermark TEXT`は埋め込みGoフォントで固定テキストを重ね、`--watermark-position top-left|top-right|bottom-left|bottom-right|center`で配置を選べます（既定は左下）。両方を指定すると日時と透かしを同じフレームに表示します。
 
 `deflicker`はJPEG/PNG/TIFF、`--raw-preview`の内蔵画像、または`--raw-develop`でAdobe DNG ConverterとGoが現像した画像の輝度を線形sRGBへ変換して測定し、指定領域の中央値に平滑化または一定輝度の目標曲線を合わせます。既定の`--smoother gaussian`はGaussian平滑化を使い、`--smoother lowess`はtricube重み付き局所線形回帰を使います。LOWESSの近傍数は`--smooth`の半径から`2×半径+1`へ換算します。LRT 7.5.5のVisual Deflickerも局所線形回帰型スムーザーを呼びますが、lrtlの測光、近傍数、補正応答は独自実装です。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を指定すると、サイドカーの値を画素へ近似適用します。`--passes 1..8`は候補補正後の画素を再描画・再測定し、追加変更がなくなれば早期終了します。既定はプレビューだけです。
 
@@ -582,9 +587,9 @@ LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分�
 
 広色域／PQは、最初の選択画像のICC名で入力を自動判定します。`--input-color bt2020`で解釈を明示することもでき、`--output-gamut bt2020 --dynamic-range sdr|pq`を指定します。PQ指定時の素材もPQ符号化済みである必要があります。ICCを読み取ってsRGB素材を変換する機能ではありません。BT.2020からBT.709 SDRへの変換も本体のBT.2020-10解釈で行い、一般的なPQ→SDRトーンマッピングは行いません。HDRの実メタデータ検査はH.265で行っています。本体由来のH.264/PQなどの色タグの不整合も含め、[色出力の測定記録](internal/lrtl/testdata/lrt-wide-output-color-7.5.5.md)を参照してください。
 
-通常SDRプロファイルでシャープ／CASを指定し、出力寸法が偶数、字幕・透かしなしの場合、Goで本体と同じ固定小数点RGB16→YUV10変換を行い、シャープ→CASの結果をYUVのままエンコーダーへ渡します。RGBへ差分を戻す従来経路で発生した色差クリップを避けます。`standard`、奇数寸法、字幕・透かし併用は従来のRGB経路です。
+通常SDRプロファイルでシャープ／CASを指定し、出力寸法が偶数、字幕・透かしなしの場合、Goで本体と同じ固定小数点RGB16→YUV10変換を行い、シャープ→CASの結果をYUVのままエンコーダーへ渡します。RGBへ差分を戻す従来経路で発生した色差クリップを避けます。`standard`、奇数寸法、標準スタイルの字幕・透かし併用は従来のRGB経路です。本体スタイルの字幕・透かしはYUV経路を維持します。
 
-実動画の比較範囲は、等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、字幕・透かしなしで偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間では補間時に8-bitへ切り替え、後段も8-bitのYUVのまま処理します。[低速補間の測定記録](internal/lrtl/testdata/lrt-native-slow-color-7.5.5.md)を参照してください。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、最強併用で以前残っていた1成分・2段階の差は、[AVX2/FMAの演算対応](internal/lrtl/testdata/lrt-gaussian-arithmetic-7.5.5.md)で解消しました。JPEGの復号差、ICC、リサイズを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
+実動画の比較範囲は、等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、字幕・透かしなしで偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間では補間時に8-bitへ切り替え、後段も8-bitのYUVのまま処理します。[低速補間の測定記録](internal/lrtl/testdata/lrt-native-slow-color-7.5.5.md)を参照してください。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、最強併用で以前残っていた1成分・2段階の差は、[AVX2/FMAの演算対応](internal/lrtl/testdata/lrt-gaussian-arithmetic-7.5.5.md)で解消しました。RGB8入力の初段色変換、JPEGの復号差、ICC、リサイズを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
 
 ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告されず、fullの10-bit端点も4〜1019へクリップされました。limitedが一般的な用途に適します。H.264/H.265/DNxHRではfull／limitedのタグと実際の輝度値を確認しています。AVIはfull-range JPEGのためauto／fullを受け付け、limited指定は保存前にエラーにします。
 

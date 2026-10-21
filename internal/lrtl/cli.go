@@ -924,7 +924,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	timestampStyle := set.String("timestamp-style", "standard", "timestamp drawing: standard or lrt-7.5.5 (FFmpeg/libass)")
 	timestampEvery := set.Int("timestamp-every", -1, "native timestamp interval in source frames (-1 uses native timestamp fps)")
 	watermark := set.String("watermark", "", "burn fixed text into every frame")
-	watermarkPosition := set.String("watermark-position", "bottom-left", "watermark position: top-left, top-right, bottom-left, bottom-right, or center")
+	watermarkStyle := set.String("watermark-style", "standard", "watermark rendering: standard or lrt-7.5.5 (native fixed position)")
+	watermarkPosition := set.String("watermark-position", "", "watermark position: top-left, top-right, bottom-left (default), bottom-right, or center")
 	motionBlurFrames := set.Int("motion-blur", 0, "blend adjacent frames and discard N warm-up output frames (0 off; 2, 3, 4, 5, 10, 15, 20)")
 	rawPreview := set.Bool("raw-preview", false, "use embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "develop RAW with installed Adobe DNG Converter (or explicit DNGLab)")
@@ -957,6 +958,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--timestamp-format": true, "-timestamp-format": true,
 		"--timestamp-style": true, "-timestamp-style": true, "--timestamp-every": true, "-timestamp-every": true,
 		"--watermark": true, "-watermark": true,
+		"--watermark-style": true, "-watermark-style": true,
 		"--watermark-position": true, "-watermark-position": true,
 		"--motion-blur": true, "-motion-blur": true,
 		"--crop-position": true, "-crop-position": true,
@@ -1088,6 +1090,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		TimestampStyle:        *timestampStyle,
 		TimestampEvery:        *timestampEvery,
 		Watermark:             *watermark,
+		WatermarkStyle:        *watermarkStyle,
 		WatermarkPosition:     strings.ToLower(strings.TrimSpace(*watermarkPosition)),
 		MotionBlurFrames:      *motionBlurFrames,
 		RawPreview:            *rawPreview,
@@ -1247,7 +1250,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	if *filenameContains != "" {
 		features = append(features, fmt.Sprintf("filename contains %q", *filenameContains))
 	}
-	if *watermark != "" {
+	if options.Watermark != "" {
 		features = append(features, "text watermark")
 	}
 	if len(features) > 0 {

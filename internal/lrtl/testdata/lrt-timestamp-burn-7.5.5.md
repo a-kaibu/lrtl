@@ -3,7 +3,7 @@
 `render --timestamp-style lrt-7.5.5` selects the measured native subtitle
 style. It enables timestamps, requires `--output-color lrt-7.5.5` (or the
 native color default of a saved render preset), even dimensions, MP4/MOV and
-no fixed-text watermark. `--timestamp-every N` selects the native source-frame
+no standard fixed-text watermark. Native watermark style is supported; see [native watermark](lrt-watermark-7.5.5.md). `--timestamp-every N` selects the native source-frame
 interval; -1 uses the native timestamp fps. Existing Go font rendering remains
 the default `standard` timestamp style. Other profile restrictions are errors
 instead of silently changing the selected style.
@@ -68,7 +68,7 @@ date layouts still have the scope described in `lrt-timestamp-clock-7.5.5.md`.
 Font selection and glyph rasterization depend on the selected FFmpeg build
 and installed fonts. These are helper-graph and decoded-video comparisons on
 the measured Windows host, not full licensed-application renders on every OS.
-Fixed-text native watermark, ICC/HDR and geometry fidelity remain separate work.
+Native fixed-text watermark is covered in [its measurement notes](lrt-watermark-7.5.5.md). ICC/HDR development and geometry fidelity remain separate work.
 
 ```powershell
 lrtl render C:\photos\sequence --output C:\photos\dated.mp4 --output-color lrt-7.5.5 --timestamp-style lrt-7.5.5 --timestamp-every -1

@@ -57,7 +57,17 @@ func nativePlaybackReferenceGraph(t *testing.T, tc nativePlaybackCase, sourceCou
 		t.Fatal(err)
 	}
 	found := false
+	// The installed caller bypasses the speed helper at exactly 1.0 and uses
+	// frame-index timestamps. Calling the helper anyway inserts fps, which
+	// incorrectly holds tmedian's last frame through the original EOF time.
+	if tc.speed == 1 {
+		graph += ",setpts=N/(24)/TB"
+		found = true
+	}
 	for _, row := range rows {
+		if found {
+			break
+		}
 		if row.FPS == "24" && row.Speed == tc.speed && row.Mode == tc.mode {
 			graph += row.Filter
 			found = true

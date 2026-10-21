@@ -98,6 +98,7 @@ type ffmpegFrameEncoding struct {
 	workingYUV   bool
 	workingDepth int
 	timestamp    nativeTimestampBurn
+	watermark    string
 	color        nativeColorSpec
 }
 
@@ -157,6 +158,13 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	directory := ""
 	captionFilter := ""
+	watermarkFilter := ""
+	if len(encoding) > 0 {
+		watermarkFilter = encoding[0].watermark
+	}
+	if watermarkFilter != "" && (!nativeColor || spatial == nil) {
+		return nil, fmt.Errorf("native watermark requires native planar input")
+	}
 	if len(encoding) > 0 && encoding[0].timestamp.file != "" {
 		if spatial == nil {
 			return nil, fmt.Errorf("native timestamp burn requires native planar input")
@@ -189,7 +197,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	if nativeColor {
 		baseFilter := colorFilter
 		colorFilter = func(videoRange, pixelFormat string) string {
-			return baseFilter(videoRange, pixelFormat) + captionFilter + nativeEncoderFadeFilter(fade)
+			return baseFilter(videoRange, pixelFormat) + watermarkFilter + captionFilter + nativeEncoderFadeFilter(fade)
 		}
 	}
 	arguments := []string{

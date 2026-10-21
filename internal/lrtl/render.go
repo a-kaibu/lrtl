@@ -66,6 +66,7 @@ type RenderOptions struct {
 	TimestampStyle        string
 	TimestampEvery        int
 	Watermark             string
+	WatermarkStyle        string
 	WatermarkPosition     string
 	MotionBlurFrames      int
 	RawPreview            bool
@@ -242,9 +243,23 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		return fmt.Errorf("timestamp style must be standard or lrt-7.5.5")
 	}
 	nativeTimestamp := options.TimestampOverlay && style == "lrt-7.5.5"
+	watermarkStyle := strings.ToLower(strings.TrimSpace(options.WatermarkStyle))
+	if watermarkStyle == "" {
+		watermarkStyle = "standard"
+	}
+	if watermarkStyle != "standard" && watermarkStyle != "lrt-7.5.5" {
+		return fmt.Errorf("watermark style must be standard or lrt-7.5.5")
+	}
+	nativeWatermark := options.Watermark != "" && watermarkStyle == "lrt-7.5.5"
+	if nativeWatermark && (outputColor != "lrt-7.5.5" || imageWriter != nil || strings.ToLower(filepath.Ext(output)) == ".avi" || options.TimestampOverlay && !nativeTimestamp) {
+		return fmt.Errorf("native watermark style requires MP4/MOV output with --output-color lrt-7.5.5 and a native timestamp style when combined")
+	}
+	if nativeWatermark && options.WatermarkPosition != "" && options.WatermarkPosition != "native" {
+		return fmt.Errorf("native watermark has a fixed position; omit --watermark-position")
+	}
 	nativeOutputFade := imageWriter == nil && outputColor == "lrt-7.5.5" && strings.ToLower(filepath.Ext(output)) != ".avi"
-	if nativeTimestamp && (outputColor != "lrt-7.5.5" || options.Watermark != "" || imageWriter != nil || strings.ToLower(filepath.Ext(output)) == ".avi") {
-		return fmt.Errorf("native timestamp style requires MP4/MOV output with --output-color lrt-7.5.5 and no text watermark")
+	if nativeTimestamp && (outputColor != "lrt-7.5.5" || options.Watermark != "" && !nativeWatermark || imageWriter != nil || strings.ToLower(filepath.Ext(output)) == ".avi") {
+		return fmt.Errorf("native timestamp style requires MP4/MOV output with --output-color lrt-7.5.5 and a native watermark style when combined")
 	}
 	if _, err := normalizeSubsampling(options.Subsampling); err != nil {
 		return err
@@ -259,11 +274,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	// there is no later RGB overlay. Other combinations retain the existing
 	// RGB path until those later stages also have a native planar implementation.
 	nativeSpatial := imageWriter == nil && outputColor == "lrt-7.5.5" &&
-		(options.OutputSharpen || options.OutputCAS || fade.duration > 0 || nativeTimestamp) && (!options.TimestampOverlay || nativeTimestamp) &&
-		options.Watermark == ""
+		(options.OutputSharpen || options.OutputCAS || fade.duration > 0 || nativeTimestamp || nativeWatermark) && (!options.TimestampOverlay || nativeTimestamp) &&
+		(options.Watermark == "" || nativeWatermark)
 	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
 		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
-		(!options.TimestampOverlay || nativeTimestamp) && options.Watermark == ""
+		(!options.TimestampOverlay || nativeTimestamp) && (options.Watermark == "" || nativeWatermark)
 	nativeWorkingDepth := 10
 	if options.Interpolation > 0 && speed < 1 {
 		nativeWorkingDepth = 8
@@ -495,7 +510,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 	resizeFrames := options.NativeGeometry || outputWidth != width || outputHeight != height
 	if options.TimestampOverlay || options.Watermark != "" {
-		if options.Watermark != "" {
+		if options.Watermark != "" && !nativeWatermark {
 			if options.WatermarkPosition == "" {
 				options.WatermarkPosition = "bottom-left"
 			}
@@ -506,8 +521,8 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			}
 		}
 	}
-	if nativeTimestamp && (outputWidth%2 != 0 || outputHeight%2 != 0) {
-		return fmt.Errorf("native timestamp style requires even output dimensions")
+	if (nativeTimestamp || nativeWatermark) && (outputWidth%2 != 0 || outputHeight%2 != 0) {
+		return fmt.Errorf("native overlay styles require even output dimensions")
 	}
 	if options.TimestampOverlay && !nativeTimestamp {
 		captureTimes, err = readFrameCaptureTimes(frames)
@@ -515,7 +530,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			return fmt.Errorf("timestamp overlay: %w", err)
 		}
 	}
-	if options.TimestampOverlay && !nativeTimestamp || options.Watermark != "" {
+	if options.TimestampOverlay && !nativeTimestamp || options.Watermark != "" && !nativeWatermark {
 		overlayFace, err = newTimestampOverlayFace(outputWidth, outputHeight)
 		if err != nil {
 			return err
@@ -612,6 +627,14 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 
 	var nativeBurn nativeTimestampBurn
+	watermarkFilter := ""
+	if nativeWatermark {
+		font, err := nativeWatermarkFont()
+		if err != nil {
+			return err
+		}
+		watermarkFilter = nativeWatermarkFilter(options.Watermark, outputWidth, font)
+	}
 	if nativeTimestamp {
 		file, err := os.CreateTemp(outputDir, ".lrtl-timestamp-*.srt")
 		if err != nil {
@@ -668,6 +691,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		rate, _ := options.frameRate()
 		encoding := ffmpegFrameEncoding{outputColor: outputColor, color: colorSpec}
 		encoding.timestamp = nativeBurn
+		encoding.watermark = watermarkFilter
 		nativeTemporal = nativeTemporal && outputWidth%2 == 0 && outputHeight%2 == 0
 		nativeSpatial = nativeSpatial || nativeTemporal
 		nativeSpatial = nativeSpatial && outputWidth%2 == 0 && outputHeight%2 == 0
@@ -861,7 +885,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				if options.TimestampOverlay && !nativeTimestamp {
 					img = applyTimestampOverlay(img, captureTimes[sourceIndex].Format(options.TimestampFormat), overlayFace)
 				}
-				if options.Watermark != "" {
+				if options.Watermark != "" && !nativeWatermark {
 					img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 				}
 			}
@@ -971,7 +995,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if options.TimestampOverlay && !nativeTimestamp {
 				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), overlayFace)
 			}
-			if options.Watermark != "" {
+			if options.Watermark != "" && !nativeWatermark {
 				img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 			}
 			rgb, err := imageRGB48(img)
@@ -1037,7 +1061,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if options.TimestampOverlay {
 				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), overlayFace)
 			}
-			if options.Watermark != "" {
+			if options.Watermark != "" && !nativeWatermark {
 				img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 			}
 			img = fadeVideoImage(img, fade.gain(index, rate))

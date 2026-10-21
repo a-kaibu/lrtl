@@ -10,33 +10,39 @@ import (
 )
 
 type lrtRenderPreset struct {
-	SavedAspectRatio     *float64 `json:"-"`
-	Name                 string   `json:"name"`
-	ID                   string   `json:"ID"`
-	Encoder              string   `json:"encoder"`
-	FrameRate            string   `json:"frameRate"`
-	OutputResV           int      `json:"outputResV"`
-	OutputQuality        int      `json:"outputQuality"`
-	SubSampling          string   `json:"subSampling"`
-	Speed                float64  `json:"speed"`
-	Interpolation        int      `json:"interpolation"`
-	MotionBlur           bool     `json:"motionBlur"`
-	MotionBlurLevel      int      `json:"motionBlurLevel"`
-	Audio                bool     `json:"audio"`
-	AudioTrack           string   `json:"audioTrack"`
-	VideoRange           int      `json:"videoRange"`
-	Gamut                int      `json:"gamut"`
-	DynamicRange         int      `json:"dynamicRange"`
-	FadeOut              bool     `json:"fadeOut"`
-	FadeTime             int      `json:"fadeTime"`
-	Sharpen              bool     `json:"sharpen"`
-	CAS                  bool     `json:"cas"`
-	RemoveAirplanes      bool     `json:"removeAirplanes"`
-	RemoveAirplanesLevel int      `json:"removeAirplanesLevel"`
-	Denoise              bool     `json:"denoise"`
-	DenoiseLevel         int      `json:"denoiseLevel"`
-	DeflickerLuma        bool     `json:"deflickerLuma"`
-	DeflickerChroma      bool     `json:"deflickerChroma"`
+	SavedAspectRatio     *float64           `json:"-"`
+	SavedCopyright       *lrtSavedCopyright `json:"-"`
+	Name                 string             `json:"name"`
+	ID                   string             `json:"ID"`
+	Encoder              string             `json:"encoder"`
+	FrameRate            string             `json:"frameRate"`
+	OutputResV           int                `json:"outputResV"`
+	OutputQuality        int                `json:"outputQuality"`
+	SubSampling          string             `json:"subSampling"`
+	Speed                float64            `json:"speed"`
+	Interpolation        int                `json:"interpolation"`
+	MotionBlur           bool               `json:"motionBlur"`
+	MotionBlurLevel      int                `json:"motionBlurLevel"`
+	Audio                bool               `json:"audio"`
+	AudioTrack           string             `json:"audioTrack"`
+	VideoRange           int                `json:"videoRange"`
+	Gamut                int                `json:"gamut"`
+	DynamicRange         int                `json:"dynamicRange"`
+	FadeOut              bool               `json:"fadeOut"`
+	FadeTime             int                `json:"fadeTime"`
+	Sharpen              bool               `json:"sharpen"`
+	CAS                  bool               `json:"cas"`
+	RemoveAirplanes      bool               `json:"removeAirplanes"`
+	RemoveAirplanesLevel int                `json:"removeAirplanesLevel"`
+	Denoise              bool               `json:"denoise"`
+	DenoiseLevel         int                `json:"denoiseLevel"`
+	DeflickerLuma        bool               `json:"deflickerLuma"`
+	DeflickerChroma      bool               `json:"deflickerChroma"`
+}
+
+type lrtSavedCopyright struct {
+	Enabled bool
+	Text    string
 }
 
 func decodeLRTRenderPreset(data []byte) (lrtRenderPreset, error) {
@@ -91,6 +97,22 @@ func loadLRTRenderPreset(path, name string) (lrtRenderPreset, error) {
 	finish := func(preset lrtRenderPreset, err error) (lrtRenderPreset, error) {
 		if err != nil {
 			return preset, err
+		}
+		if raw, present := object["renderCopyrightEnabled"]; present {
+			copyright := &lrtSavedCopyright{}
+			if err := json.Unmarshal(raw, &copyright.Enabled); err != nil {
+				return preset, fmt.Errorf("renderCopyrightEnabled: %w", err)
+			}
+			if copyright.Enabled {
+				text, present := object["renderCopyrightText"]
+				if !present {
+					return preset, fmt.Errorf("renderCopyrightText is required when copyright is enabled")
+				}
+				if err := json.Unmarshal(text, &copyright.Text); err != nil {
+					return preset, fmt.Errorf("renderCopyrightText: %w", err)
+				}
+			}
+			preset.SavedCopyright = copyright
 		}
 		if raw, present := object["renderConstrainCrop"]; present {
 			var constrain bool
@@ -151,6 +173,17 @@ func loadLRTRenderPreset(path, name string) (lrtRenderPreset, error) {
 }
 
 func applyLRTRenderPreset(options RenderOptions, preset lrtRenderPreset, path string, explicit map[string]bool) (RenderOptions, error) {
+	if saved := preset.SavedCopyright; saved != nil {
+		if !explicit["watermark"] {
+			options.Watermark = ""
+			if saved.Enabled {
+				options.Watermark = saved.Text
+			}
+		}
+		if saved.Enabled && !explicit["watermark-style"] {
+			options.WatermarkStyle = "lrt-7.5.5"
+		}
+	}
 	if preset.Gamut < 0 || preset.Gamut > 1 || preset.DynamicRange < 0 || preset.DynamicRange > 1 {
 		return options, fmt.Errorf("LRT gamut and dynamicRange must be 0 or 1")
 	}
