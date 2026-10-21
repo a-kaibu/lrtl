@@ -219,7 +219,7 @@ func TestNativeSlowPresetBatchFallbackAndFailure(t *testing.T) {
 		t.Fatal("native slow batch changed 8-bit planes")
 	}
 	assertPreviewEVFileBytes(t, path, presetBefore)
-	for _, extra := range [][]string{{"--watermark", "TEST"}, {"--fade-out", "1"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
+	for _, extra := range [][]string{{"--watermark", "TEST"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
 		args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "fallback.mp4"), "--output-color", "lrt-7.5.5", "--ffmpeg", executable, "--interpolation", "1", "--speed", ".5", "--motion-blur", "2"}
 		markerCommand(t, append(args, extra...)...)
 		var flags []string

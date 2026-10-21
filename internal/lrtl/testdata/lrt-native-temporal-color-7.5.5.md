@@ -8,7 +8,7 @@ bounded source queues and cropping; only the encoder input is planar.
 
 This path applies to `--output-color lrt-7.5.5` (the saved preset default),
 with one of these temporal filters, even output dimensions and no timestamp,
-watermark or fade. The original measurements below disabled interpolation
+watermark. The original measurements below disabled interpolation
 and Motion Blur. The subsequent [playback extension](lrt-native-playback-color-7.5.5.md)
 adds Motion Blur and modes 1/2 at speeds >= 1. The later
 [slow interpolation path](lrt-native-slow-color-7.5.5.md) adds the native
@@ -70,5 +70,7 @@ go test ./internal/lrtl -run '^$' -fuzz '^FuzzNativeTemporalColor$' -fuzztime 10
 ```
 
 This does not reproduce native Lanczos resize, Camera Raw/ICC, all temporal
-combinations, HDR/wide gamut, overlays or fade. It improves the actual working
+combinations, HDR/wide gamut, overlays. It improves the actual working
 color domain for the listed filters while leaving those broader gaps visible.
+
+Native planar fade is now supported separately; see [fade measurements](lrt-native-fade-7.5.5.md).

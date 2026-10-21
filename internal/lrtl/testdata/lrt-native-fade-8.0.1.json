@@ -1,0 +1,338 @@
+[
+  {
+    "Depth": 8,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 2.0,
+    "Bytes": 3936,
+    "Hash": "dc618131db3db945eada254a222062ad1c7d8516845adff83cf0d4354b7f0358"
+  },
+  {
+    "Depth": 8,
+    "Rate": "24",
+    "Start": 0.137,
+    "Duration": 0.7,
+    "Bytes": 3936,
+    "Hash": "da2448897dc1a9e72b06c675d303fbe154d1cd7ffe76ab261d0b162412043e56"
+  },
+  {
+    "Depth": 8,
+    "Rate": "24",
+    "Start": 0.251,
+    "Duration": 0.3,
+    "Bytes": 3936,
+    "Hash": "9625870fdababaf6b7917c1005952597ae9c568d950c3e177b45e55b3b15aabb"
+  },
+  {
+    "Depth": 8,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 1E-06,
+    "Bytes": 3936,
+    "Hash": "cf92a42d4879fd8e3eb12142d5b444edb7a4458b2e5c9ad9ec4f1a07e5228c9a"
+  },
+  {
+    "Depth": 8,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 0.0624996,
+    "Bytes": 3936,
+    "Hash": "cf92a42d4879fd8e3eb12142d5b444edb7a4458b2e5c9ad9ec4f1a07e5228c9a"
+  },
+  {
+    "Depth": 8,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 0.0625004,
+    "Bytes": 3936,
+    "Hash": "f23aca735c33dfddd4626dd44c8d0b9c7bf76c5193f2d304c037f88f14aa94a3"
+  },
+  {
+    "Depth": 8,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 1E-07,
+    "Bytes": 3936,
+    "Hash": "a67ec92a706a3763c5cc73a5ec41c9433922787f1e32b9bc137e6f6db325cde0"
+  },
+  {
+    "Depth": 8,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 2.0,
+    "Bytes": 3936,
+    "Hash": "746701f55d84d46a1c89cda93c497ea80893a181c133958d3dfe6a447a4600a4"
+  },
+  {
+    "Depth": 8,
+    "Rate": "30000/1001",
+    "Start": 0.137,
+    "Duration": 0.7,
+    "Bytes": 3936,
+    "Hash": "fc17481c6fa781778c8d341731df50dee8eeb1137d2ff74d10f7a63e8b1e3242"
+  },
+  {
+    "Depth": 8,
+    "Rate": "30000/1001",
+    "Start": 0.251,
+    "Duration": 0.3,
+    "Bytes": 3936,
+    "Hash": "3a2be99a2307389ade2fdc4374cec01d876e4d7d989a1c26bf7d3e2a0783b221"
+  },
+  {
+    "Depth": 8,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 1E-06,
+    "Bytes": 3936,
+    "Hash": "cf92a42d4879fd8e3eb12142d5b444edb7a4458b2e5c9ad9ec4f1a07e5228c9a"
+  },
+  {
+    "Depth": 8,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 0.0624996,
+    "Bytes": 3936,
+    "Hash": "f23aca735c33dfddd4626dd44c8d0b9c7bf76c5193f2d304c037f88f14aa94a3"
+  },
+  {
+    "Depth": 8,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 0.0625004,
+    "Bytes": 3936,
+    "Hash": "f23aca735c33dfddd4626dd44c8d0b9c7bf76c5193f2d304c037f88f14aa94a3"
+  },
+  {
+    "Depth": 8,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 1E-07,
+    "Bytes": 3936,
+    "Hash": "a67ec92a706a3763c5cc73a5ec41c9433922787f1e32b9bc137e6f6db325cde0"
+  },
+  {
+    "Depth": 8,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 2.0,
+    "Bytes": 3936,
+    "Hash": "ad653bdc38241204b488ed3b138be63f3df4e3eb84b6d5ec15e06148af824ad5"
+  },
+  {
+    "Depth": 8,
+    "Rate": "2",
+    "Start": 0.137,
+    "Duration": 0.7,
+    "Bytes": 3936,
+    "Hash": "cf92a42d4879fd8e3eb12142d5b444edb7a4458b2e5c9ad9ec4f1a07e5228c9a"
+  },
+  {
+    "Depth": 8,
+    "Rate": "2",
+    "Start": 0.251,
+    "Duration": 0.3,
+    "Bytes": 3936,
+    "Hash": "b71b86c610c20d1e0827afb5b1b9d7cd480abe25b07e513d4d459d9b63aa22b6"
+  },
+  {
+    "Depth": 8,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 1E-06,
+    "Bytes": 3936,
+    "Hash": "cf92a42d4879fd8e3eb12142d5b444edb7a4458b2e5c9ad9ec4f1a07e5228c9a"
+  },
+  {
+    "Depth": 8,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 0.0624996,
+    "Bytes": 3936,
+    "Hash": "cf92a42d4879fd8e3eb12142d5b444edb7a4458b2e5c9ad9ec4f1a07e5228c9a"
+  },
+  {
+    "Depth": 8,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 0.0625004,
+    "Bytes": 3936,
+    "Hash": "cf92a42d4879fd8e3eb12142d5b444edb7a4458b2e5c9ad9ec4f1a07e5228c9a"
+  },
+  {
+    "Depth": 8,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 1E-07,
+    "Bytes": 3936,
+    "Hash": "a67ec92a706a3763c5cc73a5ec41c9433922787f1e32b9bc137e6f6db325cde0"
+  },
+  {
+    "Depth": 10,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 2.0,
+    "Bytes": 7872,
+    "Hash": "e3313738d1d0d684b551676522d174ef7bcf62b88e5f86c3df70dbbb17a76b68"
+  },
+  {
+    "Depth": 10,
+    "Rate": "24",
+    "Start": 0.137,
+    "Duration": 0.7,
+    "Bytes": 7872,
+    "Hash": "dff9f29c96b4c49cb73cac49051ee587c026db3f4d4ac2c544b9460e7f60c8cd"
+  },
+  {
+    "Depth": 10,
+    "Rate": "24",
+    "Start": 0.251,
+    "Duration": 0.3,
+    "Bytes": 7872,
+    "Hash": "bb853fea4572ac8f62d2dace3dc7c01ee4628b5d05a1c1e8e904b0afd38b95d7"
+  },
+  {
+    "Depth": 10,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 1E-06,
+    "Bytes": 7872,
+    "Hash": "bb3f7547abb90848486f0a7a7e0bfc0393c74ed1c9d357ff1f2474ad81bb0286"
+  },
+  {
+    "Depth": 10,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 0.0624996,
+    "Bytes": 7872,
+    "Hash": "bb3f7547abb90848486f0a7a7e0bfc0393c74ed1c9d357ff1f2474ad81bb0286"
+  },
+  {
+    "Depth": 10,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 0.0625004,
+    "Bytes": 7872,
+    "Hash": "75762b5e1735b0160cbd7672b61fbe4671f7ed3588dd521f24a9fb43417e2215"
+  },
+  {
+    "Depth": 10,
+    "Rate": "24",
+    "Start": 0.0,
+    "Duration": 1E-07,
+    "Bytes": 7872,
+    "Hash": "db0b81076f40e2857fad19a2d0a4c4fbcb338ac126cddbc3e802796d84597acc"
+  },
+  {
+    "Depth": 10,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 2.0,
+    "Bytes": 7872,
+    "Hash": "e1f8122aa3f15b2fd7fe74fcdcd13fd7bf1efa6c34e99e60b417f4e59f593d1d"
+  },
+  {
+    "Depth": 10,
+    "Rate": "30000/1001",
+    "Start": 0.137,
+    "Duration": 0.7,
+    "Bytes": 7872,
+    "Hash": "9b87c7db5fdadcfe2401792de093730926b4f7615955aa6c2343451a4511cba8"
+  },
+  {
+    "Depth": 10,
+    "Rate": "30000/1001",
+    "Start": 0.251,
+    "Duration": 0.3,
+    "Bytes": 7872,
+    "Hash": "a64858f5f1ced279462d594f4c07a28b9712b9922ce11576e9c74de98dad5e83"
+  },
+  {
+    "Depth": 10,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 1E-06,
+    "Bytes": 7872,
+    "Hash": "bb3f7547abb90848486f0a7a7e0bfc0393c74ed1c9d357ff1f2474ad81bb0286"
+  },
+  {
+    "Depth": 10,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 0.0624996,
+    "Bytes": 7872,
+    "Hash": "75762b5e1735b0160cbd7672b61fbe4671f7ed3588dd521f24a9fb43417e2215"
+  },
+  {
+    "Depth": 10,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 0.0625004,
+    "Bytes": 7872,
+    "Hash": "75762b5e1735b0160cbd7672b61fbe4671f7ed3588dd521f24a9fb43417e2215"
+  },
+  {
+    "Depth": 10,
+    "Rate": "30000/1001",
+    "Start": 0.0,
+    "Duration": 1E-07,
+    "Bytes": 7872,
+    "Hash": "db0b81076f40e2857fad19a2d0a4c4fbcb338ac126cddbc3e802796d84597acc"
+  },
+  {
+    "Depth": 10,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 2.0,
+    "Bytes": 7872,
+    "Hash": "0ce565b6da108385624267a50bfc30f5e59d271b36c49aac036e82f30087843a"
+  },
+  {
+    "Depth": 10,
+    "Rate": "2",
+    "Start": 0.137,
+    "Duration": 0.7,
+    "Bytes": 7872,
+    "Hash": "bb3f7547abb90848486f0a7a7e0bfc0393c74ed1c9d357ff1f2474ad81bb0286"
+  },
+  {
+    "Depth": 10,
+    "Rate": "2",
+    "Start": 0.251,
+    "Duration": 0.3,
+    "Bytes": 7872,
+    "Hash": "d040d907792b433e9decfce2c1071f53a84078865d0380b49d3eba6456259065"
+  },
+  {
+    "Depth": 10,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 1E-06,
+    "Bytes": 7872,
+    "Hash": "bb3f7547abb90848486f0a7a7e0bfc0393c74ed1c9d357ff1f2474ad81bb0286"
+  },
+  {
+    "Depth": 10,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 0.0624996,
+    "Bytes": 7872,
+    "Hash": "bb3f7547abb90848486f0a7a7e0bfc0393c74ed1c9d357ff1f2474ad81bb0286"
+  },
+  {
+    "Depth": 10,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 0.0625004,
+    "Bytes": 7872,
+    "Hash": "bb3f7547abb90848486f0a7a7e0bfc0393c74ed1c9d357ff1f2474ad81bb0286"
+  },
+  {
+    "Depth": 10,
+    "Rate": "2",
+    "Start": 0.0,
+    "Duration": 1E-07,
+    "Bytes": 7872,
+    "Hash": "db0b81076f40e2857fad19a2d0a4c4fbcb338ac126cddbc3e802796d84597acc"
+  }
+]

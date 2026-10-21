@@ -36,6 +36,9 @@ type ffmpegFrameWriter struct {
 	spatial      *nativeSpatialFilter
 	workingYUV   bool
 	workingDepth int
+	fade         videoFade
+	rate         frameRate
+	frameIndex   int
 }
 
 func resolveFFmpeg(path string) (string, error) {
@@ -241,6 +244,9 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 		return nil, fmt.Errorf("open FFmpeg input: %w", err)
 	}
 	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}, spatial: spatial, workingYUV: workingYUV, workingDepth: workingDepth}
+	if spatial != nil {
+		writer.fade, writer.rate = fade, rate
+	}
 	command.Stderr = &writer.stderr
 	if err := command.Start(); err != nil {
 		_ = input.Close()
@@ -263,7 +269,9 @@ func (writer *ffmpegFrameWriter) AddFrame(frame []byte) error {
 		if err != nil {
 			return err
 		}
+		fadeNativePlanes(frame, writer.workingDepth, nativeFadeFactor(writer.fade, writer.frameIndex, writer.rate))
 	}
+	writer.frameIndex++
 	for len(frame) > 0 {
 		written, err := writer.input.Write(frame)
 		if err != nil {

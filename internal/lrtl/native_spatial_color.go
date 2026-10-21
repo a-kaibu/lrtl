@@ -75,7 +75,11 @@ func (f *nativeSpatialFilter) filterPlanes(planes [3][]uint16, size int) []byte 
 
 func (f *nativeSpatialFilter) filterPlanesDepth(planes [3][]uint16, size, depth int) []byte {
 	if f.sharpen {
-		planes[0] = sharpenLumaDepth(planes[0], f.width, f.height, depth)
+		maximum := int64(255)
+		if depth == 10 {
+			maximum = 65535 // native high-depth unsharp clips to storage width
+		}
+		planes[0] = sharpenLumaLimit(planes[0], f.width, f.height, depth, maximum)
 	}
 	if f.cas {
 		for p := range planes {

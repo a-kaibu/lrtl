@@ -4,7 +4,7 @@ The native SDR working path now retains full-range YUV444 10-bit through
 Motion Blur and playback mode 1/2 at speeds >= 1, together with output
 deflicker, all four denoise levels, all three airplane levels and unsharp/CAS.
 Mode 0 frame duplication at speeds below 1 is also supported. Even output
-dimensions and no timestamp, watermark or fade are required. The subsequent
+dimensions and no timestamp, watermark are required. The subsequent
 [slow interpolation path](lrt-native-slow-color-7.5.5.md) implements the native
 transition to 8-bit, including downstream Blur and spatial filtering.
 
@@ -58,7 +58,9 @@ go test ./internal/lrtl -run '^$' -fuzz '^FuzzWeightedWorkingFrames$' -fuzztime 
 ```
 
 This does not establish full native resize, ICC, Camera Raw, HDR or
-overlay/fade parity. Low-speed interpolation has separate measurements linked
+overlay parity. Low-speed interpolation has separate measurements linked
 above. The native YUV path removes intermediate
 RGB clipping and quantization for the listed combinations while keeping those
 remaining gaps explicit.
+
+Native planar fade is now supported separately; see [fade measurements](lrt-native-fade-7.5.5.md).

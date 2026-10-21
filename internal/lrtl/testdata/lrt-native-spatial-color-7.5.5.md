@@ -37,7 +37,7 @@ also retains the previous 12 unfiltered video cases.
 
 Routing tests cover default, speed, Motion Blur, noise removal, airplane
 removal, output deflicker and interpolation, plus existing RGB fallback for
-overlays/fade/odd sizes/standard color. Source files must remain unchanged.
+overlays/odd sizes/standard color. Source files must remain unchanged.
 Temporal combinations additionally compare every output byte with the same
 RGB temporal pipeline followed by exactly one native conversion and spatial
 pass. This establishes ordering, not native whole-pipeline pixel parity.
@@ -52,10 +52,12 @@ go test ./internal/lrtl -run '^$' -fuzz '^FuzzNativeSDRConversion$' -fuzztime 10
 
 This path is enabled by `--output-color lrt-7.5.5` (also the saved preset
 default), with sharpen and/or CAS, even output dimensions and no timestamp,
-watermark or fade. Existing RGB conversion is retained for the other
+watermark. Existing RGB conversion is retained for the other
 combinations. Supported time filters now have a separate
 [native temporal YUV path](lrt-native-temporal-color-7.5.5.md); other temporal
 combinations retain the previous BT.709 approximation. Go resize/RAW/XMP
 processing is not a reproduction of Camera Raw or
 native swscale geometry. Matching the measured spatial path does not imply
 complete LRT application, HDR, ICC or all filter-combination parity.
+
+Native planar fade is now supported separately; see [fade measurements](lrt-native-fade-7.5.5.md).

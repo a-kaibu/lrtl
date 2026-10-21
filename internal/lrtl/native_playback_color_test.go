@@ -234,7 +234,7 @@ func TestNativePlaybackPresetBatchFallbackAndFailure(t *testing.T) {
 	if !bytes.Equal(want, denoiseRead(t, capture)) {
 		t.Fatal("native playback batch changed planes")
 	}
-	for _, extra := range [][]string{{"--watermark", "TEST"}, {"--fade-out", "1"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
+	for _, extra := range [][]string{{"--watermark", "TEST"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
 		args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "fallback.mp4"), "--output-color", "lrt-7.5.5", "--ffmpeg", executable, "--motion-blur", "3"}
 		markerCommand(t, append(args, extra...)...)
 		var flags []string

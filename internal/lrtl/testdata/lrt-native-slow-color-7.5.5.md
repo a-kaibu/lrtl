@@ -61,6 +61,7 @@ application renders. The [Gaussian arithmetic update](lrt-gaussian-arithmetic-7.
 selects fused feedback on AVX2/FMA hosts and scalar feedback otherwise.
 CPU-dependent scene and small-frame threading differences remain.
 Native geometry resampling, ICC, Camera Raw, HDR/wide gamut,
-overlay/fade parity and complete LRT application output remain outside scope
-of these measurements. Even output dimensions and no timestamp, watermark or
-fade are required for this native working path.
+overlay parity and complete LRT application output remain outside scope
+of these measurements. Even output dimensions and no timestamp or watermark are required for this native working path.
+
+Native planar fade is now supported separately; see [fade measurements](lrt-native-fade-7.5.5.md).

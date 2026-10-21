@@ -224,14 +224,14 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	}
 	fade := timing.fade
 	// Spatial filters can stay in the native YUV domain through encoding when
-	// there is no later RGB overlay/fade. Other combinations retain the existing
+	// there is no later RGB overlay. Other combinations retain the existing
 	// RGB path until those later stages also have a native planar implementation.
 	nativeSpatial := imageWriter == nil && outputColor == "lrt-7.5.5" &&
-		(options.OutputSharpen || options.OutputCAS) && !options.TimestampOverlay &&
-		options.Watermark == "" && fade.duration == 0
+		(options.OutputSharpen || options.OutputCAS || fade.duration > 0) && !options.TimestampOverlay &&
+		options.Watermark == ""
 	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
 		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
-		!options.TimestampOverlay && options.Watermark == "" && fade.duration == 0
+		!options.TimestampOverlay && options.Watermark == ""
 	nativeWorkingDepth := 10
 	if options.Interpolation > 0 && speed < 1 {
 		nativeWorkingDepth = 8
@@ -828,7 +828,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					return fmt.Errorf("convert overlaid %s to RGB48: %w", frames[sourceIndex].Image, err)
 				}
 			}
-			if outputExtension != ".avi" && img == nil {
+			if outputExtension != ".avi" && img == nil && !nativeSpatial {
 				fadeRGB48(rgb, fade.gain(target-timeline.start, rate))
 			}
 			if err := writer.AddFrame(rgb); err != nil {
@@ -926,7 +926,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if err != nil {
 				return fmt.Errorf("convert %s to RGB48: %w", frame.Image, err)
 			}
-			fadeRGB48(rgb, fade.gain(index, rate))
+			if !nativeSpatial {
+				fadeRGB48(rgb, fade.gain(index, rate))
+			}
 			if err := writer.AddFrame(rgb); err != nil {
 				closeErr := writer.Close()
 				writerClosed = true
