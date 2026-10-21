@@ -53,10 +53,7 @@ or global date/seconds settings. Invalid options, malformed metadata and SRT
 delimiter injection retain the existing destination and remove temporary
 files. Preset fps/speed and explicit CLI overrides feed the selected clock.
 
-Timestamp burn-in still uses the existing Go font/layout. The native command's
-Arial/libass subtitle style and its placement before trim/fade have been
-identified; connecting this SRT path to native video overlay remains pending.
-This change does not claim full application overlay or font-rendering parity.
+The separate [native timestamp burn-in](lrt-timestamp-burn-7.5.5.md) now connects this clock to the measured Arial/libass style. The default Go style remains available. This does not claim complete metadata, font-provider or application-render parity.
 
 ```powershell
 lrtl subtitles C:\photos\sequence --output C:\photos\native.srt --profile lrt-7.5.5 --every -1 --fps 29.97 --speed 1

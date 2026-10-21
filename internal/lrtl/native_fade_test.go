@@ -14,6 +14,35 @@ import (
 	"testing"
 )
 
+func verifyNativeFadeVideos(t *testing.T, exe, dir string, flags []string, graph string) {
+	t.Helper()
+	verifyNativeFinalVideos(t, exe, dir, flags, func(pix, videoRange string) string {
+		at := strings.LastIndex(graph, ",fade=")
+		if at < 0 {
+			t.Fatal("missing native fade reference")
+		}
+		return graph[:at] + "," + nativeSDRPlanarColorFilter(videoRange, pix) + graph[at:]
+	})
+}
+
+func assertNativeFadeAfterColor(t *testing.T, capture string) {
+	t.Helper()
+	var flags []string
+	if err := json.Unmarshal(denoiseRead(t, capture+".json"), &flags); err != nil {
+		t.Fatal(err)
+	}
+	for i, flag := range flags {
+		if flag == "-vf" {
+			graph := flags[i+1]
+			if strings.Index(graph, "zscale=") < 0 || strings.Index(graph, ",fade=") < strings.Index(graph, "zscale=") {
+				t.Fatal("native fade must follow final color conversion", graph)
+			}
+			return
+		}
+	}
+	t.Fatal("missing encoder color/fade filter")
+}
+
 func TestNativeFadeOfflineReferences(t *testing.T) {
 	var rows []struct {
 		Depth, Bytes    int
@@ -197,12 +226,12 @@ func TestNativeFadeActualVideos(t *testing.T) {
 				t.Fatal(err)
 			}
 			graph := nativeTemporalReferenceGraph(t, tc) + fmt.Sprintf(",fade=t=out:st=%.3f:d=%g", fade.start, float32(fade.duration))
-			verifyNativeFilteredVideos(t, executable, dir, append(nativeTemporalCLI(tc), "--fade-out", ".5"), graph)
+			verifyNativeFadeVideos(t, executable, dir, append(nativeTemporalCLI(tc), "--fade-out", ".5"), graph)
 		})
 	}
 }
 
-func TestNativeFadeTemporalPlanes(t *testing.T) {
+func TestNativeFadeTemporalInputPlanes(t *testing.T) {
 	executable := os.Getenv("LRTL_COLOR_FFMPEG")
 	if executable == "" {
 		t.Skip("set LRTL_COLOR_FFMPEG")
@@ -213,16 +242,12 @@ func TestNativeFadeTemporalPlanes(t *testing.T) {
 	t.Setenv("LRTL_TEST_FFMPEG_CAPTURE", capture)
 	for _, tc := range []nativeTemporalCase{{name: "plain"}, {name: "spatial", spatial: true}, {name: "combined", noise: 4, air: 3, luma: true, chroma: true, spatial: true}} {
 		t.Run(tc.name, func(t *testing.T) {
-			count := 17
-			if tc.air > 0 {
-				count = 12 // measured output after strong denoise latency and trim
-			}
-			fade, _ := planVideoFade(count, frameRate{24, 1}, "24", .5)
-			graph := nativeTemporalReferenceGraph(t, tc) + fmt.Sprintf(",fade=t=out:st=%.3f:d=%g", fade.start, float32(fade.duration))
+			graph := nativeTemporalReferenceGraph(t, tc)
 			want := nativeFilterReferenceCommand(t, executable, nil, "-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", graph, "-pix_fmt", "yuv444p10le", "-f", "rawvideo", "pipe:1")
 			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "go.mp4"), "--output-color", "lrt-7.5.5", "--ffmpeg", fake, "--fps", "24", "--fade-out", ".5"}
 			markerCommand(t, append(args, nativeTemporalCLI(tc)...)...)
 			got := denoiseRead(t, capture)
+			assertNativeFadeAfterColor(t, capture)
 			if !bytes.Equal(got, want) {
 				for i := 0; i < min(len(got), len(want)); i += 2 {
 					if !bytes.Equal(got[i:i+2], want[i:i+2]) {
@@ -235,7 +260,7 @@ func TestNativeFadeTemporalPlanes(t *testing.T) {
 	}
 }
 
-func TestNativeFadeSlowPlanes(t *testing.T) {
+func TestNativeFadeSlowInputPlanes(t *testing.T) {
 	executable := os.Getenv("LRTL_COLOR_FFMPEG")
 	if executable == "" {
 		t.Skip("set LRTL_COLOR_FFMPEG")
@@ -251,14 +276,10 @@ func TestNativeFadeSlowPlanes(t *testing.T) {
 		t.Run(fmt.Sprint(mode), func(t *testing.T) {
 			tc := nativeSlowCase{playback: nativePlaybackCase{mode: mode, speed: .5}, spatial: 3}
 			graph := nativeSlowReferenceGraph(t, tc)
-			base := nativeFilterReferenceCommand(t, executable, nil, "-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", graph, "-pix_fmt", "yuv444p", "-f", "rawvideo", "pipe:1")
-			fade, err := planVideoFade(len(base)/(64*32*3), frameRate{24, 1}, "24", .5)
-			if err != nil {
-				t.Fatal(err)
-			}
-			want := nativeFilterReferenceCommand(t, executable, nil, "-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", graph+fmt.Sprintf(",fade=t=out:st=%.3f:d=%g", fade.start, float32(fade.duration)), "-pix_fmt", "yuv444p", "-f", "rawvideo", "pipe:1")
+			want := nativeFilterReferenceCommand(t, executable, nil, "-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-filter_complex", graph, "-pix_fmt", "yuv444p", "-f", "rawvideo", "pipe:1")
 			args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "go.mp4"), "--output-color", "lrt-7.5.5", "--ffmpeg", fake, "--fps", "24", "--fade-out", ".5"}
 			markerCommand(t, append(args, nativeSlowCLI(tc)...)...)
+			assertNativeFadeAfterColor(t, capture)
 			if got := denoiseRead(t, capture); !bytes.Equal(got, want) {
 				t.Fatalf("slow fade mismatch bytes%d/%d hashes%x/%x", len(got), len(want), sha256.Sum256(got), sha256.Sum256(want))
 			}
@@ -282,7 +303,7 @@ func TestNativeFadeSlowActualVideos(t *testing.T) {
 				t.Fatal(err)
 			}
 			graph += fmt.Sprintf(",fade=t=out:st=%.3f:d=%g", fade.start, float32(fade.duration))
-			verifyNativeFilteredVideos(t, executable, dir, append(nativeSlowCLI(tc), "--fade-out", ".5"), graph)
+			verifyNativeFadeVideos(t, executable, dir, append(nativeSlowCLI(tc), "--fade-out", ".5"), graph)
 		})
 	}
 }

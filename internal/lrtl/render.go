@@ -59,6 +59,8 @@ type RenderOptions struct {
 	AutoOrient            bool
 	TimestampOverlay      bool
 	TimestampFormat       string
+	TimestampStyle        string
+	TimestampEvery        int
 	Watermark             string
 	WatermarkPosition     string
 	MotionBlurFrames      int
@@ -214,6 +216,18 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	if err != nil {
 		return err
 	}
+	style := strings.ToLower(strings.TrimSpace(options.TimestampStyle))
+	if style == "" {
+		style = "standard"
+	}
+	if style != "standard" && style != "lrt-7.5.5" {
+		return fmt.Errorf("timestamp style must be standard or lrt-7.5.5")
+	}
+	nativeTimestamp := options.TimestampOverlay && style == "lrt-7.5.5"
+	nativeOutputFade := imageWriter == nil && outputColor == "lrt-7.5.5" && strings.ToLower(filepath.Ext(output)) != ".avi"
+	if nativeTimestamp && (outputColor != "lrt-7.5.5" || options.Watermark != "" || imageWriter != nil || strings.ToLower(filepath.Ext(output)) == ".avi") {
+		return fmt.Errorf("native timestamp style requires SDR MP4/MOV output with --output-color lrt-7.5.5 and no text watermark")
+	}
 	if _, err := normalizeSubsampling(options.Subsampling); err != nil {
 		return err
 	}
@@ -227,11 +241,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	// there is no later RGB overlay. Other combinations retain the existing
 	// RGB path until those later stages also have a native planar implementation.
 	nativeSpatial := imageWriter == nil && outputColor == "lrt-7.5.5" &&
-		(options.OutputSharpen || options.OutputCAS || fade.duration > 0) && !options.TimestampOverlay &&
+		(options.OutputSharpen || options.OutputCAS || fade.duration > 0 || nativeTimestamp) && (!options.TimestampOverlay || nativeTimestamp) &&
 		options.Watermark == ""
 	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
 		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
-		!options.TimestampOverlay && options.Watermark == ""
+		(!options.TimestampOverlay || nativeTimestamp) && options.Watermark == ""
 	nativeWorkingDepth := 10
 	if options.Interpolation > 0 && speed < 1 {
 		nativeWorkingDepth = 8
@@ -474,13 +488,16 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			}
 		}
 	}
-	if options.TimestampOverlay {
+	if nativeTimestamp && (outputWidth%2 != 0 || outputHeight%2 != 0) {
+		return fmt.Errorf("native timestamp style requires even output dimensions")
+	}
+	if options.TimestampOverlay && !nativeTimestamp {
 		captureTimes, err = readFrameCaptureTimes(frames)
 		if err != nil {
 			return fmt.Errorf("timestamp overlay: %w", err)
 		}
 	}
-	if options.TimestampOverlay || options.Watermark != "" {
+	if options.TimestampOverlay && !nativeTimestamp || options.Watermark != "" {
 		overlayFace, err = newTimestampOverlayFace(outputWidth, outputHeight)
 		if err != nil {
 			return err
@@ -576,6 +593,22 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		}
 	}
 
+	var nativeBurn nativeTimestampBurn
+	if nativeTimestamp {
+		file, err := os.CreateTemp(outputDir, ".lrtl-timestamp-*.srt")
+		if err != nil {
+			return fmt.Errorf("create timestamp subtitles: %w", err)
+		}
+		name := file.Name()
+		defer os.Remove(name)
+		if err := file.Close(); err != nil {
+			return err
+		}
+		if err := writeSequenceSubtitlesProfile(frames, name, rate, label, speed, 0, 0, 0, options.TimestampFormat, true, &nativeSubtitleOptions{every: options.TimestampEvery}); err != nil {
+			return fmt.Errorf("native timestamp subtitles: %w", err)
+		}
+		nativeBurn = nativeTimestampBurn{file: name, start: timeline.start}
+	}
 	tempPath, indexPath := "", ""
 	cleanup := func() {
 		if tempPath != "" {
@@ -616,6 +649,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	} else if imageWriter == nil {
 		rate, _ := options.frameRate()
 		encoding := ffmpegFrameEncoding{outputColor: outputColor}
+		encoding.timestamp = nativeBurn
 		nativeTemporal = nativeTemporal && outputWidth%2 == 0 && outputHeight%2 == 0
 		nativeSpatial = nativeSpatial || nativeTemporal
 		nativeSpatial = nativeSpatial && outputWidth%2 == 0 && outputHeight%2 == 0
@@ -806,14 +840,14 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				if err != nil {
 					return err
 				}
-				if options.TimestampOverlay {
+				if options.TimestampOverlay && !nativeTimestamp {
 					img = applyTimestampOverlay(img, captureTimes[sourceIndex].Format(options.TimestampFormat), overlayFace)
 				}
 				if options.Watermark != "" {
 					img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 				}
 			}
-			if img != nil {
+			if img != nil && !nativeOutputFade {
 				img = fadeVideoImage(img, fade.gain(target-timeline.start, rate))
 			}
 			if outputExtension == ".avi" {
@@ -828,7 +862,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					return fmt.Errorf("convert overlaid %s to RGB48: %w", frames[sourceIndex].Image, err)
 				}
 			}
-			if outputExtension != ".avi" && img == nil && !nativeSpatial {
+			if outputExtension != ".avi" && img == nil && !nativeOutputFade {
 				fadeRGB48(rgb, fade.gain(target-timeline.start, rate))
 			}
 			if err := writer.AddFrame(rgb); err != nil {
@@ -916,7 +950,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					return err
 				}
 			}
-			if options.TimestampOverlay {
+			if options.TimestampOverlay && !nativeTimestamp {
 				img = applyTimestampOverlay(img, captureTimes[index].Format(options.TimestampFormat), overlayFace)
 			}
 			if options.Watermark != "" {
@@ -926,7 +960,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if err != nil {
 				return fmt.Errorf("convert %s to RGB48: %w", frame.Image, err)
 			}
-			if !nativeSpatial {
+			if !nativeOutputFade {
 				fadeRGB48(rgb, fade.gain(index, rate))
 			}
 			if err := writer.AddFrame(rgb); err != nil {

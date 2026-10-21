@@ -1,11 +1,18 @@
-# Native SDR working-plane fade
+# Native SDR final-output fade
 
-The installed 7.5.5 render command places fade after temporal processing,
-sharpen/CAS, overlays and trim. For even SDR frames without overlays, Go now
-keeps the working YUV planes through fade and encoding. The standard profile,
-odd dimensions and timestamp/watermark combinations retain the RGB path.
+The installed 7.5.5 render command places final zscale range/color conversion
+before timestamp subtitles, trim and fade. The full command observations in
+`lrt-timestamp-style-7.5.5.json` establish this ordering. Native SDR output now
+uses the existing external encoder for fade after that final conversion,
+including the encoder pixel depth and chroma subsampling. No CGo library or
+additional native dependency is introduced.
 
-The fade is evaluated in pure Go after spatial filtering. Start and duration
+An earlier implementation applied fade to full-range working planes before
+zscale. Its isolated arithmetic tests passed, but its pipeline references had
+the same incorrect order. The recorded caller graphs exposed that mistake.
+The pipeline tests have been corrected; the following pure Go arithmetic is
+retained only as an isolated numerical reference in a `_test.go` file.
+Start and duration
 are truncated to microseconds, then rounded to the output frame clock. The remaining
 gain uses a 65535 numerator and integer division. An unchanged frame bypasses
 sample arithmetic. The 8/10-bit planar formats fade Y toward 16/64 and U/V
@@ -21,11 +28,11 @@ The 42 saved hashes in `lrt-native-fade-8.0.1.json` were measured with the
 installed bundled FFmpeg 8.0.1, not generated from Go output. They cover
 8/10-bit planes, 24, 30000/1001 and 2 fps, seven start/duration pairs, 41 frames
 per sequence, including sub-frame duration, microsecond truncation at half-frame boundaries and below-black/full-range codes. A positive duration truncated to zero microseconds uses the native default 25-frame ramp; an explicit CLI duration of zero still disables fade.
-The ordinary suite checks these references without an external executable.
+The ordinary suite checks these kernel references without an external executable.
 
 Live pipeline comparisons cover plain, sharpen/CAS and strong combined
 deflicker/denoise/airplane processing, plus both slow interpolation modes
-followed by 8-bit sharpen/CAS and fade. The strong case uses the measured
+followed by 8-bit sharpen/CAS, final color conversion and fade. The strong case uses the measured
 12-frame output after denoise latency and trim. Actual video comparisons
 cover all five paths with H.264, H.265 and ProRes HQ, both full and
 limited output ranges: 30 decoded videos and matching metadata.
@@ -38,7 +45,7 @@ test compares the storage value directly against bundled unsharp. The storage
 behavior is consistent with the official
 [unsharp implementation](https://github.com/FFmpeg/FFmpeg/blob/n8.0.1/libavfilter/vf_unsharp.c).
 
-This does not establish full licensed-application rendering parity. Overlay
+This does not establish full licensed-application rendering parity. Watermark
 fonts/layout, ICC/HDR, resizing and native threading differences remain
 separate work. Existing native preset timing still uses the native estimated
 duration; the new fade does not change scheduling or audio timing.

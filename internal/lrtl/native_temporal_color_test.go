@@ -235,6 +235,10 @@ func TestNativeTemporalActualVideos(t *testing.T) {
 }
 
 func verifyNativeFilteredVideos(t *testing.T, executable, dir string, flags []string, referenceGraph string) {
+	verifyNativeFinalVideos(t,executable,dir,flags,func(pix,videoRange string)string{return referenceGraph+",zscale=rangein=full:range="+videoRange+":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format="+pix})
+}
+
+func verifyNativeFinalVideos(t *testing.T, executable, dir string, flags []string, referenceGraph func(string,string)string) {
 	t.Helper()
 	for _, codec := range []string{"h264", "h265", "prores-hq"} {
 		for _, videoRange := range []string{"full", "limited"} {
@@ -258,7 +262,7 @@ func verifyNativeFilteredVideos(t *testing.T, executable, dir string, flags []st
 				}
 				markerCommand(t, append(args, flags...)...)
 				reference := filepath.Join(t.TempDir(), "reference"+suffix)
-				graph := referenceGraph + ",zscale=rangein=full:range=" + videoRange + ":matrixin=709:matrix=709:primariesin=709:primaries=709:transferin=709:transfer=709,format=" + pix
+				graph := referenceGraph(pix,videoRange)
 				args = []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
 				args = append(args, enc...)
 				metadata := "tv"

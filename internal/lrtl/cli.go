@@ -918,6 +918,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	lrtPreview := set.String("lrt-preview", "", "read existing LRT camera or visual preview cache")
 	timestampOverlay := set.Bool("timestamp-overlay", false, "burn each frame's EXIF/XMP capture time into the video")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used by --timestamp-overlay")
+	timestampStyle := set.String("timestamp-style", "standard", "timestamp drawing: standard or lrt-7.5.5 (FFmpeg/libass)")
+	timestampEvery := set.Int("timestamp-every", -1, "native timestamp interval in source frames (-1 uses native timestamp fps)")
 	watermark := set.String("watermark", "", "burn fixed text into every frame")
 	watermarkPosition := set.String("watermark-position", "bottom-left", "watermark position: top-left, top-right, bottom-left, bottom-right, or center")
 	motionBlurFrames := set.Int("motion-blur", 0, "blend adjacent frames and discard N warm-up output frames (0 off; 2, 3, 4, 5, 10, 15, 20)")
@@ -950,6 +952,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 		"--timestamp-format": true, "-timestamp-format": true,
+		"--timestamp-style": true, "-timestamp-style": true, "--timestamp-every": true, "-timestamp-every": true,
 		"--watermark": true, "-watermark": true,
 		"--watermark-position": true, "-watermark-position": true,
 		"--motion-blur": true, "-motion-blur": true,
@@ -998,14 +1001,21 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	}
 	deflickerEnabled := *deflicker
 	timestampOverlayEnabled := *timestampOverlay
+	timestampIntervalExplicit := false
 	set.Visit(func(parsed *flag.Flag) {
 		switch parsed.Name {
 		case "reference", "smooth", "deflicker-smoother", "passes", "constant":
 			deflickerEnabled = true
-		case "timestamp-format":
+		case "timestamp-format", "timestamp-style":
 			timestampOverlayEnabled = true
+		case "timestamp-every":
+			timestampOverlayEnabled = true
+			timestampIntervalExplicit = true
 		}
 	})
+	if timestampIntervalExplicit && !strings.EqualFold(strings.TrimSpace(*timestampStyle), "lrt-7.5.5") {
+		return reportError(stderr, fmt.Errorf("--timestamp-every requires --timestamp-style lrt-7.5.5"))
+	}
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
@@ -1068,6 +1078,8 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 		LRTPreview:            *lrtPreview,
 		TimestampOverlay:      timestampOverlayEnabled,
 		TimestampFormat:       *timestampFormat,
+		TimestampStyle:        *timestampStyle,
+		TimestampEvery:        *timestampEvery,
 		Watermark:             *watermark,
 		WatermarkPosition:     strings.ToLower(strings.TrimSpace(*watermarkPosition)),
 		MotionBlurFrames:      *motionBlurFrames,

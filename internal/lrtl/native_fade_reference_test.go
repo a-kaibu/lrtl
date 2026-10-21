@@ -7,7 +7,8 @@ import (
 	"strings"
 )
 
-// Native fade operates on final working planes, after spatial filtering.
+// Numerical reference for the isolated native fade kernel. Production runs
+// fade after final encoder color conversion in FFmpeg.
 // Its time options are parsed at microsecond precision and rescaled to frames.
 func nativeFadeFactor(fade videoFade, index int, rate frameRate) int64 {
 	if fade.duration <= 0 {

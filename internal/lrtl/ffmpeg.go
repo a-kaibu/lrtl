@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -36,9 +37,6 @@ type ffmpegFrameWriter struct {
 	spatial      *nativeSpatialFilter
 	workingYUV   bool
 	workingDepth int
-	fade         videoFade
-	rate         frameRate
-	frameIndex   int
 }
 
 func resolveFFmpeg(path string) (string, error) {
@@ -99,6 +97,7 @@ type ffmpegFrameEncoding struct {
 	spatial      *nativeSpatialFilter
 	workingYUV   bool
 	workingDepth int
+	timestamp    nativeTimestampBurn
 }
 
 func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string, encoding ...ffmpegFrameEncoding) (*ffmpegFrameWriter, error) {
@@ -142,6 +141,43 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			inputFormat = "yuv444p"
 		}
 		colorFilter = nativeSDRPlanarColorFilter
+	}
+	directory := ""
+	captionFilter := ""
+	if len(encoding) > 0 && encoding[0].timestamp.file != "" {
+		if spatial == nil {
+			return nil, fmt.Errorf("native timestamp burn requires native planar input")
+		}
+		caption, err := encoding[0].timestamp.filter()
+		if err != nil {
+			return nil, err
+		}
+		captionFilter = "," + caption
+		path, err := filepath.Abs(encoding[0].timestamp.file)
+		if err != nil {
+			return nil, err
+		}
+		directory = filepath.Dir(path)
+		output, err = filepath.Abs(output)
+		if err != nil {
+			return nil, err
+		}
+		executable, err = filepath.Abs(executable)
+		if err != nil {
+			return nil, err
+		}
+		if audioPath != "" {
+			audioPath, err = filepath.Abs(audioPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if nativeColor {
+		baseFilter := colorFilter
+		colorFilter = func(videoRange, pixelFormat string) string {
+			return baseFilter(videoRange, pixelFormat) + captionFilter + nativeEncoderFadeFilter(fade)
+		}
 	}
 	arguments := []string{
 		"-hide_banner", "-loglevel", "error", "-nostats", "-n",
@@ -239,14 +275,12 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	}
 	arguments = append(arguments, "-movflags", movFlags, "-f", container, output)
 	command := exec.Command(executable, arguments...)
+	command.Dir = directory
 	input, err := command.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("open FFmpeg input: %w", err)
 	}
 	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}, spatial: spatial, workingYUV: workingYUV, workingDepth: workingDepth}
-	if spatial != nil {
-		writer.fade, writer.rate = fade, rate
-	}
 	command.Stderr = &writer.stderr
 	if err := command.Start(); err != nil {
 		_ = input.Close()
@@ -269,9 +303,7 @@ func (writer *ffmpegFrameWriter) AddFrame(frame []byte) error {
 		if err != nil {
 			return err
 		}
-		fadeNativePlanes(frame, writer.workingDepth, nativeFadeFactor(writer.fade, writer.frameIndex, writer.rate))
 	}
-	writer.frameIndex++
 	for len(frame) > 0 {
 		written, err := writer.input.Write(frame)
 		if err != nil {

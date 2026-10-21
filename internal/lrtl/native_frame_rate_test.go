@@ -457,7 +457,7 @@ func TestNativeFrameRateActualAudioAndFade(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			graph := "scale=iw:ih:out_range=full:flags=lanczos,format=yuv444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709," + tc.Fade + "," + nativeSDRPlanarColorFilter("limited", "yuv420p") + ",extractplanes=y"
+			graph := "scale=iw:ih:out_range=full:flags=lanczos,format=yuv444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709," + nativeSDRPlanarColorFilter("limited", "yuv420p") + "," + tc.Fade + ",extractplanes=y"
 			wantY := nativeColorCommand(t, ffmpeg, bytes.Repeat(rgb, 15), "-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-f", "rawvideo", "-pixel_format", "rgb48le", "-video_size", "64x32", "-framerate", rate.String(), "-i", "pipe:0", "-vf", graph, "-f", "rawvideo", "pipe:1")
 			if !bytes.Equal(y, wantY) {
 				t.Fatalf("video fade differs from recorded native fps clock: hashes%x/%x", sha256.Sum256(y), sha256.Sum256(wantY))
