@@ -140,7 +140,16 @@ func cropNativeEvenFrame(img image.Image, orientation uint16) image.Image {
 	case 8:
 		top = dy
 	}
-	return copyFrameRectangle(img, image.Rect(bounds.Min.X+left, bounds.Min.Y+top, bounds.Min.X+left+w-dx, bounds.Min.Y+top+h-dy))
+	rectangle := image.Rect(bounds.Min.X+left, bounds.Min.Y+top, bounds.Min.X+left+w-dx, bounds.Min.Y+top+h-dy)
+	// Keep JPEG component planes available to the native scaler when cropping
+	// the odd bottom/right edge before its initial color conversion.
+	switch source := img.(type) {
+	case *image.YCbCr:
+		return source.SubImage(rectangle)
+	case *image.Gray:
+		return source.SubImage(rectangle)
+	}
+	return copyFrameRectangle(img, rectangle)
 }
 
 func applyNativeRenderGeometry(img image.Image, orientation uint16, plan nativeRenderGeometry) image.Image {

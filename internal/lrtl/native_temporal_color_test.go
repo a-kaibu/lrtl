@@ -270,7 +270,7 @@ func verifyNativeFinalVideos(t *testing.T, executable, dir string, flags []strin
 				markerCommand(t, append(args, flags...)...)
 				reference := filepath.Join(t.TempDir(), "reference"+suffix)
 				graph := referenceGraph(pix, videoRange)
-				args = []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", inputPattern, "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
+				args = []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-noautorotate", "-display_rotation:v", "0", "-i", inputPattern, "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
 				enc = append(enc, nativeSDRReferenceEncoderMetadata(codec, videoRange)...)
 				args = append(args, enc...)
 				metadata := "tv"

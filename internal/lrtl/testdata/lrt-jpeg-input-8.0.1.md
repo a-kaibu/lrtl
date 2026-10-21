@@ -59,8 +59,8 @@ scaler convention. Gray JPEG uses replicated luma and neutral chroma.
 
 ## Scope still open
 
-The exact render comparisons use identity geometry and prepared JPEG samples,
-with native output color and native overlays. Arbitrary resize/crop/rotation,
+The original render comparisons use identity geometry and prepared JPEG samples,
+with native output color and native overlays. Additional fixed-point resize/crop/rotation measurements are documented in [native scaling](lrt-native-scale-8.0.1.md). Arbitrary unmeasured geometry,
 Go XMP pixel adjustments, standard Go overlays, CMYK/RGB JPEG color handling,
 12-bit/lossless JPEG and full ICC color management are not established by these
 tests. Odd-dimension kernel tests do not establish the complete odd-output

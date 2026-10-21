@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
-	"math"
 
 	"github.com/a-kaibu/lrtl/internal/nativejpeg"
 )
@@ -26,87 +25,7 @@ type nativeChromaTap struct {
 // Quantize normalized Lanczos weights with an error carried between taps.
 // Border samples are combined before quantization, as in the measured scaler.
 func nativeChromaWeights(source, target, one int) []nativeChromaTap {
-	result := make([]nativeChromaTap, target)
-	if source == target {
-		for i := range result {
-			result[i] = nativeChromaTap{i, []int64{int64(one)}}
-		}
-		return result
-	}
-	count := min(7, max(1, source-2))
-	step := (int64(source)*65536 + int64(target/2)) / int64(target)
-	kernels := make([]nativeChromaTap, target)
-	for x := range kernels {
-		center := step - 65536 + int64(x)*2*step
-		start := int((center - int64(count-2)*65536) / 131072)
-		raw := make([]int64, count)
-		for j := range raw {
-			distance := math.Abs(float64(int64(start+j)*131072-center)) / 131072
-			weight := 0.0
-			if distance == 0 {
-				weight = 1
-			} else if distance <= 3 {
-				weight = math.Sin(distance*math.Pi) * math.Sin(distance*math.Pi/3) / (distance * distance * math.Pi * math.Pi / 3)
-			}
-			raw[j] = int64(weight * float64(int64(1)<<54))
-		}
-		kernels[x] = nativeChromaTap{start, raw}
-	}
-	// Remove tiny leading taps while keeping source positions monotonic.
-	minimum := 0
-	const cutoff = int64(1<<54) / 500
-	for x := len(kernels) - 1; x >= 0; x-- {
-		kernel := &kernels[x]
-		removed := int64(0)
-		for j := 0; j < count; j++ {
-			removed += absNativeChroma(kernel.weights[0])
-			if removed > cutoff || x+1 < len(kernels) && kernel.position >= kernels[x+1].position {
-				break
-			}
-			copy(kernel.weights, kernel.weights[1:])
-			kernel.weights[count-1] = 0
-			kernel.position++
-		}
-		length := count
-		removed = 0
-		for j := count - 1; j > 0; j-- {
-			removed += absNativeChroma(kernel.weights[j])
-			if removed > cutoff {
-				break
-			}
-			length--
-		}
-		minimum = max(minimum, length)
-	}
-	for x := range result {
-		kernel := kernels[x]
-		start := kernel.position
-		left, right := max(0, min(source-1, start)), max(0, min(source-1, start+minimum-1))
-		raw := make([]int64, right-left+1)
-		for j := 0; j < minimum; j++ {
-			raw[max(0, min(source-1, start+j))-left] += kernel.weights[j]
-		}
-		sum := int64(0)
-		for _, v := range raw {
-			sum += v
-		}
-		divisor := (sum + int64(one)/2) / int64(one)
-		if divisor == 0 {
-			divisor = 1
-		}
-		error := int64(0)
-		for i := range raw {
-			value := raw[i] + error
-			quantized := (value + divisor/2) / divisor
-			if value < 0 {
-				quantized = -((-value + divisor/2) / divisor)
-			}
-			raw[i] = quantized
-			error = value - quantized*divisor
-		}
-		result[x] = nativeChromaTap{left, raw}
-	}
-	return result
+	return nativeScaleWeights(source, target, one, 1)
 }
 
 func absNativeChroma(value int64) int64 {

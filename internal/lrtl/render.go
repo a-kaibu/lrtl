@@ -757,8 +757,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if !supportedRasterFormat(format) {
 				return nil, fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 			}
-			img = applyEXIFOrientation(img, orientation)
-			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+			nativeSource := nativeTemporal && options.NativeGeometry && !options.ApplyXMPBasic && !options.ApplyXMPExposure && !options.ApplyXMPCrop && !options.Deflicker
+			if !nativeSource {
+				img = applyEXIFOrientation(img, orientation)
+			}
+			if !nativeSource && (img.Bounds().Dx() != width || img.Bounds().Dy() != height) {
 				return nil, fmt.Errorf("inconsistent oriented dimensions in %s", frame.Image)
 			}
 			if xmpBasics != nil {
@@ -780,6 +783,22 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if gain != 1 {
 				img = applyExposureGainFrame(img, gain)
 			}
+			if nativeTemporal {
+				if options.NativeGeometry {
+					region := nativeGeometry.crop
+					if outputDeflickerEnabled {
+						region = image.Rect(0, 0, deflickerWidth, deflickerHeight)
+					}
+					if nativeSource {
+						return nativeScaleOrientedWorkingFrame(img, format, orientation, nativeGeometry.scaleWidth, nativeGeometry.scaleHeight, region)
+					}
+					return nativeScaleImageWorkingFrame(cropNativeEvenFrame(img, orientation), format, nativeGeometry.scaleWidth, nativeGeometry.scaleHeight, region)
+				}
+				if options.AspectRatio > 0 {
+					img = cropImageToAspectAtPosition(img, options.AspectRatio, cropPosition)
+				}
+				return nativeScaleImageWorkingFrame(img, format, outputWidth, outputHeight, image.Rect(0, 0, outputWidth, outputHeight))
+			}
 			if options.NativeGeometry {
 				if outputDeflickerEnabled {
 					img = resizeFrame(cropNativeEvenFrame(img, orientation), deflickerWidth, deflickerHeight)
@@ -793,9 +812,6 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				if resizeFrames {
 					img = resizeFrame(img, outputWidth, outputHeight)
 				}
-			}
-			if nativeTemporal {
-				return nativeImageWorkingFrame(img, format)
 			}
 			rgb, err := imageRGB48(img)
 			if err != nil {
@@ -953,8 +969,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if !supportedRasterFormat(format) {
 				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 			}
-			img = applyEXIFOrientation(img, orientation)
-			if img.Bounds().Dx() != width || img.Bounds().Dy() != height {
+			nativeSource := nativeSpatial && options.NativeGeometry && !options.ApplyXMPBasic && !options.ApplyXMPExposure && !options.ApplyXMPCrop && !options.Deflicker
+			if !nativeSource {
+				img = applyEXIFOrientation(img, orientation)
+			}
+			if !nativeSource && (img.Bounds().Dx() != width || img.Bounds().Dy() != height) {
 				return fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 			}
 			if xmpBasics != nil {
@@ -976,7 +995,24 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if applyXMP || options.Deflicker {
 				img = applyExposureGainFrame(img, gain)
 			}
-			if options.NativeGeometry {
+			var working []byte
+			if nativeSpatial {
+				if options.NativeGeometry {
+					if nativeSource {
+						working, err = nativeScaleOrientedWorkingFrame(img, format, orientation, nativeGeometry.scaleWidth, nativeGeometry.scaleHeight, nativeGeometry.crop)
+					} else {
+						working, err = nativeScaleImageWorkingFrame(cropNativeEvenFrame(img, orientation), format, nativeGeometry.scaleWidth, nativeGeometry.scaleHeight, nativeGeometry.crop)
+					}
+				} else {
+					if options.AspectRatio > 0 {
+						img = cropImageToAspectAtPosition(img, options.AspectRatio, cropPosition)
+					}
+					working, err = nativeScaleImageWorkingFrame(img, format, outputWidth, outputHeight, image.Rect(0, 0, outputWidth, outputHeight))
+				}
+				if err != nil {
+					return fmt.Errorf("native scale %s: %w", frame.Image, err)
+				}
+			} else if options.NativeGeometry {
 				img = applyNativeRenderGeometry(img, orientation, nativeGeometry)
 			} else {
 				if options.AspectRatio > 0 {
@@ -1000,7 +1036,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			}
 			var rgb []byte
 			if nativeSpatial {
-				rgb, err = nativeImageWorkingFrame(img, format)
+				rgb = working
 			} else {
 				rgb, err = imageRGB48(img)
 			}
