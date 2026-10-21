@@ -1265,6 +1265,8 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	airplanes := set.Int("remove-airplanes", 0, "match the video's light-trail removal and frame trim (0-3)")
 	interpolation := set.Int("interpolation", 0, "match video interpolation: 0 off, 1 blend, 2 motion compensated")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout used for subtitle text")
+	profile := set.String("profile", "standard", "subtitle timing: standard or lrt-7.5.5")
+	every := set.Int("every", -1, "native subtitle interval in source frames (-1 uses native timestamp fps)")
 	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
@@ -1276,16 +1278,31 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 		"--interpolation": true, "-interpolation": true,
 		"--lrt-render-preset": true, "-lrt-render-preset": true,
 		"--lrt-preset-name": true, "-lrt-preset-name": true,
+		"--profile": true, "-profile": true, "--every": true, "-every": true,
 	})); err != nil {
 		if help, code := finishFlagParse(set, err); help {
-			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--profile standard|lrt-7.5.5] [--every N] [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]")
 			return code
 		} else {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--profile standard|lrt-7.5.5] [--every N] [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]"))
+	}
+	if *profile != "standard" && *profile != "lrt-7.5.5" {
+		return reportError(stderr, fmt.Errorf("subtitle profile must be standard or lrt-7.5.5"))
+	}
+	if *profile == "standard" {
+		invalid := false
+		set.Visit(func(f *flag.Flag) {
+			if f.Name == "every" {
+				invalid = true
+			}
+		})
+		if invalid {
+			return reportError(stderr, fmt.Errorf("--every requires --profile lrt-7.5.5"))
+		}
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
@@ -1317,6 +1334,13 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	label := options.frameRateLabel()
+	if *profile == "lrt-7.5.5" {
+		if err := writeSequenceSubtitlesProfile(frames, *output, rate, label, actualSpeed, options.MotionBlurFrames, options.RemoveAirplanes, options.Interpolation, *timestampFormat, *overwrite, &nativeSubtitleOptions{every: *every}); err != nil {
+			return reportError(stderr, err)
+		}
+		fmt.Fprintf(stdout, "Wrote native timestamp subtitles for %d source frames: %s\n", len(frames), *output)
+		return 0
+	}
 	timeline, err := planInterpolatedVideoFrames(len(frames), actualSpeed, options.MotionBlurFrames, options.RemoveAirplanes, options.Interpolation, rate, label)
 	if err != nil {
 		return reportError(stderr, err)
