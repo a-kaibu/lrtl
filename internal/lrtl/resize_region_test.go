@@ -189,8 +189,25 @@ func TestResizeRegionLargePresetPipeline(t *testing.T) {
 		t.Fatalf("large-canvas small-output capture: bytes%d %v", len(data), err)
 	}
 	for i := 0; i < len(data); i += 2 {
+		// Installed FFmpeg RGB48 gray=12345 measures Y=193, U=V=511.
+		want := uint16(511)
+		if i < 6144*384*2 {
+			want = 193
+		}
+		if value := binary.LittleEndian.Uint16(data[i:]); value != want {
+			t.Fatalf("large native region changed the final YUV10 constant: %d want%d", value, want)
+		}
+	}
+	// Inspect the RGB48 destination separately: native output now converts to
+	// working YUV in Go before the encoder boundary.
+	markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "standard.mp4"), "--lrt-render-preset", path, "--output-color", "standard", "--ffmpeg", executable)
+	data, err = os.ReadFile(capture)
+	if err != nil || len(data) != 6144*384*6 {
+		t.Fatalf("RGB48 region capture: bytes%d %v", len(data), err)
+	}
+	for i := 0; i < len(data); i += 2 {
 		if value := binary.LittleEndian.Uint16(data[i:]); value != 12345 {
-			t.Fatalf("large native region lost16-bit constant: %d", value)
+			t.Fatalf("large region lost RGB16 precision: %d", value)
 		}
 	}
 	t.Run("actual-mp4", func(t *testing.T) {

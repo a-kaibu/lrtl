@@ -28,6 +28,14 @@ func TestNativeWatermarkMeasuredFilters(t *testing.T) {
 }
 
 func TestNativeWatermarkRecordedCallerVideos(t *testing.T) {
+	nativeWatermarkRecordedCallerVideos(t, false)
+}
+
+func TestNativeRGB8WatermarkRecordedCallerVideos(t *testing.T) {
+	nativeWatermarkRecordedCallerVideos(t, true)
+}
+
+func nativeWatermarkRecordedCallerVideos(t *testing.T, rgb8 bool) {
 	if _, err := nativeWatermarkFont(); err != nil {
 		t.Skip(err)
 	}
@@ -51,7 +59,12 @@ func TestNativeWatermarkRecordedCallerVideos(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Remove(name) })
-	dir := nativeWatermarkFixture(t, 17, 640, 320)
+	var dir string
+	if rgb8 {
+		dir = nativeRGB8Fixture(t, 17, 640, 320, "png")
+	} else {
+		dir = nativeWatermarkFixture(t, 17, 640, 320)
+	}
 	nativeTimestampReferenceSRT(t, name, 17, 1, 3)
 	for _, row := range rows {
 		t.Run(fmt.Sprint(row.Case), func(t *testing.T) {

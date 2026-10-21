@@ -89,14 +89,13 @@ existing-output preservation, failed-source temporary-file cleanup, and paths
 containing spaces, commas, apostrophes and Unicode. The pure Go filter builder
 is checked against all 105 observations and fuzzed.
 
-Exact pixel comparisons use opaque prepared RGB16 PNG images. An exploratory
-RGB8 PNG comparison found an initial conversion difference between the native
-RGB8 input path and Go's expansion to RGB16. That difference remains open;
-an isolated 64×32 RGB24 input (`R=x*20 mod 256`, `G=y*30 mod 256`, `B=80`)
-versus the same channels expanded by 257 to RGB48 differs in 4005/6144 working
-samples, maximum four 10-bit codes. Both FFmpeg scalar and native CPU selection
-give that result, before any overlay. These tests do not establish pixel
-equality for RGB8/JPEG inputs. Arbitrary
+The original 42 pixel comparisons use opaque prepared RGB16 PNG images.
+The initial RGB8 conversion difference found during those tests has since been
+fixed: [RGB8 input measurements](lrt-rgb8-input-8.0.1.md) cover all RGB8 triplets
+and another 72 videos, including 18 RGB8 watermark/timestamp/fade caller videos.
+An isolated 64×32 RGB24 input (`R=x*20 mod 256`, `G=y*30 mod 256`, `B=80`)
+previously differed in 4005/6144 working samples, up to four codes, when expanded
+to RGB48 first. Native JPEG decoding remains unverified. Arbitrary
 geometry, Camera Raw development and complete ICC color management also remain
 separate fidelity work. Native drawtext expressions and platform fonts retain
 their own rendering behavior; glyph availability is not guaranteed by a label.

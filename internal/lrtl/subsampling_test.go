@@ -103,7 +103,7 @@ func TestSubsamplingPresetCLIAndBatch(t *testing.T) {
 				if baseline == nil {
 					baseline = data
 				} else if !bytes.Equal(baseline, data) {
-					t.Fatal("output subsampling changed RGB48 source preparation")
+					t.Fatal("output subsampling changed working YUV preparation")
 				}
 				argsData, err := os.ReadFile(capture + ".json")
 				if err != nil {
@@ -115,7 +115,11 @@ func TestSubsamplingPresetCLIAndBatch(t *testing.T) {
 				}
 				format, _ := h26xPixelFormat(sampling)
 				joined := strings.Join(args, " ")
-				if !strings.Contains(joined, "-pix_fmt "+format) || !strings.Contains(joined, "-vf "+nativeSDRColorFilter(videoRange, format)) {
+				resolvedRange := videoRange
+				if resolvedRange == "auto" {
+					resolvedRange = "limited"
+				}
+				if !strings.Contains(joined, "-pix_fmt "+format) || !strings.Contains(joined, "-vf "+nativeSDRPlanarColorFilter(resolvedRange, format)) || !strings.Contains(joined, "-pixel_format yuv444p10le") {
 					t.Fatalf("wrong output format/range: %s", joined)
 				}
 				probe, err := os.ReadFile(capture + ".probe.json")

@@ -242,6 +242,11 @@ func verifyNativeFilteredVideos(t *testing.T, executable, dir string, flags []st
 
 func verifyNativeFinalVideos(t *testing.T, executable, dir string, flags []string, referenceGraph func(string, string) string) {
 	t.Helper()
+	sources, err := DiscoverSequence(dir)
+	if err != nil || len(sources) == 0 {
+		t.Fatalf("reference sequence: %v", err)
+	}
+	inputPattern := filepath.Join(dir, "frame%02d"+filepath.Ext(sources[0].Image))
 	for _, codec := range []string{"h264", "h265", "prores-hq"} {
 		for _, videoRange := range []string{"full", "limited"} {
 			t.Run(codec+"/"+videoRange, func(t *testing.T) {
@@ -265,7 +270,7 @@ func verifyNativeFinalVideos(t *testing.T, executable, dir string, flags []strin
 				markerCommand(t, append(args, flags...)...)
 				reference := filepath.Join(t.TempDir(), "reference"+suffix)
 				graph := referenceGraph(pix, videoRange)
-				args = []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", filepath.Join(dir, "frame%02d.png"), "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
+				args = []string{"-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", "24", "-i", inputPattern, "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-filter_complex", graph, "-an"}
 				enc = append(enc, nativeSDRReferenceEncoderMetadata(codec, videoRange)...)
 				args = append(args, enc...)
 				metadata := "tv"

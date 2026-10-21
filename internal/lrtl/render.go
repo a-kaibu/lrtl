@@ -274,10 +274,10 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	// there is no later RGB overlay. Other combinations retain the existing
 	// RGB path until those later stages also have a native planar implementation.
 	nativeSpatial := imageWriter == nil && outputColor == "lrt-7.5.5" &&
-		(options.OutputSharpen || options.OutputCAS || fade.duration > 0 || nativeTimestamp || nativeWatermark) && (!options.TimestampOverlay || nativeTimestamp) &&
+		(!options.TimestampOverlay || nativeTimestamp) &&
 		(options.Watermark == "" || nativeWatermark)
 	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
-		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
+		(speed != 1 || options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
 		(!options.TimestampOverlay || nativeTimestamp) && (options.Watermark == "" || nativeWatermark)
 	nativeWorkingDepth := 10
 	if options.Interpolation > 0 && speed < 1 {
@@ -697,7 +697,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		nativeSpatial = nativeSpatial && outputWidth%2 == 0 && outputHeight%2 == 0
 		if nativeSpatial {
 			encoding.spatial = &nativeSpatialFilter{outputWidth, outputHeight, options.OutputSharpen, options.OutputCAS}
-			encoding.workingYUV = nativeTemporal
+			encoding.workingYUV = true
 			if nativeTemporal {
 				encoding.workingDepth = nativeWorkingDepth
 			}
@@ -794,12 +794,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 					img = resizeFrame(img, outputWidth, outputHeight)
 				}
 			}
+			if nativeTemporal {
+				return nativeImageWorkingFrame(img, format)
+			}
 			rgb, err := imageRGB48(img)
 			if err != nil {
 				return nil, err
-			}
-			if nativeTemporal {
-				return nativeSDRWorkingFrame(rgb, img.Bounds().Dx(), img.Bounds().Dy())
 			}
 			return rgb, nil
 		}
@@ -998,7 +998,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if options.Watermark != "" && !nativeWatermark {
 				img = applyWatermarkOverlay(img, options.Watermark, options.WatermarkPosition, overlayFace)
 			}
-			rgb, err := imageRGB48(img)
+			var rgb []byte
+			if nativeSpatial {
+				rgb, err = nativeImageWorkingFrame(img, format)
+			} else {
+				rgb, err = imageRGB48(img)
+			}
 			if err != nil {
 				return fmt.Errorf("convert %s to RGB48: %w", frame.Image, err)
 			}

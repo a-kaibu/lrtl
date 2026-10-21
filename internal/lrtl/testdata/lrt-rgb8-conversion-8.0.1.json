@@ -1,0 +1,98 @@
+[
+  {
+    "Pattern": "grid",
+    "CPUFlags": "0",
+    "Hash": "117d5348f8aa0c26167fdc8b865e381ab4d0be648cee34cf6b500b059d2df54b",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "grid",
+    "CPUFlags": "native",
+    "Hash": "117d5348f8aa0c26167fdc8b865e381ab4d0be648cee34cf6b500b059d2df54b",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "random",
+    "CPUFlags": "0",
+    "Hash": "1280082ec83a9d00b2efc6395f69ff1f4e007455d01cfaf15e8a9fc3464ff2f8",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "random",
+    "CPUFlags": "native",
+    "Hash": "1280082ec83a9d00b2efc6395f69ff1f4e007455d01cfaf15e8a9fc3464ff2f8",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "red",
+    "CPUFlags": "0",
+    "Hash": "5fe7a96e66ab1c7bdb6eb2b9dae560ab4245bc5fe8d2bd576be6ff392e00aa9c",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "red",
+    "CPUFlags": "native",
+    "Hash": "5fe7a96e66ab1c7bdb6eb2b9dae560ab4245bc5fe8d2bd576be6ff392e00aa9c",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "green",
+    "CPUFlags": "0",
+    "Hash": "bd2b6faf187c94003b94f4edebdad36d5d0bcd379d39983d492fc9c6a68ddcbb",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "green",
+    "CPUFlags": "native",
+    "Hash": "bd2b6faf187c94003b94f4edebdad36d5d0bcd379d39983d492fc9c6a68ddcbb",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "blue",
+    "CPUFlags": "0",
+    "Hash": "9b67ccddebe15765b967bef073fca01966a3aeb4dfc4dedf46f3f6942202af74",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "blue",
+    "CPUFlags": "native",
+    "Hash": "9b67ccddebe15765b967bef073fca01966a3aeb4dfc4dedf46f3f6942202af74",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "gray",
+    "CPUFlags": "0",
+    "Hash": "0a5cfde1dcf5c96fa5f7cb2e3e06f21c646114e98e7fa9e515074bb055e327a6",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  },
+  {
+    "Pattern": "gray",
+    "CPUFlags": "native",
+    "Hash": "0a5cfde1dcf5c96fa5f7cb2e3e06f21c646114e98e7fa9e515074bb055e327a6",
+    "Width": 256,
+    "Height": 256,
+    "Bytes": 393216
+  }
+]
