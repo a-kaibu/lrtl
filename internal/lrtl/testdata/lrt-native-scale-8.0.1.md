@@ -93,8 +93,11 @@ separately. Targeted race checks, Go 1.23 tests, `go vet ./...`, and a
 
 ## Scope
 
+Additional Gray8/Gray16 PNG/TIFF input measurements are documented in
+[grayscale input](lrt-gray-input-8.0.1.md).
+
 These measurements establish the listed synthetic conditions. They do not
-establish all resolutions, TIFF variants, alpha/palette/gray PNG conversion,
+establish all resolutions, TIFF variants, alpha/palette PNG conversion,
 CMYK/RGB/12-bit JPEG, full ICC conversion, RAW/HDR development or odd-output
 encoding. Native preset rotation with Go XMP spatial/exposure/deflicker
 adjustments falls back to the existing image-space order. Literal CLI geometry

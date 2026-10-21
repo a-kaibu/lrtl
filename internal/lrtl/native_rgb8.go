@@ -9,8 +9,11 @@ func nativeImageWorkingFrame(img image.Image, format string) ([]byte, error) {
 	if source, ok := img.(*image.YCbCr); ok && format == "jpeg" {
 		return nativeJPEGWorkingFrame(source)
 	}
-	if source, ok := img.(*image.Gray); ok && format == "jpeg" {
-		return nativeJPEGGrayWorkingFrame(source)
+	if source, ok := img.(*image.Gray); ok && (format == "jpeg" || format == "png" || format == "tiff") {
+		return nativeGray8WorkingFrame(source)
+	}
+	if source, ok := img.(*image.Gray16); ok && (format == "png" || format == "tiff") {
+		return nativeGray16WorkingFrame(source)
 	}
 	rgb, err := imageRGB48(img)
 	if err != nil {

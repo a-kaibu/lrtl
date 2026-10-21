@@ -125,22 +125,3 @@ func nativeJPEGWorkingFrame(img *image.YCbCr) ([]byte, error) {
 	}
 	return working, nil
 }
-
-func nativeJPEGGrayWorkingFrame(img *image.Gray) ([]byte, error) {
-	bounds := img.Bounds()
-	w, h := bounds.Dx(), bounds.Dy()
-	if w <= 0 || h <= 0 || uint64(w)*uint64(h) > 64*1024*1024 {
-		return nil, fmt.Errorf("invalid native JPEG dimensions")
-	}
-	working := make([]byte, w*h*6)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			v := uint16(img.GrayAt(bounds.Min.X+x, bounds.Min.Y+y).Y)
-			pixel := working[(y*w+x)*6:]
-			binary.LittleEndian.PutUint16(pixel, v<<2|v>>6)
-			binary.LittleEndian.PutUint16(pixel[2:], 512)
-			binary.LittleEndian.PutUint16(pixel[4:], 512)
-		}
-	}
-	return working, nil
-}

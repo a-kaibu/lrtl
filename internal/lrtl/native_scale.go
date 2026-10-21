@@ -30,14 +30,20 @@ func nativeScaleImageWorkingFrame(img image.Image, format string, targetW, targe
 		return cropOutputRGB48(working, w, region), nil
 	}
 	ha, va := nativeScaleAlignment()
-	if format == "jpeg" {
+	if format == "jpeg" || format == "png" || format == "tiff" {
 		switch source := img.(type) {
 		case *image.YCbCr:
-			return nativeScaleJPEGWorkingFrame(source, targetW, targetH, region, ha, va)
+			if format == "jpeg" {
+				return nativeScaleJPEGWorkingFrame(source, targetW, targetH, region, ha, va)
+			}
 		case *image.Gray:
 			bounds := source.Bounds()
 			plane := nativeScaleBytePlane{source.Pix, source.Stride, w, h, source.PixOffset(bounds.Min.X, bounds.Min.Y)}
 			return nativeScaleBytePlanes([3]nativeScaleBytePlane{plane, {}, {}}, targetW, targetH, region, ha, va)
+		case *image.Gray16:
+			if format != "jpeg" {
+				return nativeScaleGray16WorkingFrame(source, targetW, targetH, region, ha, va)
+			}
 		}
 	}
 	rgb, err := imageRGB48(img)

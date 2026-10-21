@@ -189,8 +189,8 @@ func TestResizeRegionLargePresetPipeline(t *testing.T) {
 		t.Fatalf("large-canvas small-output capture: bytes%d %v", len(data), err)
 	}
 	for i := 0; i < len(data); i += 2 {
-		// Installed FFmpeg RGB48 gray=12345 measures Y=193, U=V=511.
-		want := uint16(511)
+		// Installed FFmpeg gray16=12345 measures Y=193, U=V=512.
+		want := uint16(512)
 		if i < 6144*384*2 {
 			want = 193
 		}

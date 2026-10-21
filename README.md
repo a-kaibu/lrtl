@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- ネイティブ経路のPNG／TIFFグレー入力を、RGBを経由せず処理するようにしました。Gray8のビット拡張、Gray16の等倍ディザと拡縮時の丸めを純Goで再現します。16-bit全65,536値×ディザ64位置を含む72保存参照と、回転・クロップ・時間フィルターを含む192動画で比較しました。[測定範囲と残る差](internal/lrtl/testdata/lrt-gray-input-8.0.1.md)を参照してください。
+
 - ネイティブ経路のリサイズを、純Goの固定小数点LanczosとRGB8／RGB16／JPEGそれぞれの色変換へ対応させました。保存プリセットでは本体と同じ「偶数端クロップ→拡縮→YUV回転→最終クロップ」の順を使います。本体48グラフ、保存参照144条件、通常CPU／スカラー84比較と、フィルターを含む324動画で検査しました。[測定範囲・再実行方法・残る差](internal/lrtl/testdata/lrt-native-scale-8.0.1.md)を参照してください。
 
 - 偶数寸法のネイティブ経路で、通常／プログレッシブJPEGを純Goで本体に近い復号・YUV入力へ対応させました。YCbCrの4:4:4／4:2:2／4:2:0とグレースケール、リスタートマーカー付き32素材を付属FFmpegと比較し、フィルター・透かし・字幕・フェードを含む180動画も比較しました。Go標準デコーダーのBSD表記を保持し、独立したIDCT丸め・色差拡大を実装しています。[対応条件と残る差](internal/lrtl/testdata/lrt-jpeg-input-8.0.1.md)を参照してください。リサイズ・回転は上記の追加範囲を検査し、完全な色管理は引き続き未達です。
@@ -195,7 +197,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 動画ノイズ除去 | 4段階の時間・空間ノイズ除去 | `render --denoise 1..4`と保存済み`denoise`／`denoiseLevel`に対応。純Goの時間平均とウェーブレット、最強段階の点状ノイズ前処理。速度変更・Motion Blurより前に適用。354件の平面/連番観測と深い変換の全出力ハッシュを比較。RGB/YUV変換は独自近似。本体の小画像SIMD処理には差があり、色管理の完全一致は未確認 | 一部 |
 | レンダー時のLuma/Chroma Deflicker | 輝度・色差の時間方向の補正 | `--output-deflicker-luma`／`--output-deflicker-chroma`と保存済み`deflickerLuma`／`deflickerChroma`に対応。純Goの10枚パワー平均、短い連番と末尾の挙動を288ケース・686,556画素で比較。実動画・バッチ・処理順をテスト。RGB/YUV変換と本体全体の出力一致は未確認 | 一部 |
 | 飛行機の光跡除去 | 時間中央値による一時的な光跡の抑制 | `render --remove-airplanes 1..3`と保存済み`removeAirplanes`／`removeAirplanesLevel`に対応。弱・中は3枚、強は5枚の中央値。中・強の輝度・ハイライト・色差制限も実装。速度変更・Motion Blur、字幕・音声・フェードの時間計算、バッチをテスト。本体の生成ヘルパーと呼び出し式から得た観測との比較で、色管理・全アプリ出力の一致は未確認 | 一部 |
-| 出力時リサイズ | レンダー解像度へのLanczos拡大縮小 | 純GoのLanczos3へ変更し、画像の端へ重みを折り返す。16-bit画素とアルファを保持。同梱FFmpegの16-bitグレー24ケース・16,338画素でRMSEを旧方式の約980から約44へ削減。プリセット読込は本体480件の寸法に一致し、最終領域だけを計算して大きな中間画像を作らない。偶数のネイティブ経路に固定小数点RGB8/RGB16/JPEG処理を追加し、144保存参照と324動画で拡縮・回転・クロップを比較。全形式・全寸法の一致は未確認 | 一部 |
+| 出力時リサイズ | レンダー解像度へのLanczos拡大縮小 | 純GoのLanczos3へ変更し、画像の端へ重みを折り返す。16-bit画素とアルファを保持。同梱FFmpegの16-bitグレー24ケース・16,338画素でRMSEを旧方式の約980から約44へ削減。プリセット読込は本体480件の寸法に一致し、最終領域だけを計算して大きな中間画像を作らない。偶数のネイティブ経路に固定小数点RGB8/RGB16/JPEG処理を追加し、144保存参照と324動画で拡縮・回転・クロップを比較。PNG/TIFFグレーも72保存参照・192動画で追加比較。全形式・全寸法の一致は未確認 | 一部 |
 | クロップ位置 | レンダー時の切り出し位置 | `render --crop-position 0..100`で左／上から右／下へ指定。50は従来の中央。保存プリセットの寸法処理と通常の`--aspect`の両方に対応し、本体288件の矩形と比較。AVI・MP4・Motion Blur・バッチ・保持テスト済み。保存JSONの位置フィールドは見つかっておらず自動読込は行わない | 一部 |
 | ライセンス制限 | 評価版/Private/Proで枚数、コーデック、解像度、商用利用条件が異なる | MIT OSS。機能別ライセンスゲートなし | 対象外 |
 
@@ -595,7 +597,7 @@ LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分�
 
 通常SDRプロファイルでシャープ／CASを指定し、出力寸法が偶数、字幕・透かしなしの場合、Goで本体と同じ固定小数点RGB16→YUV10変換を行い、シャープ→CASの結果をYUVのままエンコーダーへ渡します。RGBへ差分を戻す従来経路で発生した色差クリップを避けます。`standard`、奇数寸法、標準スタイルの字幕・透かし併用は従来のRGB経路です。本体スタイルの字幕・透かしはYUV経路を維持します。
 
-元の実動画比較は等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。RGB8のPNG／TIFFも初段変換と72動画で追加比較しています。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、標準スタイルの字幕・透かしがなく偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間では補間時に8-bitへ切り替え、後段も8-bitのYUVのまま処理します。[低速補間の測定記録](internal/lrtl/testdata/lrt-native-slow-color-7.5.5.md)を参照してください。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、最強併用で以前残っていた1成分・2段階の差は、[AVX2/FMAの演算対応](internal/lrtl/testdata/lrt-gaussian-arithmetic-7.5.5.md)で解消しました。RGB8/RGB16/JPEGの拡縮・回転は[追加測定](internal/lrtl/testdata/lrt-native-scale-8.0.1.md)の範囲で比較済みです。その他の入力形式、全寸法・全フィルターの組合せ、ICCを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
+元の実動画比較は等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。RGB8のPNG／TIFFも初段変換と72動画で追加比較しています。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、標準スタイルの字幕・透かしがなく偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間では補間時に8-bitへ切り替え、後段も8-bitのYUVのまま処理します。[低速補間の測定記録](internal/lrtl/testdata/lrt-native-slow-color-7.5.5.md)を参照してください。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、最強併用で以前残っていた1成分・2段階の差は、[AVX2/FMAの演算対応](internal/lrtl/testdata/lrt-gaussian-arithmetic-7.5.5.md)で解消しました。RGB8/RGB16/JPEGの拡縮・回転は[追加測定](internal/lrtl/testdata/lrt-native-scale-8.0.1.md)の範囲で比較済みです。PNG/TIFFグレーは[追加の72条件・192動画](internal/lrtl/testdata/lrt-gray-input-8.0.1.md)で比較済みです。その他の入力形式、全寸法・全フィルターの組合せ、ICCを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
 
 ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告されず、fullの10-bit端点も4〜1019へクリップされました。limitedが一般的な用途に適します。H.264/H.265/DNxHRではfull／limitedのタグと実際の輝度値を確認しています。AVIはfull-range JPEGのためauto／fullを受け付け、limited指定は保存前にエラーにします。
 
@@ -1589,7 +1591,7 @@ go test ./internal/lrtl -run '^TestGeneratedMaskResourcesAdobeParser$' -count=1 
 
 Goの機能追加・修正では、数値の期待値、境界条件、異常入力、既存XMPの保持とバックアップを回帰テストで確認します。数値テストは手計算や独立した参照値を使い、実装の計算をそのまま複製して期待値にはしません。変更後は以下のテスト・静的解析・ビルドを実行します。GitHub ActionsもWindows/Linuxで同じ3項目を実行します。
 
-現在の自動テストはXMP読み書き・補間、キーフレーム、Preview EV、Deflicker、MJPEG AVI生成などを対象としています。平滑化単体はLRT 7.5.5の実測値53ケース、Deflicker計算は108ケースと比較済みです。後者は3種類のXMP保存形式へ適用した324ケースも確認し、CLI保存からAVIの復号画素が変わることとリセットで元に戻ることをテストしています。一方、LRTが実際に出力した一連のXMPとの数値比較、ブラウザーのGUI操作、外部FFmpeg/DNGLabを含む処理全体の検証は未整備です。ビルド成功だけでは動作確認済みとしません。
+現在の自動テストはXMP読み書き・補間、キーフレーム、Preview EV、Deflicker、MJPEG AVI生成などを対象としています。平滑化単体はLRT 7.5.5の実測値53ケース、Deflicker計算は108ケースと比較済みです。後者は3種類のXMP保存形式へ適用した324ケースも確認し、CLI保存からAVIの復号画素が変わることとリセットで元に戻ることをテストしています。FFmpegは各測定条件で動画の復号画素・フレーム数・色タグまで比較し、再実行方法を個別の測定記録に載せています。一方、本体が一連の処理で保存したXMP全体との一致、Camera Raw/Lightroom現像との画素一致、外部バックエンドの全入力・全設定の組合せは未検証です。ビルド成功だけでは動作確認済みとしません。
 
 ```powershell
 go test ./...

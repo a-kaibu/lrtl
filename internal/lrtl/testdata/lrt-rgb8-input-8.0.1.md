@@ -57,12 +57,14 @@ Native JPEG decoding is now covered separately in
 [JPEG input measurements](lrt-jpeg-input-8.0.1.md); the RGB8 tests here remain
 specific to the RGB input quantizer.
 
-This establishes the unscaled, opaque truecolor RGB8 input conversion and the
-listed processing combinations. It does not establish native JPEG decoding,
-grayscale/palette/alpha input equivalence, odd-sized output, arbitrary geometry/resize phase,
-Camera Raw development, or complete ICC color management. Those paths retain
-their existing approximations. Standard Go overlays also retain their existing
-RGB processing; use native overlay styles for the measured planar path.
+These measurements establish the unscaled, opaque truecolor RGB8 conversion
+and the listed processing combinations. Separate measurements now cover
+[JPEG input](lrt-jpeg-input-8.0.1.md),
+[fixed-point scaling](lrt-native-scale-8.0.1.md), and
+[Gray8/Gray16 PNG/TIFF](lrt-gray-input-8.0.1.md). Palette/alpha equivalence,
+odd-output encoding, Camera Raw development and complete ICC conversion
+remain unestablished. Standard Go overlays retain their existing RGB
+processing; use native overlay styles for the measured planar path.
 
 ```powershell
 $env:LRTL_COLOR_FFMPEG='C:\Program Files\LRTimelapse 7\ffmpeg.exe'
