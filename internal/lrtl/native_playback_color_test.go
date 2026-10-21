@@ -40,8 +40,12 @@ func nativePlaybackCLI(tc nativePlaybackCase) []string {
 	return append(nativeTemporalCLI(tc.temporal), "--motion-blur", strconv.Itoa(tc.blur), "--interpolation", strconv.Itoa(tc.mode), "--speed", strconv.FormatFloat(tc.speed, 'f', -1, 64))
 }
 
-func nativePlaybackReferenceGraph(t *testing.T, tc nativePlaybackCase) string {
+func nativePlaybackReferenceGraph(t *testing.T, tc nativePlaybackCase, sourceCounts ...int) string {
 	t.Helper()
+	sourceCount := 41
+	if len(sourceCounts) > 0 {
+		sourceCount = sourceCounts[0]
+	}
 	graph := nativeTemporalReferenceFilters(t, tc.temporal)
 	var rows []struct {
 		FPS    string
@@ -79,7 +83,7 @@ func nativePlaybackReferenceGraph(t *testing.T, tc nativePlaybackCase) string {
 		tail = 1
 	}
 	if head > 0 || tail > 0 {
-		graph += fmt.Sprintf(",trim=start_frame=%d:end_frame=%d,setpts=PTS-STARTPTS", head, int(float32(41)/float32(tc.speed))-tail)
+		graph += fmt.Sprintf(",trim=start_frame=%d:end_frame=%d,setpts=PTS-STARTPTS", head, int(float32(sourceCount)/float32(tc.speed))-tail)
 	}
 	return graph
 }
@@ -230,7 +234,7 @@ func TestNativePlaybackPresetBatchFallbackAndFailure(t *testing.T) {
 	if !bytes.Equal(want, denoiseRead(t, capture)) {
 		t.Fatal("native playback batch changed planes")
 	}
-	for _, extra := range [][]string{{"--interpolation", "1", "--speed", ".5"}, {"--interpolation", "2", "--speed", ".5"}, {"--watermark", "TEST"}, {"--fade-out", "1"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
+	for _, extra := range [][]string{{"--watermark", "TEST"}, {"--fade-out", "1"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
 		args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "fallback.mp4"), "--output-color", "lrt-7.5.5", "--ffmpeg", executable, "--motion-blur", "3"}
 		markerCommand(t, append(args, extra...)...)
 		var flags []string

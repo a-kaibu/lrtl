@@ -231,7 +231,11 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		options.Watermark == "" && fade.duration == 0
 	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
 		(options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
-		(options.Interpolation == 0 || speed >= 1) && !options.TimestampOverlay && options.Watermark == "" && fade.duration == 0
+		!options.TimestampOverlay && options.Watermark == "" && fade.duration == 0
+	nativeWorkingDepth := 10
+	if options.Interpolation > 0 && speed < 1 {
+		nativeWorkingDepth = 8
+	}
 	if options.Quality < 1 || options.Quality > 100 {
 		return fmt.Errorf("JPEG quality must be between 1 and 100: %d", options.Quality)
 	}
@@ -618,6 +622,9 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		if nativeSpatial {
 			encoding.spatial = &nativeSpatialFilter{outputWidth, outputHeight, options.OutputSharpen, options.OutputCAS}
 			encoding.workingYUV = nativeTemporal
+			if nativeTemporal {
+				encoding.workingDepth = nativeWorkingDepth
+			}
 		}
 		writer, err = newFFmpegFrameWriter(ffmpegPath, tempPath, strings.TrimPrefix(outputExtension, "."), options.Codec, outputWidth, outputHeight, rate, outputCount, options.CRF, options.Preset, options.AudioPath, fade, videoRange, timing.audioDuration, options.Subsampling, encoding)
 		if err != nil {
@@ -782,7 +789,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			} else {
 				var blendErr error
 				if nativeTemporal {
-					rgb, blendErr = weightedWorkingFrames(blendWindow, weights)
+					rgb, blendErr = weightedWorkingFramesDepth(blendWindow, weights, nativeWorkingDepth)
 				} else {
 					rgb, blendErr = weightedRGB48Frames(blendWindow, weights)
 				}

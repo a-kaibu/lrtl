@@ -211,10 +211,18 @@ func (p *playbackFrameStream) sample(target int) (source, alpha int) {
 }
 
 func quantizeInterpolationPlane(plane []uint16, width int) []byte {
+	return quantizeInterpolationPlaneRange(plane, width, false)
+}
+
+func quantizeInterpolationPlaneRange(plane []uint16, width int, fullLuma bool) []byte {
 	output := make([]byte, len(plane))
 	phases := [2][2]int{{1, 2}, {3, 0}}
 	for i, v := range plane {
-		output[i] = byte(min(255, (int(v)+phases[(i/width)%2][(i%width)%2])/4))
+		value := int(v)
+		if fullLuma {
+			value -= value >> 8
+		}
+		output[i] = byte(min(255, (value+phases[(i/width)%2][(i%width)%2])/4))
 	}
 	return output
 }
@@ -233,7 +241,7 @@ func (p *playbackFrameStream) readThrough(last int) error {
 			input.planes = p.color.planes(rgb, p.width, p.height)
 			if p.speed < 1 {
 				for c := range input.eight {
-					input.eight[c] = quantizeInterpolationPlane(input.planes[c], p.width)
+					input.eight[c] = quantizeInterpolationPlaneRange(input.planes[c], p.width, bool(p.color) && c == 0)
 				}
 				if p.next > 0 {
 					p.scenes[p.next-1], p.previousMAFD = interpolationSceneChange(p.cache[p.next-1].eight[0], input.eight[0], p.previousMAFD)
@@ -302,7 +310,11 @@ func (p *playbackFrameStream) frame(target int) ([]byte, int, error) {
 					blended = blendInterpolationPlane(input.eight[c], p.cache[anchor+1].eight[c], alpha, p.scenes[anchor])
 				}
 				for i, v := range blended {
-					filtered[c][i] = uint16(v) * 4
+					if p.color {
+						filtered[c][i] = uint16(v)
+					} else {
+						filtered[c][i] = uint16(v) * 4
+					}
 				}
 			} else {
 				for i := range filtered[c] {

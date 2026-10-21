@@ -199,7 +199,7 @@ func TestNativeFrameRatePresetSubtitlesAndOverride(t *testing.T) {
 		}
 		markerCommand(t, "render", dir, "--output", filepath.Join(t.TempDir(), "native.mp4"), "--ffmpeg", executable, "--lrt-render-preset", path)
 		pixels := denoiseRead(t, capture)
-		if len(pixels) != plan.count()*64*32*6 {
+		if len(pixels) != plan.count()*64*32*3 {
 			t.Fatal("native rate lost interpolation timeline")
 		}
 		var flags []string
@@ -207,6 +207,9 @@ func TestNativeFrameRatePresetSubtitlesAndOverride(t *testing.T) {
 			t.Fatal(err)
 		}
 		args := strings.Join(flags, " ")
+		if !strings.Contains(args, "-pixel_format yuv444p ") {
+			t.Fatal("native slow rate must retain 8-bit encoder input")
+		}
 		if !strings.Contains(args, "-framerate "+rate.String()) {
 			t.Fatalf("encoder rate mismatch: %s", args)
 		}

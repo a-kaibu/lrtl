@@ -10,9 +10,10 @@ This path applies to `--output-color lrt-7.5.5` (the saved preset default),
 with one of these temporal filters, even output dimensions and no timestamp,
 watermark or fade. The original measurements below disabled interpolation
 and Motion Blur. The subsequent [playback extension](lrt-native-playback-color-7.5.5.md)
-adds Motion Blur and modes 1/2 at speeds >= 1. Low-speed blend/motion
-interpolation still retains the RGB path. Mode 0 frame duplication retains
-the existing timeline and native working color.
+adds Motion Blur and modes 1/2 at speeds >= 1. The later
+[slow interpolation path](lrt-native-slow-color-7.5.5.md) adds the native
+8-bit transition for lower speeds. Mode 0 frame duplication retains the
+existing timeline and native working color.
 
 Level 4 denoise negotiates an 8-bit removegrain/Gaussian branch. With full-range
 metadata, luma depth reduction subtracts the replicated high bits before

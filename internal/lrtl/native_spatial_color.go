@@ -55,28 +55,46 @@ func (f *nativeSpatialFilter) frame(rgb []byte) ([]byte, error) {
 }
 
 func (f *nativeSpatialFilter) workingFrame(frame []byte) ([]byte, error) {
+	return f.workingFrameDepth(frame, 10)
+}
+
+func (f *nativeSpatialFilter) workingFrameDepth(frame []byte, depth int) ([]byte, error) {
+	if depth != 8 && depth != 10 {
+		return nil, fmt.Errorf("native working depth must be 8 or 10")
+	}
 	if f.width <= 0 || f.height <= 0 || len(frame)%6 != 0 || len(frame)/6/f.width != f.height || len(frame)/6%f.width != 0 {
 		return nil, fmt.Errorf("invalid native working frame dimensions")
 	}
 	planes := outputFrameColor(true).planes(frame, f.width, f.height)
-	return f.filterPlanes(planes, len(frame)), nil
+	return f.filterPlanesDepth(planes, len(frame), depth), nil
 }
 
 func (f *nativeSpatialFilter) filterPlanes(planes [3][]uint16, size int) []byte {
+	return f.filterPlanesDepth(planes, size, 10)
+}
+
+func (f *nativeSpatialFilter) filterPlanesDepth(planes [3][]uint16, size, depth int) []byte {
 	if f.sharpen {
-		planes[0] = sharpenLuma10(planes[0], f.width, f.height)
+		planes[0] = sharpenLumaDepth(planes[0], f.width, f.height, depth)
 	}
 	if f.cas {
 		for p := range planes {
-			planes[p] = casPlane10(planes[p], f.width, f.height, .9)
+			planes[p] = casPlaneDepth(planes[p], f.width, f.height, .9, depth)
 		}
 	}
 	// FFmpeg receives the already converted and filtered planar samples. No
 	// RGB round trip or second matrix conversion can alter chroma or clipping.
+	if depth == 8 {
+		size /= 2
+	}
 	out := make([]byte, size)
 	for p := range planes {
 		for i, v := range planes[p] {
-			binary.LittleEndian.PutUint16(out[(p*len(planes[p])+i)*2:], v)
+			if depth == 8 {
+				out[p*len(planes[p])+i] = byte(v)
+			} else {
+				binary.LittleEndian.PutUint16(out[(p*len(planes[p])+i)*2:], v)
+			}
 		}
 	}
 	return out

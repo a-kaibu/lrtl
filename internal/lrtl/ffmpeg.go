@@ -29,12 +29,13 @@ func (buffer *cappedBuffer) Write(data []byte) (int, error) {
 }
 
 type ffmpegFrameWriter struct {
-	command    *exec.Cmd
-	input      io.WriteCloser
-	stderr     cappedBuffer
-	closed     bool
-	spatial    *nativeSpatialFilter
-	workingYUV bool
+	command      *exec.Cmd
+	input        io.WriteCloser
+	stderr       cappedBuffer
+	closed       bool
+	spatial      *nativeSpatialFilter
+	workingYUV   bool
+	workingDepth int
 }
 
 func resolveFFmpeg(path string) (string, error) {
@@ -91,25 +92,33 @@ func proresProfile(codec string) (string, string, bool) {
 }
 
 type ffmpegFrameEncoding struct {
-	outputColor string
-	spatial     *nativeSpatialFilter
-	workingYUV  bool
+	outputColor  string
+	spatial      *nativeSpatialFilter
+	workingYUV   bool
+	workingDepth int
 }
 
 func newFFmpegFrameWriter(executable, output, container, codec string, width, height int, rate frameRate, frameCount, crf int, preset, audioPath string, fade videoFade, videoRange, audioDuration, subsampling string, encoding ...ffmpegFrameEncoding) (*ffmpegFrameWriter, error) {
 	profile := "standard"
 	var spatial *nativeSpatialFilter
 	workingYUV := false
+	workingDepth := 10
 	if len(encoding) > 0 {
 		profile = encoding[0].outputColor
 		spatial = encoding[0].spatial
 		workingYUV = encoding[0].workingYUV
+		if encoding[0].workingDepth != 0 {
+			workingDepth = encoding[0].workingDepth
+		}
 	}
 	profile, err := normalizeOutputColor(profile)
 	if err != nil {
 		return nil, err
 	}
 	nativeColor := profile == "lrt-7.5.5"
+	if workingDepth != 8 && workingDepth != 10 || workingDepth == 8 && !workingYUV {
+		return nil, fmt.Errorf("invalid native working depth")
+	}
 	if workingYUV && spatial == nil {
 		return nil, fmt.Errorf("native working YUV requires a planar output filter")
 	}
@@ -126,6 +135,9 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 			return nil, fmt.Errorf("native spatial filtering requires an even SDR planar frame")
 		}
 		inputFormat = "yuv444p10le"
+		if workingDepth == 8 {
+			inputFormat = "yuv444p"
+		}
 		colorFilter = nativeSDRPlanarColorFilter
 	}
 	arguments := []string{
@@ -228,7 +240,7 @@ func newFFmpegFrameWriter(executable, output, container, codec string, width, he
 	if err != nil {
 		return nil, fmt.Errorf("open FFmpeg input: %w", err)
 	}
-	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}, spatial: spatial, workingYUV: workingYUV}
+	writer := &ffmpegFrameWriter{command: command, input: input, stderr: cappedBuffer{limit: ffmpegStderrLimit}, spatial: spatial, workingYUV: workingYUV, workingDepth: workingDepth}
 	command.Stderr = &writer.stderr
 	if err := command.Start(); err != nil {
 		_ = input.Close()
@@ -244,7 +256,7 @@ func (writer *ffmpegFrameWriter) AddFrame(frame []byte) error {
 	if writer.spatial != nil {
 		var err error
 		if writer.workingYUV {
-			frame, err = writer.spatial.workingFrame(frame)
+			frame, err = writer.spatial.workingFrameDepth(frame, writer.workingDepth)
 		} else {
 			frame, err = writer.spatial.frame(frame)
 		}

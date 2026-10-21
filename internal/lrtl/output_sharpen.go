@@ -10,6 +10,15 @@ import (
 // a 24-bit shift, unlike the 16-bit shift observed for 8-bit samples.
 // Keep the horizontal convolution unrounded until the vertical pass.
 func sharpenLuma10(input []uint16, width, height int) []uint16 {
+	return sharpenLumaDepth(input, width, height, 10)
+}
+
+func sharpenLumaDepth(input []uint16, width, height, depth int) []uint16 {
+	shift := 24
+	if depth == 8 {
+		shift = 16
+	}
+	maximum := int64(1<<depth) - 1
 	kernel := [...]int32{1, 6, 15, 20, 15, 6, 1}
 	horizontal := make([]int32, len(input))
 	for y := 0; y < height; y++ {
@@ -30,8 +39,8 @@ func sharpenLuma10(input []uint16, width, height int) []uint16 {
 			}
 			i := y*width + x
 			blur := (sum + 2048) >> 12
-			value := int64(input[i]) + ((int64(input[i]) - int64(blur)) * 26214 >> 24)
-			output[i] = uint16(min(int64(1023), max(int64(0), value)))
+			value := int64(input[i]) + ((int64(input[i]) - int64(blur)) * 26214 >> shift)
+			output[i] = uint16(min(maximum, max(int64(0), value)))
 		}
 	}
 	return output

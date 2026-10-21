@@ -10,6 +10,14 @@ import (
 // once by the float32 reciprocal weight sum and rounds to nearest even.
 // Packed working YUV samples have the same uint16 layout as RGB48 queues.
 func weightedWorkingFrames(frames [][]byte, weights []float32) ([]byte, error) {
+	return weightedWorkingFramesDepth(frames, weights, 10)
+}
+
+func weightedWorkingFramesDepth(frames [][]byte, weights []float32, depth int) ([]byte, error) {
+	if depth != 8 && depth != 10 {
+		return nil, fmt.Errorf("native YUV blend depth must be 8 or 10")
+	}
+	maximum := (1 << depth) - 1
 	if len(frames) == 0 || len(frames) != len(weights) || len(frames[0]) == 0 || len(frames[0])%6 != 0 {
 		return nil, fmt.Errorf("invalid native YUV blend window")
 	}
@@ -47,7 +55,7 @@ func weightedWorkingFrames(frames [][]byte, weights []float32) ([]byte, error) {
 			}
 			value = int(math.RoundToEven(float64(float32(sum * factor))))
 		}
-		binary.LittleEndian.PutUint16(out[i:], uint16(min(1023, max(0, value))))
+		binary.LittleEndian.PutUint16(out[i:], uint16(min(maximum, max(0, value))))
 	}
 	return out, nil
 }

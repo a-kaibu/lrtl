@@ -131,7 +131,7 @@ func TestNativeSpatialRoutingAndFallback(t *testing.T) {
 	}
 	capture := filepath.Join(t.TempDir(), "capture")
 	t.Setenv("LRTL_TEST_FFMPEG_CAPTURE", capture)
-	for _, extra := range [][]string{nil, {"--speed", "2"}, {"--motion-blur", "2"}, {"--denoise", "1"}, {"--remove-airplanes", "1"}, {"--output-deflicker-luma"}, {"--interpolation", "1", "--speed", ".5"}, {"--watermark", "TEST"}, {"--fade-out", "1"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
+	for _, extra := range [][]string{nil, {"--speed", "2"}, {"--motion-blur", "2"}, {"--denoise", "1"}, {"--remove-airplanes", "1"}, {"--output-deflicker-luma"}, {"--interpolation", "1", "--speed", "2"}, {"--watermark", "TEST"}, {"--fade-out", "1"}, {"--output-height", "31"}, {"--output-color", "standard"}} {
 		args := []string{"render", dir, "--output", filepath.Join(t.TempDir(), "video.mp4"), "--ffmpeg", executable, "--output-color", "lrt-7.5.5", "--sharpen", "--cas"}
 		markerCommand(t, append(args, extra...)...)
 		var flags []string

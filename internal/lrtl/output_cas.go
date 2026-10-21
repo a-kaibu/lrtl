@@ -11,6 +11,11 @@ import (
 // Replicated edges, float32 arithmetic and truncation follow measured 10-bit
 // planes from the native bundled filter. This is not the native color pipeline.
 func casSample10(plane []uint16, width, height, x, y int, peak float32) uint16 {
+	return casSampleDepth(plane, width, height, x, y, peak, 10)
+}
+
+func casSampleDepth(plane []uint16, width, height, x, y int, peak float32, depth int) uint16 {
+	maximum := (1 << depth) - 1
 	left, right := max(0, x-1), min(width-1, x+1)
 	top, bottom := max(0, y-1), min(height-1, y+1)
 	center := int(plane[y*width+x])
@@ -28,13 +33,13 @@ func casSample10(plane []uint16, width, height, x, y int, peak float32) uint16 {
 	if upper == 0 {
 		return 0
 	}
-	contrast := float32(min(lower, 2047-upper)) / float32(upper)
+	contrast := float32(min(lower, 2*(1<<depth)-1-upper)) / float32(upper)
 	contrast = min(float32(1), max(float32(0), contrast))
 	weight := float32(math.Sqrt(float64(contrast))) / peak
 	neighbors := float32(float32(north+south+west+east) * weight)
 	numerator := float32(neighbors + float32(center))
 	denominator := float32(1 + float32(4*weight))
-	return uint16(min(1023, max(0, int(numerator/denominator))))
+	return uint16(min(maximum, max(0, int(numerator/denominator))))
 }
 
 func casPeak(strength float32) float32 {
@@ -44,11 +49,15 @@ func casPeak(strength float32) float32 {
 }
 
 func casPlane10(input []uint16, width, height int, strength float32) []uint16 {
+	return casPlaneDepth(input, width, height, strength, 10)
+}
+
+func casPlaneDepth(input []uint16, width, height int, strength float32, depth int) []uint16 {
 	output := make([]uint16, len(input))
 	peak := casPeak(strength)
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			output[y*width+x] = casSample10(input, width, height, x, y, peak)
+			output[y*width+x] = casSampleDepth(input, width, height, x, y, peak, depth)
 		}
 	}
 	return output
