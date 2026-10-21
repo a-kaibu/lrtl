@@ -6,6 +6,12 @@ import (
 )
 
 func nativeImageWorkingFrame(img image.Image, format string) ([]byte, error) {
+	if source, ok := img.(*image.YCbCr); ok && format == "jpeg" {
+		return nativeJPEGWorkingFrame(source)
+	}
+	if source, ok := img.(*image.Gray); ok && format == "jpeg" {
+		return nativeJPEGGrayWorkingFrame(source)
+	}
 	rgb, err := imageRGB48(img)
 	if err != nil {
 		return nil, err

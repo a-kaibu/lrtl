@@ -53,6 +53,10 @@ RGB8 conversion removes that source of error.
 
 ## Remaining scope
 
+Native JPEG decoding is now covered separately in
+[JPEG input measurements](lrt-jpeg-input-8.0.1.md); the RGB8 tests here remain
+specific to the RGB input quantizer.
+
 This establishes the unscaled, opaque truecolor RGB8 input conversion and the
 listed processing combinations. It does not establish native JPEG decoding,
 grayscale/palette/alpha input equivalence, odd-sized output, arbitrary geometry/resize phase,

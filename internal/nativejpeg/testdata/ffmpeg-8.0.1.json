@@ -1,0 +1,258 @@
+[
+  {
+    "File": "gray-17x13-p0.jpg",
+    "PixelFormat": "gray",
+    "Hash": "f9af98c7622d5ac9bb04a990192d4e3f31c4046ba95473d22cf0e52df64ac199",
+    "WorkingHash": "8453c08db27cbcb02bec105f38ee169911c5931000d8d4e2f6488ce3954f12d9",
+    "Bytes": 221,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "gray-17x13-p1.jpg",
+    "PixelFormat": "gray",
+    "Hash": "f9af98c7622d5ac9bb04a990192d4e3f31c4046ba95473d22cf0e52df64ac199",
+    "WorkingHash": "8453c08db27cbcb02bec105f38ee169911c5931000d8d4e2f6488ce3954f12d9",
+    "Bytes": 221,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "gray-64x32-p0.jpg",
+    "PixelFormat": "gray",
+    "Hash": "b8403ae153608da4575240ed4332b35c7178f1b62ec3e8840380f0686c2665a8",
+    "WorkingHash": "f3e2775af4f0e7f3060faf91b6255c07cbbe86b136e50653cbe556bf65e55d40",
+    "Bytes": 2048,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "gray-64x32-p1.jpg",
+    "PixelFormat": "gray",
+    "Hash": "b8403ae153608da4575240ed4332b35c7178f1b62ec3e8840380f0686c2665a8",
+    "WorkingHash": "f3e2775af4f0e7f3060faf91b6255c07cbbe86b136e50653cbe556bf65e55d40",
+    "Bytes": 2048,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-17x13-q75-s0-p0.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "5cd2cd6dffc6acb53154a4395c22ea4d453f62dae2e670e4048a4eb459170bfc",
+    "WorkingHash": "9ad042b1532f150420c8ff57404b99968795f3e89071e9df117300f0c804da08",
+    "Bytes": 663,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "rgb-17x13-q75-s0-p1.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "5cd2cd6dffc6acb53154a4395c22ea4d453f62dae2e670e4048a4eb459170bfc",
+    "WorkingHash": "9ad042b1532f150420c8ff57404b99968795f3e89071e9df117300f0c804da08",
+    "Bytes": 663,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "rgb-17x13-q75-s1-p0.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "fb8321f20b8a41bffd8c651e8de46fb0f42402d45d362e922ce099486172f9d2",
+    "WorkingHash": "cc06b233eefc7b6864b2673440ae0d67802c1f1f1b06d168f2355cf354c39803",
+    "Bytes": 455,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "rgb-17x13-q75-s1-p1.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "fb8321f20b8a41bffd8c651e8de46fb0f42402d45d362e922ce099486172f9d2",
+    "WorkingHash": "cc06b233eefc7b6864b2673440ae0d67802c1f1f1b06d168f2355cf354c39803",
+    "Bytes": 455,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "rgb-17x13-q75-s2-p0.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "e498e228b39c05c2c4479c8dc602abb4158a111b209ad8be2b1d3cbc35ca5a0b",
+    "WorkingHash": "eb709b268adf1ae70be4c92f6955d586e63889fe3fb2acab468e97961b559829",
+    "Bytes": 347,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "rgb-17x13-q75-s2-p1.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "e498e228b39c05c2c4479c8dc602abb4158a111b209ad8be2b1d3cbc35ca5a0b",
+    "WorkingHash": "eb709b268adf1ae70be4c92f6955d586e63889fe3fb2acab468e97961b559829",
+    "Bytes": 347,
+    "WorkingBytes": 1326
+  },
+  {
+    "File": "rgb-64x32-q30-s0-p0.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "67f654d22d3bd1c999be70c189bdacb653a537c1f26cd24c60b2f9e1281b1957",
+    "WorkingHash": "c639ad1fab08fd3630b40cb7c1cc856560787eca56e27a37519c7c68216bf137",
+    "Bytes": 6144,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q30-s0-p1.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "67f654d22d3bd1c999be70c189bdacb653a537c1f26cd24c60b2f9e1281b1957",
+    "WorkingHash": "c639ad1fab08fd3630b40cb7c1cc856560787eca56e27a37519c7c68216bf137",
+    "Bytes": 6144,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q30-s1-p0.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "eb34feb950c29cb42b6f989faf54186d60dbd7e79ce49b615882db5ffa1bc016",
+    "WorkingHash": "f4a589e4b1d99ef5448bb9278430f2cfd987f22f9ee735dcc690c21d159c8096",
+    "Bytes": 4096,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q30-s1-p1.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "eb34feb950c29cb42b6f989faf54186d60dbd7e79ce49b615882db5ffa1bc016",
+    "WorkingHash": "f4a589e4b1d99ef5448bb9278430f2cfd987f22f9ee735dcc690c21d159c8096",
+    "Bytes": 4096,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q30-s2-p0.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "fd1e6e6aa9f44a520e38f2b063e061e11f28758b8e7872799ac9e055ac473fab",
+    "WorkingHash": "201d9fb0cf6fddb569253f578b0c420aaee05ede5f6bc9fbd5ac79d6c602405b",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q30-s2-p1.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "fd1e6e6aa9f44a520e38f2b063e061e11f28758b8e7872799ac9e055ac473fab",
+    "WorkingHash": "201d9fb0cf6fddb569253f578b0c420aaee05ede5f6bc9fbd5ac79d6c602405b",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s0-p0.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "534e4d538c876cc43729bd901e98e48a002a66408e0aace798ebabc958d66468",
+    "WorkingHash": "1463ed7a54ed94ebccb40a9c6181d423fab167644c67ee3b30d4685c788dbda2",
+    "Bytes": 6144,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s0-p1.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "534e4d538c876cc43729bd901e98e48a002a66408e0aace798ebabc958d66468",
+    "WorkingHash": "1463ed7a54ed94ebccb40a9c6181d423fab167644c67ee3b30d4685c788dbda2",
+    "Bytes": 6144,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s1-p0.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "bc144dd04932fd522267b6f0f30db6d972b94372a96a22ff1f39a86f75a36554",
+    "WorkingHash": "4bd839a47f34616b3a7c2b4f7383e0ebc2dc3f84428f53d1d80ca81c8cb9f9c5",
+    "Bytes": 4096,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s1-p1.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "bc144dd04932fd522267b6f0f30db6d972b94372a96a22ff1f39a86f75a36554",
+    "WorkingHash": "4bd839a47f34616b3a7c2b4f7383e0ebc2dc3f84428f53d1d80ca81c8cb9f9c5",
+    "Bytes": 4096,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s2-p0-restart-blocks.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "230c4fc24b718e105576a5d11d00ad3d8b29bb76e726bff68aef628020512ca4",
+    "WorkingHash": "8e3bd0cfe2dc6a402c1ffcf069c87292fe459ee3651dce2306b56c7661a1d627",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s2-p0-restart-rows.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "230c4fc24b718e105576a5d11d00ad3d8b29bb76e726bff68aef628020512ca4",
+    "WorkingHash": "8e3bd0cfe2dc6a402c1ffcf069c87292fe459ee3651dce2306b56c7661a1d627",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s2-p0.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "230c4fc24b718e105576a5d11d00ad3d8b29bb76e726bff68aef628020512ca4",
+    "WorkingHash": "8e3bd0cfe2dc6a402c1ffcf069c87292fe459ee3651dce2306b56c7661a1d627",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s2-p1-restart-blocks.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "230c4fc24b718e105576a5d11d00ad3d8b29bb76e726bff68aef628020512ca4",
+    "WorkingHash": "8e3bd0cfe2dc6a402c1ffcf069c87292fe459ee3651dce2306b56c7661a1d627",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s2-p1-restart-rows.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "230c4fc24b718e105576a5d11d00ad3d8b29bb76e726bff68aef628020512ca4",
+    "WorkingHash": "8e3bd0cfe2dc6a402c1ffcf069c87292fe459ee3651dce2306b56c7661a1d627",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q75-s2-p1.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "230c4fc24b718e105576a5d11d00ad3d8b29bb76e726bff68aef628020512ca4",
+    "WorkingHash": "8e3bd0cfe2dc6a402c1ffcf069c87292fe459ee3651dce2306b56c7661a1d627",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q95-s0-p0.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "bc2b34f4e1d1779ef9edcfc26bd48cb8893a24dde97bb0addc7784fa1f8d1d8f",
+    "WorkingHash": "097a9b87e116c86447001beb03511120fd0a291223b4a23d83d10ff491ea339e",
+    "Bytes": 6144,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q95-s0-p1.jpg",
+    "PixelFormat": "yuvj444p",
+    "Hash": "bc2b34f4e1d1779ef9edcfc26bd48cb8893a24dde97bb0addc7784fa1f8d1d8f",
+    "WorkingHash": "097a9b87e116c86447001beb03511120fd0a291223b4a23d83d10ff491ea339e",
+    "Bytes": 6144,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q95-s1-p0.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "21cc3e028ada2efb1cd23b332c8adafd8f2a117413deac1cf09b967387c5f8e9",
+    "WorkingHash": "c5f6cee52cbf29db27a97437ec8ef6f4014109c1567cb4b086d40cdcca9d7140",
+    "Bytes": 4096,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q95-s1-p1.jpg",
+    "PixelFormat": "yuvj422p",
+    "Hash": "21cc3e028ada2efb1cd23b332c8adafd8f2a117413deac1cf09b967387c5f8e9",
+    "WorkingHash": "c5f6cee52cbf29db27a97437ec8ef6f4014109c1567cb4b086d40cdcca9d7140",
+    "Bytes": 4096,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q95-s2-p0.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "13605e2c4b2f03f0f7595d5062f94242287a41cb81d869ec17b93798441d05f0",
+    "WorkingHash": "d60f9e47ca029d60fcb8642d40d85236dfc467db8b1d346969b6cf326855684b",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  },
+  {
+    "File": "rgb-64x32-q95-s2-p1.jpg",
+    "PixelFormat": "yuvj420p",
+    "Hash": "13605e2c4b2f03f0f7595d5062f94242287a41cb81d869ec17b93798441d05f0",
+    "WorkingHash": "d60f9e47ca029d60fcb8642d40d85236dfc467db8b1d346969b6cf326855684b",
+    "Bytes": 3072,
+    "WorkingBytes": 12288
+  }
+]

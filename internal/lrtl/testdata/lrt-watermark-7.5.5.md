@@ -95,7 +95,8 @@ fixed: [RGB8 input measurements](lrt-rgb8-input-8.0.1.md) cover all RGB8 triplet
 and another 72 videos, including 18 RGB8 watermark/timestamp/fade caller videos.
 An isolated 64×32 RGB24 input (`R=x*20 mod 256`, `G=y*30 mod 256`, `B=80`)
 previously differed in 4005/6144 working samples, up to four codes, when expanded
-to RGB48 first. Native JPEG decoding remains unverified. Arbitrary
+to RGB48 first. [Native JPEG decoding](lrt-jpeg-input-8.0.1.md) now has separate
+32-fixture and 180-video coverage for the identity-geometry path. Arbitrary
 geometry, Camera Raw development and complete ICC color management also remain
 separate fidelity work. Native drawtext expressions and platform fonts retain
 their own rendering behavior; glyph availability is not guaranteed by a label.

@@ -12,7 +12,9 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
-- 偶数寸法のネイティブ経路で、RGB8のPNG／TIFF入力に残っていた初段の色変換差を修正しました。RGB16へ先に拡張せず、本体と同じ14→15-bitの丸めを純Goで再現します。全16,777,216色を付属FFmpegの通常CPU／スカラー経路と比較し、PNG／TIFF・時間処理・補間・透かし・字幕・フェードを含む72動画も比較しました。[測定範囲](internal/lrtl/testdata/lrt-rgb8-input-8.0.1.md)を参照してください。JPEG復号や任意リサイズなどの差は残っています。
+- 偶数寸法のネイティブ経路で、通常／プログレッシブJPEGを純Goで本体に近い復号・YUV入力へ対応させました。YCbCrの4:4:4／4:2:2／4:2:0とグレースケール、リスタートマーカー付き32素材を付属FFmpegと比較し、フィルター・透かし・字幕・フェードを含む180動画も比較しました。Go標準デコーダーのBSD表記を保持し、独立したIDCT丸め・色差拡大を実装しています。[対応条件と残る差](internal/lrtl/testdata/lrt-jpeg-input-8.0.1.md)を参照してください。任意のリサイズ・回転や完全な色管理は引き続き未達です。
+
+- 偶数寸法のネイティブ経路で、RGB8のPNG／TIFF入力に残っていた初段の色変換差を修正しました。RGB16へ先に拡張せず、本体と同じ14→15-bitの丸めを純Goで再現します。全16,777,216色を付属FFmpegの通常CPU／スカラー経路と比較し、PNG／TIFF・時間処理・補間・透かし・字幕・フェードを含む72動画も比較しました。[測定範囲](internal/lrtl/testdata/lrt-rgb8-input-8.0.1.md)を参照してください。JPEGは上記の測定範囲に対応し、任意リサイズなどの差は残っています。
 
 - `--watermark-style lrt-7.5.5`で本体のArial透かしに対応しました。固定位置・幅別の文字サイズ・色・影・文字置換と、最終色変換→透かし→字幕→フェードの順を再現します。本体ヘルパー105件・合成グラフ3件と、SDR／広色域／PQの42動画で比較しました。保存設定の透かしも読み込めます。[測定範囲と残る差](internal/lrtl/testdata/lrt-watermark-7.5.5.md)を参照してください。
 
@@ -591,7 +593,7 @@ LRTプリセットの`videoRange=1`をfull、それ以外を本体の既定分�
 
 通常SDRプロファイルでシャープ／CASを指定し、出力寸法が偶数、字幕・透かしなしの場合、Goで本体と同じ固定小数点RGB16→YUV10変換を行い、シャープ→CASの結果をYUVのままエンコーダーへ渡します。RGBへ差分を戻す従来経路で発生した色差クリップを避けます。`standard`、奇数寸法、標準スタイルの字幕・透かし併用は従来のRGB経路です。本体スタイルの字幕・透かしはYUV経路を維持します。
 
-元の実動画比較は等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。RGB8のPNG／TIFFも初段変換と72動画で追加比較しています。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、標準スタイルの字幕・透かしがなく偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間では補間時に8-bitへ切り替え、後段も8-bitのYUVのまま処理します。[低速補間の測定記録](internal/lrtl/testdata/lrt-native-slow-color-7.5.5.md)を参照してください。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、最強併用で以前残っていた1成分・2段階の差は、[AVX2/FMAの演算対応](internal/lrtl/testdata/lrt-gaussian-arithmetic-7.5.5.md)で解消しました。RGB8の任意リサイズ・非RGB形式、JPEGの復号差、ICCを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
+元の実動画比較は等倍・不透明な16-bit PNG／TIFFで、フィルターなし12ケース、シャープ・CAS・両方の84ケースです。RGB8のPNG／TIFFも初段変換と72動画で追加比較しています。ノイズ除去・動画デフリッカー・光跡除去、Motion Blur、高速補間、補間なしの低速複製も、標準スタイルの字幕・透かしがなく偶数寸法の場合、初段からYUVのまま処理します。低速ブレンド／モーション補間では補間時に8-bitへ切り替え、後段も8-bitのYUVのまま処理します。[低速補間の測定記録](internal/lrtl/testdata/lrt-native-slow-color-7.5.5.md)を参照してください。[Motion Blurと再生速度の測定記録](internal/lrtl/testdata/lrt-native-playback-color-7.5.5.md)を参照してください。12経路・72実動画をスカラー参照と比較し、最強併用で以前残っていた1成分・2段階の差は、[AVX2/FMAの演算対応](internal/lrtl/testdata/lrt-gaussian-arithmetic-7.5.5.md)で解消しました。RGB8の任意リサイズ・非RGB形式、JPEGの未検証形式・幾何変換、ICCを含む全経路、HDR・広色域の再現は未確認または未対応です。測定条件と再実行方法は[testdataの説明](internal/lrtl/testdata/lrt-sdr-output-color-7.5.5.md)と[Go空間フィルターの説明](internal/lrtl/testdata/lrt-native-spatial-color-7.5.5.md)を参照してください。
 
 ProResでは、実測したFFmpeg 8.0.1でレンジ情報がffprobeへ報告されず、fullの10-bit端点も4〜1019へクリップされました。limitedが一般的な用途に適します。H.264/H.265/DNxHRではfull／limitedのタグと実際の輝度値を確認しています。AVIはfull-range JPEGのためauto／fullを受け付け、limited指定は保存前にエラーにします。
 

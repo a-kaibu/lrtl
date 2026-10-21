@@ -750,7 +750,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if frameWidth != width || frameHeight != height {
 				return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 			}
-			img, format, decodeErr := image.Decode(bytes.NewReader(data))
+			img, format, decodeErr := decodeRenderImage(data, nativeTemporal)
 			if decodeErr != nil {
 				return nil, fmt.Errorf("decode %s: %w", frame.Image, decodeErr)
 			}
@@ -946,7 +946,7 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 		applyBasic := xmpBasics != nil && xmpBasics[index].active()
 		applyCrop := xmpCrops != nil && xmpCrops[index].Active && (xmpCrops[index].Bounds != image.Rect(0, 0, width, height) || math.Abs(xmpCrops[index].Angle) > 1e-9)
 		if outputExtension != ".avi" {
-			img, format, err := image.Decode(bytes.NewReader(data))
+			img, format, err := decodeRenderImage(data, nativeSpatial)
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
 			}

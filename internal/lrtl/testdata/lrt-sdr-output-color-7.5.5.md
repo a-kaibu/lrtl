@@ -50,5 +50,7 @@ without overlays or fade, with 84 additional real video comparisons. The
 [native temporal path](lrt-native-temporal-color-7.5.5.md) adds deflicker,
 denoise and airplane removal under its listed conditions, with 72 scalar
 reference video comparisons. Other combinations retain the RGB approximation.
-JPEG decoding, ICC, nonidentity geometry, HDR/wide gamut and complete native
-application video parity are outside this comparison.
+JPEG decoding now has [separate measured coverage](lrt-jpeg-input-8.0.1.md),
+including progressive/restart inputs and native working planes. The original
+comparisons in this note do not establish ICC, nonidentity geometry, HDR/wide gamut or complete native
+application video parity.

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"image"
 	"math"
 	"math/big"
 	"os"
@@ -445,20 +444,10 @@ func TestNativeFrameRateActualAudioAndFade(t *testing.T) {
 			if err != nil || len(y) != 15*64*32 {
 				t.Fatalf("decoded video: %d %v", len(y), err)
 			}
-			// Use the recorded native fade command as the oracle. Native YUV
-			// fades have format black levels and an integer frame clock, unlike
-			// the previous continuous RGB gain assertion. Decode the JPEG with
-			// Go on both paths to isolate the known JPEG decoder difference.
-			img, _, err := image.Decode(bytes.NewReader(denoiseRead(t, filepath.Join(dir, "frame00.jpg"))))
-			if err != nil {
-				t.Fatal(err)
-			}
-			rgb, err := imageRGB48(img)
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Use actual JPEG input and the recorded native fade clock. The
+			// native decoder/working-plane path no longer needs a Go RGB oracle.
 			graph := "scale=iw:ih:out_range=full:flags=lanczos,format=yuv444p10le,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709," + nativeSDRPlanarColorFilter("limited", "yuv420p") + "," + tc.Fade + ",extractplanes=y"
-			wantY := nativeColorCommand(t, ffmpeg, bytes.Repeat(rgb, 15), "-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-f", "rawvideo", "-pixel_format", "rgb48le", "-video_size", "64x32", "-framerate", rate.String(), "-i", "pipe:0", "-vf", graph, "-f", "rawvideo", "pipe:1")
+			wantY := nativeColorCommand(t, ffmpeg, nil, "-v", "error", "-sws_flags", "print_info+accurate_rnd+bitexact+full_chroma_int", "-framerate", rate.String(), "-i", filepath.Join(dir, "frame%02d.jpg"), "-vf", graph, "-f", "rawvideo", "pipe:1")
 			if !bytes.Equal(y, wantY) {
 				t.Fatalf("video fade differs from recorded native fps clock: hashes%x/%x", sha256.Sum256(y), sha256.Sum256(wantY))
 			}
