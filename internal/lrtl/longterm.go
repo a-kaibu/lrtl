@@ -25,14 +25,15 @@ const (
 )
 
 type longTermFrameMetrics struct {
-	Image            string              `json:"image"`
-	Included         bool                `json:"included"`
-	SizeBytes        int64               `json:"size_bytes"`
-	ModifiedUnixNano int64               `json:"modified_unix_nano"`
-	Luminance        float64             `json:"median_luminance_linear_srgb,omitempty"`
-	ContrastEV       float64             `json:"contrast_p90_p10_ev,omitempty"`
-	HueDegrees       *float64            `json:"mean_hue_degrees,omitempty"`
-	LRTMetrics       *lrtLongTermMetrics `json:"lrt_metrics,omitempty"`
+	Image            string                    `json:"image"`
+	Included         bool                      `json:"included"`
+	SizeBytes        int64                     `json:"size_bytes"`
+	ModifiedUnixNano int64                     `json:"modified_unix_nano"`
+	Luminance        float64                   `json:"median_luminance_linear_srgb,omitempty"`
+	ContrastEV       float64                   `json:"contrast_p90_p10_ev,omitempty"`
+	HueDegrees       *float64                  `json:"mean_hue_degrees,omitempty"`
+	LRTMetrics       *lrtLongTermMetrics       `json:"lrt_metrics,omitempty"`
+	LRTFilter        *lrtLongTermFrameDecision `json:"lrt_filter,omitempty"`
 }
 
 type lrtLongTermMetrics struct {
@@ -43,12 +44,13 @@ type lrtLongTermMetrics struct {
 }
 
 type sequenceSelectionManifest struct {
-	Version        int                    `json:"version"`
-	Directory      string                 `json:"directory"`
-	MetricProfile  longTermMetricProfile  `json:"metric_profile,omitempty"`
-	MetricRevision string                 `json:"metric_revision,omitempty"`
-	Filters        longTermRanges         `json:"filters"`
-	Frames         []longTermFrameMetrics `json:"frames"`
+	Version        int                     `json:"version"`
+	Directory      string                  `json:"directory"`
+	MetricProfile  longTermMetricProfile   `json:"metric_profile,omitempty"`
+	MetricRevision string                  `json:"metric_revision,omitempty"`
+	LRTFilter      *lrtLongTermSavedFilter `json:"lrt_filter,omitempty"`
+	Filters        longTermRanges          `json:"filters"`
+	Frames         []longTermFrameMetrics  `json:"frames"`
 }
 
 type metricRange struct {

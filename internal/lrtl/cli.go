@@ -179,7 +179,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  batch-holy-grail ROOT [--recursive] [--workers N] [HOLY_GRAIL_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  export DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--apply-xmp-basic] [--apply-xmp-crop] [--long-edge N] export RGB16 TIFF frames")
 	fmt.Fprintln(writer, "  preview-images DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--long-edge N] [--quality 1-100] [--write-preview-ev] [--no-backup]")
-	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
@@ -1400,6 +1400,9 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("long-term", stderr)
 	output := set.String("output", "", "write per-frame metrics and an include/exclude selection manifest")
 	metricProfileName := set.String("metric-profile", "lrtl", "metric model: lrtl or lrt-7.5.5")
+	lrtFilterPreset := set.String("lrt-filter-preset", "", "read saved native long-term filter settings")
+	lrtFilterName := set.String("lrt-filter-preset-name", "", "select an exact key from native filterPresets")
+	lrtFilterColor := set.String("lrt-filter-color", "auto", "native contrast/hue stages: auto, on or off")
 	luminanceRange := set.String("luminance-range", "", "keep frames with the selected profile's luminance in MIN,MAX (0-1)")
 	contrastRange := set.String("contrast-range", "", "keep frames with the selected profile's contrast in MIN,MAX")
 	hueRange := set.String("hue-range", "", "keep frames with the selected profile's mean hue in MIN,MAX degrees; MIN>MAX wraps at 360")
@@ -1414,6 +1417,9 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	parseArgs := flagFirst(arguments, map[string]bool{
 		"--output": true, "-output": true,
 		"--metric-profile": true, "-metric-profile": true,
+		"--lrt-filter-preset": true, "-lrt-filter-preset": true,
+		"--lrt-filter-preset-name": true, "-lrt-filter-preset-name": true,
+		"--lrt-filter-color": true, "-lrt-filter-color": true,
 		"--luminance-range": true, "-luminance-range": true,
 		"--contrast-range": true, "-contrast-range": true,
 		"--hue-range": true, "-hue-range": true,
@@ -1421,14 +1427,45 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
-			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
 	}
 	profile := longTermMetricProfile(*metricProfileName)
+	var savedFilter *lrtLongTermSavedFilter
+	if *lrtFilterPreset == "" {
+		if *lrtFilterName != "" || *lrtFilterColor != "auto" {
+			return reportError(stderr, fmt.Errorf("native filter name/color options require --lrt-filter-preset"))
+		}
+	} else {
+		explicitProfile := false
+		set.Visit(func(f *flag.Flag) {
+			if f.Name == "metric-profile" {
+				explicitProfile = true
+			}
+		})
+		if explicitProfile && profile != longTermMetricProfileLRT755 {
+			return reportError(stderr, fmt.Errorf("saved native filters require --metric-profile lrt-7.5.5"))
+		}
+		profile = longTermMetricProfileLRT755
+		var err error
+		savedFilter, err = loadLRTLongTermPreset(*lrtFilterPreset, *lrtFilterName)
+		if err != nil {
+			return reportError(stderr, fmt.Errorf("native long-term preset: %w", err))
+		}
+		switch *lrtFilterColor {
+		case "auto":
+		case "on":
+			savedFilter.ColorActive = true
+		case "off":
+			savedFilter.ColorActive = false
+		default:
+			return reportError(stderr, fmt.Errorf("--lrt-filter-color must be auto, on or off"))
+		}
+	}
 	if profile != longTermMetricProfileLRTL && profile != longTermMetricProfileLRT755 {
 		return reportError(stderr, fmt.Errorf("--metric-profile must be lrtl or lrt-7.5.5"))
 	}
@@ -1465,6 +1502,11 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	manifest.Directory = set.Arg(0)
+	if savedFilter != nil {
+		if err := applyLRTLongTermFilter(manifest, frames, savedFilter); err != nil {
+			return reportError(stderr, err)
+		}
+	}
 	if err := writeSelectionManifest(*output, manifest, *overwrite); err != nil {
 		return reportError(stderr, err)
 	}
