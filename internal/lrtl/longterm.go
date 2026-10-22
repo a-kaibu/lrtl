@@ -36,17 +36,19 @@ type longTermFrameMetrics struct {
 }
 
 type lrtLongTermMetrics struct {
-	LuminanceMean  float64  `json:"luminance_mean_0_to_1"`
+	LuminanceMean float64 `json:"luminance_mean_0_to_1"`
+	// Historical JSON field name; the native display value is twice the deviation.
 	ContrastStdDev float64  `json:"contrast_stddev_0_to_1"`
 	HueMeanDegrees *float64 `json:"hue_mean_degrees,omitempty"`
 }
 
 type sequenceSelectionManifest struct {
-	Version       int                    `json:"version"`
-	Directory     string                 `json:"directory"`
-	MetricProfile longTermMetricProfile  `json:"metric_profile,omitempty"`
-	Filters       longTermRanges         `json:"filters"`
-	Frames        []longTermFrameMetrics `json:"frames"`
+	Version        int                    `json:"version"`
+	Directory      string                 `json:"directory"`
+	MetricProfile  longTermMetricProfile  `json:"metric_profile,omitempty"`
+	MetricRevision string                 `json:"metric_revision,omitempty"`
+	Filters        longTermRanges         `json:"filters"`
+	Frames         []longTermFrameMetrics `json:"frames"`
 }
 
 type metricRange struct {
@@ -94,6 +96,9 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 		MetricProfile: profile,
 		Filters:       ranges,
 		Frames:        make([]longTermFrameMetrics, len(frames)),
+	}
+	if profile == longTermMetricProfileLRT755 {
+		manifest.MetricRevision = "lrt-7.5.5-histogram-v1"
 	}
 	width, height := 0, 0
 	var adjustments sequenceXMPAdjustments
