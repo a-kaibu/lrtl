@@ -174,9 +174,9 @@ func radialMaskFrameSizes(packets []*XMPPacket, frames []Frame) ([]radialMaskSiz
 	sizes := make([]radialMaskSize, len(packets))
 	for i, packet := range packets {
 		values := [2]float64{}
-		for axis, names := range [][2]string{{"exif:PixelXDimension", "tiff:ImageWidth"}, {"exif:PixelYDimension", "tiff:ImageLength"}} {
+		for axis, names := range [][3]string{{"exif:PixelXDimension", "tiff:ImageWidth", "lrt:Width"}, {"exif:PixelYDimension", "tiff:ImageLength", "lrt:Height"}} {
 			for _, name := range names {
-				text, found, err := packet.GetScalar(name)
+				text, found, err := packet.GetRootScalar(name)
 				if err != nil {
 					return nil, fmt.Errorf("frame %d %s: %w", i+1, name, err)
 				}
@@ -194,7 +194,14 @@ func radialMaskFrameSizes(packets []*XMPPacket, frames []Frame) ([]radialMaskSiz
 		if (values[0] == 0 || values[1] == 0) && i < len(frames) && frames[i].Image != "" {
 			if file, err := os.Open(frames[i].Image); err == nil {
 				w, h := 0, 0
-				if config, _, err := image.DecodeConfig(file); err == nil {
+				rawWidth, rawHeight, found, err := nativeTIFFImageSize(frames[i].Image)
+				if err != nil {
+					_ = file.Close()
+					return nil, fmt.Errorf("frame %d dimensions: %w", i+1, err)
+				}
+				if found {
+					w, h = int(rawWidth), int(rawHeight)
+				} else if config, _, err := image.DecodeConfig(file); err == nil {
 					w, h = config.Width, config.Height
 				} else if _, err = file.Seek(0, 0); err == nil {
 					if metadata, err := imagemeta.Decode(file); err == nil {

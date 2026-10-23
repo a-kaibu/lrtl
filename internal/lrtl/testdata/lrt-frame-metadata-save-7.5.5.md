@@ -1,3 +1,5 @@
+> Later extension: TIFF-family RAW dimension extraction now covers priority IFD selection, large integer dimensions and the CR2 override. See [RAW dimensions](lrt-raw-dimensions-7.5.5.md) for 80 input/ExifTool/native-save comparisons and remaining container limits.
+
 # Camera metadata cache and save prefix, LRTimelapse 7.5.5
 
 ## Observations

@@ -126,7 +126,11 @@ func readNativeCameraMetadata(frame Frame, packet *XMPPacket) (*nativeCameraMeta
 		return nil, err
 	}
 	metadata, metadataErr := imagemeta.Decode(file)
-	if configErr != nil && metadataErr != nil {
+	width, height, hasTIFFSize, err := nativeTIFFImageSize(frame.Image)
+	if err != nil {
+		return nil, err
+	}
+	if configErr != nil && metadataErr != nil && !hasTIFFSize {
 		return nil, nil
 	}
 	fields := make([]string, 16)
@@ -134,7 +138,9 @@ func readNativeCameraMetadata(frame Frame, packet *XMPPacket) (*nativeCameraMeta
 		fields[i] = "-"
 	}
 	fields[0] = frame.Image
-	if configErr == nil && config.Width > 0 && config.Height > 0 {
+	if hasTIFFSize {
+		fields[1] = fmt.Sprintf("%dx%d", width, height)
+	} else if configErr == nil && config.Width > 0 && config.Height > 0 {
 		if config.Width > math.MaxInt32 || config.Height > math.MaxInt32 {
 			return nil, fmt.Errorf("image dimensions exceed native metadata range")
 		}

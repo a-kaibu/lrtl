@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- TIFF系RAWの寸法読込を実機へ近づけました。先頭IFD・本画像SubIFD・CR2のExif寸法・BigTIFFの選択を80種類の合成入力で比較し、70,000ピクセルを超える寸法も保存できます。円形マスク補間もこの読込と保存済みLRT寸法を使います。RW2/RAF等の別形式は残っています。[選択規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-raw-dimensions-7.5.5.md)を参照してください。
+
 - `init`で画像寸法・向き・カメラ設定の保存を追加しました。実機のCSV読込→保存を75条件で比較し、EXIF露出ラベル94例、PNGの向き、バックアップ・元画像保持・破損時の保存前拒否もテストしています。日時更新、RAW寸法の一部、自動撮影モード/HDRの画像判定などは未対応です。[観測方法・対応範囲・再実行手順](internal/lrtl/testdata/lrt-frame-metadata-save-7.5.5.md)を参照してください。
 
 - `copy-settings`／`init`の既定保存を登録861列へ広げました。数値755列すべて、内部HG/Deflicker/Global露出、評価の保存、旧参照タグ整理を実機864条件の初回・再保存で比較しています。内部露出の整形は別途Javaの1,426パターンでも検査します。選択外の数値や評価も変わる場合があり、従来動作は`preserve`で選べます。[動作変更・検証範囲・未対応部分](internal/lrtl/testdata/lrt-registered-save-7.5.5.md)を参照してください。
@@ -1076,7 +1078,7 @@ lrtl preview-ev "D:\Timelapse\Developed" --write
 
 ## 連番の初期化
 
-既定の`--frame-state lrt-7.5.5`は、最初の4つ星（なければ先頭）の画像を参照して連番の`lrt:Quality`を再分類します。JPEG/PNG/TIFFはFLAT、その他のRAWはRAW、DNGはAsShotNeutral（TIFFタグ50728）の有無で分けます。Custom WBに不足する値を補い、登録861列（数値755列）の保存、非使用WB値の解除、HasCropの再計算、内部補正露出・評価・旧参照タグの保存整理も行います。画像から取得できる寸法は`lrt:Width/Height`へ、露出・向きなどは対応タグへ保存し、画像側にないカメラ値は既存のLRT値を引き継ぎます。PNGの向き情報も読みます。日時は保持し、RAW寸法の一部や撮影モード/HDRの画像判定は未対応です。[実機75条件と画像読込の制限](internal/lrtl/testdata/lrt-frame-metadata-save-7.5.5.md)を参照してください。既存のQualityはこの初期化で更新します。`--frame-state preserve`では従来のマスク・ヘッダー初期化範囲を使えます。[実機426条件・合成DNG24例・制限](internal/lrtl/testdata/lrt-frame-state-7.5.5.md)を参照してください。
+既定の`--frame-state lrt-7.5.5`は、最初の4つ星（なければ先頭）の画像を参照して連番の`lrt:Quality`を再分類します。JPEG/PNG/TIFFはFLAT、その他のRAWはRAW、DNGはAsShotNeutral（TIFFタグ50728）の有無で分けます。Custom WBに不足する値を補い、登録861列（数値755列）の保存、非使用WB値の解除、HasCropの再計算、内部補正露出・評価・旧参照タグの保存整理も行います。画像から取得できる寸法は`lrt:Width/Height`へ、露出・向きなどは対応タグへ保存し、画像側にないカメラ値は既存のLRT値を引き継ぎます。PNGの向き情報も読みます。TIFF系RAWの寸法はExifToolの優先IFD・CR2の例外に合わせ、16ビットへ切り詰めずに読みます。[実機80入力の比較](internal/lrtl/testdata/lrt-raw-dimensions-7.5.5.md)を参照してください。日時は保持し、RAW寸法の一部や撮影モード/HDRの画像判定は未対応です。[実機75条件と画像読込の制限](internal/lrtl/testdata/lrt-frame-metadata-save-7.5.5.md)を参照してください。既存のQualityはこの初期化で更新します。`--frame-state preserve`では従来のマスク・ヘッダー初期化範囲を使えます。[実機426条件・合成DNG24例・制限](internal/lrtl/testdata/lrt-frame-state-7.5.5.md)を参照してください。
 
 ```powershell
 # 既定では予定を表示するだけ
