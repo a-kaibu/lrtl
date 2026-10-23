@@ -258,7 +258,11 @@ func normalizePasteDC(n *pasteNode) {
 func pastePacketNodes(packet *XMPPacket) ([]*pasteNode, error) {
 	var result []*pasteNode
 	seen := map[pasteName]bool{}
-	for _, description := range packet.rootDescriptions() {
+	descriptions := packet.rootDescriptions()
+	if len(descriptions) == 0 {
+		return nil, xmpError("XMP metadata has no root rdf:Description")
+	}
+	for _, description := range descriptions {
 		fields, err := pasteFields(description, 0)
 		if err != nil {
 			return nil, err

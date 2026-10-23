@@ -160,7 +160,7 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 		{"Saturation", &adjustments.saturation, -100, 100},
 	}
 	for _, property := range properties {
-		value, found, err := packet.GetScalar("crs:" + property.name)
+		value, found, err := packet.GetRootScalar("crs:" + property.name)
 		if err != nil {
 			return xmpBasicAdjustments{}, err
 		}
@@ -296,7 +296,7 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 }
 
 func readXMPBasicNumber(packet *XMPPacket, name string, min, max float64) (float64, bool, error) {
-	value, found, err := packet.GetScalar("crs:" + name)
+	value, found, err := packet.GetRootScalar("crs:" + name)
 	if err != nil || !found {
 		return 0, found, err
 	}

@@ -63,7 +63,11 @@ func planCopySettings(all, selected []Frame, ref *settingsReference) ([]packetOu
 	return planCopySettingsColumns(all, selected, ref, nil)
 }
 
-func planCopySettingsColumns(all, selected []Frame, ref *settingsReference, columns []selectedColumn) ([]packetOutput, int, error) {
+func planCopySettingsColumns(all, selected []Frame, ref *settingsReference, columns []selectedColumn, saveStateProfiles ...string) ([]packetOutput, int, error) {
+	profile, err := copySaveStateProfile(saveStateProfiles)
+	if err != nil {
+		return nil, 0, err
+	}
 	if len(selected) == 0 {
 		return nil, 0, fmt.Errorf("no frames selected")
 	}
@@ -117,11 +121,7 @@ func planCopySettingsColumns(all, selected []Frame, ref *settingsReference, colu
 		return nil, skipped, nil
 	}
 	outputs, err := planSelectedPacketEdits(all, targets, func(target *XMPPacket) error {
-		if len(columns) > 0 {
-			_, err := copySelectedColumnMetadata(target, ref.Packet, columns)
-			return err
-		}
-		_, err := pasteXMPMetadata(target, ref.Packet)
+		_, err := applyCopySettingsProfile(target, ref.Packet, columns, profile)
 		return err
 	})
 	return outputs, skipped, err
@@ -134,8 +134,9 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	noBackup := set.Bool("no-backup", false, "save existing sidecars without backups")
 	properties := set.String("properties", "", "copy these registered columns, separated by commas; a missing source value clears the column")
 	listProperties := set.Bool("list-properties", false, "list the registered columns available for selected-column copying")
-	const usage = "Usage: lrtl copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY [--properties NAMES] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]\n       lrtl copy-settings --list-properties"
-	if err := set.Parse(reorderFlags(arguments, map[string]bool{"--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true, "--ratings": true, "-ratings": true, "--properties": true, "-properties": true}, true)); err != nil {
+	saveState := set.String("save-state", nativeSaveStateProfile, "WB/crop numeric serialization and save preparation: lrt-7.5.5 or preserve")
+	const usage = "Usage: lrtl copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY [--properties NAMES] [--save-state lrt-7.5.5|preserve] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]\n       lrtl copy-settings --list-properties"
+	if err := set.Parse(reorderFlags(arguments, map[string]bool{"--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true, "--ratings": true, "-ratings": true, "--properties": true, "-properties": true, "--save-state": true, "-save-state": true}, true)); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			fmt.Fprintln(stdout, usage)
 			return code
@@ -167,6 +168,9 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	if set.NArg() != 2 || (*noBackup && !*write) {
 		return reportError(stderr, fmt.Errorf("%s", usage))
 	}
+	if err := validateSaveStateProfile(*saveState); err != nil {
+		return reportError(stderr, err)
+	}
 	options, err := filters.options(set)
 	if err != nil {
 		return reportError(stderr, err)
@@ -190,7 +194,7 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	outputs, skipped, err := planCopySettingsColumns(frames, selected, ref, columns)
+	outputs, skipped, err := planCopySettingsColumns(frames, selected, ref, columns, *saveState)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -215,8 +219,23 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 			}
 		}
 	}
+	fmt.Fprintf(stdout, "Save state: %s\n", *saveState)
 	for _, output := range outputs {
 		fmt.Fprintln(stdout, output.Path)
+		if *saveState == nativeSaveStateProfile {
+			nodes, err := pastePacketNodes(output.Packet)
+			if err != nil {
+				return reportError(stderr, err)
+			}
+			wb := selectedField(nodes, pasteName{crsNamespace, "WhiteBalance"})
+			crop := selectedField(nodes, pasteName{crsNamespace, "HasCrop"})
+			quality := selectedField(nodes, pasteName{namespacePrefixes["lrt"], "Quality"})
+			qualityText := ""
+			if quality != nil {
+				qualityText = quality.Value
+			}
+			fmt.Fprintf(stdout, "  Quality=%q; WhiteBalance=%q; HasCrop=%s\n", qualityText, wb.Value, crop.Value)
+		}
 	}
 	if !*write {
 		fmt.Fprintln(stdout, "Dry run. Pass --write to save sidecars.")

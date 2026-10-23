@@ -34,7 +34,7 @@ func TestSelectedColumnsCLISelectionAndPreservation(t *testing.T) {
 	}
 	before := batchFileSnapshot(t, dir)
 	sourceBefore := denoiseRead(t, source)
-	args := []string{"copy-settings", source, dir, "--selection", manifest, "--properties", "Exposure2012,WhiteBalance,HasCrop"}
+	args := []string{"copy-settings", source, dir, "--selection", manifest, "--properties", "Exposure2012,WhiteBalance,HasCrop", "--save-state", "preserve"}
 	if Main(args, &out, &stderr) != 0 {
 		t.Fatal(&stderr)
 	}

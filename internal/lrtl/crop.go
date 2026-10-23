@@ -40,7 +40,7 @@ func readXMPCropsFromPackets(frames []Frame, width, height int, packets []*XMPPa
 		if err != nil {
 			return nil, fmt.Errorf("read crop settings for %s: %w", frame.Image, err)
 		}
-		active, found, err := packet.GetScalar("crs:HasCrop")
+		active, found, err := packet.GetRootScalar("crs:HasCrop")
 		if err != nil {
 			return nil, fmt.Errorf("read crop flag for %s: %w", frame.Image, err)
 		}
@@ -63,7 +63,7 @@ func readXMPCropsFromPackets(frames []Frame, width, height int, packets []*XMPPa
 				{name: "CropRight", defaultValue: 1},
 				{name: "CropAngle", defaultValue: 0},
 			} {
-				value, exists, getErr := packet.GetScalar("crs:" + property.name)
+				value, exists, getErr := packet.GetRootScalar("crs:" + property.name)
 				if getErr != nil {
 					return nil, fmt.Errorf("read %s for %s: %w", property.name, frame.Image, getErr)
 				}
@@ -83,7 +83,7 @@ func readXMPCropsFromPackets(frames []Frame, width, height int, packets []*XMPPa
 			continue
 		}
 
-		angleText, angleFound, err := packet.GetScalar("crs:CropAngle")
+		angleText, angleFound, err := packet.GetRootScalar("crs:CropAngle")
 		if err != nil {
 			return nil, fmt.Errorf("read crop angle for %s: %w", frame.Image, err)
 		}
@@ -111,7 +111,7 @@ func readXMPCropsFromPackets(frames []Frame, width, height int, packets []*XMPPa
 		}
 		coordinates := make(map[string]float64, len(values))
 		for _, property := range values {
-			text, exists, getErr := packet.GetScalar("crs:" + property.name)
+			text, exists, getErr := packet.GetRootScalar("crs:" + property.name)
 			if getErr != nil {
 				return nil, fmt.Errorf("read %s for %s: %w", property.name, frame.Image, getErr)
 			}

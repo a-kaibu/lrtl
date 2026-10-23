@@ -9,7 +9,10 @@ lrtl copy-settings reference.jpg SEQUENCE --properties WhiteBalance,Temperature,
 lrtl copy-settings reference.xmp SEQUENCE --properties 'MaskGroupBasedCorrections[1].CorrectionMasks[1].Left' --write
 ```
 
-The default full-XML mode is unchanged when `--properties` is absent.
+The full-XML copy phase is used when `--properties` is absent. The current CLI
+also defaults to WB/crop save preparation; use `--save-state preserve` for the
+isolated copying behavior measured below. See
+[`lrt-save-state-7.5.5.md`](lrt-save-state-7.5.5.md) for that added stage.
 Column selection intersects the existing image selection flags; the properties
 are comma-separated, deduplicated by expanded name/path, then processed in the
 native registry order. Registered slash paths and the CLI's dot notation are
@@ -125,13 +128,14 @@ shape for one scalar selection, or reinterpret reserved/unregistered slots.
 ## Remaining differences from the complete application
 
 Full frame initialization and cached default synthesis have not been ported
-into this command. Whole-save WB cleanup, derived HasCrop, HG/deflicker state,
-rating/date/quality side effects, history and dirty/UI bookkeeping are also
-outside this mode. The native caller's earlier/later stages are not implied by
-the component measurements. Select the necessary WB columns together and
-explicitly copy/enable HasCrop when transferring crop settings. The existing
-renderer's supported controls and approximate Camera Raw rendering remain the
-limits on pixel application.
+into this command. WB/crop numerical serialization, WB cleanup, derived HasCrop
+and cached quality writeback are now covered by the separate default save-state
+stage. HG/deflicker state, other number columns, rating/date side effects,
+history and dirty/UI bookkeeping remain outside it. The column observations
+alone do not imply those earlier/later stages. Select the necessary WB columns
+together; the default profile derives crop activation from geometry, while
+`--save-state preserve` retains the isolated column-copy behavior. The existing
+renderer remains approximate and does not apply IncrementalTemperature/Tint.
 
 ## Tests and reproduction
 
@@ -163,7 +167,7 @@ compares complete packet semantics. It requires the user's installation and
 compatible Java/Javac on PATH. No proprietary binary is included in the repo.
 The registry and obfuscated descriptors are specific to the measured version.
 
-## Local validation, 2026-10-23
+## Initial column-mode validation, 2026-10-23 (`da97960`)
 
 - All 1,001 component cases, nine parent-preparation cases and installed-parser
   round trips passed. Eight additional JVM Formatter cases cover large decimal

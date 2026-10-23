@@ -3,7 +3,9 @@
 ## Scope
 
 `copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY` implements the XML phase of
-full metadata paste. The source is read once; its image and effective sidecar
+full metadata paste. The current CLI also performs a separate default
+[WB/crop save-state stage](lrt-save-state-7.5.5.md); use `--save-state preserve`
+to reproduce the isolated XML behavior described here. The source is read once; its image and effective sidecar
 are excluded from writes. Output is a sidecar, including for images whose
 starting XMP is embedded. The implementation and dependencies are pure Go.
 Java and an installed application are needed only for optional comparison tests.

@@ -193,11 +193,21 @@ func scalarElementText(element *etree.Element) (string, bool) {
 }
 
 func (p *XMPPacket) GetScalar(property string) (string, bool, error) {
+	return scalarFromDescriptions(p.Descriptions(), property)
+}
+
+// GetRootScalar excludes identically named properties inside masks, looks,
+// presets and other RDF structs when reading global image controls.
+func (p *XMPPacket) GetRootScalar(property string) (string, bool, error) {
+	return scalarFromDescriptions(p.rootDescriptions(), property)
+}
+
+func scalarFromDescriptions(descriptions []*etree.Element, property string) (string, bool, error) {
 	uri, local, err := expandedName(property)
 	if err != nil {
 		return "", false, err
 	}
-	for _, description := range p.Descriptions() {
+	for _, description := range descriptions {
 		for index := range description.Attr {
 			if attributeMatches(&description.Attr[index], uri, local) {
 				return description.Attr[index].Value, true, nil
@@ -343,6 +353,14 @@ func (p *XMPPacket) rootDescriptions() []*etree.Element {
 	var descriptions []*etree.Element
 	root := p.Document.Root()
 	if root == nil {
+		return descriptions
+	}
+	if root.NamespaceURI() == rdfNamespace && root.Tag == "RDF" {
+		for _, child := range root.ChildElements() {
+			if child.NamespaceURI() == rdfNamespace && child.Tag == "Description" {
+				descriptions = append(descriptions, child)
+			}
+		}
 		return descriptions
 	}
 	for _, token := range root.Child {

@@ -56,10 +56,13 @@ func TestCopySettingsSelectionBackupAndRepeat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for key, want := range map[string]string{"crs:Exposure2012": "0.75", "crs:Temperature": "5500", "exif:DateTimeOriginal": "2026-10-01T01:00:00"} {
+		for key, want := range map[string]string{"crs:Exposure2012": "0.75", "crs:WhiteBalance": "As Shot", "crs:HasCrop": "False", "exif:DateTimeOriginal": "2026-10-01T01:00:00"} {
 			if got, found, err := packet.GetScalar(key); err != nil || !found || got != want {
 				t.Fatalf("%s=%q want %q: %v", key, got, want, err)
 			}
+		}
+		if _, found, err := packet.GetScalar("crs:Temperature"); err != nil || found {
+			t.Fatal("native As Shot cleanup retained absolute WB", err)
 		}
 		rating, _, _ := packet.GetScalar("xmp:Rating")
 		if rating != []string{"4", "5"}[i-2] {
@@ -266,7 +269,7 @@ func TestCopySettingsThroughAVIPixels(t *testing.T) {
 		if err := p.SetScalar("crs:Exposure2012", "0.75"); err != nil {
 			t.Fatal(err)
 		}
-		if err := p.SetScalar("crs:Temperature", "5500"); err != nil {
+		if err := p.SetScalar("crs:WhiteBalance", "As Shot"); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := WritePacket(frame.OutputSidecar(), p, false); err != nil {
