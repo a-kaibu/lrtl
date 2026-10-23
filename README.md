@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `init`にQuality分類とWB・クロップ保存準備を追加しました。最初の4つ星（なければ先頭）を参照して連番のQualityを揃え、DNGはAsShotNeutralタグを読みます。実機426条件と合成DNG24例を比較しました。`lrt:Quality=FLAT`の相対WBを動画へ近似反映する処理も追加しています。従来の初期化範囲は`--frame-state preserve`で選べます。[動作変更・実機観測・対応範囲](internal/lrtl/testdata/lrt-frame-state-7.5.5.md)を参照してください。
+
 - `set`／`set-sequence`のWB編集を実機へ近づけました。有効な色温度・Tintの編集で`WhiteBalance=Custom`へ切り替え、対になる値を補い、非使用のWB数値を解除します。4項目の整数化・範囲制限とキャッシュ更新を実機960条件と比較しました。全体数値編集が入れ子の同名メタデータを書き換える問題も修正しています。[動作変更・観測方法・未対応範囲](internal/lrtl/testdata/lrt-wb-edit-7.5.5.md)を参照してください。
 
 - `copy-settings`の既定保存へ、LRT 7.5.5のWB整理・WB/クロップ9数値の保存・`HasCrop`の再計算を追加しました。WBがなければ`As Shot`を補い、方式と`lrt:Quality`に応じて数値を整理します。丸め前のキャッシュを使うクロップ判定を含む397条件を実機と比較し、クロップ有効化／WB整理後のAVI画素も検査しました。従来のコピー段階だけを使う場合は`--save-state preserve`を指定します。[既定動作の変更・検証範囲・残る差](internal/lrtl/testdata/lrt-save-state-7.5.5.md)を参照してください。
@@ -186,7 +188,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | `crop`で単一画像/XMPまたは連番全体の構図をCLIから確認・編集。矩形と角度、HasCropの有効化、解除、単一画像の5つ星crop markをバックアップ付きで保存できる。`interpolate`は数値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。GUIのドラッグ編集も既存機能として残る。手動PerspectiveRotate/Scaleも基本現像で適用。垂直/水平/Aspect/Uprightの遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。`select`でファイル名・XMP評価・既存選択JSONの積集合と反転選択を作成し、動画/TIFF/JPEG処理へ渡すJSONを保存できる。`copy-sequence`で選択画像と有効なXMPをファイル名・内容・更新日時を保って新規フォルダーへコピーできる。画像の移動/除去/削除、任意フォルダー作成、リネームは未対応 | 一部 |
-| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`init`による不足マスク/内部補正スロットの初期化、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。画像内XMPを読むのは外部サイドカーがない場合で、編集結果はXMPサイドカーへ保存し画像本体は変更しない。`copy-settings`で参照画像/XMPの全Camera Raw項目の置換と、他の名前空間の欠損補完に対応（実機XML処理42例と比較）。選択・dry-run・バックアップ・コピー元保護を備える。`--properties`で登録861列の型変換付き指定コピーと欠損時削除にも対応。既定でWB/クロップ9数値と状態を実機方式で保存。その他のRAWコンテナー内XMP、メタデータ全消去/リセット、フレーム再初期化、その他の数値列の一括保存、履歴等は未対応 | 一部 |
+| メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`init`による不足マスク/内部補正スロットの初期化とQuality・WB・クロップ保存準備、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。画像内XMPを読むのは外部サイドカーがない場合で、編集結果はXMPサイドカーへ保存し画像本体は変更しない。`copy-settings`で参照画像/XMPの全Camera Raw項目の置換と、他の名前空間の欠損補完に対応（実機XML処理42例と比較）。選択・dry-run・バックアップ・コピー元保護を備える。`--properties`で登録861列の型変換付き指定コピーと欠損時削除にも対応。既定でWB/クロップ9数値と状態を実機方式で保存。その他のRAWコンテナー内XMP、メタデータ全消去/リセット、フレーム再初期化、その他の数値列の一括保存、履歴等は未対応 | 一部 |
 | XMP・現像値 | Lightroom/Camera Raw等とのXMP連携、現像パラメーターの遷移 | 外部XMPを読み書きし未知のRDF値を保持。JPEGは外部サイドカーがなければ画像内の標準/拡張XMP、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRはtag 700、RAFは埋め込みJPEG、CR3はISO BMFFのAdobe XMP UUIDから読み取る。編集結果はサイドカーへ保存し画像を変更しない。`set`で許可した131項目とPreview EVを単一画像へ、`set-sequence`で選択した連番フレームへ一括設定し、WBの4数値は実機の整数範囲と有効な組のCustom切替・対の補完・非使用値の解除に対応（実機コールバック先頭960条件と比較）。全体数値の編集は根のRDFだけを対象にする。局所補正/マスクは`masks`で確認した配列パスを`set`へ渡して編集できます。`preview-ev`でRGBヒストグラムからPreview EVを算出してXMPへ書き込める。CLIの`curve`で全体／局所のマスター/R/G/Bポイントを単一画像や連番へ編集し、属性/単純テキスト/RDF Seq表現をバックアップ付きで保存。全体設定とLRTの位置登録スロットにあるローカル補正・基本マスク形状をキーフレーム間で補間。sRGB入力のレンダーでは`--apply-xmp-basic`で全体8項目、Texture/Clarity/Dehaze/Sharpening/NoiseReduction/Vignette、4領域パラメトリックカーブ、HSL 8色域の色相/彩度/輝度、Temperature/Tint、全体ColorGrade 4領域の色調、ConvertToGrayscaleと8色GrayMixer、明示されたマスター/RGBポイントカーブに加え、線形/円形グラデーションと現行形式の輝度範囲コンポーネントのAdd/Intersect合成（`MaskGroupBasedCorrections`/`Mask/Aggregate`、MaskBlendMode=0/1、MaskInverted/Flipped対応）に対するLocalExposure/Contrast/Highlights/Shadows/Whites/Blacks/Saturation/LocalTexture/LocalClarity2012/LocalDehaze/LocalSharpness/Temperature/Tint/LocalToningHue/LocalToningSaturation/LocalColorGradeとローカルMainCurve/RedCurve/GreenCurve/BlueCurveを独自近似で画素反映し、クロップも任意適用。ローカルカーブはマスク濃度で16-bit PCHIPカーブ出力を混ぜる近似で、LocalCurveRefineSaturation、ExtendedMainCurveなどのHDR曲線、キーフレーム間の曲線補間は未対応。色範囲Type=1はColorAmountを数値スプラインで遷移し、PointModelsはフレームごとに保持する。レンダーではSampleType=0のPointModelsをCIELAB/ΔE76の幅推定で近似選択（Adobeと画素一致未確認）。深度範囲、ブラシ描線/AI、他の合成モード、Camera Raw相当RAW現像も未対応 | 一部 |
 | Auto-Transition | キーフレーム間を自動補間。Look/Preset/Tone Curve/PointColorsのXMP均等化も可能 | LRT 7.5.5の実行時レジストリに登録された127個の全体数値項目と、固定配列スロットのローカル補正・マスク数値項目を3次ベジェスプラインで遷移する。Linear 1–4、Circular 1–2、Brush 1–2、MaskGroup 1–4/8–11と各CorrectionMasks[1]を位置で対応させ、Sync IDは必須にしない。`--smoothness 0..100`はLRTの設定を再現し既定値は50。Look/Preset/PointColorsとポイントカーブ、MaskGroup 1–4/8–11のMainCurve/RedCurve/GreenCurve/BlueCurve構造を最初の4つ星（なければ先頭）から均等化する。ローカルカーブは構造をコピーするだけでキーフレーム間の曲線補間はしない。`LumRange`文字列は最初の非空値を同じ配列位置の全フレーム（キーフレームを含む）へコピーし、色範囲Type=1はColorAmountを補間する。`PointModels`はLRTの遷移登録に見つからないため変更しない。円形マスク角度の後処理は本体24ケースで境界・欠損・対象位置を観測し、純粋な旧形式／現行形式の保存値を3種類のRDF表現で比較済み。両形式が混在する場合も、先頭XMPのMaskGroup／Gradientによる形式判定と`--mask-format auto|legacy|modern`で後処理対象を切り替える。混在列の保存結果を本体の全6列・3種類のRDF表現で432件比較済み。円形グラデーションとMaskGroup 8/9のAngleはLRTと同じ後処理（−45°未満なら+90°、45°超なら−90°）を、補間値と既存キーフレーム値に適用する。Depthの画像依存データ、ブラシ描線、登録スロット外のマスクは未対応。非キーフレームに欠けた登録位置のマスク構造は、最寄りの実体を持つXMPからRDF配列位置で複製して作成する。登録位置外やSync ID形式の欠損構造は未対応。RDF配列として格納されない独自XMPではSync IDを使って対応する。登録値ごとの範囲クランプとInteger型四捨五入、近接アンカーの直線化・等値区間の平坦化を適用する。許可リストにある旧式4項目（ChromaticAberrationB/R、Defringe、Exposure）はLRTの遷移登録にないため補間しない。先頭フレームのcrs:IsMergedHDRがtrueならExposure2012を-10..10、通常は-5..5に制限する。現行MaskGroup 8/9・selector 1は、画像寸法と全アンカー形状が揃う場合、物理座標への変換・補間・形状復元に対応。本体120ヘルパー観測と、通常／2・5つ星混在の360条件×3 RDF表現で比較。旧形式の同ヘルパーではパス未登録による入力保持を観測。欠損形状・不明寸法の専用変換とCamera Rawマスク画素の一致は未確認 | 一部 |
 | スナップショット | シーケンス状態のスナップショット作成、読み込みと管理 | `.lrtl/snapshots`にXMPサイドカーのZIPスナップショットを作成/一覧表示し、復元案をプレビュー可能。元の連番パスを確認し、別パスには`--allow-moved`で復元。`--write`で適用し、既存サイドカーは既定でバックアップ。画像本体は含めず、後から増えたサイドカーは削除しない | 一部 |
@@ -311,7 +313,7 @@ lrtl copy-settings "D:\Timelapse\reference.xmp" "D:\Timelapse\Sequence" --proper
 
 プロパティ名は`Exposure2012`／`crs:Exposure2012`、`CameraProfile`／`crs:CameraProfile`のように指定でき、局所補正では既存CLIのドット表記と登録表の`/crs:`表記を使えます。重複した指定はまとめ、実機の列順で処理します。ファイル名・画像寸法・撮影日時・外部露出既定値の先頭5列、未登録の位置、カーブ配列の指定は受け付けません。局所補正の作成は実機の配列準備処理に合わせ、親配列がない二重配列や、空から一度に作れない位置は書き込み前にエラーにします。必要なマスク構造は先に`init --write`または全体コピーで準備してください。
 
-既定の`--save-state lrt-7.5.5`はWB/クロップ保存準備を行います。RAW系のWBを移す場合は`WhiteBalance,Temperature,Tint`など必要な列を一緒に選んでください。`FLAT`では相対WB数値を保持しますが、現行レンダーは`IncrementalTemperature/Tint`の画素適用に未対応です。`HasCrop`はクロップ5項目から再計算されます。HG／Deflickerの内部値、履歴・その他の付随情報の更新は未対応です。コピー先のマスクと別の形状へ移すためのID／構造対応付けも行いません。[実機部品の1,001件、配列準備9件、残る差と再実行方法](internal/lrtl/testdata/lrt-selected-columns-7.5.5.md)を参照してください。
+既定の`--save-state lrt-7.5.5`はWB/クロップ保存準備を行います。RAW系のWBを移す場合は`WhiteBalance,Temperature,Tint`など必要な列を一緒に選んでください。`FLAT`では相対WB数値を保持し、レンダーは`lrt:Quality=FLAT`の相対WBをsRGB方式で近似反映します（Adobeとの画素一致は未確認）。`HasCrop`はクロップ5項目から再計算されます。HG／Deflickerの内部値、履歴・その他の付随情報の更新は未対応です。コピー先のマスクと別の形状へ移すためのID／構造対応付けも行いません。[実機部品の1,001件、配列準備9件、残る差と再実行方法](internal/lrtl/testdata/lrt-selected-columns-7.5.5.md)を参照してください。
 
 ### 保存時のWB・クロップ状態
 
@@ -331,7 +333,7 @@ lrtl copy-settings reference.xmp SEQUENCE --properties CropLeft --save-state pre
 
 入れ子のRDF構造にある同名の値を全体設定として読まないよう、レンダー側のWB・トーン・クロップ参照も修正しました。入れ子メタデータを保持したまま、根の設定だけで動画を生成します。
 
-今回の対応はこのコマンドの保存準備です。全フレーム初期化、画像からのQuality分類、他の数値列の一括再保存、HG/Deflicker・履歴・日付等の保存全体、および他の編集コマンドへの共通化は未完です。裸の`rdf:RDF`形式も扱い、根のメタデータを認識できない入力は書き込み前に拒否します。[実機397条件と対応範囲](internal/lrtl/testdata/lrt-save-state-7.5.5.md)を参照してください。
+今回の対応はこのコマンドの保存準備です。`init`では画像からのQuality分類とWB/クロップ保存準備に対応しました。`copy-settings`単独での再分類、フレーム初期化全体、他の数値列の一括再保存、HG/Deflicker・履歴・日付等の保存全体は未完です。裸の`rdf:RDF`形式も扱い、根のメタデータを認識できない入力は書き込み前に拒否します。[実機397条件と対応範囲](internal/lrtl/testdata/lrt-save-state-7.5.5.md)を参照してください。
 
 ## インストール
 
@@ -1070,6 +1072,8 @@ lrtl preview-ev "D:\Timelapse\Developed" --write
 
 ## 連番の初期化
 
+既定の`--frame-state lrt-7.5.5`は、最初の4つ星（なければ先頭）の画像を参照して連番の`lrt:Quality`を再分類します。JPEG/PNG/TIFFはFLAT、その他のRAWはRAW、DNGはAsShotNeutral（TIFFタグ50728）の有無で分けます。Custom WBに不足する値を補い、WB/クロップ9数値の保存、非使用WB値の解除、HasCropの再計算も行います。既存のQualityはこの初期化で更新します。`--frame-state preserve`では従来のマスク・ヘッダー初期化範囲を使えます。[実機426条件・合成DNG24例・制限](internal/lrtl/testdata/lrt-frame-state-7.5.5.md)を参照してください。
+
 ```powershell
 # 既定では予定を表示するだけ
 lrtl init "D:\Timelapse\RAW"
@@ -1085,7 +1089,7 @@ Modernは`MaskGroupBasedCorrections[1..9]`に4つの編集用線形マスク、H
 
 既存の編集用マスクは変更せず、内部スロットも既存の露出・Active/Amount・形状を保持して不足項目を補います。予約位置5〜7に無関係なマスクがある場合、内部ロールが別位置にある場合、または既存内部レイヤーと異なる形式を強制した場合は中断し、移動や上書きをしません。全フレームを確認してから書き込みを始めます。書き込み時の既存サイドカーは既定でバックアップし、再実行で変更がなければ書き込みません。サイドカーのない画像の埋め込みXMPも読み、未知の値を引き継いでサイドカーへ保存します。
 
-Camera RawのVersion/ProcessVersion/HasSettingsがない場合に限り、観測した互換初期値14/11/Trueを補います。既存の現像設定の消去、全スライダーのリセット、キーフレームの自動作成、LRTのシーケンス状態ファイルの生成は行いません。製品テンプレートは同梱せず、配列構造をGoで生成します。LRT/Camera Rawでの読み込み往復や全初期化機能の同等性は未検証です。
+Camera RawのVersion/ProcessVersion/HasSettingsがない場合に限り、観測した互換初期値14/11/Trueを補います。WB保存準備では非使用の数値を解除します。全スライダーのリセット、キーフレームの自動作成、LRTのシーケンス状態ファイルの生成は未対応です。製品テンプレートは同梱せず、配列構造をGoで生成します。LRT/Camera Rawでの読み込み往復や全初期化機能の同等性は未検証です。
 
 初期化→キーフレーム→編集→補間→Deflicker→AVI出力をCLIの回帰テストで実行しています。実NEFでも初期化→キーフレーム→Holy Grail→補間→DNG Converter現像→10-bit ProRes出力（640×426、2フレーム）を確認しました。
 
@@ -1593,6 +1597,8 @@ WarpRectilinearはActiveAreaの整数画素座標を使います。中心は幅�
 
 ### XMPの画素処理
 
+`lrt:Quality=FLAT`ではIncrementalTemperature/Tintを選び、非使用のTemperature/Tintを参照しません。相対色温度は`6500 + 値 × 40` Kへ対応づけ、既存のローカルWBと同じsRGB近似で反映します。相対値0では中立経路を保ち、16-bitの細かな差とアルファも検査します。Adobeの相対WB変換式を再現したものではありません。Qualityが未指定または他の値なら従来の絶対WB経路を使います。
+
 対応済みの全体/ローカル現像処理は、NRGBA64（RGB/アルファ各16-bit）と浮動小数点の計算を使います。全体の露出・WB・トーン・彩度/HSL・Color Grading・ポイント/パラメトリックカーブ、Texture/Clarity/Dehaze、シャープ・ノイズ低減・周辺減光、および対応マスクの局所調整が対象です。空間フィルターの補助層はfloat32、主要演算はfloat64です。ポイントカーブはXMPの0〜255点座標からPCHIP係数を作り、65536段階の入力位置で評価し、フレームごとに巨大なLUTを持ちません。
 
 全体22ケース、ローカル12ケースで細かな入力差・アルファ・元画像の保持を確認し、カーブは全65536段階の恒等性、宣言点の通過、単調性とファズテストを検証します。これはlrtl内での精度を確認するものです。Camera Rawの演算式・カメラプロファイル・ICC色管理・HDRの再現、およびLRTとの画素一致は未達です。Deflicker測光など一部の解析値は従来の統計定義のままで、Preview EVの256ビンは観測したLRT仕様に合わせています。
@@ -1624,7 +1630,7 @@ lrtl render C:\photos\selected --output C:\photos\selected.avi --apply-xmp-basic
 
 `set-sequence DIRECTORY PROPERTY VALUE`は、`set`と同じ全体数値・PreviewEV・既存マスクの局所数値/真偽値を、選択した画像のXMPへ一括設定します。既定は変更予定の表示で、`--write`で保存します。ファイル名、XMP評価、選択JSON、反転の意味は`select`と同じです。
 
-WBの4数値は小数部を0方向へ切り捨て、Temperatureは2000〜50000、Tintは-150〜150、IncrementalTemperature/Tintは-100〜100へ制限します。`lrt:Quality`が完全一致の`FLAT`なら相対2項目、それ以外ならTemperature/Tintが有効な組です。有効な組の編集では`WhiteBalance=Custom`へ切り替え、対になる既存値を整数読込・範囲制限して保存し、非使用の組を消去します。対の値がなければTemperature=5850／Tint=8／相対値=0を使います。プレビューにWB全5項目を表示します。実機全体のEXIF由来WB初期化、画像からのQuality分類、編集によるキーフレーム設定は未対応です。[960条件の比較と対応範囲](internal/lrtl/testdata/lrt-wb-edit-7.5.5.md)を参照してください。
+WBの4数値は小数部を0方向へ切り捨て、Temperatureは2000〜50000、Tintは-150〜150、IncrementalTemperature/Tintは-100〜100へ制限します。`lrt:Quality`が完全一致の`FLAT`なら相対2項目、それ以外ならTemperature/Tintが有効な組です。有効な組の編集では`WhiteBalance=Custom`へ切り替え、対になる既存値を整数読込・範囲制限して保存し、非使用の組を消去します。対の値がなければTemperature=5850／Tint=8／相対値=0を使います。プレビューにWB全5項目を表示します。画像からのQuality分類は`init --frame-state lrt-7.5.5`で行います。実機全体のEXIF由来WB初期化、編集によるキーフレーム設定は未対応です。[960条件の比較と対応範囲](internal/lrtl/testdata/lrt-wb-edit-7.5.5.md)を参照してください。
 
 ```powershell
 lrtl set-sequence C:\photos\sequence Exposure2012 -0.5 --ratings "4,5"

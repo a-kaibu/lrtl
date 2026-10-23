@@ -127,6 +127,9 @@ retain their existing numeric formatting and validation; their native slider
 limits are not added by this change.
 
 The renderer remains an independent approximation of Camera Raw. Absolute
-Temperature/Tint affect the basic-render path. Incremental WB metadata is
-edited, but incremental Temperature/Tint pixel processing is not implemented.
+Temperature/Tint affect the basic-render path. Incremental WB rendering is
+now available for root `lrt:Quality=FLAT` using the independent sRGB mapping
+documented in [frame initialization](lrt-frame-state-7.5.5.md). Image-based
+quality classification is available through `init`; numeric editing itself
+continues to use the root label.
 This does not establish Adobe pixel equivalence or full feature parity.

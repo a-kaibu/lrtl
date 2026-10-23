@@ -174,7 +174,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  curve IMAGE_OR_XMP|DIRECTORY [--channel master|red|green|blue] [--mask COLLECTION[N]] [--points 'X,Y;X,Y;...'|--linear] [--mark] [--dry-run] [--no-backup] [--json]")
 	fmt.Fprintln(writer, "  unmark IMAGE [--force-rating]          remove a keyframe mark")
 	fmt.Fprintln(writer, "  interpolate DIRECTORY [--mask-format auto|legacy|modern] [--write]        preview or write keyframe transitions")
-	fmt.Fprintln(writer, "  init DIRECTORY [--mask-format auto|modern|legacy] [--write] [--no-backup] initialize correction slots")
+	fmt.Fprintln(writer, "  init DIRECTORY [--mask-format auto|modern|legacy] [--frame-state lrt-7.5.5|preserve] [--write] [--no-backup] initialize corrections and frame state")
 	fmt.Fprintln(writer, "  render DIRECTORY --output FILE.avi|mp4|mov [--selection FILTER.json] [--filename-contains TEXT] [--watermark TEXT] [--watermark-position POS] [--aspect W:H] [--output-height N|--long-edge N] [--audio FILE] [--auto-orient] [--apply-xmp-basic] [--motion-blur N]")
 	fmt.Fprintln(writer, "  batch-render ROOT --output DIRECTORY [--format avi|mp4|mov] [--workers N] [--recursive] [-- RENDER_OPTIONS...]")
 	fmt.Fprintln(writer, "  batch-preview-images ROOT --output NEW_DIRECTORY [--recursive] [--workers N] [--write-preview-ev] [--no-backup] [-- PREVIEW_OPTIONS...]")

@@ -256,6 +256,9 @@ func normalizePasteDC(n *pasteNode) {
 }
 
 func pastePacketNodes(packet *XMPPacket) ([]*pasteNode, error) {
+	if err := validatePasteNamespaceBindings(packet.Document.Root(), 0); err != nil {
+		return nil, err
+	}
 	var result []*pasteNode
 	seen := map[pasteName]bool{}
 	descriptions := packet.rootDescriptions()
@@ -277,6 +280,32 @@ func pastePacketNodes(packet *XMPPacket) ([]*pasteNode, error) {
 		}
 	}
 	return result, nil
+}
+
+// etree can parse an undeclared prefixed attribute as namespace-less XML.
+// Adding that prefix while editing would retroactively bind the old attribute,
+// potentially creating duplicate properties. Reject it before any mutation.
+func validatePasteNamespaceBindings(element *etree.Element, depth int) error {
+	if element == nil {
+		return nil
+	}
+	if depth > 512 {
+		return xmpError("XMP namespace validation exceeds 512 levels")
+	}
+	if element.Space != "" && element.Space != "xml" && element.NamespaceURI() == "" {
+		return xmpError("undeclared XML namespace prefix %s", element.Space)
+	}
+	for _, attribute := range element.Attr {
+		if attribute.Space != "" && attribute.Space != "xmlns" && attribute.Space != "xml" && attribute.NamespaceURI() == "" {
+			return xmpError("undeclared XML namespace prefix %s", attribute.Space)
+		}
+	}
+	for _, child := range element.ChildElements() {
+		if err := validatePasteNamespaceBindings(child, depth+1); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func clonePasteNode(n *pasteNode) *pasteNode {

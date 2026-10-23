@@ -203,7 +203,11 @@ func setMissingInitializationValues(element *etree.Element, values map[string]st
 	return nil
 }
 
-func buildInitializationPlan(frames []Frame, format string) ([]initializationChange, error) {
+func buildInitializationPlan(frames []Frame, format string, frameStateProfiles ...string) ([]initializationChange, error) {
+	profile, err := copySaveStateProfile(frameStateProfiles)
+	if err != nil {
+		return nil, fmt.Errorf("--frame-state must be lrt-7.5.5 or preserve")
+	}
 	format = strings.ToLower(strings.TrimSpace(format))
 	if format != "auto" && format != "modern" && format != "legacy" {
 		return nil, fmt.Errorf("mask format must be auto, modern, or legacy")
@@ -211,6 +215,7 @@ func buildInitializationPlan(frames []Frame, format string) ([]initializationCha
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("sequence contains no images")
 	}
+	quality := ""
 	packets := make([]*XMPPacket, len(frames))
 	fallback := "modern"
 	for i, frame := range frames {
@@ -219,6 +224,12 @@ func buildInitializationPlan(frames []Frame, format string) ([]initializationCha
 			return nil, err
 		}
 		packets[i] = packet
+	}
+	if profile == nativeSaveStateProfile {
+		quality, err = nativeSequenceQuality(frames[nativeFrameStateReference(packets)].Image)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, packet := range packets {
 		if existing := packetMaskFormat(packet); existing != "" {
@@ -279,18 +290,17 @@ func buildInitializationPlan(frames []Frame, format string) ([]initializationCha
 		if err != nil {
 			return nil, err
 		}
-		for _, header := range [][2]string{{"HasSettings", "True"}, {"ProcessVersion", "11"}, {"Version", "14"}} {
-			if _, found, err := packets[i].GetScalar("crs:" + header[0]); err != nil {
-				return nil, err
-			} else if !found {
-				if err := packets[i].SetScalar("crs:"+header[0], header[1]); err != nil {
-					return nil, err
-				}
-			}
+		if err := prepareInitializationHeaders(packets[i]); err != nil {
+			return nil, err
 		}
 		count, err := initializeMaskPacket(packets[i], selected, ids)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+		}
+		if profile == nativeSaveStateProfile {
+			if err := prepareNativeFrameState(packets[i], quality); err != nil {
+				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+			}
 		}
 		after, err := packets[i].Serialize()
 		if err != nil {
@@ -308,7 +318,8 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 	write := set.Bool("write", false, "write initialized XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not back up existing sidecars")
 	format := set.String("mask-format", "auto", "mask structure: auto, modern, or legacy")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--mask-format": true, "-mask-format": true})); err != nil {
+	frameState := set.String("frame-state", nativeSaveStateProfile, "frame quality and WB/crop save preparation: lrt-7.5.5 or preserve")
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--mask-format": true, "-mask-format": true, "--frame-state": true, "-frame-state": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}
@@ -316,17 +327,26 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 	if set.NArg() != 1 {
 		return reportError(stderr, fmt.Errorf("expected one sequence directory"))
 	}
+	if *noBackup && !*write {
+		return reportError(stderr, fmt.Errorf("--no-backup requires --write"))
+	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	changes, err := buildInitializationPlan(frames, *format)
+	changes, err := buildInitializationPlan(frames, *format, *frameState)
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Frames: %d; sidecars to initialize: %d\n", len(frames), len(changes))
+	fmt.Fprintf(stdout, "Frame state: %s\n", *frameState)
 	for _, change := range changes {
 		fmt.Fprintf(stdout, "  %s: %s, new correction slots: %d\n", filepath.Base(change.Frame.Image), change.Format, change.CreatedSlots)
+		if *frameState == nativeSaveStateProfile {
+			quality, _, _ := change.Packet.GetRootScalar("lrt:Quality")
+			fmt.Fprintf(stdout, "    Quality=%q\n", quality)
+			writeWBEditPreview(stdout, change.Packet)
+		}
 	}
 	if !*write {
 		fmt.Fprintln(stdout, "Preview only. Pass --write to save XMP sidecars.")
@@ -343,4 +363,24 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "Saved: %s\n", change.Frame.OutputSidecar())
 	}
 	return 0
+}
+
+func prepareInitializationHeaders(packet *XMPPacket) error {
+	before, after, err := saveStateMaps(packet)
+	if err != nil {
+		return err
+	}
+	for _, header := range [][2]string{{"HasSettings", "True"}, {"ProcessVersion", "11"}, {"Version", "14"}} {
+		existing, err := saveStateScalar(after[pasteName{crsNamespace, header[0]}], "crs:"+header[0])
+		if err != nil {
+			return err
+		}
+		if !existing.present {
+			if err := setSaveStateScalar(after, header[0], header[1]); err != nil {
+				return err
+			}
+		}
+	}
+	_, err = writeChangedPasteRoots(packet, before, after)
+	return err
 }

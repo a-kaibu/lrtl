@@ -233,20 +233,38 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 			}
 		}
 	}
-	temperature, hasTemperature, err := readXMPBasicNumber(packet, "Temperature", 2000, 50000)
+	temperatureName, tintName := "Temperature", "Tint"
+	temperatureMin, temperatureMax, tintLimit := 2000.0, 50000.0, 150.0
+	quality, _, err := packet.GetRootScalar("lrt:Quality")
 	if err != nil {
 		return xmpBasicAdjustments{}, err
 	}
-	tint, hasTint, err := readXMPBasicNumber(packet, "Tint", -150, 150)
+	relativeWB := quality == "FLAT"
+	if relativeWB {
+		temperatureName, tintName = "IncrementalTemperature", "IncrementalTint"
+		temperatureMin, temperatureMax, tintLimit = -100, 100, 100
+	}
+	temperature, hasTemperature, err := readXMPBasicNumber(packet, temperatureName, temperatureMin, temperatureMax)
+	if err != nil {
+		return xmpBasicAdjustments{}, err
+	}
+	tint, hasTint, err := readXMPBasicNumber(packet, tintName, -tintLimit, tintLimit)
 	if err != nil {
 		return xmpBasicAdjustments{}, err
 	}
 	if hasTemperature || hasTint {
-		if !hasTemperature {
+		if relativeWB {
+			// Independent sRGB approximation, using the existing local-WB
+			// convention. This is not Adobe's incremental-WB transfer curve.
+			if temperature == 0 && tint == 0 {
+				hasTemperature, hasTint = false, false
+			}
+			temperature = 6500 + temperature*40
+		} else if !hasTemperature {
 			temperature = 6500
 		}
 		adjustments.whiteBalance = approximateWhiteBalanceGains(temperature, tint)
-		adjustments.hasWhiteBalance = true
+		adjustments.hasWhiteBalance = hasTemperature || hasTint
 	}
 	adjustments.colorGrading, err = readXMPColorGrading(func(name string, min, max float64) (float64, bool, error) {
 		return readXMPBasicNumber(packet, name, min, max)

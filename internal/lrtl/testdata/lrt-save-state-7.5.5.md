@@ -153,14 +153,16 @@ logic are pure Go; Java is only for optional local comparison.
 
 ## Remaining scope
 
-This profile currently applies to `copy-settings`. Full frame initialization,
-quality classification from images when `lrt:Quality` is missing, all other
+This profile applies to `copy-settings`; `init` now also shares WB/crop save
+preparation and adds explicit image-based quality reconciliation (see
+[frame initialization](lrt-frame-state-7.5.5.md)). Full frame initialization,
+classification within `copy-settings` itself, all other
 numeric columns, HG/deflicker cache writes, rating/date/dimension side effects,
 history and UI state are not yet reproduced. Scalar state values are required;
 invalid structured state is rejected during CLI preflight. Other editing
-commands do not yet share this save preparation.
+commands do not yet share the complete save preparation.
 
 The renderer remains an independent approximation of Camera Raw. In particular
-IncrementalTemperature/Tint are preserved for FLAT metadata but are not yet
-applied to pixels by the current renderer. The metadata comparisons do not
+IncrementalTemperature/Tint now have an independent sRGB pixel approximation
+for root `lrt:Quality=FLAT`, documented in the frame-initialization notes. The metadata comparisons do not
 prove Adobe pixel equivalence or complete LRTimelapse feature parity.

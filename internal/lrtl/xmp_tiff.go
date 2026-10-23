@@ -49,6 +49,10 @@ func readEmbeddedImageXMP(path string) ([]byte, bool, error) {
 }
 
 func readEmbeddedTIFFXMP(path string) ([]byte, bool, error) {
+	return readTIFFMetadata(path, (*tiffXMPReader).scan)
+}
+
+func readTIFFMetadata(path string, scan func(*tiffXMPReader, uint64) ([]byte, bool, error)) ([]byte, bool, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, false, err
@@ -99,10 +103,19 @@ func readEmbeddedTIFFXMP(path string) ([]byte, bool, error) {
 	if firstIFD == 0 {
 		return nil, false, nil
 	}
-	return reader.scan(firstIFD)
+	return scan(reader, firstIFD)
 }
 
 func (reader *tiffXMPReader) scan(firstIFD uint64) ([]byte, bool, error) {
+	return reader.scanMetadata(firstIFD, func(entry tiffXMPEntry) ([]byte, bool, error) {
+		if entry.tag != 700 {
+			return nil, false, nil
+		}
+		return reader.readPacket(entry)
+	})
+}
+
+func (reader *tiffXMPReader) scanMetadata(firstIFD uint64, inspect func(tiffXMPEntry) ([]byte, bool, error)) ([]byte, bool, error) {
 	queue := []tiffXMPDirectory{{offset: firstIFD}}
 	for len(queue) > 0 {
 		directory := queue[0]
@@ -120,10 +133,7 @@ func (reader *tiffXMPReader) scan(firstIFD uint64) ([]byte, bool, error) {
 			return nil, false, err
 		}
 		for _, entry := range entries {
-			if entry.tag != 700 {
-				continue
-			}
-			packet, found, err := reader.readPacket(entry)
+			packet, found, err := inspect(entry)
 			if err != nil {
 				return nil, false, err
 			}
