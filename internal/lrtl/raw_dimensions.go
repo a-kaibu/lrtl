@@ -23,8 +23,9 @@ func (value *rawDimensionValue) accept(number uint64, priority bool) {
 // The first explicit full-resolution directory wins priority. CR2 headers add
 // the ExifImageWidth/Height override. No pixel strips or camera preview are read.
 func nativeTIFFImageSize(path string) (int32, int32, bool, error) {
-	var width, height, exifWidth, exifHeight rawDimensionValue
-	var priorityDirectory uint64
+	var dimensions rawDimensionGraph
+	var rw2Width, rw2Height int32
+	var rw2Present, panasonic bool
 	var cr2 bool
 	_, _, err := readTIFFMetadata(path, func(reader *tiffXMPReader, first uint64) ([]byte, bool, error) {
 		if reader.bigTIFF {
@@ -40,8 +41,11 @@ func nativeTIFFImageSize(path string) (int32, int32, bool, error) {
 			return nil, false, err
 		}
 		if reader.order.Uint16(header[2:4]) == 85 {
-			return nil, false, nil
-		} // RW2 uses another tag table.
+			panasonic = true
+			var err error
+			rw2Width, rw2Height, rw2Present, err = readNativeRW2Dimensions(reader, first)
+			return nil, false, err
+		}
 		if reader.size >= 12 {
 			signature, err := reader.readAt(8, 4)
 			if err != nil {
@@ -49,60 +53,15 @@ func nativeTIFFImageSize(path string) (int32, int32, bool, error) {
 			}
 			cr2 = !reader.bigTIFF && bytes.Equal(signature, []byte{'C', 'R', 2, 0})
 		}
-		var visit func(uint64, int) error
-		visit = func(offset uint64, depth int) error {
-			if offset == 0 || reader.visited[offset] {
-				return nil
-			}
-			if depth > 32 || reader.directories >= maxPreviewIFDs {
-				return fmt.Errorf("TIFF dimension directory graph exceeds safety limits")
-			}
-			reader.visited[offset] = true
-			reader.directories++
-			entries, next, err := reader.readDirectory(offset)
-			if err != nil {
-				return err
-			}
-			for _, entry := range entries {
-				switch entry.tag {
-				case 254, 255, 256, 257, 40962, 40963:
-					number, err := rawDimensionInteger(reader, entry)
-					if err != nil {
-						return err
-					}
-					if (entry.tag == 254 && number == 0 || entry.tag == 255 && number == 1) && priorityDirectory == 0 {
-						priorityDirectory = offset
-					}
-					priority := offset == priorityDirectory
-					switch entry.tag {
-					case 256:
-						width.accept(number, priority)
-					case 257:
-						height.accept(number, priority)
-					case 40962:
-						exifWidth.accept(number, true)
-					case 40963:
-						exifHeight.accept(number, true)
-					}
-				case 330, 34665:
-					offsets, err := reader.readDirectoryOffsets(entry)
-					if err != nil {
-						return err
-					}
-					for _, child := range offsets {
-						if err := visit(child, depth+1); err != nil {
-							return err
-						}
-					}
-				}
-			}
-			return visit(next, depth+1)
-		}
-		return nil, false, visit(first, 0)
+		return nil, false, dimensions.visit(reader, first, 0)
 	})
 	if err != nil {
 		return 0, 0, false, err
 	}
+	if panasonic {
+		return rw2Width, rw2Height, rw2Present, nil
+	}
+	width, height, exifWidth, exifHeight := dimensions.width, dimensions.height, dimensions.exifWidth, dimensions.exifHeight
 	if !width.present || !height.present {
 		return 0, 0, false, nil
 	}
@@ -113,6 +72,60 @@ func nativeTIFFImageSize(path string) (int32, int32, bool, error) {
 		return 0, 0, false, fmt.Errorf("image dimensions exceed native metadata range")
 	}
 	return int32(width.value), int32(height.value), true, nil
+}
+
+type rawDimensionGraph struct {
+	width, height, exifWidth, exifHeight rawDimensionValue
+	priorityDirectory                    uint64
+}
+
+func (graph *rawDimensionGraph) visit(reader *tiffXMPReader, offset uint64, depth int) error {
+	if offset == 0 || reader.visited[offset] {
+		return nil
+	}
+	if depth > 32 || reader.directories >= maxPreviewIFDs {
+		return fmt.Errorf("TIFF dimension directory graph exceeds safety limits")
+	}
+	reader.visited[offset] = true
+	reader.directories++
+	entries, next, err := reader.readDirectory(offset)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		switch entry.tag {
+		case 254, 255, 256, 257, 40962, 40963:
+			number, err := rawDimensionInteger(reader, entry)
+			if err != nil {
+				return err
+			}
+			if (entry.tag == 254 && number == 0 || entry.tag == 255 && number == 1) && graph.priorityDirectory == 0 {
+				graph.priorityDirectory = offset
+			}
+			priority := offset == graph.priorityDirectory
+			switch entry.tag {
+			case 256:
+				graph.width.accept(number, priority)
+			case 257:
+				graph.height.accept(number, priority)
+			case 40962:
+				graph.exifWidth.accept(number, true)
+			case 40963:
+				graph.exifHeight.accept(number, true)
+			}
+		case 330, 34665:
+			offsets, err := reader.readDirectoryOffsets(entry)
+			if err != nil {
+				return err
+			}
+			for _, child := range offsets {
+				if err := graph.visit(reader, child, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return graph.visit(reader, next, depth+1)
 }
 
 func rawDimensionInteger(reader *tiffXMPReader, entry tiffXMPEntry) (uint64, error) {

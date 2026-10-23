@@ -56,11 +56,16 @@ type rawDimensionsReference struct {
 
 func rawDimensionsObservations(t *testing.T) rawDimensionsReference {
 	t.Helper()
+	return loadRawDimensionsReference(t, "testdata/lrt-raw-dimensions-7.5.5.json", 80, 2)
+}
+
+func loadRawDimensionsReference(t *testing.T, path string, count, invalidCount int) rawDimensionsReference {
+	t.Helper()
 	var reference rawDimensionsReference
-	if err := json.Unmarshal(denoiseRead(t, "testdata/lrt-raw-dimensions-7.5.5.json"), &reference); err != nil {
+	if err := json.Unmarshal(denoiseRead(t, path), &reference); err != nil {
 		t.Fatal(err)
 	}
-	if reference.StoreCompleted || reference.Stop != "history: null LRTimelapseMain.m()" || len(reference.Cases) != 80 {
+	if reference.StoreCompleted || reference.Stop != "history: null LRTimelapseMain.m()" || len(reference.Cases) != count {
 		t.Fatal("invalid raw dimension provenance")
 	}
 	seen := map[string]bool{}
@@ -74,14 +79,19 @@ func rawDimensionsObservations(t *testing.T) rawDimensionsReference {
 			invalid++
 		}
 	}
-	if invalid != 2 {
+	if invalid != invalidCount {
 		t.Fatal("native invalid-dimension count", invalid)
 	}
 	return reference
 }
 
 func TestRawDimensionsNativeImageSizeAndSave(t *testing.T) {
-	for _, row := range rawDimensionsObservations(t).Cases {
+	assertRawDimensionsReference(t, rawDimensionsObservations(t))
+}
+
+func assertRawDimensionsReference(t *testing.T, reference rawDimensionsReference) {
+	t.Helper()
+	for _, row := range reference.Cases {
 		t.Run(row.Name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), row.Name)
 			if err := os.WriteFile(path, row.Data, 0600); err != nil {
@@ -158,6 +168,11 @@ func TestRawDimensionsRadialCachedRootValues(t *testing.T) {
 }
 
 func TestRawDimensionsInstalledImageSizeAndSave(t *testing.T) {
+	assertInstalledRawDimensions(t, rawDimensionsObservations(t))
+}
+
+func assertInstalledRawDimensions(t *testing.T, reference rawDimensionsReference) {
+	t.Helper()
 	jar, exiftool := os.Getenv("LRTL_NATIVE_JAR"), os.Getenv("LRTL_ICC_EXIFTOOL")
 	if jar == "" || exiftool == "" {
 		t.Skip("set LRTL_NATIVE_JAR and LRTL_ICC_EXIFTOOL for installed ImageSize/save replay")
@@ -167,7 +182,7 @@ func TestRawDimensionsInstalledImageSizeAndSave(t *testing.T) {
 	if err := os.Mkdir(images, 0700); err != nil {
 		t.Fatal(err)
 	}
-	for _, row := range rawDimensionsObservations(t).Cases {
+	for _, row := range reference.Cases {
 		if err := os.WriteFile(filepath.Join(images, row.Name), row.Data, 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +206,7 @@ func TestRawDimensionsInstalledImageSizeAndSave(t *testing.T) {
 	if err := json.Unmarshal(denoiseRead(t, path), &replay); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(replay, rawDimensionsObservations(t)) {
+	if !reflect.DeepEqual(replay, reference) {
 		t.Fatal("installed ImageSize/save results changed")
 	}
 }
@@ -311,8 +326,11 @@ func FuzzRawDimensions(f *testing.F) {
 			t.Fatal(err)
 		}
 		width, height, present, err := nativeTIFFImageSize(path)
-		if err == nil && present && (width < 0 || height < 0) {
-			t.Fatal("dimension overflow", width, height)
+		if err == nil && present {
+			state, parseErr := parseNativeCameraFields([]string{"frame", fmt.Sprintf("%dx%d", width, height)})
+			if parseErr != nil || state.Width != width || state.Height != height {
+				t.Fatal("dimension cache round trip", width, height, parseErr)
+			}
 		}
 		if !bytes.Equal(data, denoiseRead(t, path)) {
 			t.Fatal("dimension reader changed the image")

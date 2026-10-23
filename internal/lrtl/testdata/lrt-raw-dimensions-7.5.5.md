@@ -1,3 +1,5 @@
+> Later extension: Panasonic RAW/RW2/RWL border and JPEG/ExifIFD dimension selection now has 84 additional native observations. See [RW2 dimensions and preview video](lrt-rw2-dimensions-7.5.5.md). The earlier 80 TIFF observations below remain unchanged.
+
 # TIFF/RAW ImageSize and save prefix, LRTimelapse 7.5.5
 
 ## Native observations

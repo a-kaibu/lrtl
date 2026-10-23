@@ -6,9 +6,9 @@ inputs and need neither Python nor ExifTool unless installed replay is enabled.
 from pathlib import Path
 import base64, json, struct, sys
 
-def encode(directories, endian='<', big=False, cr2=False, magic=42):
+def encode(directories, endian='<', big=False, cr2=False, magic=42, rw2=False):
     stride=512
-    first=16 if big or cr2 else 8
+    first=24 if rw2 else (16 if big or cr2 else 8)
     offsets=[first+i*stride for i in range(len(directories))]
     data=bytearray(first+len(directories)*stride)
     data[:2]=b'II' if endian=='<' else b'MM'
@@ -16,11 +16,15 @@ def encode(directories, endian='<', big=False, cr2=False, magic=42):
     else:
         struct.pack_into(endian+'HI',data,2,magic,first)
         if cr2: data[8:12]=b'CR\x02\x00';struct.pack_into(endian+'I',data,12,offsets[-1])
+        if rw2: data[8:24]=bytes.fromhex('88e774d8f8251d4d947a6e77822b5d6a')
     for i,directory in enumerate(directories):
         fields=[]
         names={'width':256,'height':257,'subfile':254,'oldsubfile':255,'photometric':262,'exifwidth':40962,'exifheight':40963,'crop':50720}
         for name,tag in names.items():
             if name in directory: fields.append((tag,directory.get('kind',4),[directory[name]]))
+        for tag,(kind,value) in directory.get('tags',{}).items():
+            fields.append((tag,kind,value if isinstance(value,(list,bytes)) else [value]))
+        if 'jpeg' in directory: fields.append((46,7,directory['jpeg']))
         for name,tag in [('sub',330),('exif',34665)]:
             if name in directory:
                 indices=directory[name] if isinstance(directory[name],list) else [directory[name]]
@@ -31,13 +35,16 @@ def encode(directories, endian='<', big=False, cr2=False, magic=42):
         struct.pack_into(endian+('Q' if big else 'H'),data,position,len(fields));position+=8 if big else 2
         extra=offsets[i]+384
         for tag,kind,values in fields:
-            fmt={3:'H',4:'I',16:'Q',18:'Q'}[kind]
+            fmt={1:'B',3:'H',4:'I',7:'B',16:'Q',18:'Q'}[kind]
             raw=struct.pack(endian+fmt*len(values),*values)
             width=8 if big else 4
             struct.pack_into(endian+('HHQ' if big else 'HHI'),data,position,tag,kind,len(values))
             if len(raw)>width:
-                data[extra:extra+len(raw)]=raw
-                raw=struct.pack(endian+('Q' if big else 'I'),extra);extra+=len(values)*struct.calcsize(fmt)
+                if kind==7:
+                    location=len(data);data.extend(raw)
+                else:
+                    location=extra;data[extra:extra+len(raw)]=raw;extra+=len(raw)
+                raw=struct.pack(endian+('Q' if big else 'I'),location)
             data[position+(12 if big else 8):position+(12 if big else 8)+width]=raw.ljust(width,b'\0')
             position+=20 if big else 12
         struct.pack_into(endian+('Q' if big else 'I'),data,position,offsets[directory['next']] if 'next' in directory else 0)

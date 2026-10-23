@@ -27,6 +27,7 @@ var embeddedRawPreviewExtensions = map[string]bool{
 	".3fr": true, ".arw": true, ".cr2": true, ".cr3": true, ".dcr": true,
 	".dcs": true, ".dng": true, ".fff": true, ".kdc": true, ".nef": true,
 	".nrw": true, ".orf": true, ".pef": true, ".raf": true, ".rw2": true,
+	".raw": true, ".rwl": true,
 	".sr2": true, ".srf": true, ".srw": true,
 }
 
