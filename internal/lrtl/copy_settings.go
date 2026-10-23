@@ -1,6 +1,7 @@
 package lrtl
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -59,6 +60,10 @@ func readSettingsReference(path string) (*settingsReference, error) {
 }
 
 func planCopySettings(all, selected []Frame, ref *settingsReference) ([]packetOutput, int, error) {
+	return planCopySettingsColumns(all, selected, ref, nil)
+}
+
+func planCopySettingsColumns(all, selected []Frame, ref *settingsReference, columns []selectedColumn) ([]packetOutput, int, error) {
 	if len(selected) == 0 {
 		return nil, 0, fmt.Errorf("no frames selected")
 	}
@@ -111,7 +116,14 @@ func planCopySettings(all, selected []Frame, ref *settingsReference) ([]packetOu
 	if len(targets) == 0 {
 		return nil, skipped, nil
 	}
-	outputs, err := planSelectedPacketEdits(all, targets, func(target *XMPPacket) error { _, err := pasteXMPMetadata(target, ref.Packet); return err })
+	outputs, err := planSelectedPacketEdits(all, targets, func(target *XMPPacket) error {
+		if len(columns) > 0 {
+			_, err := copySelectedColumnMetadata(target, ref.Packet, columns)
+			return err
+		}
+		_, err := pasteXMPMetadata(target, ref.Packet)
+		return err
+	})
 	return outputs, skipped, err
 }
 
@@ -120,12 +132,37 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	filters := registerFrameSelectionFlags(set)
 	write := set.Bool("write", false, "save all validated metadata changes to sidecars")
 	noBackup := set.Bool("no-backup", false, "save existing sidecars without backups")
-	const usage = "Usage: lrtl copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]"
-	if err := set.Parse(reorderFlags(arguments, map[string]bool{"--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true, "--ratings": true, "-ratings": true}, true)); err != nil {
+	properties := set.String("properties", "", "copy these registered columns, separated by commas; a missing source value clears the column")
+	listProperties := set.Bool("list-properties", false, "list the registered columns available for selected-column copying")
+	const usage = "Usage: lrtl copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY [--properties NAMES] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]\n       lrtl copy-settings --list-properties"
+	if err := set.Parse(reorderFlags(arguments, map[string]bool{"--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true, "--ratings": true, "-ratings": true, "--properties": true, "-properties": true}, true)); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			fmt.Fprintln(stdout, usage)
 			return code
 		}
+	}
+	propertyFlag := false
+	flagCount := 0
+	set.Visit(func(f *flag.Flag) {
+		flagCount++
+		if f.Name == "properties" {
+			propertyFlag = true
+		}
+	})
+	if *listProperties {
+		if set.NArg() != 0 || flagCount != 1 {
+			return reportError(stderr, fmt.Errorf("--list-properties must be used alone"))
+		}
+		columns, err := selectedColumnRegistry()
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		for _, column := range columns {
+			if column.Index >= 5 {
+				fmt.Fprintf(stdout, "%s\t%s\n", column.Property, column.Kind)
+			}
+		}
+		return 0
 	}
 	if set.NArg() != 2 || (*noBackup && !*write) {
 		return reportError(stderr, fmt.Errorf("%s", usage))
@@ -133,6 +170,13 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	options, err := filters.options(set)
 	if err != nil {
 		return reportError(stderr, err)
+	}
+	var columns []selectedColumn
+	if propertyFlag {
+		columns, err = parseSelectedColumns(*properties)
+		if err != nil {
+			return reportError(stderr, err)
+		}
 	}
 	ref, err := readSettingsReference(set.Arg(0))
 	if err != nil {
@@ -146,12 +190,31 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	outputs, skipped, err := planCopySettings(frames, selected, ref)
+	outputs, skipped, err := planCopySettingsColumns(frames, selected, ref, columns)
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Reference: %s\nSelected: %d/%d frames; reference files skipped: %d; changed sidecars: %d\n", set.Arg(0), len(selected), len(frames), skipped, len(outputs))
-	fmt.Fprintln(stdout, "Replace Camera Raw settings; merge other metadata, including missing capture information.")
+	if len(columns) == 0 {
+		fmt.Fprintln(stdout, "Replace Camera Raw settings; merge other metadata, including missing capture information.")
+	} else {
+		fmt.Fprintf(stdout, "Copy %d registered column(s); missing source values clear selected columns.\n", len(columns))
+		nodes, err := pastePacketNodes(ref.Packet)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		for _, column := range columns {
+			value, err := readSelectedColumn(nodes, column)
+			if err != nil {
+				return reportError(stderr, err)
+			}
+			if value.present {
+				fmt.Fprintf(stdout, "  %s: %q\n", column.Property, value.value)
+			} else {
+				fmt.Fprintf(stdout, "  %s: remove\n", column.Property)
+			}
+		}
+	}
 	for _, output := range outputs {
 		fmt.Fprintln(stdout, output.Path)
 	}

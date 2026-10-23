@@ -563,6 +563,11 @@ func pasteXMPMetadata(destination, source *XMPPacket) (bool, error) {
 			}
 		}
 	}
+	return writeChangedPasteRoots(destination, before, after)
+}
+
+// Only changed root properties are rebuilt; untouched XML remains in place.
+func writeChangedPasteRoots(destination *XMPPacket, before, after map[pasteName]*pasteNode) (bool, error) {
 	changed := map[pasteName]bool{}
 	for name, n := range before {
 		other := after[name]

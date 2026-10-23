@@ -17,8 +17,10 @@ This is not a develop-only clipboard operation.
 The full native caller subsequently reparses/reinitializes its frame model,
 including mask/default metadata. That stage and its cached rating behavior
 are **not implemented or covered by these XML comparisons**. Selected-column
-paste, GUI clipboard state, native dirty flags and self-paste alias behavior
-are also outside this feature. CLI references are immutable snapshots.
+copy is a separate `--properties` mode described in
+[`lrt-selected-columns-7.5.5.md`](lrt-selected-columns-7.5.5.md).
+GUI clipboard state, native dirty flags and self-paste alias behavior are also
+outside this feature. CLI references are immutable snapshots.
 
 ## Measurements
 
@@ -113,7 +115,8 @@ temporary-file replacement and backup mechanism. A later filesystem write
 failure does not roll back already saved sidecars; this is not a multi-file
 transaction. Images and the source reference are not edited.
 
-Local validation on 2026-10-23 passed the focused tests on Go 1.23 and 1.26,
+For the initial full-XML implementation (`72fed3b`), local validation on
+2026-10-23 passed the focused tests on Go 1.23 and 1.26,
 the race detector with installed-parser comparison, a 60-second fuzz run
 (655,900 executions), `go vet ./...`, and a `CGO_ENABLED=0` executable build.
 The focused coverage profile measures 347/364 statements (95.3%) in

@@ -1,0 +1,4332 @@
+[
+ {
+  "index": 0,
+  "property": "RawFileName",
+  "kind": "String"
+ },
+ {
+  "index": 1,
+  "property": "exif:PixelXDimension",
+  "kind": "Integer"
+ },
+ {
+  "index": 2,
+  "property": "exif:PixelYDimension",
+  "kind": "Integer"
+ },
+ {
+  "index": 3,
+  "property": "xmp:CreateDate",
+  "kind": "String"
+ },
+ {
+  "index": 4,
+  "property": "lrt:ExternalExposureDefault",
+  "kind": "Double"
+ },
+ {
+  "index": 5,
+  "property": "Exposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 6,
+  "property": "HasSettings",
+  "kind": "Boolean"
+ },
+ {
+  "index": 7,
+  "property": "lrt:Quality",
+  "kind": "String"
+ },
+ {
+  "index": 8,
+  "property": "ProcessVersion",
+  "kind": "Double"
+ },
+ {
+  "index": 9,
+  "property": "CropTop",
+  "kind": "Double"
+ },
+ {
+  "index": 10,
+  "property": "CropLeft",
+  "kind": "Double"
+ },
+ {
+  "index": 11,
+  "property": "CropBottom",
+  "kind": "Double"
+ },
+ {
+  "index": 12,
+  "property": "CropRight",
+  "kind": "Double"
+ },
+ {
+  "index": 13,
+  "property": "CropAngle",
+  "kind": "Double"
+ },
+ {
+  "index": 14,
+  "property": "HasCrop",
+  "kind": "Boolean"
+ },
+ {
+  "index": 15,
+  "property": "CompatibleVersion",
+  "kind": "String"
+ },
+ {
+  "index": 16,
+  "property": "HDREditMode",
+  "kind": "Integer"
+ },
+ {
+  "index": 17,
+  "property": "HDRMaxValue",
+  "kind": "Double"
+ },
+ {
+  "index": 18,
+  "property": "crs:CameraProfile",
+  "kind": "String"
+ },
+ {
+  "index": 19,
+  "property": "crs:CameraProfileDigest",
+  "kind": "String"
+ },
+ {
+  "index": 20,
+  "property": "crd:CameraProfile",
+  "kind": "String"
+ },
+ {
+  "index": 21,
+  "property": "crd:CameraProfileDigest",
+  "kind": "String"
+ },
+ {
+  "index": 22,
+  "property": "crs:LookName",
+  "kind": "String"
+ },
+ {
+  "index": 23,
+  "property": "crs:Look/crs:Name",
+  "kind": "String"
+ },
+ {
+  "index": 24,
+  "property": "crs:Look/crs:Amount",
+  "kind": "Double"
+ },
+ {
+  "index": 25,
+  "property": "crs:Look/crs:UUID",
+  "kind": "String"
+ },
+ {
+  "index": 26,
+  "property": "crd:LookName",
+  "kind": "String"
+ },
+ {
+  "index": 27,
+  "property": "ToneCurveName2012",
+  "kind": "String"
+ },
+ {
+  "index": 28,
+  "property": "WhiteBalance",
+  "kind": "String"
+ },
+ {
+  "index": 29,
+  "property": "Temperature",
+  "kind": "Integer"
+ },
+ {
+  "index": 30,
+  "property": "Tint",
+  "kind": "Integer"
+ },
+ {
+  "index": 31,
+  "property": "IncrementalTemperature",
+  "kind": "Integer"
+ },
+ {
+  "index": 32,
+  "property": "IncrementalTint",
+  "kind": "Integer"
+ },
+ {
+  "index": 33,
+  "property": "HighlightRecovery",
+  "kind": "Integer"
+ },
+ {
+  "index": 34,
+  "property": "FillLight",
+  "kind": "Integer"
+ },
+ {
+  "index": 35,
+  "property": "Contrast2012",
+  "kind": "Integer"
+ },
+ {
+  "index": 36,
+  "property": "Highlights2012",
+  "kind": "Integer"
+ },
+ {
+  "index": 37,
+  "property": "Shadows2012",
+  "kind": "Integer"
+ },
+ {
+  "index": 38,
+  "property": "Whites2012",
+  "kind": "Integer"
+ },
+ {
+  "index": 39,
+  "property": "Blacks2012",
+  "kind": "Integer"
+ },
+ {
+  "index": 40,
+  "property": "Shadows",
+  "kind": "Integer"
+ },
+ {
+  "index": 41,
+  "property": "Brightness",
+  "kind": "Integer"
+ },
+ {
+  "index": 42,
+  "property": "Contrast",
+  "kind": "Integer"
+ },
+ {
+  "index": 43,
+  "property": "Texture",
+  "kind": "Integer"
+ },
+ {
+  "index": 44,
+  "property": "Clarity",
+  "kind": "Integer"
+ },
+ {
+  "index": 45,
+  "property": "Clarity2012",
+  "kind": "Integer"
+ },
+ {
+  "index": 46,
+  "property": "Dehaze",
+  "kind": "Integer"
+ },
+ {
+  "index": 47,
+  "property": "Vibrance",
+  "kind": "Integer"
+ },
+ {
+  "index": 48,
+  "property": "Saturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 49,
+  "property": "CurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 50,
+  "property": "ParametricShadows",
+  "kind": "Integer"
+ },
+ {
+  "index": 51,
+  "property": "ParametricShadowSplit",
+  "kind": "Integer"
+ },
+ {
+  "index": 52,
+  "property": "ParametricDarks",
+  "kind": "Integer"
+ },
+ {
+  "index": 53,
+  "property": "ParametricMidtoneSplit",
+  "kind": "Integer"
+ },
+ {
+  "index": 54,
+  "property": "ParametricLights",
+  "kind": "Integer"
+ },
+ {
+  "index": 55,
+  "property": "ParametricHighlightSplit",
+  "kind": "Integer"
+ },
+ {
+  "index": 56,
+  "property": "ParametricHighlights",
+  "kind": "Integer"
+ },
+ {
+  "index": 57,
+  "property": "HueAdjustmentRed",
+  "kind": "Integer"
+ },
+ {
+  "index": 58,
+  "property": "SaturationAdjustmentRed",
+  "kind": "Integer"
+ },
+ {
+  "index": 59,
+  "property": "LuminanceAdjustmentRed",
+  "kind": "Integer"
+ },
+ {
+  "index": 60,
+  "property": "HueAdjustmentOrange",
+  "kind": "Integer"
+ },
+ {
+  "index": 61,
+  "property": "SaturationAdjustmentOrange",
+  "kind": "Integer"
+ },
+ {
+  "index": 62,
+  "property": "LuminanceAdjustmentOrange",
+  "kind": "Integer"
+ },
+ {
+  "index": 63,
+  "property": "HueAdjustmentYellow",
+  "kind": "Integer"
+ },
+ {
+  "index": 64,
+  "property": "SaturationAdjustmentYellow",
+  "kind": "Integer"
+ },
+ {
+  "index": 65,
+  "property": "LuminanceAdjustmentYellow",
+  "kind": "Integer"
+ },
+ {
+  "index": 66,
+  "property": "HueAdjustmentGreen",
+  "kind": "Integer"
+ },
+ {
+  "index": 67,
+  "property": "SaturationAdjustmentGreen",
+  "kind": "Integer"
+ },
+ {
+  "index": 68,
+  "property": "LuminanceAdjustmentGreen",
+  "kind": "Integer"
+ },
+ {
+  "index": 69,
+  "property": "HueAdjustmentAqua",
+  "kind": "Integer"
+ },
+ {
+  "index": 70,
+  "property": "SaturationAdjustmentAqua",
+  "kind": "Integer"
+ },
+ {
+  "index": 71,
+  "property": "LuminanceAdjustmentAqua",
+  "kind": "Integer"
+ },
+ {
+  "index": 72,
+  "property": "HueAdjustmentBlue",
+  "kind": "Integer"
+ },
+ {
+  "index": 73,
+  "property": "SaturationAdjustmentBlue",
+  "kind": "Integer"
+ },
+ {
+  "index": 74,
+  "property": "LuminanceAdjustmentBlue",
+  "kind": "Integer"
+ },
+ {
+  "index": 75,
+  "property": "HueAdjustmentPurple",
+  "kind": "Integer"
+ },
+ {
+  "index": 76,
+  "property": "SaturationAdjustmentPurple",
+  "kind": "Integer"
+ },
+ {
+  "index": 77,
+  "property": "LuminanceAdjustmentPurple",
+  "kind": "Integer"
+ },
+ {
+  "index": 78,
+  "property": "HueAdjustmentMagenta",
+  "kind": "Integer"
+ },
+ {
+  "index": 79,
+  "property": "SaturationAdjustmentMagenta",
+  "kind": "Integer"
+ },
+ {
+  "index": 80,
+  "property": "LuminanceAdjustmentMagenta",
+  "kind": "Integer"
+ },
+ {
+  "index": 81,
+  "property": "SplitToningShadowHue",
+  "kind": "Integer"
+ },
+ {
+  "index": 82,
+  "property": "SplitToningShadowSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 83,
+  "property": "ColorGradeShadowLum",
+  "kind": "Integer"
+ },
+ {
+  "index": 84,
+  "property": "ColorGradeMidtoneHue",
+  "kind": "Integer"
+ },
+ {
+  "index": 85,
+  "property": "ColorGradeMidtoneSat",
+  "kind": "Integer"
+ },
+ {
+  "index": 86,
+  "property": "ColorGradeMidtoneLum",
+  "kind": "Integer"
+ },
+ {
+  "index": 87,
+  "property": "SplitToningHighlightHue",
+  "kind": "Integer"
+ },
+ {
+  "index": 88,
+  "property": "SplitToningHighlightSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 89,
+  "property": "ColorGradeHighlightLum",
+  "kind": "Integer"
+ },
+ {
+  "index": 90,
+  "property": "ColorGradeGlobalHue",
+  "kind": "Integer"
+ },
+ {
+  "index": 91,
+  "property": "ColorGradeGlobalSat",
+  "kind": "Integer"
+ },
+ {
+  "index": 92,
+  "property": "ColorGradeGlobalLum",
+  "kind": "Integer"
+ },
+ {
+  "index": 93,
+  "property": "SplitToningBalance",
+  "kind": "Integer"
+ },
+ {
+  "index": 94,
+  "property": "ColorGradeBlending",
+  "kind": "Integer"
+ },
+ {
+  "index": 95,
+  "property": "Sharpness",
+  "kind": "Integer"
+ },
+ {
+  "index": 96,
+  "property": "SharpenRadius",
+  "kind": "Double"
+ },
+ {
+  "index": 97,
+  "property": "SharpenDetail",
+  "kind": "Integer"
+ },
+ {
+  "index": 98,
+  "property": "SharpenEdgeMasking",
+  "kind": "Integer"
+ },
+ {
+  "index": 99,
+  "property": "LuminanceSmoothing",
+  "kind": "Integer"
+ },
+ {
+  "index": 100,
+  "property": "LuminanceNoiseReductionDetail",
+  "kind": "Integer"
+ },
+ {
+  "index": 101,
+  "property": "LuminanceNoiseReductionContrast",
+  "kind": "Integer"
+ },
+ {
+  "index": 102,
+  "property": "ColorNoiseReduction",
+  "kind": "Integer"
+ },
+ {
+  "index": 103,
+  "property": "ColorNoiseReductionDetail",
+  "kind": "Integer"
+ },
+ {
+  "index": 104,
+  "property": "ColorNoiseReductionSmoothness",
+  "kind": "Integer"
+ },
+ {
+  "index": 105,
+  "property": "LensProfileEnable",
+  "kind": "Integer"
+ },
+ {
+  "index": 106,
+  "property": "crd:LensProfileEnable",
+  "kind": "Integer"
+ },
+ {
+  "index": 107,
+  "property": "LensProfileDigest",
+  "kind": "String"
+ },
+ {
+  "index": 108,
+  "property": "LensProfileFilename",
+  "kind": "String"
+ },
+ {
+  "index": 109,
+  "property": "LensProfileName",
+  "kind": "String"
+ },
+ {
+  "index": 110,
+  "property": "LensProfileSetup",
+  "kind": "String"
+ },
+ {
+  "index": 111,
+  "property": "LensProfileDistortionScale",
+  "kind": "Integer"
+ },
+ {
+  "index": 112,
+  "property": "LensProfileVignettingScale",
+  "kind": "Integer"
+ },
+ {
+  "index": 113,
+  "property": "LensProfileChromaticAberrationScale",
+  "kind": "Integer"
+ },
+ {
+  "index": 114,
+  "property": "LensManualDistortionAmount",
+  "kind": "Integer"
+ },
+ {
+  "index": 115,
+  "property": "PerspectiveVertical",
+  "kind": "Integer"
+ },
+ {
+  "index": 116,
+  "property": "PerspectiveHorizontal",
+  "kind": "Integer"
+ },
+ {
+  "index": 117,
+  "property": "PerspectiveRotate",
+  "kind": "Double"
+ },
+ {
+  "index": 118,
+  "property": "PerspectiveScale",
+  "kind": "Integer"
+ },
+ {
+  "index": 119,
+  "property": "PerspectiveAspect",
+  "kind": "Integer"
+ },
+ {
+  "index": 120,
+  "property": "PerspectiveUpright",
+  "kind": "Integer"
+ },
+ {
+  "index": 121,
+  "property": "UprightVersion",
+  "kind": "Integer"
+ },
+ {
+  "index": 122,
+  "property": "UprightCenterMode",
+  "kind": "Integer"
+ },
+ {
+  "index": 123,
+  "property": "UprightCenterNormX",
+  "kind": "Double"
+ },
+ {
+  "index": 124,
+  "property": "UprightCenterNormY",
+  "kind": "Double"
+ },
+ {
+  "index": 125,
+  "property": "UprightFocalMode",
+  "kind": "Integer"
+ },
+ {
+  "index": 126,
+  "property": "UprightFocalLength35mm",
+  "kind": "Double"
+ },
+ {
+  "index": 127,
+  "property": "UprightPreview",
+  "kind": "Boolean"
+ },
+ {
+  "index": 128,
+  "property": "UprightDependentDigest",
+  "kind": "String"
+ },
+ {
+  "index": 129,
+  "property": "UprightGuidedDependentDigest",
+  "kind": "String"
+ },
+ {
+  "index": 130,
+  "property": "UprightTransformCount",
+  "kind": "Integer"
+ },
+ {
+  "index": 131,
+  "property": "UprightTransform_0",
+  "kind": "String"
+ },
+ {
+  "index": 132,
+  "property": "UprightTransform_1",
+  "kind": "String"
+ },
+ {
+  "index": 133,
+  "property": "UprightTransform_2",
+  "kind": "String"
+ },
+ {
+  "index": 134,
+  "property": "UprightTransform_3",
+  "kind": "String"
+ },
+ {
+  "index": 135,
+  "property": "UprightTransform_4",
+  "kind": "String"
+ },
+ {
+  "index": 136,
+  "property": "UprightTransform_5",
+  "kind": "String"
+ },
+ {
+  "index": 137,
+  "property": "UprightFourSegmentsCount",
+  "kind": "Integer"
+ },
+ {
+  "index": 138,
+  "property": "UprightFourSegments_0",
+  "kind": "String"
+ },
+ {
+  "index": 139,
+  "property": "UprightFourSegments_1",
+  "kind": "String"
+ },
+ {
+  "index": 140,
+  "property": "UprightFourSegments_2",
+  "kind": "String"
+ },
+ {
+  "index": 141,
+  "property": "UprightFourSegments_3",
+  "kind": "String"
+ },
+ {
+  "index": 142,
+  "property": "GrainAmount",
+  "kind": "Integer"
+ },
+ {
+  "index": 143,
+  "property": "GrainSize",
+  "kind": "Integer"
+ },
+ {
+  "index": 144,
+  "property": "GrainFrequency",
+  "kind": "Integer"
+ },
+ {
+  "index": 145,
+  "property": "VignetteAmount",
+  "kind": "Integer"
+ },
+ {
+  "index": 146,
+  "property": "VignetteMidpoint",
+  "kind": "Integer"
+ },
+ {
+  "index": 147,
+  "property": "ToneMapStrength",
+  "kind": "Integer"
+ },
+ {
+  "index": 148,
+  "property": "PostCropVignetteAmount",
+  "kind": "Integer"
+ },
+ {
+  "index": 149,
+  "property": "PostCropVignetteMidpoint",
+  "kind": "Integer"
+ },
+ {
+  "index": 150,
+  "property": "PostCropVignetteFeather",
+  "kind": "Integer"
+ },
+ {
+  "index": 151,
+  "property": "PostCropVignetteRoundness",
+  "kind": "Integer"
+ },
+ {
+  "index": 152,
+  "property": "PostCropVignetteStyle",
+  "kind": "Integer"
+ },
+ {
+  "index": 153,
+  "property": "PostCropVignetteHighlightContrast",
+  "kind": "Integer"
+ },
+ {
+  "index": 154,
+  "property": "ShadowTint",
+  "kind": "Integer"
+ },
+ {
+  "index": 155,
+  "property": "RedHue",
+  "kind": "Integer"
+ },
+ {
+  "index": 156,
+  "property": "RedSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 157,
+  "property": "GreenHue",
+  "kind": "Integer"
+ },
+ {
+  "index": 158,
+  "property": "GreenSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 159,
+  "property": "BlueHue",
+  "kind": "Integer"
+ },
+ {
+  "index": 160,
+  "property": "BlueSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 161,
+  "property": "AutoLateralCA",
+  "kind": "Integer"
+ },
+ {
+  "index": 162,
+  "property": "DefringePurpleAmount",
+  "kind": "Integer"
+ },
+ {
+  "index": 163,
+  "property": "DefringePurpleHueLo",
+  "kind": "Integer"
+ },
+ {
+  "index": 164,
+  "property": "DefringePurpleHueHi",
+  "kind": "Integer"
+ },
+ {
+  "index": 165,
+  "property": "DefringeGreenAmount",
+  "kind": "Integer"
+ },
+ {
+  "index": 166,
+  "property": "DefringeGreenHueLo",
+  "kind": "Integer"
+ },
+ {
+  "index": 167,
+  "property": "DefringeGreenHueHi",
+  "kind": "Integer"
+ },
+ {
+  "index": 168,
+  "property": "tiff:Orientation",
+  "kind": "Integer"
+ },
+ {
+  "index": 169,
+  "property": "ConvertToGrayscale",
+  "kind": "Boolean"
+ },
+ {
+  "index": 170,
+  "property": "GrayMixerAqua",
+  "kind": "Integer"
+ },
+ {
+  "index": 171,
+  "property": "GrayMixerBlue",
+  "kind": "Integer"
+ },
+ {
+  "index": 172,
+  "property": "GrayMixerGreen",
+  "kind": "Integer"
+ },
+ {
+  "index": 173,
+  "property": "GrayMixerMagenta",
+  "kind": "Integer"
+ },
+ {
+  "index": 174,
+  "property": "GrayMixerOrange",
+  "kind": "Integer"
+ },
+ {
+  "index": 175,
+  "property": "GrayMixerPurple",
+  "kind": "Integer"
+ },
+ {
+  "index": 176,
+  "property": "GrayMixerRed",
+  "kind": "Integer"
+ },
+ {
+  "index": 177,
+  "property": "GrayMixerYellow",
+  "kind": "Integer"
+ },
+ {
+  "index": 178,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 179,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 180,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 181,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 182,
+  "property": "GradientBasedCorrections[1]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 183,
+  "property": "GradientBasedCorrections[1]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 184,
+  "property": "GradientBasedCorrections[1]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 185,
+  "property": "GradientBasedCorrections[1]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 186,
+  "property": "GradientBasedCorrections[1]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 187,
+  "property": "GradientBasedCorrections[1]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 188,
+  "property": "GradientBasedCorrections[1]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 189,
+  "property": "GradientBasedCorrections[1]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 190,
+  "property": "GradientBasedCorrections[1]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 191,
+  "property": "GradientBasedCorrections[1]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 192,
+  "property": "GradientBasedCorrections[1]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 193,
+  "property": "GradientBasedCorrections[1]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 194,
+  "property": "GradientBasedCorrections[1]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 195,
+  "property": "GradientBasedCorrections[1]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 196,
+  "property": "GradientBasedCorrections[1]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 197,
+  "property": "GradientBasedCorrections[1]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 198,
+  "property": "GradientBasedCorrections[1]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 199,
+  "property": "GradientBasedCorrections[1]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 200,
+  "property": "GradientBasedCorrections[1]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 201,
+  "property": "GradientBasedCorrections[1]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 202,
+  "property": "GradientBasedCorrections[1]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 203,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 204,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 205,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 206,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 207,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 208,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 209,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 210,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 211,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 212,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 213,
+  "property": "GradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 214,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 215,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 216,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 217,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 218,
+  "property": "GradientBasedCorrections[2]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 219,
+  "property": "GradientBasedCorrections[2]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 220,
+  "property": "GradientBasedCorrections[2]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 221,
+  "property": "GradientBasedCorrections[2]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 222,
+  "property": "GradientBasedCorrections[2]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 223,
+  "property": "GradientBasedCorrections[2]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 224,
+  "property": "GradientBasedCorrections[2]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 225,
+  "property": "GradientBasedCorrections[2]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 226,
+  "property": "GradientBasedCorrections[2]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 227,
+  "property": "GradientBasedCorrections[2]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 228,
+  "property": "GradientBasedCorrections[2]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 229,
+  "property": "GradientBasedCorrections[2]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 230,
+  "property": "GradientBasedCorrections[2]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 231,
+  "property": "GradientBasedCorrections[2]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 232,
+  "property": "GradientBasedCorrections[2]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 233,
+  "property": "GradientBasedCorrections[2]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 234,
+  "property": "GradientBasedCorrections[2]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 235,
+  "property": "GradientBasedCorrections[2]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 236,
+  "property": "GradientBasedCorrections[2]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 237,
+  "property": "GradientBasedCorrections[2]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 238,
+  "property": "GradientBasedCorrections[2]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 239,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 240,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 241,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 242,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 243,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 244,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 245,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 246,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 247,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 248,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 249,
+  "property": "GradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 250,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 251,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 252,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 253,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 254,
+  "property": "GradientBasedCorrections[3]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 255,
+  "property": "GradientBasedCorrections[3]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 256,
+  "property": "GradientBasedCorrections[3]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 257,
+  "property": "GradientBasedCorrections[3]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 258,
+  "property": "GradientBasedCorrections[3]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 259,
+  "property": "GradientBasedCorrections[3]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 260,
+  "property": "GradientBasedCorrections[3]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 261,
+  "property": "GradientBasedCorrections[3]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 262,
+  "property": "GradientBasedCorrections[3]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 263,
+  "property": "GradientBasedCorrections[3]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 264,
+  "property": "GradientBasedCorrections[3]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 265,
+  "property": "GradientBasedCorrections[3]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 266,
+  "property": "GradientBasedCorrections[3]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 267,
+  "property": "GradientBasedCorrections[3]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 268,
+  "property": "GradientBasedCorrections[3]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 269,
+  "property": "GradientBasedCorrections[3]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 270,
+  "property": "GradientBasedCorrections[3]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 271,
+  "property": "GradientBasedCorrections[3]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 272,
+  "property": "GradientBasedCorrections[3]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 273,
+  "property": "GradientBasedCorrections[3]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 274,
+  "property": "GradientBasedCorrections[3]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 275,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 276,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 277,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 278,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 279,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 280,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 281,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 282,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 283,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 284,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 285,
+  "property": "GradientBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 286,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 287,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 288,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 289,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 290,
+  "property": "GradientBasedCorrections[4]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 291,
+  "property": "GradientBasedCorrections[4]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 292,
+  "property": "GradientBasedCorrections[4]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 293,
+  "property": "GradientBasedCorrections[4]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 294,
+  "property": "GradientBasedCorrections[4]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 295,
+  "property": "GradientBasedCorrections[4]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 296,
+  "property": "GradientBasedCorrections[4]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 297,
+  "property": "GradientBasedCorrections[4]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 298,
+  "property": "GradientBasedCorrections[4]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 299,
+  "property": "GradientBasedCorrections[4]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 300,
+  "property": "GradientBasedCorrections[4]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 301,
+  "property": "GradientBasedCorrections[4]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 302,
+  "property": "GradientBasedCorrections[4]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 303,
+  "property": "GradientBasedCorrections[4]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 304,
+  "property": "GradientBasedCorrections[4]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 305,
+  "property": "GradientBasedCorrections[4]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 306,
+  "property": "GradientBasedCorrections[4]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 307,
+  "property": "GradientBasedCorrections[4]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 308,
+  "property": "GradientBasedCorrections[4]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 309,
+  "property": "GradientBasedCorrections[4]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 310,
+  "property": "GradientBasedCorrections[4]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 311,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 312,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 313,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 314,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 315,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 316,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 317,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 318,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 319,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 320,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 321,
+  "property": "GradientBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 322,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 323,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 324,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 325,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 326,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 327,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 328,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 329,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 330,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 331,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 332,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 333,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 334,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 335,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 336,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 337,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 338,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 339,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 340,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 341,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 342,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 343,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 344,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 345,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 346,
+  "property": "CircularGradientBasedCorrections[1]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 347,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 348,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 349,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 350,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 351,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 352,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 353,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 354,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 355,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 356,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 357,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 358,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 359,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 360,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 361,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 362,
+  "property": "CircularGradientBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 363,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 364,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 365,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 366,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 367,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 368,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 369,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 370,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 371,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 372,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 373,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 374,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 375,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 376,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 377,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 378,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 379,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 380,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 381,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 382,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 383,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 384,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 385,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 386,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 387,
+  "property": "CircularGradientBasedCorrections[2]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 388,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 389,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 390,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 391,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 392,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 393,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 394,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 395,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 396,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 397,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 398,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 399,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 400,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 401,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 402,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 403,
+  "property": "CircularGradientBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 404,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 405,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 406,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 407,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 408,
+  "property": "PaintBasedCorrections[1]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 409,
+  "property": "PaintBasedCorrections[1]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 410,
+  "property": "PaintBasedCorrections[1]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 411,
+  "property": "PaintBasedCorrections[1]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 412,
+  "property": "PaintBasedCorrections[1]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 413,
+  "property": "PaintBasedCorrections[1]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 414,
+  "property": "PaintBasedCorrections[1]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 415,
+  "property": "PaintBasedCorrections[1]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 416,
+  "property": "PaintBasedCorrections[1]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 417,
+  "property": "PaintBasedCorrections[1]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 418,
+  "property": "PaintBasedCorrections[1]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 419,
+  "property": "PaintBasedCorrections[1]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 420,
+  "property": "PaintBasedCorrections[1]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 421,
+  "property": "PaintBasedCorrections[1]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 422,
+  "property": "PaintBasedCorrections[1]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 423,
+  "property": "PaintBasedCorrections[1]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 424,
+  "property": "PaintBasedCorrections[1]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 425,
+  "property": "PaintBasedCorrections[1]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 426,
+  "property": "PaintBasedCorrections[1]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 427,
+  "property": "PaintBasedCorrections[1]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 428,
+  "property": "PaintBasedCorrections[1]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 429,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 430,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 431,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 432,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 433,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 434,
+  "property": "PaintBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 435,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 436,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 437,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 438,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 439,
+  "property": "PaintBasedCorrections[2]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 440,
+  "property": "PaintBasedCorrections[2]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 441,
+  "property": "PaintBasedCorrections[2]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 442,
+  "property": "PaintBasedCorrections[2]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 443,
+  "property": "PaintBasedCorrections[2]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 444,
+  "property": "PaintBasedCorrections[2]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 445,
+  "property": "PaintBasedCorrections[2]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 446,
+  "property": "PaintBasedCorrections[2]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 447,
+  "property": "PaintBasedCorrections[2]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 448,
+  "property": "PaintBasedCorrections[2]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 449,
+  "property": "PaintBasedCorrections[2]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 450,
+  "property": "PaintBasedCorrections[2]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 451,
+  "property": "PaintBasedCorrections[2]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 452,
+  "property": "PaintBasedCorrections[2]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 453,
+  "property": "PaintBasedCorrections[2]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 454,
+  "property": "PaintBasedCorrections[2]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 455,
+  "property": "PaintBasedCorrections[2]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 456,
+  "property": "PaintBasedCorrections[2]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 457,
+  "property": "PaintBasedCorrections[2]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 458,
+  "property": "PaintBasedCorrections[2]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 459,
+  "property": "PaintBasedCorrections[2]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 460,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 461,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 462,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 463,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 464,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 465,
+  "property": "PaintBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 466,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 467,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 468,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 469,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 470,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 471,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 472,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 473,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 474,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 475,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 476,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 477,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 478,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 479,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 480,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 481,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 482,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 483,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 484,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 485,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 486,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 487,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 488,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 489,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 490,
+  "property": "MaskGroupBasedCorrections[1]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 491,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 492,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 493,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 494,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 495,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 496,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 497,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 498,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 499,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 500,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 501,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 502,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 503,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 504,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 505,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 506,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 507,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 508,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 509,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 510,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 511,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 512,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 513,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 514,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 515,
+  "property": "MaskGroupBasedCorrections[1]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 516,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 517,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 518,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 519,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 520,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 521,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 522,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 523,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 524,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 525,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 526,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 527,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 528,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 529,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 530,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 531,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 532,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 533,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 534,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 535,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 536,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 537,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 538,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 539,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 540,
+  "property": "MaskGroupBasedCorrections[2]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 541,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 542,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 543,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 544,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 545,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 546,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 547,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 548,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 549,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 550,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 551,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 552,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 553,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 554,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 555,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 556,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 557,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 558,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 559,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 560,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 561,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 562,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 563,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 564,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 565,
+  "property": "MaskGroupBasedCorrections[2]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 566,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 567,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 568,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 569,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 570,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 571,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 572,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 573,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 574,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 575,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 576,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 577,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 578,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 579,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 580,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 581,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 582,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 583,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 584,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 585,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 586,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 587,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 588,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 589,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 590,
+  "property": "MaskGroupBasedCorrections[3]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 591,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 592,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 593,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 594,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 595,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 596,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 597,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 598,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 599,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 600,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 601,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 602,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 603,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 604,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 605,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 606,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 607,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 608,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 609,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 610,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 611,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 612,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 613,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 614,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 615,
+  "property": "MaskGroupBasedCorrections[3]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 616,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 617,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 618,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 619,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 620,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 621,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 622,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 623,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 624,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 625,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 626,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 627,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 628,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 629,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 630,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 631,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 632,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 633,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 634,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 635,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 636,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 637,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 638,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 639,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 640,
+  "property": "MaskGroupBasedCorrections[4]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 641,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 642,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 643,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 644,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 645,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 646,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 647,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 648,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 649,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 650,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 651,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 652,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 653,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 654,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 655,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 656,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 657,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 658,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 659,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 660,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 661,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 662,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 663,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 664,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 665,
+  "property": "MaskGroupBasedCorrections[4]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 666,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 667,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 668,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 669,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 670,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 671,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 672,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 673,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 674,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 675,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 676,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 677,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 678,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 679,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 680,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 681,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 682,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 683,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 684,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 685,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 686,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 687,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 688,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 689,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 690,
+  "property": "MaskGroupBasedCorrections[8]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 691,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 692,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 693,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 694,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 695,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 696,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 697,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 698,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 699,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 700,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 701,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 702,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 703,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 704,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 705,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 706,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 707,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 708,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 709,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 710,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 711,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 712,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 713,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 714,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 715,
+  "property": "MaskGroupBasedCorrections[8]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 716,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 717,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 718,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 719,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 720,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 721,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 722,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 723,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 724,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 725,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 726,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 727,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 728,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 729,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 730,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 731,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 732,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 733,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 734,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 735,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 736,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 737,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 738,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 739,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 740,
+  "property": "MaskGroupBasedCorrections[9]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 741,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 742,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 743,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 744,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 745,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 746,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 747,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 748,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 749,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 750,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 751,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 752,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 753,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 754,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 755,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 756,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 757,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 758,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 759,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 760,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 761,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 762,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 763,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 764,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 765,
+  "property": "MaskGroupBasedCorrections[9]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 766,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 767,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 768,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 769,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 770,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 771,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 772,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 773,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 774,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 775,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 776,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 777,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 778,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 779,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 780,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 781,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 782,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 783,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 784,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 785,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 786,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 787,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 788,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 789,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 790,
+  "property": "MaskGroupBasedCorrections[10]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 791,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 792,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 793,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 794,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 795,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 796,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 797,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 798,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 799,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 800,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 801,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 802,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 803,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 804,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 805,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 806,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 807,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 808,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 809,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 810,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 811,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 812,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 813,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 814,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 815,
+  "property": "MaskGroupBasedCorrections[10]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ },
+ {
+  "index": 816,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionName",
+  "kind": "String"
+ },
+ {
+  "index": 817,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionSyncID",
+  "kind": "String"
+ },
+ {
+  "index": 818,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 819,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionActive",
+  "kind": "Boolean"
+ },
+ {
+  "index": 820,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalTemperature",
+  "kind": "Double"
+ },
+ {
+  "index": 821,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalTint",
+  "kind": "Double"
+ },
+ {
+  "index": 822,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalHue",
+  "kind": "Double"
+ },
+ {
+  "index": 823,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalExposure2012",
+  "kind": "Double"
+ },
+ {
+  "index": 824,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalContrast2012",
+  "kind": "Double"
+ },
+ {
+  "index": 825,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalHighlights2012",
+  "kind": "Double"
+ },
+ {
+  "index": 826,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalShadows2012",
+  "kind": "Double"
+ },
+ {
+  "index": 827,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalWhites2012",
+  "kind": "Double"
+ },
+ {
+  "index": 828,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalBlacks2012",
+  "kind": "Double"
+ },
+ {
+  "index": 829,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalTexture",
+  "kind": "Double"
+ },
+ {
+  "index": 830,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalClarity2012",
+  "kind": "Double"
+ },
+ {
+  "index": 831,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalDehaze",
+  "kind": "Double"
+ },
+ {
+  "index": 832,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 833,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalSharpness",
+  "kind": "Double"
+ },
+ {
+  "index": 834,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalLuminanceNoise",
+  "kind": "Double"
+ },
+ {
+  "index": 835,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalMoire",
+  "kind": "Double"
+ },
+ {
+  "index": 836,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalDefringe",
+  "kind": "Double"
+ },
+ {
+  "index": 837,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalToningHue",
+  "kind": "Double"
+ },
+ {
+  "index": 838,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalToningSaturation",
+  "kind": "Double"
+ },
+ {
+  "index": 839,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalGrain",
+  "kind": "Double"
+ },
+ {
+  "index": 840,
+  "property": "MaskGroupBasedCorrections[11]/crs:LocalCurveRefineSaturation",
+  "kind": "Integer"
+ },
+ {
+  "index": 841,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:MaskValue",
+  "kind": "Double"
+ },
+ {
+  "index": 842,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:ZeroX",
+  "kind": "Double"
+ },
+ {
+  "index": 843,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:ZeroY",
+  "kind": "Double"
+ },
+ {
+  "index": 844,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:FullX",
+  "kind": "Double"
+ },
+ {
+  "index": 845,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:FullY",
+  "kind": "Double"
+ },
+ {
+  "index": 846,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Top",
+  "kind": "Double"
+ },
+ {
+  "index": 847,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Left",
+  "kind": "Double"
+ },
+ {
+  "index": 848,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Bottom",
+  "kind": "Double"
+ },
+ {
+  "index": 849,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Right",
+  "kind": "Double"
+ },
+ {
+  "index": 850,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Angle",
+  "kind": "Double"
+ },
+ {
+  "index": 851,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Midpoint",
+  "kind": "Double"
+ },
+ {
+  "index": 852,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Roundness",
+  "kind": "Double"
+ },
+ {
+  "index": 853,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Feather",
+  "kind": "Double"
+ },
+ {
+  "index": 854,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/crs:Flipped",
+  "kind": "Boolean"
+ },
+ {
+  "index": 855,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/lrt:CX",
+  "kind": "Double"
+ },
+ {
+  "index": 856,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/lrt:CY",
+  "kind": "Double"
+ },
+ {
+  "index": 857,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/lrt:RX",
+  "kind": "Double"
+ },
+ {
+  "index": 858,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/lrt:RY",
+  "kind": "Double"
+ },
+ {
+  "index": 859,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionMasks[1]/lrt:AN",
+  "kind": "Double"
+ },
+ {
+  "index": 860,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionRangeMask/crs:Type",
+  "kind": "Double"
+ },
+ {
+  "index": 861,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionRangeMask/crs:ColorAmount",
+  "kind": "Double"
+ },
+ {
+  "index": 862,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionRangeMask/crs:LumMin",
+  "kind": "Double"
+ },
+ {
+  "index": 863,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionRangeMask/crs:LumMax",
+  "kind": "Double"
+ },
+ {
+  "index": 864,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionRangeMask/crs:LumFeather",
+  "kind": "Double"
+ },
+ {
+  "index": 865,
+  "property": "MaskGroupBasedCorrections[11]/crs:CorrectionRangeMask/crs:LumRange",
+  "kind": "String"
+ }
+]
