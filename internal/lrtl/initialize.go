@@ -298,6 +298,15 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
 		if profile == nativeSaveStateProfile {
+			metadata, err := readNativeCameraMetadata(frame, packets[i])
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", frame.Image, err)
+			}
+			if metadata != nil {
+				if err := applyNativeCameraMetadata(packets[i], *metadata); err != nil {
+					return nil, err
+				}
+			}
 			if err := prepareNativeFrameState(packets[i], quality); err != nil {
 				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 			}
@@ -346,6 +355,11 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 			quality, _, _ := change.Packet.GetRootScalar("lrt:Quality")
 			rating, _, _ := change.Packet.GetRootScalar("xmp:Rating")
 			fmt.Fprintf(stdout, "    Quality=%q; Rating=%q\n", quality, rating)
+			for _, name := range []string{"Width", "Height", "Aperture", "ShutterSpeed", "Iso", "ShootingMode", "IsMergedHDR"} {
+				if value, present, _ := change.Packet.GetRootScalar("lrt:" + name); present {
+					fmt.Fprintf(stdout, "    %s=%q\n", name, value)
+				}
+			}
 			writeWBEditPreview(stdout, change.Packet)
 		}
 	}

@@ -1,3 +1,5 @@
+> Later extension: `init` now adds an image camera-metadata refresh. See [camera cache and save](lrt-frame-metadata-save-7.5.5.md) for native observations, image-adapter coverage and remaining date/RAW limitations. The registered-save measurements below remain unchanged.
+
 # Registered-column save prefix, LRTimelapse 7.5.5
 
 ## Scope and provenance

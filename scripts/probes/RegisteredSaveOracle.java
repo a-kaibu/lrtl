@@ -61,7 +61,7 @@ public final class RegisteredSaveOracle {
         String saved=save(f,packet,sequence),savedAgain=save(f,packet,sequence);
         out.append(separator).append("{\"name\":").append(quote(name)).append(",\"target\":").append(quote(targetText)).append(",\"source\":").append(sourceText==null?"null":quote(sourceText)).append(",\"properties\":").append(selection==null?"null":quote(selection)).append(",\"saved\":").append(quote(saved)).append(",\"saved_again\":").append(quote(savedAgain)).append('}');separator=",\n";
     }
-    public static void main(String[] args)throws Exception {
+    static void initialize()throws Exception {
         Locale.setDefault(Locale.JAPAN);
         frameType=Class.forName("tQa");xml=Class.forName("Wd");options=Class.forName("bCA");sequenceType=Class.forName("Rsa");Class<?> registryType=Class.forName("Ooa"),factory=Class.forName("ABA");
         Object registry=method(registryType,"A",registryType).invoke(null);int count=(int)method(registryType,"A",int.class).invoke(registry);
@@ -69,8 +69,11 @@ public final class RegisteredSaveOracle {
         parse=method(factory,"A",xml,String.class);serialize=method(factory,"A",String.class,xml,options);read=method(xml,"A",String.class,String.class,String.class);
         load=method(frameType,"A",void.class,String.class,String.class,xml,int.class,boolean.class);cell=method(frameType,"a",Object.class,int.class);assign=method(frameType,"a",void.class,int.class,Object.class);
         store=method(frameType,"A",void.class,sequenceType,ArrayList.class,boolean.class);
+    }
+    public static void main(String[] args)throws Exception {
+        initialize();
         String base="crs:WhiteBalance=\"Custom\" lrt:Quality=\"RAW\" f:Keep=\"untouched\"";
-        for(int i=5;i<count;i++)if(types.get(i)==Double.class||types.get(i)==Integer.class) {
+        for(int i=5;i<names.size();i++)if(types.get(i)==Double.class||types.get(i)==Integer.class) {
             String p=names.get(i),value=types.get(i)==Double.class?"1.23456789123":"1.5";
             String target=packet(base,SelectedColumnOracle.pathBody(p,value));
             observe("numeric-"+i,target,null,null);
