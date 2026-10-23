@@ -628,6 +628,7 @@ func runSet(arguments []string, stdout, stderr io.Writer) int {
 	if len(arguments) == 1 && (arguments[0] == "--help" || arguments[0] == "-h") {
 		fmt.Fprintln(stdout, "Usage: lrtl set IMAGE_OR_XMP CRS_PROPERTY|PreviewEV|MASK_PATH VALUE [--dry-run] [--no-backup]")
 		fmt.Fprintln(stdout, "  PreviewEV is in EV and is stored as lrt:ExternalExposureDefault multiplied by 4.")
+		fmt.Fprintln(stdout, "  WB controls use integer slider ranges; active Temperature/Tint edits set Custom WB and clear the inactive pair.")
 		fmt.Fprintln(stdout, "  Local controls: set IMAGE 'MaskGroupBasedCorrections[1].LocalExposure2012' 0.5")
 		fmt.Fprintln(stdout, "  Geometry: set IMAGE 'MaskGroupBasedCorrections[1].CorrectionMasks[1].FullY' 0.8")
 		return 0
@@ -677,13 +678,16 @@ func runSet(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	if err := packet.SetScalar(edit.property, edit.value); err != nil {
+	if err := applyNumericXMPSet(packet, edit); err != nil {
 		return reportError(stderr, err)
 	}
 	if edit.previewEV {
 		fmt.Fprintf(stdout, "%s: set PreviewEV=%s (%s=%s)\n", filepath.Base(image), formatNumber(edit.inputValue), edit.property, edit.value)
 	} else {
 		fmt.Fprintf(stdout, "%s: set %s=%s\n", filepath.Base(image), edit.property, edit.value)
+	}
+	if wbEditControlIndex(edit.property) >= 0 {
+		writeWBEditPreview(stdout, packet)
 	}
 	if dryRun {
 		fmt.Fprintf(stdout, "Dry run. Would write %s\n", sidecar)

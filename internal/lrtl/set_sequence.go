@@ -49,6 +49,9 @@ func parseNumericXMPSet(property, text string) (numericXMPSet, error) {
 		}
 	}
 	edit.value = formatNumber(value)
+	if index := wbEditControlIndex(edit.property); index >= 0 {
+		edit.value = wbEditInteger(index, value)
+	}
 	return edit, nil
 }
 
@@ -87,7 +90,7 @@ func planSequenceValueEdits(all, selected []Frame, property, text string) ([]pac
 			_, err := setMaskProperty(packet, *local, text)
 			return err
 		}
-		return packet.SetScalar(global.property, global.value)
+		return applyNumericXMPSet(packet, global)
 	})
 }
 
@@ -206,6 +209,9 @@ func runSetSequence(arguments []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Selected: %d/%d frames; changed sidecars: %d\nSet %s = %s\n", len(selected), len(frames), len(outputs), set.Arg(1), set.Arg(2))
 	for _, output := range outputs {
 		fmt.Fprintln(stdout, output.Path)
+		if wbEditControlIndex(set.Arg(1)) >= 0 {
+			writeWBEditPreview(stdout, output.Packet)
+		}
 	}
 	if !*write {
 		fmt.Fprintln(stdout, "Dry run. Pass --write to save sidecars.")

@@ -219,9 +219,18 @@ func TestNativeGeometryInvalidAndFailureRetention(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := batchFileSnapshot(t, dir)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	capture := filepath.Join(t.TempDir(), "unexpected-backend-input")
+	t.Setenv("LRTL_TEST_FFMPEG_CAPTURE", capture)
 	var out, stderr bytes.Buffer
-	if Main([]string{"render", dir, "--output", output, "--lrt-render-preset", path, "--overwrite"}, &out, &stderr) == 0 || !strings.Contains(stderr.String(), "geometry") {
+	if Main([]string{"render", dir, "--output", output, "--lrt-render-preset", path, "--overwrite", "--ffmpeg", executable}, &out, &stderr) == 0 || !strings.Contains(stderr.String(), "geometry") {
 		t.Fatalf("invalid native geometry should fail before output: %s", stderr.String())
+	}
+	if _, err := os.Stat(capture); !os.IsNotExist(err) {
+		t.Fatalf("invalid geometry reached the video backend: %v", err)
 	}
 	assertPreviewEVFileBytes(t, output, []byte("existing output"))
 	if !reflect.DeepEqual(before, batchFileSnapshot(t, dir)) {
