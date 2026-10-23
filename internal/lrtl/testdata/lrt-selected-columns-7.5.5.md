@@ -1,3 +1,5 @@
+> Later extension: the default save profile now covers all 861 registered columns, internal exposures and rating/reference cleanup. See [registered save prefix](lrt-registered-save-7.5.5.md) for 864 first/second-store observations, changed defaults and remaining limitations. The measurements below describe the earlier component stage.
+
 # Selected-column metadata copying (LRTimelapse 7.5.5)
 
 ## CLI

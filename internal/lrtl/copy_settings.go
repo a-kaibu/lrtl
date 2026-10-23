@@ -134,7 +134,7 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	noBackup := set.Bool("no-backup", false, "save existing sidecars without backups")
 	properties := set.String("properties", "", "copy these registered columns, separated by commas; a missing source value clears the column")
 	listProperties := set.Bool("list-properties", false, "list the registered columns available for selected-column copying")
-	saveState := set.String("save-state", nativeSaveStateProfile, "WB/crop numeric serialization and save preparation: lrt-7.5.5 or preserve")
+	saveState := set.String("save-state", nativeSaveStateProfile, "registered-column serialization and native save preparation: lrt-7.5.5 or preserve")
 	const usage = "Usage: lrtl copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY [--properties NAMES] [--save-state lrt-7.5.5|preserve] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]\n       lrtl copy-settings --list-properties"
 	if err := set.Parse(reorderFlags(arguments, map[string]bool{"--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true, "--ratings": true, "-ratings": true, "--properties": true, "-properties": true, "--save-state": true, "-save-state": true}, true)); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -202,7 +202,7 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 	if len(columns) == 0 {
 		fmt.Fprintln(stdout, "Replace Camera Raw settings; merge other metadata, including missing capture information.")
 	} else {
-		fmt.Fprintf(stdout, "Copy %d registered column(s); missing source values clear selected columns.\n", len(columns))
+		fmt.Fprintf(stdout, "Copy %d registered column cache(s); missing source values clear cached cells.\nSource cache:\n", len(columns))
 		nodes, err := pastePacketNodes(ref.Packet)
 		if err != nil {
 			return reportError(stderr, err)
@@ -235,6 +235,24 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 				qualityText = quality.Value
 			}
 			fmt.Fprintf(stdout, "  Quality=%q; WhiteBalance=%q; HasCrop=%s\n", qualityText, wb.Value, crop.Value)
+			rating, found, _ := output.Packet.GetRootScalar("xmp:Rating")
+			if found {
+				fmt.Fprintf(stdout, "  Rating=%q\n", rating)
+			} else {
+				fmt.Fprintln(stdout, "  Rating=(absent)")
+			}
+			for _, column := range columns {
+				column.Kind = ""
+				value, err := readSelectedColumn(nodes, column)
+				if err != nil {
+					return reportError(stderr, err)
+				}
+				if value.present {
+					fmt.Fprintf(stdout, "  final %s: %q\n", column.Property, value.value)
+				} else {
+					fmt.Fprintf(stdout, "  final %s: absent\n", column.Property)
+				}
+			}
 		}
 	}
 	if !*write {

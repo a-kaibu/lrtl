@@ -123,11 +123,11 @@ func prepareNativeFrameState(packet *XMPPacket, quality string) error {
 	if _, err := applyNativeWBDefaults(working, transitionScalar{quality, true}); err != nil {
 		return err
 	}
-	context, err := readNativeSaveStateContext(working)
+	context, err := readRegisteredSaveContext(working)
 	if err != nil {
 		return err
 	}
-	if _, err := applyNativeSaveState(working, context); err != nil {
+	if _, err := applyRegisteredSaveState(working, context); err != nil {
 		return err
 	}
 	before, _, err = saveStateMaps(packet)

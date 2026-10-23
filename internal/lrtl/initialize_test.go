@@ -34,7 +34,7 @@ func TestInitializeModernAndLegacyLayout(t *testing.T) {
 					t.Fatalf("created=%d", change.CreatedSlots)
 				}
 				packet := change.Packet
-				for _, header := range [][2]string{{"Version", "14"}, {"ProcessVersion", "11"}, {"HasSettings", "True"}} {
+				for _, header := range [][2]string{{"Version", "14"}, {"ProcessVersion", "11.000000"}, {"HasSettings", "True"}} {
 					value, found, err := packet.GetScalar("crs:" + header[0])
 					if err != nil || !found || value != header[1] {
 						t.Fatalf("header %s=%s %v", header[0], value, err)
@@ -46,7 +46,11 @@ func TestInitializeModernAndLegacyLayout(t *testing.T) {
 						t.Fatalf("slot %d missing", slot)
 					}
 					value, found, err := crsElementValue(item, "LocalExposure2012")
-					if err != nil || !found || value != "0" {
+					wantExposure := "0.000000"
+					if slot >= 5 && slot <= 7 {
+						wantExposure = "0"
+					}
+					if err != nil || !found || value != wantExposure {
 						t.Fatalf("initial exposure %s %v", value, err)
 					}
 					masks := rdfArrayItems(directCRSProperty(item, "CorrectionMasks").element)
@@ -148,13 +152,15 @@ func TestInitializeRetainsEditsAndAdoptsExistingIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	changes, err := buildInitializationPlan(frames, "auto")
-	if err != nil || len(changes) != 1 {
+	if err != nil || len(changes) != 2 {
 		t.Fatalf("changes=%d err=%v", len(changes), err)
 	}
-	if changes[0].Frame.Index != 1 {
-		t.Fatal("existing edited packet was changed")
+	for name, want := range map[string]string{"crs:Exposure2012": "1.250000", "crs:ProcessVersion": "15.400000", "xmp:Rating": "5"} {
+		if value, found, _ := changes[0].Packet.GetRootScalar(name); !found || value != want {
+			t.Fatal("normalized edit lost", name, value)
+		}
 	}
-	newSlot := existingInitializationSlot(changes[0].Packet, "modern", 1)
+	newSlot := existingInitializationSlot(changes[1].Packet, "modern", 1)
 	newID, _, _ := crsElementValue(newSlot, "CorrectionSyncID")
 	oldID, _, _ := crsElementValue(item, "CorrectionSyncID")
 	if newID != oldID {

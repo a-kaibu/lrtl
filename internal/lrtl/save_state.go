@@ -233,15 +233,17 @@ func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColum
 		return false, err
 	}
 	working := &XMPPacket{Document: target.Document.Copy()}
-	var context nativeSaveStateContext
+	var context registeredSaveContext
 	if profile == nativeSaveStateProfile && len(columns) > 0 {
-		context, err = copiedNativeSaveStateContext(working, source, columns)
+		context, err = copiedRegisteredSaveContext(working, source, columns)
 		if err != nil {
 			return false, err
 		}
 	}
 	if len(columns) > 0 {
-		_, err = copySelectedColumnMetadata(working, source, columns)
+		if profile == "preserve" {
+			_, err = copySelectedColumnMetadata(working, source, columns)
+		}
 	} else {
 		_, err = pasteXMPMetadata(working, source)
 	}
@@ -250,12 +252,12 @@ func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColum
 	}
 	if profile == nativeSaveStateProfile {
 		if len(columns) == 0 {
-			context, err = readNativeSaveStateContext(working)
+			context, err = readRegisteredSaveContext(working)
 			if err != nil {
 				return false, err
 			}
 		}
-		if _, err = applyNativeSaveState(working, context); err != nil {
+		if _, err = applyRegisteredSaveState(working, context); err != nil {
 			return false, err
 		}
 	}

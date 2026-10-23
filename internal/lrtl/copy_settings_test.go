@@ -56,7 +56,7 @@ func TestCopySettingsSelectionBackupAndRepeat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for key, want := range map[string]string{"crs:Exposure2012": "0.75", "crs:WhiteBalance": "As Shot", "crs:HasCrop": "False", "exif:DateTimeOriginal": "2026-10-01T01:00:00"} {
+		for key, want := range map[string]string{"crs:Exposure2012": "0.750000", "crs:WhiteBalance": "As Shot", "crs:HasCrop": "False", "exif:DateTimeOriginal": "2026-10-01T01:00:00"} {
 			if got, found, err := packet.GetScalar(key); err != nil || !found || got != want {
 				t.Fatalf("%s=%q want %q: %v", key, got, want, err)
 			}
@@ -215,9 +215,9 @@ func TestCopySettingsEmbeddedReferenceAndSidecarPriority(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, _, _ := p.GetScalar("crs:Exposure2012")
-			want := "0.75"
+			want := "0.750000"
 			if external {
-				want = "-2"
+				want = "-2.000000"
 			}
 			if got != want {
 				t.Fatalf("exposure %s want %s", got, want)

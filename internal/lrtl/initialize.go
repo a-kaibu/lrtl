@@ -318,7 +318,7 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 	write := set.Bool("write", false, "write initialized XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not back up existing sidecars")
 	format := set.String("mask-format", "auto", "mask structure: auto, modern, or legacy")
-	frameState := set.String("frame-state", nativeSaveStateProfile, "frame quality and WB/crop save preparation: lrt-7.5.5 or preserve")
+	frameState := set.String("frame-state", nativeSaveStateProfile, "frame quality, registered-column serialization and native save preparation: lrt-7.5.5 or preserve")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{"--mask-format": true, "-mask-format": true, "--frame-state": true, "-frame-state": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
@@ -344,7 +344,8 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "  %s: %s, new correction slots: %d\n", filepath.Base(change.Frame.Image), change.Format, change.CreatedSlots)
 		if *frameState == nativeSaveStateProfile {
 			quality, _, _ := change.Packet.GetRootScalar("lrt:Quality")
-			fmt.Fprintf(stdout, "    Quality=%q\n", quality)
+			rating, _, _ := change.Packet.GetRootScalar("xmp:Rating")
+			fmt.Fprintf(stdout, "    Quality=%q; Rating=%q\n", quality, rating)
 			writeWBEditPreview(stdout, change.Packet)
 		}
 	}

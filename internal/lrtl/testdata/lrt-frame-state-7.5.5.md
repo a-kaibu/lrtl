@@ -1,3 +1,5 @@
+> Later extension: the default save profile now covers all 861 registered columns, internal exposures and rating/reference cleanup. See [registered save prefix](lrt-registered-save-7.5.5.md) for 864 first/second-store observations, changed defaults and remaining limitations. The measurements below describe the earlier component stage.
+
 # Frame initialization and relative WB (LRTimelapse 7.5.5)
 
 `init` now defaults to `--frame-state lrt-7.5.5`, adding quality classification,

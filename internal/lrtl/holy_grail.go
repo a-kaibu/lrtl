@@ -516,6 +516,11 @@ func holyGrailKeyframePlan(packet *XMPPacket, desiredRating int) (int, bool, str
 		if valid && rating == float64(desiredRating) {
 			return 0, false, "", nil
 		}
+		if valid && rating == 0 {
+			// Native initialization writes an explicit zero for unrated frames.
+			// Keep its spelling so removing our marker restores the original.
+			return desiredRating, false, ratingText, nil
+		}
 		return 0, false, "", fmt.Errorf("cannot mark an HG %d-star keyframe over existing xmp:Rating=%s", desiredRating, ratingText)
 	}
 	return desiredRating, false, absentRating, nil
