@@ -80,6 +80,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runSelect(arguments[1:], stdout, stderr)
 	case "copy-sequence":
 		return runCopySequence(arguments[1:], stdout, stderr)
+	case "copy-settings":
+		return runCopySettings(arguments[1:], stdout, stderr)
 	case "import":
 		return runImport(arguments[1:], stdout, stderr)
 	case "import-video":
@@ -156,6 +158,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
 	fmt.Fprintln(writer, "  select DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--output FILTER.json]")
 	fmt.Fprintln(writer, "  copy-sequence DIRECTORY --output NEW_DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write]")
+	fmt.Fprintln(writer, "  copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  set-sequence DIRECTORY PROPERTY VALUE [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  import SOURCE --output DIRECTORY [--recursive] [--sort name|capture-time] [--split-gap DURATION|--split-intervals] [--skip-jpeg] [--rename-by-date] [--convert-dng] [--dng-compression lossless|uncompressed|lossy] [--dng-long-edge N] [--dng-converter PATH|--dnglab PATH] [--dry-run]")
 	fmt.Fprintln(writer, "  import-video VIDEO --output DIRECTORY [--fps N] [--format jpg|png] [--quality 1-31] [--ffmpeg PATH]")
