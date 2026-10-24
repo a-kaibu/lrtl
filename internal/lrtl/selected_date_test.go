@@ -102,7 +102,7 @@ func TestSelectedDatePreparationAtomicAndClock(t *testing.T) {
 		calls++
 		return time.Date(2026, 10, 24, 3, 4, calls, 123, time.FixedZone("test", 32400))
 	}
-	if _, err := prepareSelectedCopyWrites(outputs, clock); err == nil {
+	if _, err := prepareCopySettingsWrites(outputs, clock); err == nil {
 		t.Fatal("accepted late composite MetadataDate")
 	}
 	if calls != 0 {
@@ -115,7 +115,7 @@ func TestSelectedDatePreparationAtomicAndClock(t *testing.T) {
 		t.Fatal("changed invalid input on error")
 	}
 	outputs[1].Packet = &XMPPacket{Document: good.Document.Copy()}
-	prepared, err := prepareSelectedCopyWrites(outputs, clock)
+	prepared, err := prepareCopySettingsWrites(outputs, clock)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestSelectedDatePreparationAtomicAndClock(t *testing.T) {
 	if data, _ := good.Serialize(); !bytes.Equal(data, first) {
 		t.Fatal("changed plan packet on success")
 	}
-	if _, err := prepareSelectedCopyWrites(nil, func() time.Time { t.Fatal("clock for empty plan"); return time.Time{} }); err != nil {
+	if _, err := prepareCopySettingsWrites(nil, func() time.Time { t.Fatal("clock for empty plan"); return time.Time{} }); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range r.Cases {
@@ -140,7 +140,7 @@ func TestSelectedDatePreparationAtomicAndClock(t *testing.T) {
 		if eligible, _ := nativeMetadataDateEligible(packet, date); eligible {
 			continue
 		}
-		if _, err := prepareSelectedCopyWrites([]packetOutput{{Path: "inactive.xmp", Packet: packet}}, func() time.Time { t.Fatal("clock for ineligible packet"); return time.Time{} }); err != nil {
+		if _, err := prepareCopySettingsWrites([]packetOutput{{Path: "inactive.xmp", Packet: packet}}, func() time.Time { t.Fatal("clock for ineligible packet"); return time.Time{} }); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -322,7 +322,7 @@ func FuzzSelectedDateCopy(f *testing.F) {
 			if dateErr == nil && (err != nil || got != date || present != found) {
 				t.Fatal("selected copy replaced target capture cache")
 			}
-			prepared, err := prepareSelectedCopyWrites([]packetOutput{{Path: "fuzz.xmp", Packet: target}}, func() time.Time { return time.Unix(0, 0).UTC() })
+			prepared, err := prepareCopySettingsWrites([]packetOutput{{Path: "fuzz.xmp", Packet: target}}, func() time.Time { return time.Unix(0, 0).UTC() })
 			if err == nil {
 				eligible, _ := nativeMetadataDateEligible(target, date)
 				if eligible {

@@ -91,9 +91,10 @@ func prepareInitializationWrites(changes []initializationChange, clock func() ti
 	return prepared, nil
 }
 
-// Selected-column copying retains the target's CreateDate cache. Resolve clocks
-// only for actual outputs, after planning and before the first filesystem write.
-func prepareSelectedCopyWrites(outputs []packetOutput, clock func() time.Time) ([]packetOutput, error) {
+// Resolve copy clocks only for actual outputs, after planning and before the
+// first filesystem write. Native full copy has already serialized its reloaded
+// date cache into CreateDate; selected columns keep the target's existing date.
+func prepareCopySettingsWrites(outputs []packetOutput, clock func() time.Time) ([]packetOutput, error) {
 	prepared := make([]packetOutput, len(outputs))
 	for i, output := range outputs {
 		packet := &XMPPacket{Document: output.Packet.Document.Copy()}

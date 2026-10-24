@@ -301,6 +301,17 @@ func FuzzNativeSaveState(f *testing.F) {
 	for _, row := range reference.CopyCrop {
 		f.Add(row.Source, row.Destination, row.Properties, false)
 	}
+	var fullDates fullCopyDateReference
+	dateData, err := os.ReadFile("testdata/lrt-full-paste-date-7.5.5.json")
+	if err != nil {
+		f.Fatal(err)
+	}
+	if err := json.Unmarshal(dateData, &fullDates); err != nil {
+		f.Fatal(err)
+	}
+	for _, row := range fullDates.Cases {
+		f.Add(row.Source, row.Target, "", false)
+	}
 	f.Fuzz(func(t *testing.T, sourceText, targetText, properties string, preserve bool) {
 		if len(sourceText) > 32768 || len(targetText) > 32768 || len(properties) > 4096 {
 			t.Skip()

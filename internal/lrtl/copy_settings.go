@@ -125,7 +125,7 @@ func planCopySettingsColumns(all, selected []Frame, ref *settingsReference, colu
 		_, err := applyCopySettingsProfile(target, ref.Packet, columns, profile)
 		return err
 	})
-	if err == nil && profile == nativeSaveStateProfile && len(columns) > 0 {
+	if err == nil && profile == nativeSaveStateProfile {
 		for _, output := range outputs {
 			date, _, dateErr := captureTimestampScalar(output.Packet, "xmp:CreateDate")
 			if dateErr == nil {
@@ -253,11 +253,9 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 			} else {
 				fmt.Fprintln(stdout, "  Rating=(absent)")
 			}
-			if len(columns) > 0 {
-				date, _, _ := captureTimestampScalar(output.Packet, "xmp:CreateDate")
-				if eligible, _ := nativeMetadataDateEligible(output.Packet, date); eligible {
-					fmt.Fprintln(stdout, "  MetadataDate: updated when saved")
-				}
+			date, _, _ := captureTimestampScalar(output.Packet, "xmp:CreateDate")
+			if eligible, _ := nativeMetadataDateEligible(output.Packet, date); eligible {
+				fmt.Fprintln(stdout, "  MetadataDate: updated when saved")
 			}
 			for _, column := range columns {
 				column.Kind = ""
@@ -277,8 +275,8 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "Dry run. Pass --write to save sidecars.")
 		return 0
 	}
-	if *saveState == nativeSaveStateProfile && len(columns) > 0 {
-		outputs, err = prepareSelectedCopyWrites(outputs, time.Now)
+	if *saveState == nativeSaveStateProfile {
+		outputs, err = prepareCopySettingsWrites(outputs, time.Now)
 		if err != nil {
 			return reportError(stderr, err)
 		}

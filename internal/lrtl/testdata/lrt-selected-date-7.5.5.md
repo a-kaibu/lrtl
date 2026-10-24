@@ -55,4 +55,4 @@ go test ./internal/lrtl -run '^TestSelectedDateInstalledReplay$' -count=1
 
 ## 残る範囲
 
-`--properties` を省略した全体貼付けの日時再初期化は未接続です。画像から日時を再取得する全経路、キャッシュのロード経路全体、履歴・InstanceID・製品の保存完了は未再現です。汎用WritePacketや他の編集コマンドへ時計更新を広げたものではありません。
+`--properties` を省略した全体貼付けも、[日時キャッシュとHasSettingsの再読込](lrt-full-paste-date-7.5.5.md)に対応しました。画像から日時を再取得する全経路、キャッシュのロード経路全体、履歴・InstanceID・製品の保存完了は未再現です。汎用WritePacketや他の編集コマンドへ時計更新を広げたものではありません。
