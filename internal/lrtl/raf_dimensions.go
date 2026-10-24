@@ -16,6 +16,9 @@ func nativeImageSize(path string) (int32, int32, bool, error) {
 	if strings.EqualFold(filepath.Ext(path), ".raf") {
 		return nativeRAFImageSize(path)
 	}
+	if strings.EqualFold(filepath.Ext(path), ".cr3") {
+		return nativeCR3ImageSize(path)
+	}
 	return nativeTIFFImageSize(path)
 }
 

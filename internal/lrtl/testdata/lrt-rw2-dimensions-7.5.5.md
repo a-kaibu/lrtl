@@ -121,4 +121,5 @@ capture-date/history completion and native RAW development remain incomplete.
 External sidecars supply RWL/Panasonic RAW edits; extending their embedded-XMP
 container coverage remains separate work.
 [RAF cropped-size composites](lrt-raf-dimensions-7.5.5.md) were added subsequently.
-CR3 dimensions and Phase One-specific size selection remain separate work.
+[CR3 dimensions](lrt-cr3-dimensions-7.5.5.md) were also added subsequently.
+Phase One-specific size selection remains separate work.

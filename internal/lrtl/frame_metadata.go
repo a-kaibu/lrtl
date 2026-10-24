@@ -10,8 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/evanoberholster/imagemeta"
 )
 
 // The camera subset of the native CSV reader. Capture dates are intentionally
@@ -125,7 +123,7 @@ func readNativeCameraMetadata(frame Frame, packet *XMPPacket) (*nativeCameraMeta
 	if _, err := file.Seek(0, 0); err != nil {
 		return nil, err
 	}
-	metadata, metadataErr := imagemeta.Decode(file)
+	metadata, metadataErr := decodeImageMetadata(file)
 	width, height, hasImageSize, err := nativeImageSize(frame.Image)
 	if err != nil {
 		return nil, err

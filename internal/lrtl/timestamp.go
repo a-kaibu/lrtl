@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/evanoberholster/imagemeta"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/goregular"
 	"golang.org/x/image/font/opentype"
@@ -108,7 +107,7 @@ func captureTimeFromImage(frame Frame) (time.Time, bool, error) {
 	if err != nil {
 		return time.Time{}, false, err
 	}
-	metadata, decodeErr := imagemeta.Decode(file)
+	metadata, decodeErr := decodeImageMetadata(file)
 	closeErr := file.Close()
 	if decodeErr != nil {
 		return time.Time{}, false, decodeErr

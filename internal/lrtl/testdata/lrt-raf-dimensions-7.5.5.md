@@ -57,4 +57,4 @@ python scripts/probes/raf_dimensions_fixture.py work/new-raf-dimension-inputs
 
 ## 残る範囲
 
-合成ヘッダーで観測した寸法と保存前半が対象です。全カメラモデル、M-RAW内の複数画像、独自maker noteによる寸法の上書き、壊れたJPEGの回復、RAFのカメラ露出・日時・WB情報の全取得、RAW現像の完全一致は未対応または未検証です。CR3等の別コンテナーの寸法と、Phase One独自の寸法選択も残っています。
+合成ヘッダーで観測した寸法と保存前半が対象です。全カメラモデル、M-RAW内の複数画像、独自maker noteによる寸法の上書き、壊れたJPEGの回復、RAFのカメラ露出・日時・WB情報の全取得、RAW現像の完全一致は未対応または未検証です。[CR3の寸法](lrt-cr3-dimensions-7.5.5.md)は後続実装で対応しました。Phase One独自の寸法選択も残っています。

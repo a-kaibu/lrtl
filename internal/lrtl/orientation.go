@@ -26,7 +26,7 @@ func readEXIFOrientation(data []byte) (uint16, error) {
 		}
 		return normalizeEXIFOrientation(orientation)
 	}
-	metadata, err := imagemeta.Decode(bytes.NewReader(data))
+	metadata, err := decodeImageMetadata(bytes.NewReader(data))
 	if errors.Is(err, imagemeta.ErrNoExif) {
 		return 1, nil
 	}

@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-
-	"github.com/evanoberholster/imagemeta"
 )
 
 const holyGrailCorrectionProperty = "ol:HolyGrailCorrection2012"
@@ -63,7 +61,7 @@ func readCameraExposureMetadata(frame Frame) (CameraExposure, error) {
 	if err != nil {
 		return CameraExposure{}, err
 	}
-	metadata, decodeErr := imagemeta.Decode(file)
+	metadata, decodeErr := decodeImageMetadata(file)
 	closeErr := file.Close()
 	if decodeErr != nil {
 		return CameraExposure{}, decodeErr

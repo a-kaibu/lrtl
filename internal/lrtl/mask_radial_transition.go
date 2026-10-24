@@ -9,7 +9,6 @@ import (
 	"strconv"
 
 	"github.com/a-kaibu/lrtl/internal/fdlibm"
-	"github.com/evanoberholster/imagemeta"
 )
 
 type radialMaskShape struct {
@@ -204,7 +203,7 @@ func radialMaskFrameSizes(packets []*XMPPacket, frames []Frame) ([]radialMaskSiz
 				} else if config, _, err := image.DecodeConfig(file); err == nil {
 					w, h = config.Width, config.Height
 				} else if _, err = file.Seek(0, 0); err == nil {
-					if metadata, err := imagemeta.Decode(file); err == nil {
+					if metadata, err := decodeImageMetadata(file); err == nil {
 						w, h = int(metadata.ImageWidth), int(metadata.ImageHeight)
 					}
 				}
