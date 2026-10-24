@@ -14,12 +14,13 @@ type sequenceCopyFile struct {
 }
 
 type sequenceCopyPlan struct {
-	destination string
-	frames      int
-	files       []sequenceCopyFile
+	destination      string
+	frames           int
+	sidecars, caches int
+	files            []sequenceCopyFile
 }
 
-func planSequenceCopy(directory, output string, frames []Frame) (*sequenceCopyPlan, error) {
+func planSequenceCopy(directory, output string, frames []Frame, includeCompanions ...bool) (*sequenceCopyPlan, error) {
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frames selected")
 	}
@@ -42,42 +43,57 @@ func planSequenceCopy(directory, output string, frames []Frame) (*sequenceCopyPl
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	plan := &sequenceCopyPlan{destination: destination, frames: len(frames)}
+	if len(includeCompanions) > 1 {
+		return nil, fmt.Errorf("at most one companion option is allowed")
+	}
+	companions := len(includeCompanions) == 1 && includeCompanions[0]
+	paths, err := sequenceCopyPaths(frames, companions)
+	if err != nil {
+		return nil, err
+	}
+	plan := &sequenceCopyPlan{destination: destination}
 	seen := map[string]sequenceCopyFile{}
-	for _, frame := range frames {
-		for _, path := range []string{frame.Image, frame.Sidecar} {
-			if path == "" {
+	for _, candidate := range paths {
+		path := candidate.source
+		if path == "" {
+			continue
+		}
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Lstat(absolute)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("copy source must be a regular file: %s", absolute)
+		}
+		resolved, err := filepath.EvalSymlinks(absolute)
+		if err != nil {
+			return nil, err
+		}
+		if candidate.kind != "cache" && !sameFilesystemPath(filepath.Dir(resolved), source) || candidate.kind == "cache" && !pathContains(source, resolved) {
+			return nil, fmt.Errorf("copy source is outside the sequence: %s", absolute)
+		}
+		name := candidate.name
+		key := strings.ToLower(name)
+		if earlier, exists := seen[key]; exists {
+			if samePath(earlier.source, absolute) && os.SameFile(earlier.info, info) {
 				continue
-			}
-			absolute, err := filepath.Abs(path)
-			if err != nil {
-				return nil, err
-			}
-			info, err := os.Lstat(absolute)
-			if err != nil {
-				return nil, err
-			}
-			if !info.Mode().IsRegular() {
-				return nil, fmt.Errorf("copy source must be a regular file: %s", absolute)
-			}
-			resolved, err := filepath.EvalSymlinks(absolute)
-			if err != nil {
-				return nil, err
-			}
-			if !sameFilesystemPath(filepath.Dir(resolved), source) {
-				return nil, fmt.Errorf("copy source is outside the sequence: %s", absolute)
-			}
-			name := filepath.Base(absolute)
-			key := strings.ToLower(name)
-			if earlier, exists := seen[key]; exists {
-				if samePath(earlier.source, absolute) && os.SameFile(earlier.info, info) {
-					continue
-				} // Shared stem XMP is copied once.
-				return nil, fmt.Errorf("case-insensitive output name collision: %s", name)
-			}
-			entry := sequenceCopyFile{source: absolute, name: name, info: info}
-			seen[key] = entry
-			plan.files = append(plan.files, entry)
+			} // Shared stem XMP is copied once.
+			return nil, fmt.Errorf("case-insensitive output name collision: %s", name)
+		}
+		entry := sequenceCopyFile{source: absolute, name: name, info: info}
+		seen[key] = entry
+		plan.files = append(plan.files, entry)
+		switch candidate.kind {
+		case "image":
+			plan.frames++
+		case "sidecar":
+			plan.sidecars++
+		case "cache":
+			plan.caches++
 		}
 	}
 	return plan, nil
@@ -117,6 +133,9 @@ func executeSequenceCopy(plan *sequenceCopyPlan, copyOne func(string, string) er
 			return err
 		}
 		destination := filepath.Join(staging, file.name)
+		if err := os.MkdirAll(filepath.Dir(destination), 0755); err != nil {
+			return err
+		}
 		if err := copyOne(file.source, destination); err != nil {
 			return fmt.Errorf("copy %s: %w", file.name, err)
 		}
@@ -156,13 +175,14 @@ func runCopySequence(arguments []string, stdout, stderr io.Writer) int {
 	filters := registerFrameSelectionFlags(set)
 	output := set.String("output", "", "new directory for selected images and active XMP sidecars")
 	write := set.Bool("write", false, "copy the planned files")
+	companions := set.Bool("include-lrt-companions", false, "also copy paired JPEGs and per-image LRT previews/proxies")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{"--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true, "--ratings": true, "-ratings": true, "--output": true, "-output": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl copy-sequence DIRECTORY --output NEW_DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl copy-sequence DIRECTORY --output NEW_DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--include-lrt-companions] [--write]"))
 	}
 	options, err := filters.options(set)
 	if err != nil {
@@ -176,11 +196,14 @@ func runCopySequence(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	plan, err := planSequenceCopy(set.Arg(0), *output, selected)
+	plan, err := planSequenceCopy(set.Arg(0), *output, selected, *companions)
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	fmt.Fprintf(stdout, "Selected: %d/%d frames; files: %d\nOutput: %s\n", len(selected), len(frames), len(plan.files), plan.destination)
+	if *companions {
+		fmt.Fprintf(stdout, "Including companions: %d images, %d active sidecars, %d cache files\n", plan.frames, plan.sidecars, plan.caches)
+	}
 	for _, file := range plan.files {
 		fmt.Fprintln(stdout, file.name)
 	}
@@ -191,6 +214,10 @@ func runCopySequence(arguments []string, stdout, stderr io.Writer) int {
 	if err := executeSequenceCopy(plan, nil); err != nil {
 		return reportError(stderr, err)
 	}
-	fmt.Fprintf(stdout, "Copied %d frames and %d sidecars.\n", plan.frames, len(plan.files)-plan.frames)
+	if *companions {
+		fmt.Fprintf(stdout, "Copied %d images, %d sidecars and %d cache files.\n", plan.frames, plan.sidecars, plan.caches)
+	} else {
+		fmt.Fprintf(stdout, "Copied %d frames and %d sidecars.\n", plan.frames, plan.sidecars)
+	}
 	return 0
 }
