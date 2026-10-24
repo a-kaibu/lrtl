@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- Phase One IIQのExif寸法優先を52条件で比較し、初期化・円形マスク補間へ反映しました。標準TIFFのJPEGプレビューを持つIIQを`--raw-preview`で動画化でき、通常読込／`preserve`では埋め込みXMPも読めます。既定初期化は本体のファイル読込6条件に合わせ、IIQのサイドカーだけを採用します。AVIの復号画素・バックアップ・再実行もテストしています。[対応条件・採用元の違い・残る範囲](internal/lrtl/testdata/lrt-iiq-dimensions-7.5.5.md)を参照してください。
+
 - Canon CR3の寸法読込を追加しました。CMT1／CMT2とトラック寸法の順序、CR2とのExif優先順位の違い、整数境界などを実機76条件で比較し、`init`の保存と円形マスク補間に反映します。BigTIFF入りCR3で見つかったメタデータ依存のpanicも修正し、エラー時の保持とAVIのJPEG対照一致をテストしています。[規則・検証・未対応範囲](internal/lrtl/testdata/lrt-cr3-dimensions-7.5.5.md)を参照してください。
 
 - RAF（Fujifilm RAW）の寸法読込を追加しました。埋め込みJPEGとRAWクロップの優先順位、複数ディレクトリ、重複・欠損・ゼロ寸法を実機66条件で比較しています。`init`の寸法保存と円形マスク補間に使い、RAFプレビューからの3フレームAVIも抽出JPEG対照と全画素一致を確認しました。[規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-raf-dimensions-7.5.5.md)を参照してください。
@@ -42,7 +44,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - RW2／Leica RWL／Panasonic RAWの寸法読込を追加しました。センサー境界、ExifIFD、埋め込みJPEGの選択を実機84条件で比較しています。`.raw`（PanasonicのTIFF構造）と`.rwl`も`--raw-preview`で動画化でき、各3フレームのAVIが抽出JPEGの対照と一致しました。[規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-rw2-dimensions-7.5.5.md)を参照してください。
 
-- TIFF系RAWの寸法読込を実機へ近づけました。先頭IFD・本画像SubIFD・CR2のExif寸法・BigTIFFの選択を80種類の合成入力で比較し、70,000ピクセルを超える寸法も保存できます。円形マスク補間もこの読込と保存済みLRT寸法を使います。RW2／RAF／CR3系は後続実装で対応し、Phase One独自の寸法選択等は残っています。[選択規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-raw-dimensions-7.5.5.md)を参照してください。
+- TIFF系RAWの寸法読込を実機へ近づけました。先頭IFD・本画像SubIFD・CR2のExif寸法・BigTIFFの選択を80種類の合成入力で比較し、70,000ピクセルを超える寸法も保存できます。円形マスク補間もこの読込と保存済みLRT寸法を使います。RW2／RAF／CR3／IIQ系は後続実装で対応し、独自maker noteの全取得等は残っています。[選択規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-raw-dimensions-7.5.5.md)を参照してください。
 
 - `init`で画像寸法・向き・カメラ設定の保存を追加しました。実機のCSV読込→保存を75条件で比較し、EXIF露出ラベル94例、PNGの向き、バックアップ・元画像保持・破損時の保存前拒否もテストしています。日時更新、RAW寸法の一部、自動撮影モード/HDRの画像判定などは未対応です。[観測方法・対応範囲・再実行手順](internal/lrtl/testdata/lrt-frame-metadata-save-7.5.5.md)を参照してください。
 
@@ -215,7 +217,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
-| RAWの寸法メタデータ | RAWの本画像寸法を読み、保存・補間に利用 | TIFF系／CR2／BigTIFF、RW2／RWL／Panasonic RAW、RAF、CR3の観測済み寸法選択に対応。RAFの66条件、CR3の76条件を含めて比較。`init`保存と円形マスク補間へ反映。Phase One独自選択、全maker noteの上書きは未対応 | 一部 |
+| RAWの寸法メタデータ | RAWの本画像寸法を読み、保存・補間に利用 | TIFF系／CR2／BigTIFF、RW2／RWL／Panasonic RAW、RAF、CR3、IIQの観測済み寸法選択に対応。RAFの66条件、CR3の76条件、IIQ／TIFFの52条件を含めて比較。`init`保存と円形マスク補間へ反映。独自maker noteの全上書きは未対応 | 一部 |
 | レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、本体の推定枚数に基づくフェード・音声時刻、映像レンジ、保存済みアスペクト比に対応。動画デフリッカー・ノイズ除去・光跡除去・ブレンド／モーション補間も対応。`gamut`／`dynamicRange`でBT.2020 SDR/PQ設定も読める。BT.2020中間画像が必要。ICC名から自動判定し、`--input-color bt2020`で手動指定も可能 | 一部 |
 | 選択範囲の手動キーフレーム | 選択画像への4/5つ星マーク設定・解除 | `mark-sequence`／`unmark-sequence`で一括設定・解除。ファイル名・評価・JSON・反転で対象を選択し、元評価の復元、HG保護、保存前検証、バックアップに対応。GUI操作との比較は未実施 | CLI実装済み |
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
@@ -422,7 +424,7 @@ AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必
 
 `timeshift`は`--offset 2h30m`、`--offset=-45s`、`--offset 1d`のような固定時間差で連番の撮影日時をずらします。既定はプレビューで、`--write`を付けるとXMPサイドカーへ保存し、既存ファイルはバックアップします。外部XMPがなければ対応画像内XMPを引き継ぎ、他の現像設定・未知のRDFを保持します。対象は根の`DateTimeOriginal`と`CreateDate`で、単純値の`DateTimeDigitized`は読込時に`CreateDate`へ正規化します（両方あれば明示された`CreateDate`を優先）。プリセット内の同名日時は変更しません。`ModifyDate`と画像に埋め込まれたEXIF値は変更しません。XMPの日付値がなく画像EXIFで撮影日時を読める場合は、ずらした`DateTimeOriginal`をサイドカーへ追加します。
 
-XMPを読む処理は、同じ画像に外部`.xmp`サイドカーがあればそれを優先します。サイドカーがないJPEG画像では標準/拡張XMP APP1、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/DCRではTIFF XMLPacket tag 700、ORFではIIRO/IIRS/MMORマジックのTIFF XMLPacket tag 700、RAFではヘッダーのオフセット/長さで指定される埋め込みJPEGの標準/拡張XMP APP1を読みます。CR3ではISO BMFFのAdobe XMP UUID boxを探し、サイズとXMLパケットを検証します。埋め込みXMPを編集した場合も、変更は外部サイドカーへ保存し、元画像を書き換えません。組み立てた埋め込みXMPの上限は32 MiBです。これら以外のRAWコンテナーに埋め込まれたXMPは未対応です。
+XMPを読む処理は、同じ画像に外部`.xmp`サイドカーがあればそれを優先します。サイドカーがないJPEG画像では標準/拡張XMP APP1、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/DCR/IIQではTIFF XMLPacket tag 700、ORFではIIRO/IIRS/MMORマジックのTIFF XMLPacket tag 700、RAFではヘッダーのオフセット/長さで指定される埋め込みJPEGの標準/拡張XMP APP1を読みます。CR3ではISO BMFFのAdobe XMP UUID boxを探し、サイズとXMLパケットを検証します。IIQの既定初期化は本体の採用規則に合わせてサイドカーだけを使います。埋め込みXMPを編集した場合も、変更は外部サイドカーへ保存し、元画像を書き換えません。組み立てた埋め込みXMPの上限は32 MiBです。これら以外のRAWコンテナーに埋め込まれたXMPは未対応です。
 
 `lens-tag`はLRTimelapse 7.5.5のLens Taggerで確認したf/1〜f/90の候補から選び、連番の各XMPサイドカーへ`lrt:Aperture`として記録します。既定はプレビューで、`--write`で保存し、既存サイドカーはバックアップします。`--no-backup`は`--write`と併用できます。GUIにも同じ操作があります。これはマニュアルレンズ向けのLRT独自XMP値で、画像内EXIFや埋め込みXMPは変更しません。`holy-grail`はEXIFのFNumberが有効ならそちらを優先し、欠落時には`lrt:Aperture`を使います。
 

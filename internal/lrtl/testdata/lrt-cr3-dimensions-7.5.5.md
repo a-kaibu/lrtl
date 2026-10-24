@@ -62,4 +62,6 @@ python scripts/probes/cr3_dimensions_fixture.py work/new-cr3-dimension-inputs
 
 ## 残る範囲
 
+[IIQのExif寸法優先](lrt-iiq-dimensions-7.5.5.md)は後続実装で対応しました。独自maker noteの全取得は引き続き対象外です。
+
 合成入力で測定したメタデータと保存前半が対象です。全カメラモデル、Canonの独自maker noteによる別の寸法、他のmajor brand、画像項目プロパティや別種のトラック、全破損入力の回復、製品ワークフロー全体のキャッシュ優先順位は未対応または未検証です。Phase Oneの独自寸法選択も残っています。CR3のRAW現像や色管理の完全一致を追加したものではありません。

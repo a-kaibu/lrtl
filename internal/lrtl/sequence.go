@@ -214,6 +214,10 @@ func loadFramePacketSource(frame Frame, nativeTimestamp bool) (*XMPPacket, bool,
 			return nil, false, "", err
 		}
 	}
+	if nativeTimestamp && strings.EqualFold(filepath.Ext(frame.Image), ".iiq") {
+		// The native file reader uses external XMP only for this RAW type.
+		return nil, false, "image", nil
+	}
 	return loadFrameEmbeddedPacket(frame.Image)
 }
 

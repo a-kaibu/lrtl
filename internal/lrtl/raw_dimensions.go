@@ -21,7 +21,8 @@ func (value *rawDimensionValue) accept(number uint64, priority bool) {
 
 // ImageSize uses individually prioritized TIFF dimensions, not the largest IFD.
 // The first explicit full-resolution directory wins priority. CR2 headers add
-// the ExifImageWidth/Height override. No pixel strips or camera preview are read.
+// the ExifImageWidth/Height override, as does the IIQ file type. No pixel strips
+// or camera preview are read.
 func nativeTIFFImageSize(path string) (int32, int32, bool, error) {
 	var dimensions rawDimensionGraph
 	var rw2Width, rw2Height int32
@@ -65,7 +66,7 @@ func nativeTIFFImageSize(path string) (int32, int32, bool, error) {
 	if !width.present || !height.present {
 		return 0, 0, false, nil
 	}
-	if cr2 && exifWidth.present && exifHeight.present && exifWidth.value != 0 && exifHeight.value != 0 {
+	if (cr2 || strings.EqualFold(filepath.Ext(path), ".iiq")) && exifWidth.present && exifHeight.present && exifWidth.value != 0 && exifHeight.value != 0 {
 		width, height = exifWidth, exifHeight
 	}
 	if width.value > math.MaxInt32 || height.value > math.MaxInt32 {

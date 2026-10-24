@@ -113,6 +113,8 @@ observations and limitations.
 [CR3 dimensions](lrt-cr3-dimensions-7.5.5.md) were also added subsequently,
 using their distinct box/metadata precedence.
 
+[IIQ Exif dimension precedence](lrt-iiq-dimensions-7.5.5.md) was added subsequently.
+
 This implements the observed TIFF/CR2 dimension path. RW2's separate tag table,
 RAF cropped-size composites, CR3/other containers, Phase One-specific size
 selection, proprietary maker-note overrides and every malformed TIFF variant
