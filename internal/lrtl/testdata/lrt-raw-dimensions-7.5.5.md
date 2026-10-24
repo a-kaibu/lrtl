@@ -106,6 +106,10 @@ python scripts/probes/raw_dimensions_fixture.py work/raw-size-inputs
 
 ## Remaining scope
 
+Subsequent work adds [RW2 dimensions](lrt-rw2-dimensions-7.5.5.md) and
+[RAF cropped-size selection](lrt-raf-dimensions-7.5.5.md), with separate native
+observations and limitations.
+
 This implements the observed TIFF/CR2 dimension path. RW2's separate tag table,
 RAF cropped-size composites, CR3/other containers, Phase One-specific size
 selection, proprietary maker-note overrides and every malformed TIFF variant

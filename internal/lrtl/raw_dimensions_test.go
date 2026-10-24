@@ -46,6 +46,7 @@ func TestRawDimensionsRejectMalformedDirectories(t *testing.T) {
 
 type rawDimensionsReference struct {
 	StoreCompleted bool `json:"store_completed"`
+	ExifToolExit   int  `json:"exiftool_exit"`
 	Stop           string
 	Cases          []struct {
 		Name, Size, Target, Saved string
@@ -199,7 +200,11 @@ func assertInstalledRawDimensions(t *testing.T, reference rawDimensionsReference
 		t.Fatalf("compile observer: %v\n%s", err, out)
 	}
 	path := filepath.Join(dir, "replay.json")
-	if out, err := exec.Command("java", "--enable-native-access=ALL-UNNAMED", "-cp", dir+string(os.PathListSeparator)+jar, "lrtlprobe.RawDimensionsOracle", path, exiftool, images).CombinedOutput(); err != nil {
+	javaArgs := []string{"--enable-native-access=ALL-UNNAMED", "-cp", dir + string(os.PathListSeparator) + jar, "lrtlprobe.RawDimensionsOracle", path, exiftool, images}
+	if reference.ExifToolExit == 1 {
+		javaArgs = append(javaArgs, "--allow-exiftool-errors")
+	}
+	if out, err := exec.Command("java", javaArgs...).CombinedOutput(); err != nil {
 		t.Fatalf("native replay: %v\n%s", err, out)
 	}
 	var replay rawDimensionsReference

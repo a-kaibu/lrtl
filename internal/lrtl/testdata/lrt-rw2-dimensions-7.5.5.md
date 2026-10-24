@@ -120,5 +120,5 @@ notes, very large/invalid embedded JPEG recovery, complete frame-cache precedenc
 capture-date/history completion and native RAW development remain incomplete.
 External sidecars supply RWL/Panasonic RAW edits; extending their embedded-XMP
 container coverage remains separate work.
-RAF cropped-size composites, CR3 dimensions and Phase One-specific size selection
-remain separate dimension work.
+[RAF cropped-size composites](lrt-raf-dimensions-7.5.5.md) were added subsequently.
+CR3 dimensions and Phase One-specific size selection remain separate work.

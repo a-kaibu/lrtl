@@ -194,7 +194,7 @@ func radialMaskFrameSizes(packets []*XMPPacket, frames []Frame) ([]radialMaskSiz
 		if (values[0] == 0 || values[1] == 0) && i < len(frames) && frames[i].Image != "" {
 			if file, err := os.Open(frames[i].Image); err == nil {
 				w, h := 0, 0
-				rawWidth, rawHeight, found, err := nativeTIFFImageSize(frames[i].Image)
+				rawWidth, rawHeight, found, err := nativeImageSize(frames[i].Image)
 				if err != nil {
 					_ = file.Close()
 					return nil, fmt.Errorf("frame %d dimensions: %w", i+1, err)

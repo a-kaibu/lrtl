@@ -126,11 +126,11 @@ func readNativeCameraMetadata(frame Frame, packet *XMPPacket) (*nativeCameraMeta
 		return nil, err
 	}
 	metadata, metadataErr := imagemeta.Decode(file)
-	width, height, hasTIFFSize, err := nativeTIFFImageSize(frame.Image)
+	width, height, hasImageSize, err := nativeImageSize(frame.Image)
 	if err != nil {
 		return nil, err
 	}
-	if configErr != nil && metadataErr != nil && !hasTIFFSize {
+	if configErr != nil && metadataErr != nil && !hasImageSize {
 		return nil, nil
 	}
 	fields := make([]string, 16)
@@ -138,7 +138,7 @@ func readNativeCameraMetadata(frame Frame, packet *XMPPacket) (*nativeCameraMeta
 		fields[i] = "-"
 	}
 	fields[0] = frame.Image
-	if hasTIFFSize {
+	if hasImageSize {
 		fields[1] = fmt.Sprintf("%dx%d", width, height)
 	} else if configErr == nil && config.Width > 0 && config.Height > 0 {
 		if config.Width > math.MaxInt32 || config.Height > math.MaxInt32 {

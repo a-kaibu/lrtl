@@ -22,11 +22,12 @@ public final class RawDimensionsOracle {
         for(Path path:paths)command.add(path.toString());
         Process process=new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
         String observed=new String(process.getInputStream().readAllBytes(),StandardCharsets.UTF_8);
-        if(process.waitFor()!=0)throw new IllegalStateException("ExifTool failed");
+        int exiftoolExit=process.waitFor();
+        if(exiftoolExit!=0 && !(exiftoolExit==1 && args.length==4 && args[3].equals("--allow-exiftool-errors")))throw new IllegalStateException("ExifTool failed");
         var lines=observed.lines().toList();
         if(lines.size()!=paths.size())throw new IllegalStateException("Missing ExifTool observations");
         String target=RegisteredSaveOracle.packet("lrt:Quality=\"RAW\" crs:HasSettings=\"False\" crs:WhiteBalance=\"As Shot\" f:Keep=\"untouched\"","");
-        StringBuilder out=new StringBuilder("{\"store_completed\":false,\"stop\":\"history: null LRTimelapseMain.m()\",\"cases\":[\n");String comma="";
+        StringBuilder out=new StringBuilder("{\"store_completed\":false,\"stop\":\"history: null LRTimelapseMain.m()\",\"exiftool_exit\":"+exiftoolExit+",\"cases\":[\n");String comma="";
         for(int i=0;i<paths.size();i++) {
             Path path=paths.get(i);String[] columns=lines.get(i).split("\t",-1);
             String name=path.getFileName().toString();

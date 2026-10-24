@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- RAF（Fujifilm RAW）の寸法読込を追加しました。埋め込みJPEGとRAWクロップの優先順位、複数ディレクトリ、重複・欠損・ゼロ寸法を実機66条件で比較しています。`init`の寸法保存と円形マスク補間に使い、RAFプレビューからの3フレームAVIも抽出JPEG対照と全画素一致を確認しました。[規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-raf-dimensions-7.5.5.md)を参照してください。
+
 - レーティング再読込を実機3,440条件に合わせ、1→4、厳密な整数解釈、直近の`LRT_`フォルダーでのHG評価解除を既定コピー保存に反映しました。URI／修飾子付き評価もキーフレーム選択・補間で読み取り、mark／unmarkやHG処理では入れ子の別メタデータを保持します。回帰・race・fuzzテストと、補間後のAVI復号画素比較を追加しています。[規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-reload-rating-7.5.5.md)を参照してください。
 
 - 全体の`copy-settings`で、現行形式の既定スライダー・線形カーブ等を補うようにしました。ファイル名とQualityでRAW系／FLAT系を選び、既存値を優先して統合します。実機の既定84条件・統合432条件、空参照・共有XMP・再実行、既定値を適用したAVI画素を検査しています。[既定値・動作変更・観測範囲](internal/lrtl/testdata/lrt-reload-defaults-7.5.5.md)を参照してください。
@@ -38,7 +40,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - RW2／Leica RWL／Panasonic RAWの寸法読込を追加しました。センサー境界、ExifIFD、埋め込みJPEGの選択を実機84条件で比較しています。`.raw`（PanasonicのTIFF構造）と`.rwl`も`--raw-preview`で動画化でき、各3フレームのAVIが抽出JPEGの対照と一致しました。[規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-rw2-dimensions-7.5.5.md)を参照してください。
 
-- TIFF系RAWの寸法読込を実機へ近づけました。先頭IFD・本画像SubIFD・CR2のExif寸法・BigTIFFの選択を80種類の合成入力で比較し、70,000ピクセルを超える寸法も保存できます。円形マスク補間もこの読込と保存済みLRT寸法を使います。RW2系は後続実装で対応し、RAF等の別形式は残っています。[選択規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-raw-dimensions-7.5.5.md)を参照してください。
+- TIFF系RAWの寸法読込を実機へ近づけました。先頭IFD・本画像SubIFD・CR2のExif寸法・BigTIFFの選択を80種類の合成入力で比較し、70,000ピクセルを超える寸法も保存できます。円形マスク補間もこの読込と保存済みLRT寸法を使います。RW2／RAF系は後続実装で対応し、CR3等の別形式は残っています。[選択規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-raw-dimensions-7.5.5.md)を参照してください。
 
 - `init`で画像寸法・向き・カメラ設定の保存を追加しました。実機のCSV読込→保存を75条件で比較し、EXIF露出ラベル94例、PNGの向き、バックアップ・元画像保持・破損時の保存前拒否もテストしています。日時更新、RAW寸法の一部、自動撮影モード/HDRの画像判定などは未対応です。[観測方法・対応範囲・再実行手順](internal/lrtl/testdata/lrt-frame-metadata-save-7.5.5.md)を参照してください。
 
@@ -211,6 +213,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 | 機能領域 | LRTimelapseの機能 | lrtlの状況 | 状態 |
 |---|---|---|---|
+| RAWの寸法メタデータ | RAWの本画像寸法を読み、保存・補間に利用 | TIFF系／CR2／BigTIFF、RW2／RWL／Panasonic RAW、RAFの観測済み寸法選択に対応。RAFはプレビューとクロップの優先順位を66条件で比較。`init`保存と円形マスク補間へ反映。CR3、Phase One独自選択、全maker noteの上書きは未対応 | 一部 |
 | レンダープリセット | 保存した動画出力設定の再利用 | `--lrt-render-preset`で単独プリセットJSON、またはLRT設定JSONのlastRenderSettings／名前で選ぶrenderPresetsを読み込む。fps、解像度、H.264/H.265画質、ProRes/DNxHRプロファイル、Motion Blur、音声、速度、本体の推定枚数に基づくフェード・音声時刻、映像レンジ、保存済みアスペクト比に対応。動画デフリッカー・ノイズ除去・光跡除去・ブレンド／モーション補間も対応。`gamut`／`dynamicRange`でBT.2020 SDR/PQ設定も読める。BT.2020中間画像が必要。ICC名から自動判定し、`--input-color bt2020`で手動指定も可能 | 一部 |
 | 選択範囲の手動キーフレーム | 選択画像への4/5つ星マーク設定・解除 | `mark-sequence`／`unmark-sequence`で一括設定・解除。ファイル名・評価・JSON・反転で対象を選択し、元評価の復元、HG保護、保存前検証、バックアップに対応。GUI操作との比較は未実施 | CLI実装済み |
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
