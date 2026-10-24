@@ -159,6 +159,10 @@ func copyFile(source, destination string) error {
 }
 
 func WritePacket(path string, packet *XMPPacket, backup bool) (string, error) {
+	return writePacketNewerThan(path, packet, backup, time.Time{})
+}
+
+func writePacketNewerThan(path string, packet *XMPPacket, backup bool, minimum time.Time) (string, error) {
 	parent := filepath.Dir(path)
 	if err := os.MkdirAll(parent, 0755); err != nil {
 		return "", err
@@ -214,8 +218,27 @@ func WritePacket(path string, packet *XMPPacket, backup bool) (string, error) {
 	// Discovery chooses the newest sidecar variant. Do not make an edited
 	// future-dated active file older than its stale companion. Two seconds
 	// also advances timestamps on filesystems with coarse time resolution.
+	stamp := time.Time{}
 	if statErr == nil && info.ModTime().After(time.Now()) {
-		stamp := info.ModTime().Add(2 * time.Second)
+		stamp = info.ModTime().Add(2 * time.Second)
+	}
+	if !minimum.IsZero() {
+		// JPEG/DNG initialization must remain newer than the image at native
+		// millisecond resolution, including future-dated source images.
+		actual := stamp
+		if actual.IsZero() {
+			temporary, err := os.Stat(tempPath)
+			if err != nil {
+				cleanup()
+				return backupPath, err
+			}
+			actual = temporary.ModTime()
+		}
+		if actual.UnixMilli() <= minimum.UnixMilli() {
+			stamp = minimum.Add(2 * time.Second)
+		}
+	}
+	if !stamp.IsZero() {
 		if err := os.Chtimes(tempPath, stamp, stamp); err != nil {
 			cleanup()
 			return backupPath, err

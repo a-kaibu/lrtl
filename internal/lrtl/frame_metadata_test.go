@@ -186,6 +186,7 @@ func TestFrameMetadataInitializationEXIFAndPreserve(t *testing.T) {
 			if _, err := WritePacket(filepath.Join(dir, "frame.xmp"), packet, false); err != nil {
 				t.Fatal(err)
 			}
+			ensureTestSidecarNewer(t, image, filepath.Join(dir, "frame.xmp"))
 			before := batchFileSnapshot(t, dir)
 			var out, stderr bytes.Buffer
 			args := []string{"init", dir, "--frame-state", profile}

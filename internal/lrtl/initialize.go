@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/beevik/etree"
 )
@@ -17,6 +19,8 @@ type initializationChange struct {
 	Packet       *XMPPacket
 	Format       string
 	CreatedSlots int
+	Source       string
+	ImageTime    time.Time
 }
 
 var initializationRoles = []string{"HG", "Deflicker", "Global"}
@@ -217,13 +221,18 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 	}
 	quality := ""
 	packets := make([]*XMPPacket, len(frames))
+	sources := make([]string, len(frames))
 	fallback := "modern"
 	for i, frame := range frames {
-		packet, err := PacketForFrame(frame)
+		packet, found, source, err := loadFramePacketSource(frame, profile == nativeSaveStateProfile)
 		if err != nil {
 			return nil, err
 		}
+		if !found {
+			packet = EmptyXMPPacket()
+		}
 		packets[i] = packet
+		sources[i] = source
 	}
 	if profile == nativeSaveStateProfile {
 		quality, err = nativeSequenceQuality(frames[nativeFrameStateReference(packets)].Image)
@@ -315,8 +324,16 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 		if err != nil {
 			return nil, err
 		}
-		if string(before) != string(after) {
-			changes = append(changes, initializationChange{frame, packets[i], selected, count})
+		if string(before) != string(after) || profile == nativeSaveStateProfile && sources[i] == "image" && frame.Sidecar != "" {
+			imageTime := time.Time{}
+			if profile == nativeSaveStateProfile && nativeImageXMPTimestamp(frame.Image) {
+				info, err := os.Stat(frame.Image)
+				if err != nil {
+					return nil, err
+				}
+				imageTime = info.ModTime()
+			}
+			changes = append(changes, initializationChange{Frame: frame, Packet: packets[i], Format: selected, CreatedSlots: count, Source: sources[i], ImageTime: imageTime})
 		}
 	}
 	return changes, nil
@@ -352,6 +369,7 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 	for _, change := range changes {
 		fmt.Fprintf(stdout, "  %s: %s, new correction slots: %d\n", filepath.Base(change.Frame.Image), change.Format, change.CreatedSlots)
 		if *frameState == nativeSaveStateProfile {
+			fmt.Fprintf(stdout, "    XMP source: %s\n", change.Source)
 			quality, _, _ := change.Packet.GetRootScalar("lrt:Quality")
 			rating, _, _ := change.Packet.GetRootScalar("xmp:Rating")
 			fmt.Fprintf(stdout, "    Quality=%q; Rating=%q\n", quality, rating)
@@ -368,7 +386,7 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	for _, change := range changes {
-		backup, err := WritePacket(change.Frame.OutputSidecar(), change.Packet, !*noBackup)
+		backup, err := writePacketNewerThan(change.Frame.OutputSidecar(), change.Packet, !*noBackup, change.ImageTime)
 		if err != nil {
 			return reportError(stderr, err)
 		}

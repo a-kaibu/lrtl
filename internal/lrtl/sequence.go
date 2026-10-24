@@ -161,38 +161,73 @@ func loadPacket(frame Frame) (*XMPPacket, error) {
 }
 
 func loadFramePacket(frame Frame) (*XMPPacket, bool, error) {
+	packet, found, _, err := loadFramePacketSource(frame, false)
+	return packet, found, err
+}
+
+func nativeImageXMPTimestamp(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg", ".dng":
+		return true
+	}
+	return false
+}
+
+// The native initialization profile reconciles JPEG/DNG image and sidecar
+// timestamps at Java File.lastModified's millisecond resolution. Other callers
+// keep the existing sidecar-first policy until they share that import workflow.
+func loadFramePacketSource(frame Frame, nativeTimestamp bool) (*XMPPacket, bool, string, error) {
 	sidecar := frame.Sidecar
 	if sidecar == "" {
 		candidate := frame.OutputSidecar()
 		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
 			sidecar = candidate
 		} else if err != nil && !os.IsNotExist(err) {
-			return nil, false, err
+			return nil, false, "", err
 		}
 	}
 	if sidecar != "" {
+		if nativeTimestamp && nativeImageXMPTimestamp(frame.Image) {
+			info, err := os.Stat(sidecar)
+			if err != nil && !os.IsNotExist(err) {
+				return nil, false, "", err
+			}
+			if err == nil && info.Mode().IsRegular() {
+				imageInfo, err := os.Stat(frame.Image)
+				if err != nil {
+					return nil, false, "", err
+				}
+				if imageInfo.ModTime().UnixMilli() >= info.ModTime().UnixMilli() {
+					return loadFrameEmbeddedPacket(frame.Image)
+				}
+			}
+		}
 		data, err := os.ReadFile(sidecar)
 		if err == nil {
 			packet, parseErr := parseXMP(data)
 			if parseErr != nil {
-				return nil, false, fmt.Errorf("%s: %w", sidecar, parseErr)
+				return nil, false, "", fmt.Errorf("%s: %w", sidecar, parseErr)
 			}
-			return packet, true, nil
+			return packet, true, "sidecar", nil
 		}
 		if !os.IsNotExist(err) {
-			return nil, false, err
+			return nil, false, "", err
 		}
 	}
-	data, found, err := readEmbeddedImageXMP(frame.Image)
+	return loadFrameEmbeddedPacket(frame.Image)
+}
+
+func loadFrameEmbeddedPacket(path string) (*XMPPacket, bool, string, error) {
+	data, found, err := readEmbeddedImageXMP(path)
 	if err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	}
 	if !found {
-		return nil, false, nil
+		return nil, false, "image", nil
 	}
 	packet, err := parseXMP(data)
 	if err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	}
-	return packet, true, nil
+	return packet, true, "image", nil
 }

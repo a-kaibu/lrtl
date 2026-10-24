@@ -32,6 +32,7 @@ func TestFrameStateInitializationProfilesAndSequenceQuality(t *testing.T) {
 				if _, err := WritePacket(path+".xmp", p, false); err != nil {
 					t.Fatal(err)
 				}
+				ensureTestSidecarNewer(t, path, path+".xmp")
 			}
 			original := batchFileSnapshot(t, dir)
 			var out, stderr bytes.Buffer

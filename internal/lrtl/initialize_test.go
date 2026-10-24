@@ -177,6 +177,7 @@ func TestInitializePreflightsConflictsBeforeAnyWrite(t *testing.T) {
 	frames := makeFrames(t, dir, 2)
 	packet := exposureTestPacket(t, "unsigned")
 	frame := persistExposurePacket(t, frames[1], packet)
+	ensureTestSidecarNewer(t, frame.Image, frame.Sidecar)
 	original, err := os.ReadFile(frame.Sidecar)
 	if err != nil {
 		t.Fatal(err)
@@ -301,6 +302,7 @@ func TestInitializeRejectsWrongFormatsAndMovedInternalSlots(t *testing.T) {
 	}
 	packet := exposureTestPacket(t, "modern")
 	persistExposurePacket(t, frames[0], packet)
+	ensureTestSidecarNewer(t, frames[0].Image, frames[0].OutputSidecar())
 	if _, err := buildInitializationPlan(frames, "modern"); err == nil {
 		t.Fatal("moved internal slots accepted")
 	}
@@ -396,6 +398,7 @@ func TestInitializeRejectsMalformedArraysBeforeWriting(t *testing.T) {
 				t.Fatal(err)
 			}
 			persistExposurePacket(t, frames[1], packet)
+			ensureTestSidecarNewer(t, frames[1].Image, frames[1].OutputSidecar())
 			var out, stderr bytes.Buffer
 			if code := Main([]string{"init", dir, "--write"}, &out, &stderr); code == 0 {
 				t.Fatal("malformed array accepted")

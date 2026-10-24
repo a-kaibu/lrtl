@@ -44,7 +44,8 @@ func batchHolyGrailFixture(t *testing.T, root, name string, cached bool) string 
 		if !cached && rating == 0 {
 			delete(properties, "xmp:Rating") // HG respects every explicitly stored rating.
 		}
-		writeTestXMP(t, path, properties)
+		sidecar := writeTestXMP(t, path, properties)
+		ensureTestSidecarNewer(t, path, sidecar)
 	}
 	return dir
 }
