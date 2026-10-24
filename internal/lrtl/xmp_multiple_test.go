@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -133,9 +134,25 @@ func TestXMPMultipleInitializeAndRender(t *testing.T) {
 
 func testMergedXMPInitializeAndRender(t *testing.T, row xmpSourceObservation) {
 	t.Helper()
+	if row.Result == nil {
+		t.Fatal("missing merged metadata control")
+	}
+	expected, err := parseXMP([]byte(*row.Result))
+	if err != nil {
+		t.Fatal(err)
+	}
+	exposure, found, err := expected.GetRootScalar("crs:Exposure2012")
+	if err != nil || !found {
+		t.Fatal("missing exposure control")
+	}
+	wantExposure, err := strconv.ParseFloat(exposure, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ext := filepath.Ext(row.Filename)
 	dir := t.TempDir()
 	for i := 0; i < 3; i++ {
-		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("frame-%02d.jpg", i)), row.Data, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("frame-%02d%s", i, ext)), row.Data, 0600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -167,7 +184,7 @@ func testMergedXMPInitializeAndRender(t *testing.T, row xmpSourceObservation) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertExposureValue(t, packet, globalXMPExposureTarget(), 2)
+		assertExposureValue(t, packet, globalXMPExposureTarget(), wantExposure)
 		for _, name := range []string{"First", "Second"} {
 			if property := packet.findRootProperty("urn:lrtl:multiple", name); property.element == nil && property.attribute == nil {
 				t.Fatal("lost earlier packet field", name)

@@ -49,7 +49,88 @@ func readEmbeddedImageXMP(path string) ([]byte, bool, error) {
 }
 
 func readEmbeddedTIFFXMP(path string) ([]byte, bool, error) {
-	return readTIFFMetadata(path, (*tiffXMPReader).scan)
+	return readTIFFMetadata(path, func(reader *tiffXMPReader, first uint64) ([]byte, bool, error) {
+		ext := strings.ToLower(filepath.Ext(path))
+		if !reader.bigTIFF && (ext == ".tif" || ext == ".tiff" || ext == ".dng") {
+			return reader.scanMergedXMP(first)
+		}
+		return reader.scan(first)
+	})
+}
+
+// Classic TIFF/DNG import follows directory entries in storage order, visiting
+// SubIFDs/ExifIFDs immediately. Next-page directories are visited for their
+// children but do not contribute their own tag 700 (native thumbnail handling).
+func (reader *tiffXMPReader) scanMergedXMP(first uint64) ([]byte, bool, error) {
+	var merged *XMPPacket
+	var original []byte
+	packets, total := 0, uint64(0)
+	var visit func(uint64, int, bool) error
+	visit = func(offset uint64, depth int, include bool) error {
+		if offset == 0 || reader.visited[offset] {
+			return nil
+		}
+		if depth > 32 || reader.directories >= maxPreviewIFDs {
+			return fmt.Errorf("TIFF XMP directory graph exceeds safety limits")
+		}
+		reader.visited[offset] = true
+		reader.directories++
+		entries, next, err := reader.readDirectory(offset)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			switch entry.tag {
+			case 330, 34665:
+				offsets, err := reader.readDirectoryOffsets(entry)
+				if err != nil {
+					continue
+				}
+				for _, child := range offsets {
+					if err := visit(child, depth+1, true); err != nil {
+						return err
+					}
+				}
+			case 700:
+				if !include {
+					continue
+				}
+				if entry.count > maxEmbeddedTIFFXMPSize-total {
+					return fmt.Errorf("TIFF XMP packets exceed safety limit")
+				}
+				total += entry.count
+				data, found, err := reader.readPacket(entry)
+				if err != nil {
+					return err
+				}
+				if !found {
+					continue
+				}
+				packet, err := parseXMP(data)
+				if err != nil {
+					return fmt.Errorf("parse TIFF XMP tag 700: %w", err)
+				}
+				packets++
+				if merged == nil {
+					merged, original = packet, data
+				} else if err := mergeEmbeddedXMP(merged, packet); err != nil {
+					return err
+				}
+			}
+		}
+		return visit(next, depth+1, false)
+	}
+	if err := visit(first, 0, true); err != nil {
+		return nil, false, err
+	}
+	if merged == nil {
+		return nil, false, nil
+	}
+	if packets == 1 {
+		return original, true, nil
+	}
+	data, err := merged.Serialize()
+	return data, err == nil, err
 }
 
 func readTIFFMetadata(path string, scan func(*tiffXMPReader, uint64) ([]byte, bool, error)) ([]byte, bool, error) {
