@@ -18,8 +18,9 @@ This is not a develop-only clipboard operation.
 
 The full native caller subsequently reparses/reinitializes its frame model,
 including mask/default metadata. The CLI now implements its
-[date-cache and HasSettings reload](lrt-full-paste-date-7.5.5.md), and registered
-save preparation, but complete mask/default reconstruction and cache reload
+[date-cache and HasSettings reload](lrt-full-paste-date-7.5.5.md),
+[mask preparation and legacy conversion](lrt-mask-preparation-7.5.5.md), and registered
+save preparation, but complete default reconstruction and cache reload
 remain unfinished. These XML comparisons alone do not cover those stages. Selected-column
 copy is a separate `--properties` mode described in
 [`lrt-selected-columns-7.5.5.md`](lrt-selected-columns-7.5.5.md).

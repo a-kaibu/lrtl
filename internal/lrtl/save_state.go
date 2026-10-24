@@ -259,6 +259,9 @@ func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColum
 	}
 	if profile == nativeSaveStateProfile {
 		if len(columns) == 0 {
+			if _, err := prepareFullCopyMasks(working, "reload"); err != nil {
+				return false, err
+			}
 			captureDate, err = fullCopyCaptureDate(working)
 			if err != nil {
 				return false, err

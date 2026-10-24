@@ -257,6 +257,13 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 			if eligible, _ := nativeMetadataDateEligible(output.Packet, date); eligible {
 				fmt.Fprintln(stdout, "  MetadataDate: updated when saved")
 			}
+			if len(columns) == 0 {
+				for _, name := range []string{"MaskGroupBasedCorrections", "GradientBasedCorrections", "CircularGradientBasedCorrections"} {
+					if array := selectedField(nodes, pasteName{crsNamespace, name}); array != nil {
+						fmt.Fprintf(stdout, "  %s: %d correction(s)\n", name, len(array.Items))
+					}
+				}
+			}
 			for _, column := range columns {
 				column.Kind = ""
 				value, err := readSelectedColumn(nodes, column)
