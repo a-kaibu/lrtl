@@ -96,6 +96,10 @@ func planSequenceValueEdits(all, selected []Frame, property, text string) ([]pac
 
 // Validate every candidate before the caller starts writing any sidecars.
 func planSelectedPacketEdits(all, selected []Frame, edit func(*XMPPacket) error) ([]packetOutput, error) {
+	return planSelectedFramePacketEdits(all, selected, func(_ Frame, packet *XMPPacket) error { return edit(packet) })
+}
+
+func planSelectedFramePacketEdits(all, selected []Frame, edit func(Frame, *XMPPacket) error) ([]packetOutput, error) {
 	if len(selected) == 0 {
 		return nil, fmt.Errorf("no frames selected")
 	}
@@ -124,7 +128,7 @@ func planSelectedPacketEdits(all, selected []Frame, edit func(*XMPPacket) error)
 		if err != nil {
 			return nil, err
 		}
-		if err := edit(packet); err != nil {
+		if err := edit(frame, packet); err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.Image, err)
 		}
 		after, err := packet.Serialize()

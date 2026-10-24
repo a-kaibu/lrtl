@@ -120,7 +120,7 @@ func TestCopySettingsRejectsBeforeWriting(t *testing.T) {
 }
 
 func TestCopySettingsSharedSourceAndHardlinkProtection(t *testing.T) {
-	for _, mode := range []string{"unselected-shared", "all-shared", "reference-shared", "reference-hardlink"} {
+	for _, mode := range []string{"unselected-shared", "all-shared", "all-shared-common", "reference-shared", "reference-hardlink"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			for _, name := range []string{"same.nef", "same.jpg"} {
@@ -130,7 +130,15 @@ func TestCopySettingsSharedSourceAndHardlinkProtection(t *testing.T) {
 			}
 			source := pasteReferenceFile(t)
 			shared := filepath.Join(dir, "same.xmp")
-			if _, err := WritePacket(shared, EmptyXMPPacket(), false); err != nil {
+			initial := EmptyXMPPacket()
+			if mode == "all-shared-common" {
+				// A shared FLAT cache gives the same defaults to both extensions.
+				// Otherwise NEF/JPEG now require different native default packets.
+				if err := initial.SetScalar("lrt:Quality", "FLAT"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := WritePacket(shared, initial, false); err != nil {
 				t.Fatal(err)
 			}
 			if mode == "reference-shared" {
@@ -151,14 +159,14 @@ func TestCopySettingsSharedSourceAndHardlinkProtection(t *testing.T) {
 			}
 			var out, stderr bytes.Buffer
 			code := Main(args, &out, &stderr)
-			if mode == "unselected-shared" {
+			if mode == "unselected-shared" || mode == "all-shared" {
 				if code == 0 {
-					t.Fatal("changed unselected shared sidecar")
+					t.Fatal("changed protected or conflicting shared sidecar")
 				}
 			} else if code != 0 {
 				t.Fatal(&stderr)
 			}
-			if mode != "all-shared" {
+			if mode != "all-shared-common" {
 				if !reflect.DeepEqual(before, batchFileSnapshot(t, dir)) {
 					t.Fatal("protected reference or shared target changed")
 				}
@@ -319,9 +327,13 @@ func TestCopySettingsManifestInverseAndEmptyReference(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, found, err := packet.GetScalar("crs:Exposure2012")
-		if err != nil || found != (i == 2 || i == 3) {
-			t.Fatalf("frame %d: found %v error %v", i, found, err)
+		value, found, err := packet.GetScalar("crs:Exposure2012")
+		want := "0.000000"
+		if i == 2 || i == 3 {
+			want = "1"
+		}
+		if err != nil || !found || value != want {
+			t.Fatalf("frame %d: exposure %q, want %q; found %v error %v", i, value, want, found, err)
 		}
 	}
 }

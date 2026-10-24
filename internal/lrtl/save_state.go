@@ -224,9 +224,14 @@ func copySaveStateProfile(arguments []string) (string, error) {
 	return profile, validateSaveStateProfile(profile)
 }
 
-func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColumn, profile string) (bool, error) {
+// Packet-only calls isolate save-state preparation. The CLI supplies the actual
+// target image so a full copy also gets frame-specific default packet values.
+func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColumn, profile string, targetImages ...string) (bool, error) {
 	if err := validateSaveStateProfile(profile); err != nil {
 		return false, err
+	}
+	if len(targetImages) > 1 {
+		return false, fmt.Errorf("one target image is required for frame reload")
 	}
 	before, _, err := saveStateMaps(target)
 	if err != nil {
@@ -265,6 +270,11 @@ func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColum
 			captureDate, err = fullCopyCaptureDate(working)
 			if err != nil {
 				return false, err
+			}
+			if len(targetImages) == 1 {
+				if _, err := prepareFullCopyDefaults(working, targetImages[0]); err != nil {
+					return false, err
+				}
 			}
 			if err := prepareFullCopyHasSettings(working); err != nil {
 				return false, err

@@ -343,7 +343,8 @@ func FuzzNativeSaveState(f *testing.F) {
 		if preserve {
 			profile = "preserve"
 		}
-		_, copyErr := applyCopySettingsProfile(target, source, columns, profile)
+		image := []string{"frame.nef", "frame.jpg", "frame.png"}[len(sourceText)%3]
+		_, copyErr := applyCopySettingsProfile(target, source, columns, profile, image)
 		afterSource, err := source.Serialize()
 		if err != nil || !bytes.Equal(originalSource, afterSource) {
 			t.Fatal("source changed", err)

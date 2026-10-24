@@ -121,8 +121,8 @@ func planCopySettingsColumns(all, selected []Frame, ref *settingsReference, colu
 	if len(targets) == 0 {
 		return nil, skipped, nil
 	}
-	outputs, err := planSelectedPacketEdits(all, targets, func(target *XMPPacket) error {
-		_, err := applyCopySettingsProfile(target, ref.Packet, columns, profile)
+	outputs, err := planSelectedFramePacketEdits(all, targets, func(frame Frame, target *XMPPacket) error {
+		_, err := applyCopySettingsProfile(target, ref.Packet, columns, profile, frame.Image)
 		return err
 	})
 	if err == nil && profile == nativeSaveStateProfile {
