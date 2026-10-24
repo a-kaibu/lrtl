@@ -21,6 +21,7 @@ type initializationChange struct {
 	CreatedSlots int
 	Source       string
 	ImageTime    time.Time
+	CaptureDate  string
 }
 
 var initializationRoles = []string{"HG", "Deflicker", "Global"}
@@ -295,6 +296,7 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 	changes := make([]initializationChange, 0, len(frames))
 	for i, frame := range frames {
 		selected := formats[i]
+		captureDate := ""
 		before, err := packets[i].Serialize()
 		if err != nil {
 			return nil, err
@@ -328,13 +330,18 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 			if err != nil {
 				return nil, fmt.Errorf("%s: read capture date: %w", frame.Image, err)
 			}
-			if available || seeded && seedValue != "" {
-				if err := applyNativeCaptureDate(packets[i], date, true); err != nil {
-					return nil, err
-				}
-			}
 			if err := prepareNativeFrameState(packets[i], quality); err != nil {
 				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+			}
+			if available || seeded && seedValue != "" {
+				eligible, err := nativeMetadataDateEligible(packets[i], date)
+				if err != nil {
+					return nil, err
+				}
+				if err := applyNativeCaptureDate(packets[i], date, eligible); err != nil {
+					return nil, err
+				}
+				captureDate = date
 			}
 		}
 		after, err := packets[i].Serialize()
@@ -342,6 +349,9 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 			return nil, err
 		}
 		if string(before) != string(after) || profile == nativeSaveStateProfile && sources[i] == "image" && frame.Sidecar != "" {
+			if err := validateNativeMetadataDateTarget(packets[i], captureDate); err != nil {
+				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+			}
 			imageTime := time.Time{}
 			if profile == nativeSaveStateProfile && nativeImageXMPTimestamp(frame.Image) {
 				info, err := os.Stat(frame.Image)
@@ -350,7 +360,7 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 				}
 				imageTime = info.ModTime()
 			}
-			changes = append(changes, initializationChange{Frame: frame, Packet: packets[i], Format: selected, CreatedSlots: count, Source: sources[i], ImageTime: imageTime})
+			changes = append(changes, initializationChange{Frame: frame, Packet: packets[i], Format: selected, CreatedSlots: count, Source: sources[i], ImageTime: imageTime, CaptureDate: captureDate})
 		}
 	}
 	return changes, nil
@@ -396,13 +406,20 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 				}
 			}
 			writeWBEditPreview(stdout, change.Packet)
+			if eligible, _ := nativeMetadataDateEligible(change.Packet, change.CaptureDate); eligible {
+				fmt.Fprintln(stdout, "    MetadataDate: updated when saved")
+			}
 		}
 	}
 	if !*write {
 		fmt.Fprintln(stdout, "Preview only. Pass --write to save XMP sidecars.")
 		return 0
 	}
-	for _, change := range changes {
+	prepared, err := prepareInitializationWrites(changes, time.Now)
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	for _, change := range prepared {
 		backup, err := writePacketNewerThan(change.Frame.OutputSidecar(), change.Packet, !*noBackup, change.ImageTime)
 		if err != nil {
 			return reportError(stderr, err)
