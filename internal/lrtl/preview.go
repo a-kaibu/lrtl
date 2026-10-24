@@ -76,7 +76,7 @@ func writeSequencePreviewWithOptions(frames []Frame, output string, options imag
 		} else if packet.KeyframeKind() == "crop" {
 			marks[index] = previewFrameMark{label: "Crop", color: "#7c3aed"}
 		} else {
-			kind, found, err := packet.GetScalar(holyGrailKeyframeProperty)
+			kind, found, err := captureTimestampScalar(packet, holyGrailKeyframeProperty)
 			if err != nil {
 				return fmt.Errorf("read Holy Grail keyframe marker for %s: %w", frame.Image, err)
 			}

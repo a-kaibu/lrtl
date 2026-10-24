@@ -398,7 +398,7 @@ func runInitialize(arguments []string, stdout, stderr io.Writer) int {
 		if *frameState == nativeSaveStateProfile {
 			fmt.Fprintf(stdout, "    XMP source: %s\n", change.Source)
 			quality, _, _ := change.Packet.GetRootScalar("lrt:Quality")
-			rating, _, _ := change.Packet.GetRootScalar("xmp:Rating")
+			rating, _, _ := readRootRating(change.Packet)
 			fmt.Fprintf(stdout, "    Quality=%q; Rating=%q\n", quality, rating)
 			for _, name := range []string{"Width", "Height", "Aperture", "ShutterSpeed", "Iso", "ShootingMode", "IsMergedHDR"} {
 				if value, present, _ := change.Packet.GetRootScalar("lrt:" + name); present {

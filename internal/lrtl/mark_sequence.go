@@ -6,11 +6,11 @@ import (
 )
 
 func unmarkSelectedKeyframe(packet *XMPPacket, force bool) error {
-	owned, err := packet.HasProperty("ol:KeyframeKind")
+	owned, err := hasRootMetadataProperty(packet, "ol:KeyframeKind")
 	if err != nil {
 		return err
 	}
-	_, internal, err := packet.GetScalar(holyGrailKeyframeProperty)
+	_, internal, err := captureTimestampScalar(packet, holyGrailKeyframeProperty)
 	if err != nil {
 		return err
 	}

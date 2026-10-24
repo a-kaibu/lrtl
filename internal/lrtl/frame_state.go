@@ -67,7 +67,7 @@ func nativeSequenceQuality(firstImage string) (string, error) {
 
 func nativeFrameStateReference(packets []*XMPPacket) int {
 	for i, packet := range packets {
-		value, present, _ := packet.GetRootScalar("xmp:Rating")
+		value, present, _ := readRootRating(packet)
 		if !present {
 			continue
 		}

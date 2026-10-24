@@ -45,13 +45,9 @@ func readRegisteredSaveContext(packet *XMPPacket) (registeredSaveContext, error)
 		}
 		context.Values[column.Index] = value
 	}
-	rating, _, err := packet.GetRootScalar("xmp:Rating")
-	if err != nil {
-		return registeredSaveContext{}, err
-	}
-	context.Rating, _ = selectedJavaInteger(rating)
-	if context.Rating == 1 {
-		context.Rating = 4
+	rating := selectedField(nodes, pasteName{xmpNamespace, "Rating"})
+	if rating != nil && (rating.Kind == "scalar" || rating.Kind == "uri") {
+		context.Rating = nativeReloadRating(rating.Value)
 	}
 	collection := "MaskGroupBasedCorrections"
 	modernPresent := selectedField(nodes, pasteName{crsNamespace, "MaskGroupBasedCorrections"}) != nil

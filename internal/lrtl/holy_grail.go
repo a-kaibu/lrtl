@@ -472,15 +472,15 @@ func optimizeHolyGrailLRTCurve(inputs []float64, ratings []int, cameras []Camera
 }
 
 func holyGrailKeyframePlan(packet *XMPPacket, desiredRating int) (int, bool, string, error) {
-	kind, hasKind, err := packet.GetScalar(holyGrailKeyframeProperty)
+	kind, hasKind, err := captureTimestampScalar(packet, holyGrailKeyframeProperty)
 	if err != nil {
 		return 0, false, "", err
 	}
-	previous, hasPrevious, err := packet.GetScalar(holyGrailPreviousRatingProperty)
+	previous, hasPrevious, err := captureTimestampScalar(packet, holyGrailPreviousRatingProperty)
 	if err != nil {
 		return 0, false, "", err
 	}
-	ratingText, hasRating, err := packet.GetScalar("xmp:Rating")
+	ratingText, hasRating, err := readRootRating(packet)
 	if err != nil {
 		return 0, false, "", err
 	}
@@ -506,7 +506,7 @@ func holyGrailKeyframePlan(packet *XMPPacket, desiredRating int) (int, bool, str
 	if desiredRating == 0 {
 		return 0, false, "", nil
 	}
-	if marked, err := packet.HasProperty("ol:KeyframeKind"); err != nil {
+	if marked, err := hasRootMetadataProperty(packet, "ol:KeyframeKind"); err != nil {
 		return 0, false, "", err
 	} else if marked {
 		return 0, false, "", fmt.Errorf("cannot place an HG marker over an existing regular keyframe")
@@ -730,27 +730,27 @@ func applyHolyGrailPlan(changes []HolyGrailChange) error {
 		}
 		if change.RestoreKeyframe {
 			if change.PreviousRating == absentRating {
-				if err := change.Packet.RemoveProperty("xmp:Rating"); err != nil {
+				if err := removeRootMetadataProperty(change.Packet, "xmp:Rating"); err != nil {
 					return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 				}
-			} else if err := change.Packet.SetScalar("xmp:Rating", change.PreviousRating); err != nil {
+			} else if err := setCaptureTimestampScalar(change.Packet, "xmp:Rating", change.PreviousRating); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
-			if err := change.Packet.RemoveProperty(holyGrailKeyframeProperty); err != nil {
+			if err := removeRootMetadataProperty(change.Packet, holyGrailKeyframeProperty); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
-			if err := change.Packet.RemoveProperty(holyGrailPreviousRatingProperty); err != nil {
+			if err := removeRootMetadataProperty(change.Packet, holyGrailPreviousRatingProperty); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
 		}
 		if change.KeyframeRating != 0 {
-			if err := change.Packet.SetScalar("xmp:Rating", strconv.Itoa(change.KeyframeRating)); err != nil {
+			if err := setCaptureTimestampScalar(change.Packet, "xmp:Rating", strconv.Itoa(change.KeyframeRating)); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
-			if err := change.Packet.SetScalar(holyGrailKeyframeProperty, strconv.Itoa(change.KeyframeRating)); err != nil {
+			if err := setCaptureTimestampScalar(change.Packet, holyGrailKeyframeProperty, strconv.Itoa(change.KeyframeRating)); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
-			if err := change.Packet.SetScalar(holyGrailPreviousRatingProperty, change.PreviousRating); err != nil {
+			if err := setCaptureTimestampScalar(change.Packet, holyGrailPreviousRatingProperty, change.PreviousRating); err != nil {
 				return fmt.Errorf("%s: %w", change.Frame.OutputSidecar(), err)
 			}
 		}

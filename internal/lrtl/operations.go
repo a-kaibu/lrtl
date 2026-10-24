@@ -61,13 +61,22 @@ func MarkKeyframe(packet *XMPPacket, kind string) (int, error) {
 }
 
 func MarkKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, error) {
+	working := &XMPPacket{Document: packet.Document.Copy()}
+	value, err := markKeyframeWithRating(working, kind, rating)
+	if err == nil {
+		packet.Document = working.Document
+	}
+	return value, err
+}
+
+func markKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, error) {
 	if kind != "default" && kind != "crop" {
 		return 0, fmt.Errorf("unsupported keyframe kind: %s", kind)
 	}
 	if rating != 4 && rating != 5 {
 		return 0, fmt.Errorf("keyframe rating must be 4 or 5: %d", rating)
 	}
-	if _, hgMarked, err := packet.GetScalar(holyGrailKeyframeProperty); err != nil {
+	if _, hgMarked, err := captureTimestampScalar(packet, holyGrailKeyframeProperty); err != nil {
 		return 0, err
 	} else if hgMarked {
 		return 0, fmt.Errorf("this image is an internal Holy Grail keyframe; reset Holy Grail marks before assigning a regular keyframe")
@@ -75,58 +84,67 @@ func MarkKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, er
 	if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
 		return 0, fmt.Errorf("this image has an LRTimelapse 2- or 3-star Holy Grail keyframe rating; reset Holy Grail marks before assigning a regular keyframe")
 	}
-	marked, err := packet.HasProperty("ol:KeyframeKind")
+	marked, err := hasRootMetadataProperty(packet, "ol:KeyframeKind")
 	if err != nil {
 		return 0, err
 	}
 	if !marked {
-		previousRating, found, err := packet.GetScalar("xmp:Rating")
+		previousRating, found, err := readRootRating(packet)
 		if err != nil {
 			return 0, err
 		}
 		if !found {
 			previousRating = absentRating
 		}
-		if err := packet.SetScalar("ol:PreviousRating", previousRating); err != nil {
+		if err := setCaptureTimestampScalar(packet, "ol:PreviousRating", previousRating); err != nil {
 			return 0, err
 		}
 	}
-	if err := packet.SetScalar("xmp:Rating", strconv.Itoa(rating)); err != nil {
+	if err := setCaptureTimestampScalar(packet, "xmp:Rating", strconv.Itoa(rating)); err != nil {
 		return 0, err
 	}
-	if err := packet.SetScalar("ol:KeyframeKind", kind); err != nil {
+	if err := setCaptureTimestampScalar(packet, "ol:KeyframeKind", kind); err != nil {
 		return 0, err
 	}
 	return rating, nil
 }
 
 func UnmarkKeyframe(packet *XMPPacket, forceRating bool) error {
-	marked, err := packet.HasProperty("ol:KeyframeKind")
+	working := &XMPPacket{Document: packet.Document.Copy()}
+	err := unmarkKeyframe(working, forceRating)
+	if err == nil {
+		packet.Document = working.Document
+	}
+	return err
+}
+
+func unmarkKeyframe(packet *XMPPacket, forceRating bool) error {
+	marked, err := hasRootMetadataProperty(packet, "ol:KeyframeKind")
 	if err != nil {
 		return err
 	}
 	if marked {
-		previousRating, found, err := packet.GetScalar("ol:PreviousRating")
+		previousRating, found, err := captureTimestampScalar(packet, "ol:PreviousRating")
 		if err != nil {
 			return err
 		}
 		if found && previousRating == absentRating {
-			if err := packet.RemoveProperty("xmp:Rating"); err != nil {
+			if err := removeRootMetadataProperty(packet, "xmp:Rating"); err != nil {
 				return err
 			}
 		} else if found {
-			if err := packet.SetScalar("xmp:Rating", previousRating); err != nil {
+			if err := setCaptureTimestampScalar(packet, "xmp:Rating", previousRating); err != nil {
 				return err
 			}
 		}
-		if err := packet.RemoveProperty("ol:KeyframeKind"); err != nil {
+		if err := removeRootMetadataProperty(packet, "ol:KeyframeKind"); err != nil {
 			return err
 		}
-		return packet.RemoveProperty("ol:PreviousRating")
+		return removeRootMetadataProperty(packet, "ol:PreviousRating")
 	}
 	if forceRating {
 		if rating, valid := packet.Rating(); valid && (rating == 4 || rating == 5) {
-			return packet.RemoveProperty("xmp:Rating")
+			return removeRootMetadataProperty(packet, "xmp:Rating")
 		}
 	}
 	return fmt.Errorf("this marker was not created by lrtl; pass --force-rating to clear an existing 4- or 5-star rating")

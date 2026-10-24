@@ -595,7 +595,7 @@ func (p *XMPPacket) CopyRootPropertyFrom(source *XMPPacket, property string) (bo
 }
 
 func (p *XMPPacket) Rating() (int, bool) {
-	value, found, _ := p.GetScalar("xmp:Rating")
+	value, found, _ := readRootRating(p)
 	if !found {
 		return 0, false
 	}
@@ -607,7 +607,7 @@ func (p *XMPPacket) Rating() (int, bool) {
 }
 
 func (p *XMPPacket) KeyframeKind() string {
-	if value, found, _ := p.GetScalar("ol:KeyframeKind"); found {
+	if value, found, _ := captureTimestampScalar(p, "ol:KeyframeKind"); found {
 		if value == "default" || value == "crop" {
 			return value
 		}

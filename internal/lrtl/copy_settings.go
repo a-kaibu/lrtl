@@ -247,7 +247,7 @@ func runCopySettings(arguments []string, stdout, stderr io.Writer) int {
 				qualityText = quality.Value
 			}
 			fmt.Fprintf(stdout, "  Quality=%q; WhiteBalance=%q; HasCrop=%s\n", qualityText, wb.Value, crop.Value)
-			rating, found, _ := output.Packet.GetRootScalar("xmp:Rating")
+			rating, found, _ := readRootRating(output.Packet)
 			if found {
 				fmt.Fprintf(stdout, "  Rating=%q\n", rating)
 			} else {

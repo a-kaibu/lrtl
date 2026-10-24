@@ -45,16 +45,6 @@ func fullCopySDKBoolean(value string) bool {
 	case "true", "t", "on", "yes":
 		return true
 	}
-	// Integer.parseInt does not trim whitespace or allow a second sign. The
-	// shared registered-column converter is more permissive about both, so
-	// reject those forms first. Its BMP decimal-digit handling is reusable.
-	unsigned := value
-	if strings.HasPrefix(unsigned, "+") || strings.HasPrefix(unsigned, "-") {
-		unsigned = unsigned[1:]
-	}
-	if unsigned == "" || unsigned != selectedJavaTrim(unsigned) || strings.HasPrefix(unsigned, "+") || strings.HasPrefix(unsigned, "-") {
-		return false
-	}
-	number, valid := selectedJavaInteger(value)
+	number, valid := nativeReloadInteger(value)
 	return valid && number != 0
 }

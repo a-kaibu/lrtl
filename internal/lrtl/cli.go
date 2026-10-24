@@ -443,7 +443,7 @@ func runScan(directory string, stdout, stderr io.Writer) int {
 			state = "yes"
 			marker = packet.KeyframeKind()
 			if marker == "" {
-				if hgKind, found, _ := packet.GetScalar(holyGrailKeyframeProperty); found {
+				if hgKind, found, _ := captureTimestampScalar(packet, holyGrailKeyframeProperty); found {
 					marker = "HG-" + hgKind
 				} else if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
 					marker = fmt.Sprintf("HG-%d", rating)
@@ -729,7 +729,7 @@ func runUnmark(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	marked, err := packet.HasProperty("ol:KeyframeKind")
+	marked, err := hasRootMetadataProperty(packet, "ol:KeyframeKind")
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -1763,7 +1763,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		if hasRating && (rating == 2 || rating == 3) {
 			holyGrailMarkers[index] = true
 		}
-		hasHolyGrailProperty, err := packet.HasProperty(holyGrailKeyframeProperty)
+		hasHolyGrailProperty, err := hasRootMetadataProperty(packet, holyGrailKeyframeProperty)
 		if err != nil {
 			return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 		}
@@ -1889,7 +1889,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 					return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 				}
 				if restoredRating, found := packet.Rating(); found && restoredRating == *ratingOption {
-					if err := packet.RemoveProperty("xmp:Rating"); err != nil {
+					if err := removeRootMetadataProperty(packet, "xmp:Rating"); err != nil {
 						return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 					}
 				}

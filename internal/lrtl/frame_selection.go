@@ -83,7 +83,7 @@ func filterSequenceFrames(frames []Frame, directory string, options frameSelecti
 			if err != nil {
 				return nil, err
 			}
-			text, found, err := packet.GetScalar("xmp:Rating")
+			text, found, err := readRootRating(packet)
 			if err != nil {
 				return nil, err
 			}

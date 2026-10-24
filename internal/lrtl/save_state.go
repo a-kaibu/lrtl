@@ -284,6 +284,9 @@ func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColum
 				return false, err
 			}
 		}
+		if len(targetImages) == 1 {
+			context.Rating = nativeFrameRating(context.Rating, targetImages[0])
+		}
 		if _, err = applyRegisteredSaveState(working, context); err != nil {
 			return false, err
 		}
