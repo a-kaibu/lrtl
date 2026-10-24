@@ -83,25 +83,23 @@ func planTimeShift(frames []Frame, offset time.Duration) ([]timeShiftChange, err
 	}
 	changes := make([]timeShiftChange, 0, len(frames))
 	for _, frame := range frames {
-		packet := EmptyXMPPacket()
-		created := frame.Sidecar == ""
-		if !created {
-			var err error
-			packet, err = loadPacket(frame)
-			if err != nil {
-				return nil, err
-			}
+		packet, err := PacketForFrame(frame)
+		if err != nil {
+			return nil, err
 		}
+		created := frame.Sidecar == ""
 		change := timeShiftChange{
 			frame: frame, path: frame.OutputSidecar(), packet: packet, created: created,
 			before: make(map[string]string), after: make(map[string]string),
 		}
 		for _, property := range captureTimestampProperties {
-			hasProperty, err := packet.HasProperty(property)
+			uri, local, err := expandedName(property)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
 			}
-			value, found, err := packet.GetScalar(property)
+			root := packet.findRootProperty(uri, local)
+			hasProperty := root.element != nil || root.attribute != nil
+			value, found, err := captureTimestampScalar(packet, property)
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
 			}
@@ -115,7 +113,7 @@ func planTimeShift(frames []Frame, offset time.Duration) ([]timeShiftChange, err
 			if err != nil {
 				return nil, fmt.Errorf("%s %s: %w", filepath.Base(frame.Image), property, err)
 			}
-			if err := packet.SetScalar(property, shifted); err != nil {
+			if err := setCaptureTimestampScalar(packet, property, shifted); err != nil {
 				return nil, fmt.Errorf("%s %s: %w", filepath.Base(frame.Image), property, err)
 			}
 			change.properties = append(change.properties, property)
@@ -132,7 +130,7 @@ func planTimeShift(frames []Frame, offset time.Duration) ([]timeShiftChange, err
 			}
 			property := "exif:DateTimeOriginal"
 			shifted := captureTime.Add(offset).Format("2006:01:02 15:04:05")
-			if err := packet.SetScalar(property, shifted); err != nil {
+			if err := setCaptureTimestampScalar(packet, property, shifted); err != nil {
 				return nil, fmt.Errorf("%s: %w", filepath.Base(frame.Image), err)
 			}
 			change.properties = append(change.properties, property)

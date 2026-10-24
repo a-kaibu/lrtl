@@ -18,6 +18,46 @@ import (
 
 const defaultTimestampFormat = "2006-01-02 15:04:05"
 
+// Capture dates are global properties. Qualified simple values (including
+// xml:lang) remain dates, while nested preset metadata is not a capture clock.
+func captureTimestampScalar(packet *XMPPacket, property string) (string, bool, error) {
+	uri, local, err := expandedName(property)
+	if err != nil {
+		return "", false, err
+	}
+	root := packet.findRootProperty(uri, local)
+	if root.attribute != nil {
+		return root.attribute.Value, true, nil
+	}
+	if root.element == nil {
+		return "", false, nil
+	}
+	node, err := parsePasteNode(root.element, 0)
+	if err != nil {
+		return "", false, err
+	}
+	if node.Kind != "scalar" && node.Kind != "uri" {
+		return "", false, nil
+	}
+	return node.Value, true, nil
+}
+
+func setCaptureTimestampScalar(packet *XMPPacket, property, value string) error {
+	uri, local, err := expandedName(property)
+	if err != nil {
+		return err
+	}
+	before, after, err := saveStateMaps(packet)
+	if err != nil {
+		return err
+	}
+	if err := setSaveStateProperty(after, pasteName{uri, local}, strings.SplitN(property, ":", 2)[0], value); err != nil {
+		return err
+	}
+	_, err = writeChangedPasteRoots(packet, before, after)
+	return err
+}
+
 func parseCaptureTimestamp(value string) (time.Time, bool) {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -39,15 +79,15 @@ func parseCaptureTimestamp(value string) (time.Time, bool) {
 }
 
 func captureTimeFromXMP(frame Frame) (time.Time, bool, error) {
-	if frame.Sidecar == "" {
-		return time.Time{}, false, nil
-	}
 	packet, err := loadPacket(frame)
 	if err != nil {
 		return time.Time{}, false, err
 	}
+	if packet == nil {
+		return time.Time{}, false, nil
+	}
 	for _, property := range []string{"exif:DateTimeOriginal", "xmp:CreateDate", "xmp:ModifyDate"} {
-		value, found, err := packet.GetScalar(property)
+		value, found, err := captureTimestampScalar(packet, property)
 		if err != nil {
 			return time.Time{}, false, err
 		}

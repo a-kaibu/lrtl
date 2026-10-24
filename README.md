@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- 画像内XMPだけにある撮影日時を、日時順取り込み・字幕・動画の時刻表示・日時シフトで使えるよう修正しました。`DateTimeDigitized`を`CreateDate`へ正規化する実機の別名処理も合わせ、プリセット内の日時を採用・変更しません。JPEG/TIFF/DNGの実機XML45条件、未知のRDF・修飾子・バックアップ保持、日時順取り込み→SRT／AVI、全体・race・fuzzテストで検査しています。[動作変更・比較範囲・残る差](internal/lrtl/testdata/lrt-embedded-capture-time-7.5.5.md)を参照してください。
+
 - TIFF/DNG内の複数IFDのXMPを実機に合わせて統合するようにしました。SubIFDとExifIFDを格納順に辿り、次ページ自身のXMPは採用しません。実機120条件のうち114条件が一致し、壊れた対象XMLの6条件はGo版の保存前エラーとの差を明示しています。実画素TIFFの初期化・AVI復号画素・全体・race・fuzzテストを追加しました。降順タグの画像はメタデータを読めますが、画像デコーダーは未対応です。[規則・テスト・残る差](internal/lrtl/testdata/lrt-xmp-tiff-multiple-7.5.5.md)を参照してください。
 
 - JPEGの標準XMPと拡張XMPを統合し、標準側だけにある項目を保持するようにしました。最初のリンク・チャンク順序・GUID大小文字・再送を実機30条件で観測し、20条件は一致、10条件はGo版の整合性エラーとの差を明示しています。全体・race・fuzzテストと、実行ファイルでの初期化／AVI復号画素比較を追加しました。[読込規則・検証範囲・残る差](internal/lrtl/testdata/lrt-xmp-extended-7.5.5.md)を参照してください。
@@ -399,7 +401,7 @@ AVI出力と画像列の処理はPure Goです。MP4/MOVには外部FFmpegが必
 
 `import-video`はFFmpegで動画をJPGまたはPNGの連番へデコードします。既定ではデコード可能な全フレームを保存し、`--fps N`を指定するとその間隔でフレームをサンプリングします。JPEGの圧縮品質は`--quality 1`（高画質）〜`31`（低画質）で指定できます。抽出先は新しいフォルダーでなければならず、既存フォルダーを置き換えません。インストール済みLRT 7.5.5の動画取り込みもFFmpegで全フレームをJPEGへ展開します。今回確認した呼び出しにはシーン検出やシーン境界での分割がなく、写真の「間隔で分割」は別機能でした。以前は動画のシーン分割を本体の不足対応項目として記載していましたが、その根拠を確認できなかったため訂正しました。写真の間隔分割には`import --split-intervals`を使います。
 
-`timeshift`は`--offset 2h30m`、`--offset=-45s`、`--offset 1d`のような固定時間差で連番の撮影日時をずらします。既定はプレビューで、`--write`を付けるとXMPサイドカーへ保存し、既存ファイルはバックアップします。対象は`DateTimeOriginal`、`DateTimeDigitized`、`CreateDate`で、`ModifyDate`と画像に埋め込まれたEXIF値は変更しません。XMPの日付値がなく画像EXIFで撮影日時を読める場合は、ずらした`DateTimeOriginal`をサイドカーへ追加します。
+`timeshift`は`--offset 2h30m`、`--offset=-45s`、`--offset 1d`のような固定時間差で連番の撮影日時をずらします。既定はプレビューで、`--write`を付けるとXMPサイドカーへ保存し、既存ファイルはバックアップします。外部XMPがなければ対応画像内XMPを引き継ぎ、他の現像設定・未知のRDFを保持します。対象は根の`DateTimeOriginal`と`CreateDate`で、単純値の`DateTimeDigitized`は読込時に`CreateDate`へ正規化します（両方あれば明示された`CreateDate`を優先）。プリセット内の同名日時は変更しません。`ModifyDate`と画像に埋め込まれたEXIF値は変更しません。XMPの日付値がなく画像EXIFで撮影日時を読める場合は、ずらした`DateTimeOriginal`をサイドカーへ追加します。
 
 XMPを読む処理は、同じ画像に外部`.xmp`サイドカーがあればそれを優先します。サイドカーがないJPEG画像では標準/拡張XMP APP1、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/DCRではTIFF XMLPacket tag 700、ORFではIIRO/IIRS/MMORマジックのTIFF XMLPacket tag 700、RAFではヘッダーのオフセット/長さで指定される埋め込みJPEGの標準/拡張XMP APP1を読みます。CR3ではISO BMFFのAdobe XMP UUID boxを探し、サイズとXMLパケットを検証します。埋め込みXMPを編集した場合も、変更は外部サイドカーへ保存し、元画像を書き換えません。組み立てた埋め込みXMPの上限は32 MiBです。これら以外のRAWコンテナーに埋め込まれたXMPは未対応です。
 

@@ -79,7 +79,53 @@ func parseXMP(data []byte) (*XMPPacket, error) {
 		description.CreateAttr("xmlns:rdf", rdfNamespace)
 		description.CreateAttr("rdf:about", "")
 	}
+	packet.normalizeCaptureDateAlias()
 	return packet, nil
+}
+
+// Adobe's root-level DateTimeDigitized alias is serialized as xmp:CreateDate.
+// A present canonical property wins. Nested metadata and nonscalar aliases
+// remain untouched; their normalization is not covered by our observations.
+func (p *XMPPacket) normalizeCaptureDateAlias() {
+	const exif = "http://ns.adobe.com/exif/1.0/"
+	alias := p.findRootProperty(exif, "DateTimeDigitized")
+	if alias.attribute == nil && alias.element == nil {
+		return
+	}
+	if alias.element != nil {
+		node, err := parsePasteNode(alias.element, 0)
+		if err != nil || (node.Kind != "scalar" && node.Kind != "uri") {
+			return
+		}
+	}
+	canonical := p.findRootProperty(xmpNamespace, "CreateDate")
+	if canonical.attribute == nil && canonical.element == nil {
+		if alias.attribute != nil {
+			prefix := ensurePrefix(alias.description, "xmp", xmpNamespace)
+			// Declaring a prefix may reallocate the attribute slice.
+			alias = p.findRootProperty(exif, "DateTimeDigitized")
+			alias.attribute.Space = prefix
+			alias.attribute.Key = "CreateDate"
+		} else {
+			alias.element.Space = ensurePrefix(alias.element, "xmp", xmpNamespace)
+			alias.element.Tag = "CreateDate"
+		}
+		return
+	}
+	for _, description := range p.rootDescriptions() {
+		attrs := description.Attr[:0]
+		for _, a := range description.Attr {
+			if !attributeMatches(&a, exif, "DateTimeDigitized") {
+				attrs = append(attrs, a)
+			}
+		}
+		description.Attr = attrs
+		for _, child := range description.ChildElements() {
+			if child.NamespaceURI() == exif && child.Tag == "DateTimeDigitized" {
+				child.Remove()
+			}
+		}
+	}
 }
 
 func validateXMPXML(data []byte) error {

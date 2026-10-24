@@ -159,7 +159,7 @@ func longTermCaptureClock(frame Frame) (time.Time, bool, bool, error) {
 		return time.Time{}, false, false, err
 	}
 	for _, property := range []string{"exif:DateTimeOriginal", "xmp:CreateDate", "xmp:ModifyDate"} {
-		value, found, err := packet.GetScalar(property)
+		value, found, err := captureTimestampScalar(packet, property)
 		if err != nil {
 			return time.Time{}, false, false, err
 		}
