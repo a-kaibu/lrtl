@@ -14,9 +14,12 @@ import (
 )
 
 type sequenceMovePlan struct {
-	copy *sequenceCopyPlan
-	keep []bool
-	root os.FileInfo
+	copy            *sequenceCopyPlan
+	keep            []bool
+	root            os.FileInfo
+	destinationRoot os.FileInfo
+	reuse           []os.FileInfo
+	reuseHashes     []string
 }
 
 func movePathKey(path string) string {
@@ -30,7 +33,18 @@ func movePathKey(path string) string {
 	return path
 }
 
-func planSequenceMove(directory, output string, all, selected []Frame, companions bool) (*sequenceMovePlan, error) {
+func planSequenceMove(directory, output string, all, selected []Frame, companions bool, mergeOption ...bool) (*sequenceMovePlan, error) {
+	if len(mergeOption) > 1 {
+		return nil, fmt.Errorf("at most one merge option is allowed")
+	}
+	merge := len(mergeOption) == 1 && mergeOption[0]
+	if merge {
+		if info, err := os.Lstat(filepath.Clean(output)); err == nil && (!info.IsDir() || info.Mode()&os.ModeSymlink != 0) {
+			return nil, fmt.Errorf("merge destination must be a directory, not a symbolic link")
+		} else if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
 	if len(selected) == 0 {
 		return nil, fmt.Errorf("no frames selected")
 	}
@@ -64,7 +78,7 @@ func planSequenceMove(directory, output string, all, selected []Frame, companion
 			paths = append(paths, sequenceCopyPath{path, filepath.Base(path), "sidecar"})
 		}
 	}
-	copy, err := planSequenceCopyFiles(directory, output, paths)
+	copy, err := planSequenceCopyFilesInto(directory, output, paths, merge)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +122,17 @@ func planSequenceMove(directory, output string, all, selected []Frame, companion
 			return nil, err
 		}
 	}
+	if merge {
+		if info, err := os.Lstat(copy.destination); err == nil {
+			plan.destinationRoot = info
+			os.SameFile(info, info)
+			if err := planMoveMerge(plan); err != nil {
+				return nil, err
+			}
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
 	return plan, nil
 }
 
@@ -117,15 +142,17 @@ type sequenceMoveOps struct {
 }
 
 type sequenceMoveJournal struct {
-	Version     int                       `json:"version"`
-	Source      string                    `json:"source"`
-	Destination string                    `json:"destination"`
-	Staging     string                    `json:"destination_staging"`
-	Files       []sequenceMoveJournalFile `json:"files"`
+	Version             int                       `json:"version"`
+	Source              string                    `json:"source"`
+	Destination         string                    `json:"destination"`
+	Staging             string                    `json:"destination_staging"`
+	ExistingDestination bool                      `json:"existing_destination"`
+	Files               []sequenceMoveJournalFile `json:"files"`
 }
 type sequenceMoveJournalFile struct {
 	Original, Held, Name, SHA256 string
 	KeepOriginal                 bool
+	ReuseDestination             bool
 }
 
 func moveDigest(path string) (string, error) {
@@ -203,7 +230,11 @@ func executeSequenceMove(plan *sequenceMovePlan, ops sequenceMoveOps) error {
 	if err := moveRootUnchanged(plan); err != nil {
 		return err
 	}
-	if _, err := os.Lstat(plan.copy.destination); err == nil {
+	if plan.destinationRoot != nil {
+		if err := validateMoveMerge(plan); err != nil {
+			return err
+		}
+	} else if _, err := os.Lstat(plan.copy.destination); err == nil {
 		return fmt.Errorf("output already exists: %s", plan.copy.destination)
 	} else if !os.IsNotExist(err) {
 		return err
@@ -231,7 +262,7 @@ func executeSequenceMove(plan *sequenceMovePlan, ops sequenceMoveOps) error {
 			}
 		}
 	}()
-	journal := sequenceMoveJournal{Version: 1, Source: plan.copy.source, Destination: plan.copy.destination, Staging: stage}
+	journal := sequenceMoveJournal{Version: 1, Source: plan.copy.source, Destination: plan.copy.destination, Staging: stage, ExistingDestination: plan.destinationRoot != nil}
 	for i, file := range plan.copy.files {
 		if err := copySourceUnchanged(file); err != nil {
 			return err
@@ -267,7 +298,8 @@ func executeSequenceMove(plan *sequenceMovePlan, ops sequenceMoveOps) error {
 		if err := os.Chmod(target, file.info.Mode().Perm()); err != nil {
 			return err
 		}
-		journal.Files = append(journal.Files, sequenceMoveJournalFile{Original: file.source, Name: file.name, SHA256: digest, KeepOriginal: plan.keep[i]})
+		reuse := plan.destinationRoot != nil && plan.reuse[i] != nil
+		journal.Files = append(journal.Files, sequenceMoveJournalFile{Original: file.source, Name: file.name, SHA256: digest, KeepOriginal: plan.keep[i], ReuseDestination: reuse})
 	}
 	if err := moveRootUnchanged(plan); err != nil {
 		return err
@@ -307,6 +339,9 @@ func executeSequenceMove(plan *sequenceMovePlan, ops sequenceMoveOps) error {
 		if len(failures) > 0 {
 			retainStage = true
 			return errors.Join(failure, errors.Join(failures...), fmt.Errorf("rollback incomplete; originals retained at %s; verified copies at %s", holding, stage))
+		}
+		if retainStage {
+			return errors.Join(failure, fmt.Errorf("restored originals; recovery journal retained at %s", holding))
 		}
 		if err := os.Remove(journalPath); err != nil {
 			return errors.Join(failure, fmt.Errorf("restored originals; journal retained at %s: %w", holding, err))
@@ -353,7 +388,16 @@ func executeSequenceMove(plan *sequenceMovePlan, ops sequenceMoveOps) error {
 	if err := moveRootUnchanged(plan); err != nil {
 		return rollback(err)
 	}
-	if err := ops.move(stage, plan.copy.destination); err != nil {
+	if plan.destinationRoot != nil {
+		if err := publishMoveMerge(plan, stage, ops); err != nil {
+			// Retain verified copies even if undoing a partial merge failed.
+			if errors.Is(err, errMoveMergeRollbackIncomplete) {
+				retainStage = true
+				err = errors.Join(err, fmt.Errorf("merge copies retained at %s", stage))
+			}
+			return rollback(err)
+		}
+	} else if err := ops.move(stage, plan.copy.destination); err != nil {
 		return rollback(err)
 	}
 	// Publication is the commit point. Never roll back a complete destination
@@ -394,9 +438,28 @@ func executeSequenceMove(plan *sequenceMovePlan, ops sequenceMoveOps) error {
 }
 
 func runMoveSequence(arguments []string, stdout, stderr io.Writer) int {
-	set := newFlagSet("move-sequence", stderr)
+	return runTransferSequence(arguments, stdout, stderr, false)
+}
+
+func runRemoveSequence(arguments []string, stdout, stderr io.Writer) int {
+	return runTransferSequence(arguments, stdout, stderr, true)
+}
+
+func runTransferSequence(arguments []string, stdout, stderr io.Writer, remove bool) int {
+	command := "move-sequence"
+	if remove {
+		command = "remove-sequence"
+	}
+	set := newFlagSet(command, stderr)
 	filters := registerFrameSelectionFlags(set)
-	output := set.String("output", "", "new destination directory outside the source")
+	outputValue := ""
+	output := &outputValue
+	mergeValue := remove
+	merge := &mergeValue
+	if !remove {
+		output = set.String("output", "", "destination directory outside the source")
+		merge = set.Bool("merge", false, "append to an existing directory without replacing files")
+	}
 	companions := set.Bool("include-lrt-companions", true, "include paired JPEGs and per-image LRT caches")
 	write := set.Bool("write", false, "move the planned files")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true, "--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true, "--ratings": true, "-ratings": true})); err != nil {
@@ -404,8 +467,26 @@ func runMoveSequence(arguments []string, stdout, stderr io.Writer) int {
 			return code
 		}
 	}
-	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl move-sequence DIRECTORY --output NEW_DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--include-lrt-companions=false] [--write]"))
+	if set.NArg() != 1 || !remove && *output == "" {
+		outputUsage := "--output DIRECTORY [--merge] "
+		if remove {
+			outputUsage = ""
+		}
+		return reportError(stderr, fmt.Errorf("Usage: lrtl %s DIRECTORY %s[--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--include-lrt-companions=false] [--write]", command, outputUsage))
+	}
+	if remove {
+		source, err := filepath.EvalSymlinks(set.Arg(0))
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		source, err = filepath.Abs(source)
+		if err != nil {
+			return reportError(stderr, err)
+		}
+		if filepath.Dir(source) == source {
+			return reportError(stderr, fmt.Errorf("cannot remove a filesystem root sequence"))
+		}
+		*output = source + "_REMOVED"
 	}
 	options, err := filters.options(set)
 	if err != nil {
@@ -419,7 +500,7 @@ func runMoveSequence(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	plan, err := planSequenceMove(set.Arg(0), *output, all, selected, *companions)
+	plan, err := planSequenceMove(set.Arg(0), *output, all, selected, *companions, *merge)
 	if err != nil {
 		return reportError(stderr, err)
 	}
@@ -434,6 +515,12 @@ func runMoveSequence(arguments []string, stdout, stderr io.Writer) int {
 		action := "move"
 		if plan.keep[i] {
 			action = "copy (shared)"
+		}
+		if plan.destinationRoot != nil && plan.reuse[i] != nil {
+			action = "reuse existing (move original)"
+			if plan.keep[i] {
+				action = "reuse existing (keep shared original)"
+			}
 		}
 		fmt.Fprintf(stdout, "%s: %s\n", action, file.name)
 	}

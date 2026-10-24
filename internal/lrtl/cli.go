@@ -82,6 +82,8 @@ func Main(arguments []string, stdout, stderr io.Writer) int {
 		return runCopySequence(arguments[1:], stdout, stderr)
 	case "move-sequence":
 		return runMoveSequence(arguments[1:], stdout, stderr)
+	case "remove-sequence":
+		return runRemoveSequence(arguments[1:], stdout, stderr)
 	case "rename-sequence":
 		return runRenameSequence(arguments[1:], stdout, stderr)
 	case "copy-settings":
@@ -162,7 +164,8 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  scan DIRECTORY                         list images, sidecars, and keyframes")
 	fmt.Fprintln(writer, "  select DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--output FILTER.json]")
 	fmt.Fprintln(writer, "  copy-sequence DIRECTORY --output NEW_DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--include-lrt-companions] [--write]")
-	fmt.Fprintln(writer, "  move-sequence DIRECTORY --output NEW_DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--include-lrt-companions=false] [--write]")
+	fmt.Fprintln(writer, "  move-sequence DIRECTORY --output DIRECTORY [--merge] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--include-lrt-companions=false] [--write]")
+	fmt.Fprintln(writer, "  remove-sequence DIRECTORY [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--include-lrt-companions=false] [--write]")
 	fmt.Fprintln(writer, "  rename-sequence DIRECTORY --name NEW_NAME [--write]  rename the whole directory")
 	fmt.Fprintln(writer, "  copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY [--properties NAMES] [--save-state lrt-7.5.5|preserve] [--selection FILTER.json] [--filename-contains TEXT] [--ratings LIST] [--invert] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  copy-settings --list-properties          list columns available for selective copying")

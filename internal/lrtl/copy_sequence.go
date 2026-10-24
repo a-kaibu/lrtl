@@ -38,6 +38,10 @@ func planSequenceCopy(directory, output string, frames []Frame, includeCompanion
 }
 
 func planSequenceCopyFiles(directory, output string, paths []sequenceCopyPath) (*sequenceCopyPlan, error) {
+	return planSequenceCopyFilesInto(directory, output, paths, false)
+}
+
+func planSequenceCopyFilesInto(directory, output string, paths []sequenceCopyPath, merge bool) (*sequenceCopyPlan, error) {
 	if strings.TrimSpace(output) == "" {
 		return nil, fmt.Errorf("a new output directory is required")
 	}
@@ -52,8 +56,10 @@ func planSequenceCopyFiles(directory, output string, paths []sequenceCopyPath) (
 	if pathContains(source, destination) {
 		return nil, fmt.Errorf("output must be outside the source sequence")
 	}
-	if _, err := os.Lstat(destination); err == nil {
-		return nil, fmt.Errorf("output already exists: %s", destination)
+	if info, err := os.Lstat(destination); err == nil {
+		if !merge || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("output already exists: %s", destination)
+		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
