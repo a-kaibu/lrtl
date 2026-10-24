@@ -21,6 +21,10 @@ TIFF-based DNG inputs exercise metadata loading without RAW pixel data.
 
 ## Observed rule
 
+[Subsequent RAW-format measurements](lrt-raw-xmp-source-7.5.5.md) add 420 cases
+and restrict default initialization's embedded packets to JPEG/DNG/TIFF.
+General Go reads and preserve initialization retain their wider format support.
+
 | Image type | Existing stem sidecar | No sidecar |
 | --- | --- | --- |
 | JPEG / DNG | Sidecar only when strictly newer than image; otherwise image | Embedded image XMP |

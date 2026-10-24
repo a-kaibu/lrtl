@@ -124,13 +124,18 @@ func TestXMPSourceNativeFileReader(t *testing.T) {
 }
 
 func TestXMPSourceInstalledFileReader(t *testing.T) {
+	assertInstalledXMPSourceReference(t, xmpSourceObservations(t))
+}
+
+func assertInstalledXMPSourceReference(t *testing.T, reference xmpSourceReference) {
+	t.Helper()
 	jar := os.Getenv("LRTL_NATIVE_JAR")
 	if jar == "" {
 		t.Skip("set LRTL_NATIVE_JAR for complete native XMP source reader replay")
 	}
 	dir := t.TempDir()
 	inputs := filepath.Join(dir, "inputs")
-	for _, row := range xmpSourceObservations(t).Cases {
+	for _, row := range reference.Cases {
 		writeXMPSourceObservation(t, filepath.Join(inputs, row.Name), row)
 	}
 	root, err := filepath.Abs(filepath.Join("..", "..", "scripts", "probes"))
@@ -148,7 +153,7 @@ func TestXMPSourceInstalledFileReader(t *testing.T) {
 	if err := json.Unmarshal(denoiseRead(t, path), &replay); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(replay, xmpSourceObservations(t)) {
+	if !reflect.DeepEqual(replay, reference) {
 		t.Fatal("native XMP source results changed")
 	}
 }

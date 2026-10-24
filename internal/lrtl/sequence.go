@@ -173,6 +173,17 @@ func nativeImageXMPTimestamp(path string) bool {
 	return false
 }
 
+func nativeEmbeddedFrameXMP(path string) bool {
+	if nativeImageXMPTimestamp(path) {
+		return true
+	}
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".tif", ".tiff":
+		return true
+	}
+	return false
+}
+
 // The native initialization profile reconciles JPEG/DNG image and sidecar
 // timestamps at Java File.lastModified's millisecond resolution. Other callers
 // keep the existing sidecar-first policy until they share that import workflow.
@@ -214,8 +225,8 @@ func loadFramePacketSource(frame Frame, nativeTimestamp bool) (*XMPPacket, bool,
 			return nil, false, "", err
 		}
 	}
-	if nativeTimestamp && strings.EqualFold(filepath.Ext(frame.Image), ".iiq") {
-		// The native file reader uses external XMP only for this RAW type.
+	if nativeTimestamp && !nativeEmbeddedFrameXMP(frame.Image) {
+		// The native file reader adopts image packets only for JPEG/DNG/TIFF.
 		return nil, false, "image", nil
 	}
 	return loadFrameEmbeddedPacket(frame.Image)
