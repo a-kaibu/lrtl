@@ -56,6 +56,9 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 	}
 
 	var standard []byte
+	var standardPacket *XMPPacket
+	var standardError error
+	standardCount, standardBytes := 0, 0
 	extended := make(map[string]*extendedXMP)
 	for {
 		marker, err := nextJPEGMarker(reader)
@@ -87,7 +90,23 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 			continue
 		}
 		if bytes.HasPrefix(payload, []byte(jpegXMPHeader)) {
-			standard = append(standard[:0], payload[len(jpegXMPHeader):]...)
+			data := payload[len(jpegXMPHeader):]
+			standardBytes += len(data)
+			if standardBytes > maxEmbeddedXMPSize {
+				return nil, false, fmt.Errorf("standard JPEG XMP packets exceed safety limit")
+			}
+			packet, err := parseXMP(data)
+			if err != nil {
+				standardError = err
+				continue
+			}
+			standardCount++
+			if standardPacket == nil {
+				standardPacket = packet
+				standard = append([]byte(nil), data...)
+			} else if err := mergeEmbeddedXMP(standardPacket, packet); err != nil {
+				return nil, false, err
+			}
 			continue
 		}
 		if !bytes.HasPrefix(payload, []byte(jpegExtendedXMPHeader)) {
@@ -117,12 +136,18 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 		}
 		packet.chunks = append(packet.chunks, extendedXMPChunk{offset: offset, data: append([]byte(nil), chunk...)})
 	}
-	if len(standard) == 0 {
+	if standardPacket == nil {
+		if standardError != nil {
+			return nil, false, fmt.Errorf("parse embedded JPEG XMP: %w", standardError)
+		}
 		return nil, false, nil
 	}
-	standardPacket, err := parseXMP(standard)
-	if err != nil {
-		return nil, false, fmt.Errorf("parse embedded JPEG XMP: %w", err)
+	if standardCount > 1 {
+		var err error
+		standard, err = standardPacket.Serialize()
+		if err != nil {
+			return nil, false, err
+		}
 	}
 	guid, linked, err := standardPacket.GetScalar("xmpNote:HasExtendedXMP")
 	if err != nil {
@@ -147,6 +172,36 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 		return data, true, nil
 	}
 	return standard, true, nil
+}
+
+// Native embedded-directory import replaces whole nonempty root properties in
+// encounter order. Empty incoming roots leave earlier values intact; nested
+// empty fields/items are removed while copying a replacement.
+func mergeEmbeddedXMP(destination, source *XMPPacket) error {
+	src, err := pastePacketNodes(source)
+	if err != nil {
+		return err
+	}
+	dst, err := pastePacketNodes(destination)
+	if err != nil {
+		return err
+	}
+	before, after := map[pasteName]*pasteNode{}, map[pasteName]*pasteNode{}
+	for _, n := range dst {
+		before[n.Name], after[n.Name] = n, n
+	}
+	for _, n := range src {
+		if pasteNodeEmpty(n) {
+			continue
+		}
+		if copy := clonePasteForAppend(n); copy != nil {
+			after[n.Name] = copy
+		} else {
+			delete(after, n.Name)
+		}
+	}
+	_, err = writeChangedPasteRoots(destination, before, after)
+	return err
 }
 
 func nextJPEGMarker(reader io.Reader) (byte, error) {

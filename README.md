@@ -12,6 +12,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- JPEG内の複数の標準XMPパケットを順番に統合するようにしました。先のパケットだけにある項目を保持し、重複する項目は後の値で置き換えます。配列・構造体・空値・壊れたXMLを含む20条件の実機観測と、初期化／AVI生成・全体・race・fuzzテストで検査しています。壊れたXMLしかない場合はGo版の厳密なエラーを維持します。[観測方法・対応範囲・残る差](internal/lrtl/testdata/lrt-xmp-multiple-7.5.5.md)を参照してください。
+
 - `init`のJPEG/DNGのXMP採用を実機方式へ変更しました。画像がサイドカーと同時刻または新しければ画像内XMP、新しいサイドカーならそちらを使います。TIFFはサイドカー優先です。実機ファイル読込76条件、未来日時・バックアップ・再実行・動画画素を検査しました。従来の初期化は`--frame-state preserve`で選べます。[動作変更・実測値・残る差](internal/lrtl/testdata/lrt-xmp-source-7.5.5.md)を参照してください。
 
 - RW2／Leica RWL／Panasonic RAWの寸法読込を追加しました。センサー境界、ExifIFD、埋め込みJPEGの選択を実機84条件で比較しています。`.raw`（PanasonicのTIFF構造）と`.rwl`も`--raw-preview`で動画化でき、各3フレームのAVIが抽出JPEGの対照と一致しました。[規則・テスト・未対応範囲](internal/lrtl/testdata/lrt-rw2-dimensions-7.5.5.md)を参照してください。
