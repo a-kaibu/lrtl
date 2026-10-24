@@ -90,3 +90,34 @@ func prepareInitializationWrites(changes []initializationChange, clock func() ti
 	}
 	return prepared, nil
 }
+
+// Selected-column copying retains the target's CreateDate cache. Resolve clocks
+// only for actual outputs, after planning and before the first filesystem write.
+func prepareSelectedCopyWrites(outputs []packetOutput, clock func() time.Time) ([]packetOutput, error) {
+	prepared := make([]packetOutput, len(outputs))
+	for i, output := range outputs {
+		packet := &XMPPacket{Document: output.Packet.Document.Copy()}
+		date, _, err := captureTimestampScalar(packet, "xmp:CreateDate")
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", output.Path, err)
+		}
+		if err := validateNativeMetadataDateTarget(packet, date); err != nil {
+			return nil, fmt.Errorf("%s: %w", output.Path, err)
+		}
+		prepared[i] = packetOutput{Path: output.Path, Packet: packet}
+	}
+	for _, output := range prepared {
+		date, _, _ := captureTimestampScalar(output.Packet, "xmp:CreateDate")
+		eligible, err := nativeMetadataDateEligible(output.Packet, date)
+		if err == nil && eligible {
+			_, err = applyNativeMetadataDate(output.Packet, date, formatNativeMetadataDate(clock()))
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", output.Path, err)
+		}
+		if _, err := output.Packet.Serialize(); err != nil {
+			return nil, fmt.Errorf("%s: %w", output.Path, err)
+		}
+	}
+	return prepared, nil
+}

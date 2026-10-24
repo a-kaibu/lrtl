@@ -233,6 +233,13 @@ func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColum
 		return false, err
 	}
 	working := &XMPPacket{Document: target.Document.Copy()}
+	captureDate := ""
+	if profile == nativeSaveStateProfile && len(columns) > 0 {
+		captureDate, _, err = captureTimestampScalar(target, "xmp:CreateDate")
+		if err != nil {
+			return false, err
+		}
+	}
 	var context registeredSaveContext
 	if profile == nativeSaveStateProfile && len(columns) > 0 {
 		context, err = copiedRegisteredSaveContext(working, source, columns)
@@ -258,6 +265,13 @@ func applyCopySettingsProfile(target, source *XMPPacket, columns []selectedColum
 			}
 		}
 		if _, err = applyRegisteredSaveState(working, context); err != nil {
+			return false, err
+		}
+		eligible, err := nativeMetadataDateEligible(working, captureDate)
+		if err != nil {
+			return false, err
+		}
+		if err := applyNativeCaptureDate(working, captureDate, eligible); err != nil {
 			return false, err
 		}
 	}
