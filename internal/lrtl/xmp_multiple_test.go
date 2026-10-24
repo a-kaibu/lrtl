@@ -66,13 +66,17 @@ func TestXMPMultipleNativeReader(t *testing.T) {
 }
 
 func TestXMPMultipleInstalledReader(t *testing.T) {
+	replayInstalledXMPReader(t, xmpMultipleObservations(t))
+}
+
+func replayInstalledXMPReader(t *testing.T, reference xmpSourceReference) {
+	t.Helper()
 	jar := os.Getenv("LRTL_NATIVE_JAR")
 	if jar == "" {
 		t.Skip("set LRTL_NATIVE_JAR for installed multiple-XMP reader replay")
 	}
 	dir := t.TempDir()
 	inputs := filepath.Join(dir, "inputs")
-	reference := xmpMultipleObservations(t)
 	for _, row := range reference.Cases {
 		writeXMPSourceObservation(t, filepath.Join(inputs, row.Name), row)
 	}
@@ -124,6 +128,11 @@ func TestXMPMultipleInitializeAndRender(t *testing.T) {
 			row = candidate
 		}
 	}
+	testMergedXMPInitializeAndRender(t, row)
+}
+
+func testMergedXMPInitializeAndRender(t *testing.T, row xmpSourceObservation) {
+	t.Helper()
 	dir := t.TempDir()
 	for i := 0; i < 3; i++ {
 		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("frame-%02d.jpg", i)), row.Data, 0600); err != nil {
@@ -239,9 +248,25 @@ func TestXMPMultipleExtendedAndSizeLimit(t *testing.T) {
 	image = append(image, segment(jpegExtendedXMPHeader, chunk)...)
 	image = append(image, 255, 217)
 	got, found, err := readEmbeddedJPEGXMPFromReader(bytes.NewReader(image))
-	if err != nil || !found || !bytes.Equal(got, packet) {
+	if err != nil || !found {
 		t.Fatalf("extended regression: %v", err)
 	}
+	expected, err := parseXMP(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := expected.SetScalar("xmpNote:HasExtendedXMP", guid); err != nil {
+		t.Fatal(err)
+	}
+	want, err := expected.Serialize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual, err := parseXMP(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPastedMetadata(t, actual, string(want))
 	// Many individually legal APP1 segments must not create an unbounded merge.
 	large := append(packet, bytes.Repeat([]byte(" "), 60000)...)
 	app := segment(jpegXMPHeader, large)

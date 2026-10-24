@@ -59,7 +59,10 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 	var standardPacket *XMPPacket
 	var standardError error
 	standardCount, standardBytes := 0, 0
-	extended := make(map[string]*extendedXMP)
+	var extended *extendedXMP
+	var extensionGUID string
+	linked := false
+	extendedBytes := 0
 	for {
 		marker, err := nextJPEGMarker(reader)
 		if err != nil {
@@ -100,6 +103,14 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 				standardError = err
 				continue
 			}
+			// The native extractor keeps the first link it encounters, even if
+			// a later standard packet replaces that property in the final XML.
+			if !linked {
+				extensionGUID, linked, err = packet.GetScalar("xmpNote:HasExtendedXMP")
+				if err != nil {
+					return nil, false, fmt.Errorf("read extended JPEG XMP link: %w", err)
+				}
+			}
 			standardCount++
 			if standardPacket == nil {
 				standardPacket = packet
@@ -123,18 +134,23 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 		size := binary.BigEndian.Uint32(payload[headerLength+32 : headerLength+36])
 		offset := binary.BigEndian.Uint32(payload[headerLength+36 : headerLength+40])
 		chunk := payload[headerLength+40:]
+		extendedBytes += len(chunk)
+		if extendedBytes > maxEmbeddedXMPSize {
+			return nil, false, fmt.Errorf("extended JPEG XMP chunks exceed safety limit")
+		}
 		if size == 0 || size > maxEmbeddedXMPSize || offset > size || uint64(len(chunk)) > uint64(size-offset) {
 			return nil, false, fmt.Errorf("invalid extended JPEG XMP chunk bounds")
 		}
-		guid := strings.ToUpper(string(guidBytes))
-		packet := extended[guid]
-		if packet == nil {
-			packet = &extendedXMP{size: size}
-			extended[guid] = packet
-		} else if packet.size != size {
+		// Matching is case sensitive and begins only after the first link.
+		if !linked || string(guidBytes) != extensionGUID {
+			continue
+		}
+		if extended == nil {
+			extended = &extendedXMP{size: size}
+		} else if extended.size != size {
 			return nil, false, fmt.Errorf("inconsistent extended JPEG XMP packet size")
 		}
-		packet.chunks = append(packet.chunks, extendedXMPChunk{offset: offset, data: append([]byte(nil), chunk...)})
+		extended.chunks = append(extended.chunks, extendedXMPChunk{offset: offset, data: append([]byte(nil), chunk...)})
 	}
 	if standardPacket == nil {
 		if standardError != nil {
@@ -149,27 +165,29 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 			return nil, false, err
 		}
 	}
-	guid, linked, err := standardPacket.GetScalar("xmpNote:HasExtendedXMP")
-	if err != nil {
-		return nil, false, fmt.Errorf("read extended JPEG XMP link: %w", err)
-	}
 	if linked {
-		guid = strings.ToUpper(strings.TrimSpace(guid))
-		if len(guid) != 32 {
+		if len(extensionGUID) != 32 {
 			return nil, false, fmt.Errorf("invalid xmpNote:HasExtendedXMP GUID")
 		}
-		if _, err := hex.DecodeString(guid); err != nil {
+		if _, err := hex.DecodeString(extensionGUID); err != nil {
 			return nil, false, fmt.Errorf("invalid xmpNote:HasExtendedXMP GUID")
 		}
-		packet := extended[guid]
-		if packet == nil {
+		if extended == nil {
 			return nil, false, fmt.Errorf("embedded JPEG XMP references a missing extended packet")
 		}
-		data, err := assembleExtendedXMP(guid, packet)
+		data, err := assembleExtendedXMP(extensionGUID, extended)
 		if err != nil {
 			return nil, false, err
 		}
-		return data, true, nil
+		packet, err := parseXMP(data)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := mergeEmbeddedXMP(standardPacket, packet); err != nil {
+			return nil, false, err
+		}
+		data, err = standardPacket.Serialize()
+		return data, err == nil, err
 	}
 	return standard, true, nil
 }
@@ -233,6 +251,14 @@ func assembleExtendedXMP(guid string, packet *extendedXMP) ([]byte, error) {
 	data := make([]byte, int(packet.size))
 	var expected uint32
 	for _, chunk := range chunks {
+		if chunk.offset < expected {
+			// Already assembled identical bytes may be retransmitted.
+			// Conflicting overlaps still fail before any sidecar is written.
+			end := uint64(chunk.offset) + uint64(len(chunk.data))
+			if end <= uint64(expected) && bytes.Equal(data[int(chunk.offset):int(end)], chunk.data) {
+				continue
+			}
+		}
 		if chunk.offset != expected {
 			return nil, fmt.Errorf("embedded JPEG extended XMP packet has a gap or overlapping chunks")
 		}
@@ -243,7 +269,7 @@ func assembleExtendedXMP(guid string, packet *extendedXMP) ([]byte, error) {
 		return nil, fmt.Errorf("embedded JPEG extended XMP packet is incomplete")
 	}
 	digest := md5.Sum(data)
-	if strings.ToUpper(hex.EncodeToString(digest[:])) != guid {
+	if !strings.EqualFold(hex.EncodeToString(digest[:]), guid) {
 		return nil, fmt.Errorf("embedded JPEG extended XMP GUID does not match its packet")
 	}
 	if _, err := parseXMP(data); err != nil {
