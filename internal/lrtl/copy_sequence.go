@@ -10,10 +10,12 @@ import (
 
 type sequenceCopyFile struct {
 	source, name string
+	kind         string
 	info         os.FileInfo
 }
 
 type sequenceCopyPlan struct {
+	source           string
 	destination      string
 	frames           int
 	sidecars, caches int
@@ -24,6 +26,18 @@ func planSequenceCopy(directory, output string, frames []Frame, includeCompanion
 	if len(frames) == 0 {
 		return nil, fmt.Errorf("no frames selected")
 	}
+	if len(includeCompanions) > 1 {
+		return nil, fmt.Errorf("at most one companion option is allowed")
+	}
+	companions := len(includeCompanions) == 1 && includeCompanions[0]
+	paths, err := sequenceCopyPaths(frames, companions)
+	if err != nil {
+		return nil, err
+	}
+	return planSequenceCopyFiles(directory, output, paths)
+}
+
+func planSequenceCopyFiles(directory, output string, paths []sequenceCopyPath) (*sequenceCopyPlan, error) {
 	if strings.TrimSpace(output) == "" {
 		return nil, fmt.Errorf("a new output directory is required")
 	}
@@ -43,15 +57,7 @@ func planSequenceCopy(directory, output string, frames []Frame, includeCompanion
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if len(includeCompanions) > 1 {
-		return nil, fmt.Errorf("at most one companion option is allowed")
-	}
-	companions := len(includeCompanions) == 1 && includeCompanions[0]
-	paths, err := sequenceCopyPaths(frames, companions)
-	if err != nil {
-		return nil, err
-	}
-	plan := &sequenceCopyPlan{destination: destination}
+	plan := &sequenceCopyPlan{source: source, destination: destination}
 	seen := map[string]sequenceCopyFile{}
 	for _, candidate := range paths {
 		path := candidate.source
@@ -84,7 +90,7 @@ func planSequenceCopy(directory, output string, frames []Frame, includeCompanion
 			} // Shared stem XMP is copied once.
 			return nil, fmt.Errorf("case-insensitive output name collision: %s", name)
 		}
-		entry := sequenceCopyFile{source: absolute, name: name, info: info}
+		entry := sequenceCopyFile{source: absolute, name: name, info: info, kind: candidate.kind}
 		seen[key] = entry
 		plan.files = append(plan.files, entry)
 		switch candidate.kind {
