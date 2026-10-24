@@ -44,6 +44,10 @@ func xmpError(format string, args ...any) error {
 type XMPPacket struct{ Document *etree.Document }
 
 func parseXMP(data []byte) (*XMPPacket, error) {
+	return parseXMPWithCaptureAliases(data, true)
+}
+
+func parseXMPWithCaptureAliases(data []byte, normalize bool) (*XMPPacket, error) {
 	if err := validateXMPXML(data); err != nil {
 		return nil, xmpError("invalid XML in XMP packet: %v", err)
 	}
@@ -79,7 +83,9 @@ func parseXMP(data []byte) (*XMPPacket, error) {
 		description.CreateAttr("xmlns:rdf", rdfNamespace)
 		description.CreateAttr("rdf:about", "")
 	}
-	packet.normalizeCaptureDateAlias()
+	if normalize {
+		packet.normalizeCaptureDateAlias()
+	}
 	return packet, nil
 }
 

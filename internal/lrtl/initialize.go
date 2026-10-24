@@ -316,6 +316,23 @@ func buildInitializationPlan(frames []Frame, format string, frameStateProfiles .
 					return nil, err
 				}
 			}
+			seedValue, seeded, err := captureTimestampScalar(packets[i], "xmp:CreateDate")
+			if err != nil {
+				return nil, err
+			}
+			var seed *string
+			if seeded {
+				seed = &seedValue
+			}
+			date, available, err := readNativeCaptureDateWithSeed(frame.Image, seed)
+			if err != nil {
+				return nil, fmt.Errorf("%s: read capture date: %w", frame.Image, err)
+			}
+			if available || seeded && seedValue != "" {
+				if err := applyNativeCaptureDate(packets[i], date, true); err != nil {
+					return nil, err
+				}
+			}
 			if err := prepareNativeFrameState(packets[i], quality); err != nil {
 				return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 			}

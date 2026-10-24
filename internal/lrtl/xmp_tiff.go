@@ -25,7 +25,7 @@ type tiffXMPEntry struct {
 }
 
 type tiffXMPReader struct {
-	file        *os.File
+	file        io.ReaderAt
 	size        uint64
 	order       binary.ByteOrder
 	bigTIFF     bool
@@ -143,10 +143,14 @@ func readTIFFMetadata(path string, scan func(*tiffXMPReader, uint64) ([]byte, bo
 	if err != nil {
 		return nil, false, err
 	}
-	if info.Size() < 8 {
+	return readTIFFMetadataAt(file, info.Size(), scan)
+}
+
+func readTIFFMetadataAt(file io.ReaderAt, size int64, scan func(*tiffXMPReader, uint64) ([]byte, bool, error)) ([]byte, bool, error) {
+	if size < 8 {
 		return nil, false, nil
 	}
-	reader := &tiffXMPReader{file: file, size: uint64(info.Size()), visited: make(map[uint64]bool)}
+	reader := &tiffXMPReader{file: file, size: uint64(size), visited: make(map[uint64]bool)}
 	var header [16]byte
 	if _, err := file.ReadAt(header[:8], 0); err != nil {
 		return nil, false, err
@@ -167,7 +171,7 @@ func readTIFFMetadata(path string, scan func(*tiffXMPReader, uint64) ([]byte, bo
 	case 0x4f52, 0x5352: // Olympus ORF: IIRO, IIRS, or MMOR.
 		firstIFD = uint64(reader.order.Uint32(header[4:8]))
 	case 43:
-		if info.Size() < int64(len(header)) {
+		if size < int64(len(header)) {
 			return nil, false, fmt.Errorf("truncated BigTIFF header")
 		}
 		if _, err := file.ReadAt(header[8:], 8); err != nil {

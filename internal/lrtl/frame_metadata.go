@@ -189,55 +189,63 @@ func readNativeCameraMetadata(frame Frame, packet *XMPPacket) (*nativeCameraMeta
 }
 
 func readNativePNGOrientation(file *os.File) (uint16, bool, error) {
+	data, found, err := readNativePNGExif(file)
+	if err != nil || !found {
+		return 0, found, err
+	}
+	orientation, err := pngTIFFOrientation(data)
+	return orientation, true, err
+}
+
+func readNativePNGExif(file *os.File) ([]byte, bool, error) {
 	if _, err := file.Seek(8, io.SeekStart); err != nil {
-		return 0, false, err
+		return nil, false, err
 	}
 	info, err := file.Stat()
 	if err != nil {
-		return 0, false, err
+		return nil, false, err
 	}
 	for count := 0; count < 4096; count++ {
 		var header [8]byte
 		if _, err := io.ReadFull(file, header[:]); err != nil {
-			return 0, false, err
+			return nil, false, err
 		}
 		length := int64(binary.BigEndian.Uint32(header[:4]))
 		position, err := file.Seek(0, io.SeekCurrent)
 		if err != nil {
-			return 0, false, err
+			return nil, false, err
 		}
 		if length+4 > info.Size()-position {
-			return 0, false, fmt.Errorf("truncated PNG metadata chunk")
+			return nil, false, fmt.Errorf("truncated PNG metadata chunk")
 		}
 		kind := string(header[4:])
 		if kind == "IEND" {
-			return 0, false, nil
+			return nil, false, nil
 		}
 		if kind != "eXIf" {
 			if _, err := file.Seek(length+4, io.SeekCurrent); err != nil {
-				return 0, false, err
+				return nil, false, err
 			}
 			continue
 		}
 		if length > 1<<20 {
-			return 0, false, fmt.Errorf("PNG EXIF exceeds metadata size limit")
+			return nil, false, fmt.Errorf("PNG EXIF exceeds metadata size limit")
 		}
 		data := make([]byte, int(length))
 		if _, err := io.ReadFull(file, data); err != nil {
-			return 0, false, err
+			return nil, false, err
 		}
 		var checksum [4]byte
 		if _, err := io.ReadFull(file, checksum[:]); err != nil {
-			return 0, false, err
+			return nil, false, err
 		}
 		hash := crc32.NewIEEE()
 		hash.Write(header[4:])
 		hash.Write(data)
 		if hash.Sum32() != binary.BigEndian.Uint32(checksum[:]) {
-			return 0, false, fmt.Errorf("invalid PNG eXIf checksum")
+			return nil, false, fmt.Errorf("invalid PNG eXIf checksum")
 		}
-		orientation, err := pngTIFFOrientation(data)
-		return orientation, true, err
+		return data, true, nil
 	}
-	return 0, false, fmt.Errorf("too many PNG metadata chunks")
+	return nil, false, fmt.Errorf("too many PNG metadata chunks")
 }

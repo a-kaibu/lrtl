@@ -35,7 +35,7 @@ def encode(directories, endian='<', big=False, cr2=False, magic=42, rw2=False):
         struct.pack_into(endian+('Q' if big else 'H'),data,position,len(fields));position+=8 if big else 2
         extra=offsets[i]+384
         for tag,kind,values in fields:
-            fmt={1:'B',3:'H',4:'I',7:'B',16:'Q',18:'Q'}[kind]
+            fmt={1:'B',2:'B',3:'H',4:'I',7:'B',16:'Q',18:'Q'}[kind]
             raw=struct.pack(endian+fmt*len(values),*values)
             width=8 if big else 4
             struct.pack_into(endian+('HHQ' if big else 'HHI'),data,position,tag,kind,len(values))
