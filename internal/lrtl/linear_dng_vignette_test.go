@@ -126,6 +126,69 @@ func TestDNGVignetteRadialApplyChannelsClippingAndDimensions(t *testing.T) {
 	}
 }
 
+func TestDNGStage1VignetteRadialUsesRawPixelCenters(t *testing.T) {
+	const width, height = 4, 2
+	vignette, err := parseDNGVignetteRadial(testDNGVignetteRadial(.5, .5, [5]float64{1}).payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := make([]uint16, width*height)
+	for i := range source {
+		source[i] = 16384
+	}
+	source[0] = 50000 // The radial gain at this corner clips to 65535.
+	destination := make([]uint16, len(source))
+	if err := vignette.applyRaw(source, destination, width, height, 1); err != nil {
+		t.Fatal(err)
+	}
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			index := y*width + x
+			want := uint16(18022)
+			if x == 0 || x == width-1 {
+				want = 24576
+			}
+			if index == 0 {
+				want = 65535
+			}
+			if got := destination[index]; got != want {
+				t.Errorf("raw pixel (%d,%d)=%d want %d", x, y, got, want)
+			}
+		}
+	}
+}
+
+func TestLinearDNGStage1VignetteRadialBeforeActiveAreaBothByteOrders(t *testing.T) {
+	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		t.Run(order.String(), func(t *testing.T) {
+			pixels := make([]uint16, 4*2)
+			for i := range pixels {
+				pixels[i] = 16384
+			}
+			metadata := map[uint16]dngTestField{
+				50829: dngTestLong(order, 0, 1, 2, 3),
+				50717: dngTestLong(order, 65535),
+				51008: testDNGOpcodeList(testDNGVignetteRadial(.5, .5, [5]float64{1})),
+			}
+			decoded, err := decodeLinearDNG(linearDNGFixture(order, 4, 2, 1, pixels, metadata))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if decoded.Bounds() != image.Rect(0, 0, 2, 2) {
+				t.Fatalf("active bounds=%v", decoded.Bounds())
+			}
+			want := testDNGLinearToSRGB16(18022)
+			for y := 0; y < 2; y++ {
+				for x := 0; x < 2; x++ {
+					if pixel := decoded.NRGBA64At(x, y); pixel.R != want || pixel.G != want || pixel.B != want {
+						t.Errorf("pixel (%d,%d)=%v want gray %d", x, y, pixel, want)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestDNGVignetteRadialOrderedWithPointOpcodesAndClips(t *testing.T) {
 	area := testDNGArea(image.Rect(0, 0, 4, 4), 0, 1, 1, 1)
 	point, err := parseDNGPointOpcode(8, testDNGPolynomial(area, 0, 0, 1).payload)

@@ -455,6 +455,8 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 				err = applyDNGBadPixelConstantRaw(stage1Pixels, destination, width, height, *opcode.badPixelConstant)
 			} else if opcode.badPixelList != nil {
 				err = applyDNGBadPixelListRaw(stage1Pixels, destination, width, height, image.Rect(0, 0, width, height), *opcode.badPixelList)
+			} else if opcode.vignette != nil {
+				err = opcode.vignette.applyRaw(stage1Pixels, destination, width, height, channels)
 			} else if opcode.point != nil {
 				err = applyDNGPointOpcodeRaw(stage1Pixels, destination, width, height, channels, *opcode.point)
 			} else {

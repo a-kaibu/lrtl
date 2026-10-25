@@ -99,7 +99,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 				}
 			}
 			stage1 := tag == 51008
-			unsupportedStage1 := stage1 && id != 4 && id != 5 && (id < 7 || id > 13)
+			unsupportedStage1 := stage1 && id != 3 && id != 4 && id != 5 && (id < 7 || id > 13)
 			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 14)) || unsupportedStage1 || version > 0x01070100 || id == 5 && version < 0x01030000 {
 				if flags&1 != 0 {
 					continue

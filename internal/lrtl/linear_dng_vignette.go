@@ -80,3 +80,42 @@ func (vignette *dngVignetteRadial) apply(data []float32, width, height, channels
 	}
 	return nil
 }
+
+// applyRaw applies a Stage 1 vignette opcode to stored 16-bit samples. The SDK
+// evaluates this opcode through a normalized float buffer, then writes the
+// result back to the Stage 1 image. Pixel-center coordinates are used for the
+// radial mask, as in the SDK's fixed-point mask setup.
+func (vignette *dngVignetteRadial) applyRaw(source, destination []uint16, width, height, channels int) error {
+	if width < 1 || height < 1 || channels < 1 || channels > 3 || uint64(width) > uint64(math.MaxInt)/uint64(height) {
+		return fmt.Errorf("invalid image dimensions for Stage 1 radial vignette")
+	}
+	pixelCount := uint64(width) * uint64(height)
+	if pixelCount > uint64(math.MaxInt)/uint64(channels) || uint64(len(source)) != pixelCount*uint64(channels) || len(destination) != len(source) {
+		return fmt.Errorf("invalid image buffer for Stage 1 radial vignette")
+	}
+	copy(destination, source)
+	cx, cy := float64(width)*vignette.centerX, float64(height)*vignette.centerY
+	mx := max(math.Abs(cx), math.Abs(float64(width)-cx))
+	my := max(math.Abs(cy), math.Abs(float64(height)-cy))
+	radius := math.Hypot(mx, my)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			gain := vignette.gainAt(float64(x)+.5, float64(y)+.5, cx, cy, radius)
+			if math.IsNaN(gain) || math.IsInf(gain, 0) {
+				return fmt.Errorf("non-finite Stage 1 radial vignette gain")
+			}
+			gain32 := float32(gain)
+			base := (y*width + x) * channels
+			for channel := 0; channel < channels; channel++ {
+				index := base + channel
+				value := float32(source[index]) / 65535 * gain32
+				if math.IsNaN(float64(value)) {
+					return fmt.Errorf("non-finite Stage 1 radial vignette sample")
+				}
+				value = min(float32(1), max(float32(0), value))
+				destination[index] = uint16(math.Round(float64(value) * 65535))
+			}
+		}
+	}
+	return nil
+}
