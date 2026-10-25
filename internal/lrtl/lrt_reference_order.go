@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strings"
-	"unicode"
 )
 
 // The native date comparator uses xmp:CreateDate text without parsing dates or
@@ -30,12 +28,9 @@ func lrtReferenceDateOrder(names, dates []string) ([]int, error) {
 	for i := range order {
 		order[i] = i
 	}
-	fold := func(text string) string {
-		return strings.Map(func(r rune) rune { return unicode.ToLower(unicode.ToUpper(r)) }, text)
-	}
 	nameKeys, dateKeys := make([]string, len(names)), make([]string, len(dates))
 	for i := range names {
-		nameKeys[i], dateKeys[i] = fold(names[i]), fold(dates[i])
+		nameKeys[i], dateKeys[i] = javaOrderKey(names[i]), javaOrderKey(dates[i])
 	}
 	sort.SliceStable(order, func(a, b int) bool {
 		i, j := order[a], order[b]
@@ -55,7 +50,7 @@ func readLRTReferenceDateOrder(frames []Frame) ([]int, error) {
 		if err != nil {
 			return nil, err
 		}
-		value, _, err := packet.GetScalar("xmp:CreateDate")
+		value, _, err := captureTimestampScalar(packet, "xmp:CreateDate")
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.Image, err)
 		}

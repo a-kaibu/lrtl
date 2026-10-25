@@ -893,6 +893,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 
 func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
+	sortMode := set.String("sort", "name", "frame order: name, capture-time, lrt-name, lrt-ascii or lrt-date")
 	lrtPreset := set.String("lrt-render-preset", "", "read a native render preset or LRT settings JSON")
 	lrtPresetName := set.String("lrt-preset-name", "", "choose an exact name from native renderPresets")
 	output := set.String("output", "", "output AVI, MP4, or MOV path")
@@ -949,6 +950,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	parseArgs := flagFirst(arguments, map[string]bool{
+		"--sort": true, "-sort": true,
 		"--lrt-render-preset": true, "-lrt-render-preset": true, "--lrt-preset-name": true, "-lrt-preset-name": true,
 		"--lrt-preview": true, "-lrt-preview": true,
 		"--output": true, "-output": true,
@@ -1062,6 +1064,10 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 			return reportError(stderr, fmt.Errorf("--filename-contains %q matched no frames in %s", *filenameContains, directory))
 		}
 		frames = matched
+	}
+	frames, err = orderSequenceFrames(frames, *sortMode)
+	if err != nil {
+		return reportError(stderr, err)
 	}
 	options := RenderOptions{
 		FrameRate:             *fps,
@@ -1316,6 +1322,9 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 
 func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("subtitles", stderr)
+	sortMode := set.String("sort", "name", "match video order: name, capture-time, lrt-name, lrt-ascii or lrt-date")
+	selection := set.String("selection", "", "match the video's selected frame manifest")
+	contains := set.String("filename-contains", "", "match the video's filename filter")
 	output := set.String("output", "", "write timestamp subtitles to an SRT file")
 	lrtPreset := set.String("lrt-render-preset", "", "match timing from a saved LRT render preset or settings JSON")
 	lrtPresetName := set.String("lrt-preset-name", "", "choose an exact native render preset name")
@@ -1329,6 +1338,7 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	every := set.Int("every", -1, "native subtitle interval in source frames (-1 uses native timestamp fps)")
 	overwrite := set.Bool("overwrite", false, "replace an existing SRT file")
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
+		"--sort": true, "-sort": true, "--selection": true, "-selection": true, "--filename-contains": true, "-filename-contains": true,
 		"--output": true, "-output": true,
 		"--fps": true, "-fps": true,
 		"--speed": true, "-speed": true,
@@ -1341,14 +1351,14 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 		"--profile": true, "-profile": true, "--every": true, "-every": true,
 	})); err != nil {
 		if help, code := finishFlagParse(set, err); help {
-			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--profile standard|lrt-7.5.5] [--every N] [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl subtitles DIRECTORY --output FILE.srt [--sort MODE] [--selection FILE] [--filename-contains TEXT] [--profile standard|lrt-7.5.5] [--every N] [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]")
 			return code
 		} else {
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--profile standard|lrt-7.5.5] [--every N] [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl subtitles DIRECTORY --output FILE.srt [--sort MODE] [--selection FILE] [--filename-contains TEXT] [--profile standard|lrt-7.5.5] [--every N] [--lrt-render-preset FILE] [--lrt-preset-name NAME] [--fps N] [--speed X] [--motion-blur N] [--remove-airplanes LEVEL] [--interpolation MODE] [--timestamp-format LAYOUT] [--overwrite]"))
 	}
 	if *profile != "standard" && *profile != "lrt-7.5.5" {
 		return reportError(stderr, fmt.Errorf("subtitle profile must be standard or lrt-7.5.5"))
@@ -1365,6 +1375,14 @@ func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	frames, err = filterSequenceFrames(frames, set.Arg(0), frameSelectionOptions{Manifest: *selection, FilenameContains: *contains})
+	if err != nil {
+		return reportError(stderr, err)
+	}
+	frames, err = orderSequenceFrames(frames, *sortMode)
 	if err != nil {
 		return reportError(stderr, err)
 	}

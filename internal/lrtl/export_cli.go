@@ -19,6 +19,7 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 		name, outputDescription, defaultLongEdge = "preview-images", "new output directory for JPEG previews and measurements", 1280
 	}
 	set := newFlagSet(name, stderr)
+	sortMode := set.String("sort", "name", "frame order: name, capture-time, lrt-name, lrt-ascii or lrt-date")
 	quality, writeEV, noBackup := new(int), new(bool), new(bool)
 	*quality = 90
 	if previews {
@@ -53,6 +54,7 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 	timestamp := set.Bool("timestamp-overlay", false, "burn frame capture time into exported pixels")
 	timestampFormat := set.String("timestamp-format", defaultTimestampFormat, "Go time layout for timestamp overlay")
 	values := map[string]bool{}
+	values["--sort"], values["-sort"] = true, true
 	for _, name := range []string{"output", "selection", "filename-contains", "long-edge", "output-height", "aspect", "dnglab", "dng-converter", "reference", "smooth", "deflicker-smoother", "passes", "motion-blur", "watermark", "watermark-position", "timestamp-format", "lrt-preview"} {
 		values["--"+name] = true
 		values["-"+name] = true
@@ -151,6 +153,10 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 		frames = matched
 	}
 	options := RenderOptions{LongEdge: *longEdge, OutputHeight: *height, AspectRatio: ratio, ApplyXMPBasic: *applyBasic, ApplyXMPExposure: *applyExposure, ApplyXMPCrop: *applyCrop, AutoOrient: *autoOrient, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *converter, Deflicker: deflickerEnabled, Reference: area, SmoothRadius: *smooth, DeflickerSmoother: *smoother, DeflickerPasses: *passes, Constant: *constant, MotionBlurFrames: *motionBlur, Watermark: *watermark, WatermarkPosition: strings.ToLower(strings.TrimSpace(*watermarkPosition)), TimestampOverlay: timestampEnabled, TimestampFormat: *timestampFormat}
+	frames, err = orderSequenceFrames(frames, *sortMode)
+	if err != nil {
+		return reportError(stderr, err)
+	}
 	options.LRTPreview = *lrtPreview
 	if previews {
 		var packets []*XMPPacket
