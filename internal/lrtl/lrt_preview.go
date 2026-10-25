@@ -16,14 +16,21 @@ const lrtPreviewFixedOne = int64(1) << 32
 // preview loader: only images wider than previewWidthCamera are resized, to
 // width x int(width/1.5), with one bilinear pass.
 func resizeLRTCameraPreview(img image.Image) (image.Image, error) {
+	return resizeLRTCameraPreviewWidth(img, lrtDefaultCameraPreviewWidth)
+}
+
+func resizeLRTCameraPreviewWidth(img image.Image, previewWidthCamera int) (image.Image, error) {
 	if img == nil || img.Bounds().Empty() {
 		return nil, fmt.Errorf("cannot resize an empty LRT preview")
 	}
+	if previewWidthCamera < 2 {
+		return nil, fmt.Errorf("LRT camera preview width must be at least 2 pixels")
+	}
 	bounds := img.Bounds()
-	if bounds.Dx() <= lrtDefaultCameraPreviewWidth {
+	if bounds.Dx() <= previewWidthCamera {
 		return img, nil
 	}
-	width := lrtDefaultCameraPreviewWidth
+	width := previewWidthCamera
 	height := int(float32(width) / 1.5)
 	if height <= 0 {
 		return nil, fmt.Errorf("invalid LRT preview dimensions %dx%d", width, height)

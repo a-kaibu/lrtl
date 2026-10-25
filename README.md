@@ -12,7 +12,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
-- `preview-ev`でLRT 7.5.5のカメラプレビュー縮小を再現しました。画像幅が設定値を超える場合、既定の1024×682へ1パスbilinearで縮小してから測光します。LRT本体の合成画像3条件でPreview EVを1e-5以内に比較し、拡大・縮小を含む5条件の58画素（174色成分）も完全一致を確認しました。設定幅を変更した環境、LRT/Camera Rawの元画像デコード・色管理は未対応です。[JAR解析・オラクル・制限](internal/lrtl/testdata/lrt-preview-resize-7.5.5.md)
+- `preview-ev`でLRT 7.5.5のカメラプレビュー縮小を再現しました。画像幅が設定値を超える場合、既定の1024×682へ1パスbilinearで縮小してから測光します。LRT本体の合成画像3条件でPreview EVを1e-5以内に比較し、拡大・縮小を含む6条件の82画素（246色成分）も完全一致を確認しました。`--preview-width-camera N`でLRTの設定幅も指定できます。LRT/Camera Rawの元画像デコード・色管理は未対応です。[JAR解析・オラクル・制限](internal/lrtl/testdata/lrt-preview-resize-7.5.5.md)
 - Linear DNGの`OpcodeList2/3`に、放射状ビネット補正`FixVignetteRadial`（ID 3）を追加しました。r²〜r¹⁰の5係数と正規化中心を読み、Opcodeの順序どおり線形カメラ値へ適用します。仕様式との独立計算、両バイト順、色面、クリップ、RAW→16-bit TIFF→AVIと失敗時の出力取消をテストしています。Camera Rawの画素一致を示すものではありません。
 - Linear DNGの`OpcodeList2/3`に`WarpRectilinear2`（ID 14）を追加しました。r⁰〜r¹⁴の係数、多項式の有効半径、逆数モード、色面別の中心を使い、オプションOpcode直後の旧式ワープを省く互換規則も処理します。独立座標式、破損データ、両バイト順、RAW→16-bit TIFF→AVIをテストしています。
 - Linear DNGの`OpcodeList2/3`に`WarpFisheye`（ID 2）を追加しました。DNG仕様のarctan写像、共有／色面別の係数、`DefaultScale`の画素比を使い、既存のバイキュービック再サンプルへ接続します。独立した座標計算、異常入力、fuzz、RAW→16-bit TIFF→AVIの画素までテストしています。欠陥画素補間などは引き続き未対応です。
@@ -1151,9 +1151,11 @@ Preview EVは平均値を256で割った値で、XMP保存値はその4倍です
 ```powershell
 lrtl preview-ev "D:\Timelapse\Developed"
 lrtl preview-ev "D:\Timelapse\Developed" --write
+# LRT settingsでカメラプレビュー幅を変更している場合
+lrtl preview-ev "D:\Timelapse\Developed" --preview-width-camera 1280
 ```
 
-Preview EVのヒストグラム、既定の全画面ROI、および幅1024pxを超える画像を1024×682へ縮小する規則は、LRT 7.5.5の合成画像で照合済みです。縮小後の測定値は3条件で本体から1e-5以内、5条件の拡大・縮小で個別画素58点の全174色成分が本体と完全一致します。LRTと同じRAW/画像デコードや色管理は未再現のため、同じ画像ファイルでも入力画素が異なる場合があります。`--lrt-reference`では保存済みROIを全画面の代わりに使います。XMP値がない連番では、先に`preview-ev --write`を実行すると、`keyframes`の既定数量計算で使える値を生成できます。
+Preview EVのヒストグラム、既定の全画面ROI、および幅1024pxを超える画像を1024×682へ縮小する規則は、LRT 7.5.5の合成画像で照合済みです。縮小後の測定値は3条件で本体から1e-5以内、6条件の拡大・縮小で個別画素82点の全246色成分が本体と完全一致します。LRTの`previewWidthCamera`を変えている場合は`--preview-width-camera N`で同じ幅を指定できます（LRT設定ファイルは自動読込しません）。LRTと同じRAW/画像デコードや色管理は未再現のため、同じ画像ファイルでも入力画素が異なる場合があります。`--lrt-reference`では保存済みROIを全画面の代わりに使います。XMP値がない連番では、先に`preview-ev --write`を実行すると、`keyframes`の既定数量計算で使える値を生成できます。
 
 ## 連番の初期化
 

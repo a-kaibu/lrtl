@@ -16,6 +16,7 @@ public final class PreviewResizePixelOracle {
         {4, 3, 2, 2},
         {7, 5, 4, 3},
         {9, 7, 5, 4},
+        {7, 5, 6, 4},
     };
 
     public static void main(String[] args) throws Exception {

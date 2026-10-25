@@ -81,6 +81,7 @@ type imageInputOptions struct {
 	LRTDeflickerPreferences *lrtDeflickerPreferences
 	NativeDeflicker         nativeDeflickerOptions
 	PreviewHistogram        previewHistogramOptions
+	PreviewWidthCamera      int
 	LRTReference            bool
 	lrtReferences           []lrtReferenceBox
 	LRTPreview              string
@@ -94,6 +95,9 @@ type imageInputOptions struct {
 }
 
 func validateImageInputOptions(options imageInputOptions) error {
+	if options.PreviewWidthCamera != 0 && options.PreviewWidthCamera < 2 {
+		return fmt.Errorf("--preview-width-camera must be at least 2 pixels")
+	}
 	if err := options.NativeDeflicker.validate(); err != nil {
 		return err
 	}

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -153,8 +154,8 @@ func TestLRTPreviewBilinearPixelsMatchNative(t *testing.T) {
 	if err := json.Unmarshal(data, &cases); err != nil {
 		t.Fatal(err)
 	}
-	if len(cases) != 5 {
-		t.Fatalf("got %d native pixel cases, want 5", len(cases))
+	if len(cases) != 6 {
+		t.Fatalf("got %d native pixel cases, want 6", len(cases))
 	}
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("%dx%d_to_%dx%d", tc.SourceWidth, tc.SourceHeight, tc.Width, tc.Height), func(t *testing.T) {
@@ -185,6 +186,83 @@ func TestLRTPreviewBilinearPixelsMatchNative(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestPreviewEVCLIHonorsPreviewWidthCamera(t *testing.T) {
+	data, err := os.ReadFile("testdata/lrt-preview-resize-pixels-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		SourceWidth  int
+		SourceHeight int
+		Width        int
+		Height       int
+		Pattern      int
+		RGB          []string
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 6 {
+		t.Fatalf("got %d native pixel cases, want 6", len(cases))
+	}
+	tc := cases[5]
+	dir := t.TempDir()
+	path := filepath.Join(dir, "frame.png")
+	source := image.NewNRGBA(image.Rect(0, 0, tc.SourceWidth, tc.SourceHeight))
+	for y := 0; y < tc.SourceHeight; y++ {
+		for x := 0; x < tc.SourceWidth; x++ {
+			source.SetNRGBA(x, y, color.NRGBA{
+				R: uint8((x*47 + y*19 + tc.Pattern*17) & 255),
+				G: uint8((x*13 + y*71 + tc.Pattern*29) & 255),
+				B: uint8((x*83 + y*31 + tc.Pattern*43) & 255),
+				A: 255,
+			})
+		}
+	}
+	writePreviewEVFixture(t, path, source)
+
+	nativePreview := image.NewNRGBA(image.Rect(0, 0, tc.Width, tc.Height))
+	for i, hex := range tc.RGB {
+		value, err := strconv.ParseUint(hex, 16, 24)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nativePreview.SetNRGBA(i%tc.Width, i/tc.Width, color.NRGBA{
+			R: uint8(value >> 16), G: uint8(value >> 8), B: uint8(value), A: 255,
+		})
+	}
+	defaultEV, err := framePreviewEV(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeEV, err := framePreviewEV(nativePreview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaultEV == nativeEV {
+		t.Fatal("oracle image does not distinguish the default and custom preview widths")
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Main([]string{"preview-ev", dir}, &stdout, &stderr); code != 0 {
+		t.Fatalf("default-width exit=%d stderr=%s", code, &stderr)
+	}
+	if !strings.Contains(stdout.String(), "PreviewEV="+formatNumber(defaultEV)) {
+		t.Fatalf("default width output=%s, want source EV %s", stdout.String(), formatNumber(defaultEV))
+	}
+	stdout.Reset()
+	if code := Main([]string{"preview-ev", dir, "--preview-width-camera", strconv.Itoa(tc.Width)}, &stdout, &stderr); code != 0 {
+		t.Fatalf("custom-width exit=%d stderr=%s", code, &stderr)
+	}
+	if !strings.Contains(stdout.String(), "PreviewEV="+formatNumber(nativeEV)) {
+		t.Fatalf("custom width output=%s, want LRT pixel-oracle EV %s", stdout.String(), formatNumber(nativeEV))
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := Main([]string{"preview-ev", dir, "--preview-width-camera", "1"}, &stdout, &stderr); code == 0 || !strings.Contains(stderr.String(), "at least 2") {
+		t.Fatalf("invalid width exit=%d stdout=%s stderr=%s", code, stdout.String(), stderr.String())
 	}
 }
 

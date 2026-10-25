@@ -58,7 +58,11 @@ func analyzePreviewEVSequence(frames []Frame, options imageInputOptions) ([]floa
 			return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
 		img = adjustments.apply(index, img)
-		img, err = resizeLRTCameraPreview(img)
+		previewWidthCamera := options.PreviewWidthCamera
+		if previewWidthCamera == 0 {
+			previewWidthCamera = lrtDefaultCameraPreviewWidth
+		}
+		img, err = resizeLRTCameraPreviewWidth(img, previewWidthCamera)
 		if err != nil {
 			return nil, fmt.Errorf("prepare LRT Preview EV image %s: %w", frame.Image, err)
 		}
@@ -170,6 +174,7 @@ func framePreviewEVAreaWithOptions(img image.Image, area image.Rectangle, option
 
 func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("preview-ev", stderr)
+	previewWidthCamera := set.Int("preview-width-camera", lrtDefaultCameraPreviewWidth, "LRT camera preview width threshold and resize target")
 	ignoreBlacks := set.Int("ignore-blacks", 0, "black histogram range percentage (0-100); enables soft exclusion")
 	ignoreWhites := set.Int("ignore-whites", 0, "white histogram range percentage (0-100); enables soft exclusion")
 	hardCut := set.Bool("hard-cut", false, "use a hard histogram cutoff instead of soft exclusion")
@@ -184,14 +189,14 @@ func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP during analysis")
 	write := set.Bool("write", false, "write lrt:ExternalExposureDefault to XMP sidecars")
 	noBackup := set.Bool("no-backup", false, "do not create backups when writing")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true, "--lrt-preview": true, "-lrt-preview": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--preview-width-camera": true, "-preview-width-camera": true, "--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true, "--lrt-preview": true, "-lrt-preview": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
-			fmt.Fprintln(stdout, "Usage: lrtl preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]")
+			fmt.Fprintln(stdout, "Usage: lrtl preview-ev DIRECTORY [--preview-width-camera N] [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]")
 			return code
 		}
 	}
 	if set.NArg() != 1 {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview-ev DIRECTORY [--preview-width-camera N] [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--write] [--no-backup]"))
 	}
 	if *noBackup && !*write {
 		return reportError(stderr, fmt.Errorf("--no-backup requires --write"))
@@ -201,9 +206,10 @@ func runPreviewEV(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	options := imageInputOptions{
-		LRTReference: *lrtReference,
-		LRTPreview:   *lrtPreview,
-		RawPreview:   *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+		PreviewWidthCamera: *previewWidthCamera,
+		LRTReference:       *lrtReference,
+		LRTPreview:         *lrtPreview,
+		RawPreview:         *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic,
 		ApplyXMPCrop: *applyXMPCrop,
 	}

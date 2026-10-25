@@ -3,5 +3,6 @@
   {"sourceWidth":2,"sourceHeight":2,"width":4,"height":4,"pattern":1,"rgb":["111d2b","1d2040","342769","402a7e","162f33","223248","393971","453c86","1f5242","2b5657","435c81","4e5f95","24644a","30675f","476e88","53719d"]},
   {"sourceWidth":4,"sourceHeight":3,"width":2,"height":2,"pattern":2,"rgb":["3e5287","9c6c8d","5bbdb6","b9d75c"]},
   {"sourceWidth":7,"sourceHeight":5,"width":4,"height":3,"pattern":3,"rgb":["4b73aa","9d8a3c","a5a1cd","42b85e","6bea7e","bde06f","2f1821","612f92","8a60b2","c777a3","398e54","81a4c5"]},
-  {"sourceWidth":9,"sourceHeight":7,"width":5,"height":4,"pattern":4,"rgb":["5e94b2","b2ab6e","08c3a4","5c8d99","b0916f","7f1096","cd279e","293f3a","7d56cf","d16e64","a08c45","c2a4a8","49bb70","9ed253","6dea9b","c2697b","16805e","6b38a6","bf4f4f","7b66d1"]}
+  {"sourceWidth":9,"sourceHeight":7,"width":5,"height":4,"pattern":4,"rgb":["5e94b2","b2ab6e","08c3a4","5c8d99","b0916f","7f1096","cd279e","293f3a","7d56cf","d16e64","a08c45","c2a4a8","49bb70","9ed253","6dea9b","c2697b","16805e","6b38a6","bf4f4f","7b66d1"]},
+  {"sourceWidth":7,"sourceHeight":5,"width":6,"height":4,"pattern":5,"rgb":["5b9bcd","92aa42","c9b9a3","6bb66f","36b865","6dc7c6","73949b","aaa369","b9b2a2","5a646e","4e308c","854095","8b4c2f","c15c90","8e6b87","2f7a52","6689b2","9d9829","a2a556","d9b4b7","a6c4ad","47d378","7ee2d9","b5f150"]}
 ]
