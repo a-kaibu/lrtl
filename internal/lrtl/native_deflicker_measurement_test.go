@@ -158,7 +158,7 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 		Subsampling        string
 		DirectEV, StaticEV float64
 	}
-	if err := json.Unmarshal(data, &cases); err != nil || len(cases) != 2 {
+	if err := json.Unmarshal(data, &cases); err != nil || len(cases) != 5 {
 		t.Fatalf("invalid native JPEG subsampling oracle: cases=%d err=%v", len(cases), err)
 	}
 	for _, tc := range cases {
@@ -178,6 +178,12 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 				ratio = image.YCbCrSubsampleRatio422
 			case "4:4:4":
 				ratio = image.YCbCrSubsampleRatio444
+			case "4:4:0":
+				ratio = image.YCbCrSubsampleRatio440
+			case "4:1:1":
+				ratio = image.YCbCrSubsampleRatio411
+			case "4:1:0":
+				ratio = image.YCbCrSubsampleRatio410
 			default:
 				t.Fatalf("unexpected native subsampling %q", tc.Subsampling)
 			}
@@ -211,8 +217,29 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 			if meanDelta > 0.35 || maxDelta > 3 {
 				t.Fatalf("decoded JPEG RGB delta: mean %.3f, max %d; want mean <= 0.35 and max <= 3", meanDelta, maxDelta)
 			}
-			if delta := math.Abs(gotEV - tc.DirectEV); delta > 1e-4 {
-				t.Fatalf("Preview EV %.17g differs from LRT 7.5.5 %.17g (delta %.3g)", gotEV, tc.DirectEV, delta)
+			maxEVDelta := 1e-4
+			if tc.Subsampling == "4:4:0" || tc.Subsampling == "4:1:1" || tc.Subsampling == "4:1:0" {
+				maxEVDelta = 1e-3
+			}
+			if delta := math.Abs(gotEV - tc.DirectEV); delta > maxEVDelta {
+				t.Fatalf("Preview EV %.17g differs from LRT 7.5.5 %.17g (delta %.3g, limit %.3g)", gotEV, tc.DirectEV, delta, maxEVDelta)
+			}
+
+			frame := Frame{Image: filepath.Join("testdata", tc.File)}
+			preview, err := analyzePreviewEVSequence([]Frame{frame}, imageInputOptions{})
+			if err != nil || len(preview) != 1 || math.Abs(preview[0]-tc.DirectEV) > maxEVDelta {
+				t.Fatalf("Preview EV pipeline=%v, LRT 7.5.5=%.17g, limit=%.3g, err=%v", preview, tc.DirectEV, maxEVDelta, err)
+			}
+			packet, err := PacketForFrame(frame)
+			if err != nil {
+				t.Fatal(err)
+			}
+			options := imageInputOptions{NativeDeflicker: nativeDeflickerOptions{Enabled: true}}
+			source := newFrameInputCache(options, false)
+			defer source.close()
+			measurements, err := measureDeflickerPackets([]Frame{frame}, image.Rectangle{}, options, []*XMPPacket{packet}, source, nil)
+			if err != nil || len(measurements) != 1 || math.Abs(measurements[0]-tc.DirectEV) > maxEVDelta {
+				t.Fatalf("Deflicker measurement pipeline=%v, LRT 7.5.5=%.17g, limit=%.3g, err=%v", measurements, tc.DirectEV, maxEVDelta, err)
 			}
 		})
 	}

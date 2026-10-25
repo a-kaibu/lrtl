@@ -15,16 +15,18 @@ no user photographs or vendor executable code are included.
 
 The Go test checks that LRT's cached-frame, static-histogram, and preview
 measurement paths agree; the Go histogram calculation on LRT's decoded raster
-matches the recorded value within `1e-10 EV`. The metering path now upsamples
-subsampled JPEG chroma around centered sample sites before converting to RGB.
-All six source JPEGs use 4:2:0 chroma subsampling. Additional 4:2:2 and 4:4:4
-measurements are recorded in [the subsampling oracle](lrt-native-jpeg-subsampling-7.5.5.md).
+matches the recorded value within `1e-10 EV`. The metering path interpolates
+4:2:0 and 4:2:2 JPEG chroma around centered sample sites before converting to
+RGB. All six source JPEGs use 4:2:0 chroma subsampling. Additional 4:2:2,
+4:4:4, 4:4:0, 4:1:1, and 4:1:0 measurements are recorded in
+[the subsampling oracle](lrt-native-jpeg-subsampling-7.5.5.md).
 Across these six cases, decoded RGB differs from LRT's AWT raster by at most 3
 levels per channel (mean absolute difference below 0.25), and Preview EV differs
 by less than `0.0024 EV`. Both `analyzePreviewEVSequence` and native Deflicker
 measurement are exercised through their production entry points. These are
-synthetic fixtures; other JPEG encoders, the less common 4:4:0/4:1:1/4:1:0
-sampling ratios, color profiles, and LRT versions still need direct comparison.
+synthetic fixtures; other JPEG encoders, color profiles, and LRT versions
+still need direct comparison. The additional nearest-sample ratios have a
+separate `0.001 EV` regression limit documented in the subsampling oracle.
 
 The Java probe can be rerun on a machine with LRTimelapse 7.5.5 and JDK 17 or
 newer:

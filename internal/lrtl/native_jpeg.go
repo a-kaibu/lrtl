@@ -10,12 +10,10 @@ import (
 	"github.com/a-kaibu/lrtl/internal/nativejpeg"
 )
 
-// decodeLRTMeteringImage reproduces the centered 4:2:0 and 4:2:2 chroma
-// upsampling observed in LRTimelapse's AWT JPEG decoder before native Preview
-// EV metering. Go's JPEG decoder exposes subsampled YCbCr and its At method
-// selects the nearest chroma sample; LRT interpolates between centered chroma
-// samples instead. 4:4:4 needs no upsampling. Other sampling ratios use the
-// same model but need separate native measurements.
+// decodeLRTMeteringImage reproduces the chroma reconstruction observed in
+// LRTimelapse's AWT JPEG decoder before native Preview EV metering. For 4:2:0
+// and 4:2:2 LRT interpolates between centered chroma samples; for 4:4:0,
+// 4:1:1, and 4:1:0 it selects the nearest sample, as Go's YCbCr.At does.
 func decodeLRTMeteringImage(data []byte) (image.Image, string, error) {
 	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil || format != "jpeg" {
@@ -36,18 +34,15 @@ func upsampleLRTJPEGChroma(src *image.YCbCr) (image.Image, error) {
 	}
 	horizontal, vertical := 1, 1
 	switch src.SubsampleRatio {
-	case image.YCbCrSubsampleRatio444:
+	case image.YCbCrSubsampleRatio444,
+		image.YCbCrSubsampleRatio440,
+		image.YCbCrSubsampleRatio411,
+		image.YCbCrSubsampleRatio410:
 		return src, nil
 	case image.YCbCrSubsampleRatio422:
 		horizontal = 2
 	case image.YCbCrSubsampleRatio420:
 		horizontal, vertical = 2, 2
-	case image.YCbCrSubsampleRatio440:
-		vertical = 2
-	case image.YCbCrSubsampleRatio411:
-		horizontal = 4
-	case image.YCbCrSubsampleRatio410:
-		horizontal, vertical = 4, 2
 	default:
 		return nil, fmt.Errorf("unsupported JPEG chroma subsampling %v", src.SubsampleRatio)
 	}

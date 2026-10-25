@@ -1,4 +1,7 @@
 [
   {"file":"native-jpeg-subsampling-422.jpg","decodedFile":"native-jpeg-subsampling-422-lrt-decoded.png","subsampling":"4:2:2","directEV":0.49571749748815770,"staticEV":0.49571749748815770},
-  {"file":"native-jpeg-subsampling-444.jpg","decodedFile":"native-jpeg-subsampling-444-lrt-decoded.png","subsampling":"4:4:4","directEV":0.49321491040127800,"staticEV":0.49321491040127800}
+  {"file":"native-jpeg-subsampling-444.jpg","decodedFile":"native-jpeg-subsampling-444-lrt-decoded.png","subsampling":"4:4:4","directEV":0.49321491040127800,"staticEV":0.49321491040127800},
+  {"file":"native-jpeg-subsampling-440.jpg","decodedFile":"native-jpeg-subsampling-440-lrt-decoded.png","subsampling":"4:4:0","directEV":0.49807190186550293,"staticEV":0.49807190186550293},
+  {"file":"native-jpeg-subsampling-411.jpg","decodedFile":"native-jpeg-subsampling-411-lrt-decoded.png","subsampling":"4:1:1","directEV":0.49840236637889020,"staticEV":0.49840236637889020},
+  {"file":"native-jpeg-subsampling-410.jpg","decodedFile":"native-jpeg-subsampling-410-lrt-decoded.png","subsampling":"4:1:0","directEV":0.49852666689564296,"staticEV":0.49852666689564296}
 ]
