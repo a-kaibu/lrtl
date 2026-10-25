@@ -27,10 +27,11 @@ type dngWarpPlaneGeometry struct {
 }
 
 type dngImageOpcode struct {
-	point    *dngPointOpcode
-	warp     *dngWarp
-	vignette *dngVignetteRadial
-	trim     *image.Rectangle
+	point            *dngPointOpcode
+	warp             *dngWarp
+	vignette         *dngVignetteRadial
+	trim             *image.Rectangle
+	badPixelConstant *dngBadPixelConstant
 }
 
 func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarp, error) {
@@ -298,6 +299,20 @@ func applyDNGImageOpcodesWithBounds(opcodes []dngImageOpcode, data []float32, wi
 				}
 			}
 			data, scratch = scratch, data
+			continue
+		}
+		if badPixel := opcodes[i].badPixelConstant; badPixel != nil {
+			if channels != 1 {
+				return nil, image.Rectangle{}, fmt.Errorf("DNG FixBadPixelsConstant requires one image channel")
+			}
+			if scratch == nil || len(scratch) != len(data) {
+				scratch = make([]float32, len(data))
+			}
+			copy(scratch, data)
+			if err := applyDNGBadPixelConstant(scratch, data, width, height, bounds.Min.X, bounds.Min.Y, *badPixel); err != nil {
+				return nil, image.Rectangle{}, err
+			}
+			i++
 			continue
 		}
 		var points []dngPointOpcode

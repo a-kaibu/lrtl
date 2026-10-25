@@ -21,6 +21,11 @@ type dngGainMap struct {
 	values                               []float32
 }
 
+type dngBadPixelConstant struct {
+	value      uint16
+	bayerPhase uint32
+}
+
 type dngPointOpcode struct {
 	dngOpcodeArea
 	id           uint32
@@ -95,11 +100,22 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 			}
 			// Stage 1 uses a different raw-value domain. Only normalized
 			// post-linearization and post-demosaic operations are supported.
-			if (id != 1 && id != 2 && id != 3 && id != 6 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 {
+			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 6 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 {
 				if flags&1 != 0 {
 					continue
 				}
 				return nil, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
+			}
+			if id == 4 {
+				if channels != 1 {
+					return nil, fmt.Errorf("Linear DNG FixBadPixelsConstant requires a single-channel Bayer image")
+				}
+				badPixel, err := parseDNGBadPixelConstant(payload)
+				if err != nil {
+					return nil, fmt.Errorf("Linear DNG FixBadPixelsConstant in tag %d: %w", tag, err)
+				}
+				opcodes = append(opcodes, dngImageOpcode{badPixelConstant: &badPixel})
+				continue
 			}
 			if id == 1 || id == 2 || id == 14 {
 				var warp *dngWarp
@@ -167,6 +183,18 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 		}
 	}
 	return opcodes, nil
+}
+
+func parseDNGBadPixelConstant(data []byte) (dngBadPixelConstant, error) {
+	if len(data) != 8 {
+		return dngBadPixelConstant{}, fmt.Errorf("invalid parameter size")
+	}
+	phase := binary.BigEndian.Uint32(data[4:])
+	if phase > 3 {
+		return dngBadPixelConstant{}, fmt.Errorf("invalid Bayer phase %d", phase)
+	}
+	// DNG SDK behavior truncates Constant to its 16-bit image sample type.
+	return dngBadPixelConstant{value: uint16(binary.BigEndian.Uint32(data)), bayerPhase: phase}, nil
 }
 
 func parseDNGTrimBounds(data []byte) (image.Rectangle, error) {
@@ -400,4 +428,51 @@ func applyDNGPointOpcodesAt(opcodes []dngPointOpcode, camera *[3]float64, x, y, 
 			camera[plane] = min(1, max(0, value))
 		}
 	}
+}
+
+func applyDNGBadPixelConstant(source, destination []float32, width, height int, originX, originY int, opcode dngBadPixelConstant) error {
+	if width < 1 || height < 1 || uint64(width)*uint64(height) != uint64(len(source)) || len(destination) != len(source) || opcode.bayerPhase > 3 {
+		return fmt.Errorf("invalid FixBadPixelsConstant image or opcode")
+	}
+	copy(destination, source)
+	readSample := func(index int) uint16 {
+		value := min(1, max(0, float64(source[index])))
+		return uint16(math.Round(value * 65535))
+	}
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			index := y*width + x
+			if readSample(index) != opcode.value {
+				continue
+			}
+			// The DNG SDK's BayerPhase convention differs from the published
+			// table: its IsGreen() predicate is (row+column+phase+(phase>>1))&1 == 0.
+			// Match the SDK because Adobe confirms this is the implemented convention.
+			imageX, imageY := x+originX, y+originY
+			isGreen := (imageX+imageY+int(opcode.bayerPhase)+int(opcode.bayerPhase>>1))&1 == 0
+			offsets := [4][2]int{{-2, 0}, {2, 0}, {0, -2}, {0, 2}}
+			if isGreen {
+				offsets = [4][2]int{{-1, -1}, {1, -1}, {-1, 1}, {1, 1}}
+			}
+			var total uint32
+			count := uint32(0)
+			for _, offset := range offsets {
+				sx, sy := x+offset[0], y+offset[1]
+				if sx < 0 || sy < 0 || sx >= width || sy >= height {
+					continue
+				}
+				value := readSample(sy*width + sx)
+				if value == opcode.value {
+					continue
+				}
+				total += uint32(value)
+				count++
+			}
+			if count != 0 {
+				repaired := (total + (count >> 1)) / count
+				destination[index] = float32(repaired) / 65535
+			}
+		}
+	}
+	return nil
 }

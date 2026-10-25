@@ -264,6 +264,13 @@ func FuzzLinearDNG(f *testing.F) {
 	f.Add(mixedDNGPointFixture(binary.BigEndian, 2, 2))
 	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		f.Add(linearDNGFixture(order, 2, 2, 1, []uint16{1024, 2048, 4096, 8192}, map[uint16]dngTestField{51022: testDNGOpcodeList(testDNGGainMap(testDNGGainMapPayload(2, 2, 2, 2, 1, 1, 2, 3, 4)))}))
+		f.Add(linearDNGFixture(order, 5, 5, 1, []uint16{
+			10000, 10000, 10000, 10000, 10000,
+			10000, 1000, 10000, 2000, 10000,
+			10000, 10000, 65535, 10000, 10000,
+			10000, 3000, 10000, 4000, 10000,
+			10000, 10000, 10000, 10000, 10000,
+		}, map[uint16]dngTestField{50717: dngTestLong(order, 65535), 51009: testDNGOpcodeList(testDNGBadPixelConstant(65535, 0))}))
 	}
 	f.Add(blackPatternDNGFixture(f, binary.LittleEndian))
 	f.Add(blackPatternDNGFixture(f, binary.BigEndian))

@@ -406,7 +406,7 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 	var pointOpcodes []dngPointOpcode
 	needsOpcodeBuffer := false
 	for _, opcode := range imageOpcodes {
-		if (opcode.warp != nil && !opcode.warp.identity()) || (opcode.vignette != nil && !opcode.vignette.identity()) || opcode.trim != nil {
+		if (opcode.warp != nil && !opcode.warp.identity()) || (opcode.vignette != nil && !opcode.vignette.identity()) || opcode.trim != nil || opcode.badPixelConstant != nil {
 			needsOpcodeBuffer = true
 		}
 		if opcode.point != nil {
