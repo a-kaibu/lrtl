@@ -197,7 +197,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [DEFLICKER_OPTIONS...] [--lrt-deflicker-settings] [--lrt-preferences FILE] [--write]")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--lrt-holy-grail-settings] [--write] compensate camera exposure changes")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
@@ -1718,6 +1718,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	luminanceDeviation := set.Bool("luminance-deviation", false, "use lrtl's luminance-deviation frame selection instead of LRT spacing")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 from sidecar XMP in luminance analysis")
@@ -1728,6 +1729,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--count": true, "-count": true, "--smooth": true, "-smooth": true,
 		"--rating": true, "-rating": true,
+		"--lrt-preview": true, "-lrt-preview": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1761,13 +1763,13 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, fmt.Errorf("smoothing radius must be between 0 and 1000 frames: %d", *smoothRadius))
 	}
 	inputOptions := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+		LRTPreview: *lrtPreview, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	if err := validateImageInputOptions(inputOptions); err != nil {
 		return reportError(stderr, err)
 	}
-	if *evenlySpaced && (*rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "" || *applyXMPExposure || *applyXMPBasic || *applyXMPCrop) {
+	if *evenlySpaced && (*lrtPreview != "" || *rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "" || *applyXMPExposure || *applyXMPBasic || *applyXMPCrop) {
 		return reportError(stderr, fmt.Errorf("image processing options cannot be combined with --evenly-spaced because that mode does not decode images"))
 	}
 	frameCount := len(frames)
@@ -1819,7 +1821,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	useLRTMeasurements := hasLRTMeasurements && !*applyXMPExposure && !*applyXMPBasic && !*applyXMPCrop && !*rawPreview && !*rawDevelop && strings.TrimSpace(*dnglab) == ""
+	useLRTMeasurements := hasLRTMeasurements && !*applyXMPExposure && !*applyXMPBasic && !*applyXMPCrop && *lrtPreview == "" && !*rawPreview && !*rawDevelop && strings.TrimSpace(*dnglab) == ""
 	var curve []float64
 	if !*evenlySpaced && (*luminanceDeviation || (!countSpecified && !useLRTMeasurements)) {
 		curve, err = analyzeLuminanceSequenceWithInputOptions(frames, inputOptions)

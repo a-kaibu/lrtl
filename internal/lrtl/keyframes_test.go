@@ -2,9 +2,13 @@ package lrtl
 
 import (
 	"bytes"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"math"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -62,6 +66,72 @@ func TestAnalyzeLuminanceSequenceRejectsRAW(t *testing.T) {
 	}
 	if _, err := analyzeLuminanceSequence(frames); err == nil || !strings.Contains(err.Error(), "requires --raw-preview or --raw-develop") {
 		t.Fatalf("expected unsupported RAW error, got %v", err)
+	}
+}
+
+func TestKeyframesUsesSelectedLRTPreviewInsteadOfSavedPreviewEV(t *testing.T) {
+	root := t.TempDir()
+	const frameCount = 151
+	for index := 0; index < frameCount; index++ {
+		level := uint8(5 + index*240/(frameCount-1))
+		path := filepath.Join(root, "frame"+strconvTwo(index+1)+".NEF")
+		if err := os.WriteFile(path, []byte("not a decodable RAW; use the selected LRT preview"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		writeTestXMP(t, path, map[string]string{"lrt:ExternalExposureDefault": "0"})
+		preview := image.NewGray(image.Rect(0, 0, 32, 16))
+		for y := 0; y < preview.Bounds().Dy(); y++ {
+			for x := 0; x < preview.Bounds().Dx(); x++ {
+				preview.SetGray(x, y, color.Gray{Y: level})
+			}
+		}
+		var encoded bytes.Buffer
+		if err := jpeg.Encode(&encoded, preview, &jpeg.Options{Quality: 100}); err != nil {
+			t.Fatal(err)
+		}
+		cache := lrtPreviewPath(path, "visual")
+		if err := os.MkdirAll(filepath.Dir(cache), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cache, encoded.Bytes(), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := batchFileSnapshot(t, root)
+	var out, stderr bytes.Buffer
+	if code := Main([]string{"keyframes", root}, &out, &stderr); code != 0 {
+		t.Fatalf("XMP-only estimate exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(out.String(), "source: LRT XMP (lrt:ExternalExposureDefault / 4)): 1 total") {
+		t.Fatalf("expected the saved uniform Preview EV estimate, got: %s", out.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Main([]string{"keyframes", root, "--lrt-preview", "visual"}, &out, &stderr); code != 0 {
+		t.Fatalf("LRT-preview estimate exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(out.String(), "source: image luminance): 3 total") {
+		t.Fatalf("selected LRT cache did not replace saved Preview EV measurements: %s", out.String())
+	}
+	if !reflect.DeepEqual(before, batchFileSnapshot(t, root)) {
+		t.Fatal("keyframe preview modified XMP or LRT preview caches")
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Main([]string{"keyframes", root, "--evenly-spaced", "--lrt-preview", "visual"}, &out, &stderr); code == 0 {
+		t.Fatal("evenly-spaced mode accepted an image input option it does not use")
+	}
+	if err := os.Remove(lrtPreviewPath(filepath.Join(root, "frame01.NEF"), "visual")); err != nil {
+		t.Fatal(err)
+	}
+	beforeMissingCache := batchFileSnapshot(t, root)
+	out.Reset()
+	stderr.Reset()
+	if code := Main([]string{"keyframes", root, "--lrt-preview", "visual"}, &out, &stderr); code == 0 {
+		t.Fatal("missing explicitly selected LRT cache fell back to saved Preview EV")
+	}
+	if !reflect.DeepEqual(beforeMissingCache, batchFileSnapshot(t, root)) {
+		t.Fatal("missing LRT preview cache changed source files")
 	}
 }
 
