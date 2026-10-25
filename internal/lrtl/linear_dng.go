@@ -287,7 +287,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 	if err != nil {
 		return nil, err
 	}
-	hasProfile := profileTone != nil || profileMaps.first != nil || profileMaps.look != nil
+	hasProfile := profileTone != nil || profileMaps.first != nil || profileMaps.look != nil || profileMaps.gainTable != nil
 	profileWeight := 0.0
 	transform := dngIdentityMatrix
 	finalTransform := dngIdentityMatrix
@@ -433,6 +433,14 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 				}
 				for channel := range rgb {
 					rgb[channel] = min(1, max(0, rgb[channel]*gain))
+				}
+				if profileMaps.gainTable != nil {
+					imageX := outputCrop.Min.X + outputX - activeArea.Min.X
+					imageY := outputCrop.Min.Y + outputY - activeArea.Min.Y
+					rgb, err = profileMaps.gainTable.apply(rgb, imageX, imageY, activeArea.Dx(), activeArea.Dy())
+					if err != nil {
+						return nil, fmt.Errorf("apply DNG ProfileGainTableMap: %w", err)
+					}
 				}
 				if profileMaps.look != nil {
 					rgb = profileMaps.look.apply(rgb)

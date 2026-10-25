@@ -13,6 +13,7 @@ type dngProfileMap struct {
 
 type dngProfileMaps struct {
 	first, second, look *dngProfileMap
+	gainTable           *dngProfileGainTableMap
 }
 
 func readDNGProfileMap(fields *dngFields, dimsTag, dataTag, encodingTag uint16) (*dngProfileMap, error) {
@@ -105,6 +106,10 @@ func readDNGProfileMaps(fields *dngFields) (dngProfileMaps, error) {
 		return maps, fmt.Errorf("DNG profile has second hue/saturation table without first")
 	}
 	maps.look, err = readDNGProfileMap(fields, 50981, 50982, 51108)
+	if err != nil {
+		return maps, err
+	}
+	maps.gainTable, err = readDNGProfileGainTableMap(fields)
 	return maps, err
 }
 
