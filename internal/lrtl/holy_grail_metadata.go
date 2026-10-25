@@ -66,17 +66,17 @@ func readHolyGrailLRTCameraExposure(frame Frame, ignoreAperture bool) (CameraExp
 	if err != nil {
 		return CameraExposure{}, err
 	}
-	timeText, hasTime, err := packet.GetScalar("lrt:ShutterSpeed")
+	timeText, hasTime, err := packet.GetRootScalar("lrt:ShutterSpeed")
 	if err != nil {
 		return CameraExposure{}, err
 	}
-	isoText, hasISO, err := packet.GetScalar("lrt:Iso")
+	isoText, hasISO, err := packet.GetRootScalar("lrt:Iso")
 	if err != nil {
 		return CameraExposure{}, err
 	}
 	apertureText, hasAperture := "", false
 	if !ignoreAperture {
-		apertureText, hasAperture, err = packet.GetScalar("lrt:Aperture")
+		apertureText, hasAperture, err = packet.GetRootScalar("lrt:Aperture")
 		if err != nil {
 			return CameraExposure{}, err
 		}

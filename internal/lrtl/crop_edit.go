@@ -111,7 +111,7 @@ func readCropMetadata(packet *XMPPacket) (cropMetadata, error) {
 		name string
 		dest *float64
 	}{{"CropLeft", &crop.Left}, {"CropTop", &crop.Top}, {"CropRight", &crop.Right}, {"CropBottom", &crop.Bottom}, {"CropAngle", &crop.Angle}} {
-		text, found, err := packet.GetScalar("crs:" + field.name)
+		text, found, err := packet.GetRootScalar("crs:" + field.name)
 		if err != nil {
 			return crop, err
 		}
@@ -131,7 +131,7 @@ func readCropMetadata(packet *XMPPacket) (cropMetadata, error) {
 	if crop.Left >= crop.Right || crop.Top >= crop.Bottom {
 		return crop, fmt.Errorf("XMP crop rectangle is empty or inverted")
 	}
-	text, found, err := packet.GetScalar("crs:HasCrop")
+	text, found, err := packet.GetRootScalar("crs:HasCrop")
 	if err != nil {
 		return crop, err
 	}

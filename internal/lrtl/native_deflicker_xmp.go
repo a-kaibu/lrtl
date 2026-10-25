@@ -6,11 +6,11 @@ import (
 )
 
 func readDeflickerTracking(packet *XMPPacket) (float64, xmpExposureTarget, error) {
-	text, found, err := packet.GetScalar(deflickerCorrectionProperty)
+	text, found, err := packet.GetRootScalar(deflickerCorrectionProperty)
 	if err != nil {
 		return 0, xmpExposureTarget{}, err
 	}
-	targetText, hasTarget, err := packet.GetScalar(deflickerTargetProperty)
+	targetText, hasTarget, err := packet.GetRootScalar(deflickerTargetProperty)
 	if err != nil {
 		return 0, xmpExposureTarget{}, err
 	}

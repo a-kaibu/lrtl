@@ -137,7 +137,7 @@ func buildDeflickerCorrectionChanges(frames []Frame, luminances, corrections []f
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
-		previousText, hasPrevious, err := packet.GetScalar(deflickerCorrectionProperty)
+		previousText, hasPrevious, err := packet.GetRootScalar(deflickerCorrectionProperty)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
@@ -149,7 +149,7 @@ func buildDeflickerCorrectionChanges(frames []Frame, luminances, corrections []f
 				return nil, fmt.Errorf("%s: %s is not numeric", frame.OutputSidecar(), deflickerCorrectionProperty)
 			}
 		}
-		previousTargetText, hasTarget, err := packet.GetScalar(deflickerTargetProperty)
+		previousTargetText, hasTarget, err := packet.GetRootScalar(deflickerTargetProperty)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}

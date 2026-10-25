@@ -461,7 +461,7 @@ func runScan(directory string, stdout, stderr io.Writer) int {
 				}
 			}
 			for _, name := range NumericCRSProperties {
-				if _, found, _ := packet.GetScalar("crs:" + name); found {
+				if _, found, _ := packet.GetRootScalar("crs:" + name); found {
 					controls++
 				}
 			}

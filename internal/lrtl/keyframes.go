@@ -263,7 +263,7 @@ func readLRTKeyframeMeasurements(frames []Frame, packets []*XMPPacket) ([]float6
 		if packet == nil {
 			return nil, false, nil
 		}
-		text, found, err := packet.GetScalar("lrt:ExternalExposureDefault")
+		text, found, err := packet.GetRootScalar("lrt:ExternalExposureDefault")
 		if err != nil {
 			return nil, false, fmt.Errorf("%s: %w", frames[index].OutputSidecar(), err)
 		}

@@ -92,7 +92,7 @@ func readCameraExposure(frame Frame, ignoreAperture bool) (CameraExposure, error
 		if err != nil {
 			return CameraExposure{}, fmt.Errorf("read XMP aperture: %w", err)
 		}
-		apertureText, found, err := packet.GetScalar("lrt:Aperture")
+		apertureText, found, err := packet.GetRootScalar("lrt:Aperture")
 		if err != nil {
 			return CameraExposure{}, fmt.Errorf("read lrt:Aperture: %w", err)
 		}
@@ -283,7 +283,7 @@ func readHolyGrailLRTInputs(frames []Frame, preview string, reference bool) ([]f
 			return nil, nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
 		if preview == "" {
-			text, found, err := packet.GetScalar("lrt:ExternalExposureDefault")
+			text, found, err := packet.GetRootScalar("lrt:ExternalExposureDefault")
 			if err != nil {
 				return nil, nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 			}
@@ -686,7 +686,7 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
-		previousText, hadPrevious, err := packet.GetScalar(holyGrailCorrectionProperty)
+		previousText, hadPrevious, err := packet.GetRootScalar(holyGrailCorrectionProperty)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
@@ -697,7 +697,7 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 				return nil, fmt.Errorf("%s: %s is not numeric", frame.OutputSidecar(), holyGrailCorrectionProperty)
 			}
 		}
-		previousTargetText, hadPreviousTarget, err := packet.GetScalar(holyGrailTargetProperty)
+		previousTargetText, hadPreviousTarget, err := packet.GetRootScalar(holyGrailTargetProperty)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
@@ -830,7 +830,7 @@ func readXMPExposure(frame Frame) (float64, error) {
 }
 
 func readXMPExposurePacket(packet *XMPPacket) (float64, error) {
-	value, found, err := packet.GetScalar("crs:Exposure2012")
+	value, found, err := packet.GetRootScalar("crs:Exposure2012")
 	if err != nil {
 		return 0, err
 	}

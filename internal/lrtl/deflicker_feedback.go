@@ -229,7 +229,7 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 					feedback[i] = math.Exp2(exposure - initialTracked[i])
 					continue
 				}
-				text, found, err := packet.GetScalar(deflickerCorrectionProperty)
+				text, found, err := packet.GetRootScalar(deflickerCorrectionProperty)
 				if err != nil {
 					return nil, err
 				}
@@ -240,7 +240,7 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 				if !valid {
 					return nil, fmt.Errorf("invalid deflicker tracking")
 				}
-				targetText, found, err := packet.GetScalar(deflickerTargetProperty)
+				targetText, found, err := packet.GetRootScalar(deflickerTargetProperty)
 				if err != nil {
 					return nil, err
 				}

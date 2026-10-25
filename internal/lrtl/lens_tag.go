@@ -54,7 +54,7 @@ func buildLensTagPlan(frames []Frame, aperture string) ([]lensTagChange, error) 
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
-		previous, found, err := packet.GetScalar("lrt:Aperture")
+		previous, found, err := packet.GetRootScalar("lrt:Aperture")
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}

@@ -106,7 +106,7 @@ func readEmbeddedJPEGXMPFromReader(reader io.Reader) ([]byte, bool, error) {
 			// The native extractor keeps the first link it encounters, even if
 			// a later standard packet replaces that property in the final XML.
 			if !linked {
-				extensionGUID, linked, err = packet.GetScalar("xmpNote:HasExtendedXMP")
+				extensionGUID, linked, err = packet.GetRootScalar("xmpNote:HasExtendedXMP")
 				if err != nil {
 					return nil, false, fmt.Errorf("read extended JPEG XMP link: %w", err)
 				}

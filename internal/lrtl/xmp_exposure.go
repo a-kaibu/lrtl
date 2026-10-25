@@ -111,7 +111,7 @@ func xmpExposureTargetElement(packet *XMPPacket, target xmpExposureTarget) (*etr
 
 func getXMPExposureTargetValue(packet *XMPPacket, target xmpExposureTarget) (float64, bool, error) {
 	if target.Collection == "" {
-		text, found, err := packet.GetScalar("crs:Exposure2012")
+		text, found, err := packet.GetRootScalar("crs:Exposure2012")
 		if err != nil || !found {
 			return 0, found, err
 		}
@@ -145,11 +145,11 @@ func readDeflickerRenderCorrection(packet *XMPPacket) (float64, *etree.Element, 
 }
 
 func readManagedExposureRenderCorrection(packet *XMPPacket, correctionProperty, targetProperty string) (float64, *etree.Element, error) {
-	correctionText, hasCorrection, err := packet.GetScalar(correctionProperty)
+	correctionText, hasCorrection, err := packet.GetRootScalar(correctionProperty)
 	if err != nil {
 		return 0, nil, err
 	}
-	targetText, hasTarget, err := packet.GetScalar(targetProperty)
+	targetText, hasTarget, err := packet.GetRootScalar(targetProperty)
 	if err != nil {
 		return 0, nil, err
 	}

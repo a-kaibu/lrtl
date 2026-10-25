@@ -6,7 +6,7 @@ import (
 )
 
 func readXMPGrayscale(packet *XMPPacket, adjustments *xmpBasicAdjustments) error {
-	value, found, err := packet.GetScalar("crs:ConvertToGrayscale")
+	value, found, err := packet.GetRootScalar("crs:ConvertToGrayscale")
 	if err != nil {
 		return err
 	}

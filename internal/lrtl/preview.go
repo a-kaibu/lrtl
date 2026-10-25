@@ -61,7 +61,7 @@ func writeSequencePreviewWithOptions(frames []Frame, output string, options imag
 		if err != nil {
 			return fmt.Errorf("read preview metadata for %s: %w", frame.Image, err)
 		}
-		if value, found, err := packet.GetScalar("crs:Exposure2012"); err != nil {
+		if value, found, err := packet.GetRootScalar("crs:Exposure2012"); err != nil {
 			return fmt.Errorf("read Exposure2012 for %s: %w", frame.Image, err)
 		} else if found {
 			number, valid := scalarNumber(value)
