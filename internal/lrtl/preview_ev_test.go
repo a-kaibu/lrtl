@@ -115,6 +115,40 @@ func TestPreviewEVSequenceDecodesRasterFormats(t *testing.T) {
 	}
 }
 
+func TestPreviewEVSequenceUsesLRTDefaultFullFrameROI(t *testing.T) {
+	// Pattern 6 is a native LRT 7.5.5 oracle case with the full-frame box.
+	// Its varied pixels make a center-only or cropped measurement differ.
+	img := image.NewNRGBA(image.Rect(0, 0, 14, 8))
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			img.SetNRGBA(x, y, color.NRGBA{
+				R: uint8((x*37 + y*11 + 6*17) & 255),
+				G: uint8((x*13 + y*41 + 6*29) & 255),
+				B: uint8((x*23 + y*7 + 6*43) & 255),
+				A: 255,
+			})
+		}
+	}
+	const want = 0.4747591652461889 // native case 6 in lrt-preview-ev-roi-7.5.5.json
+	center, err := framePreviewEVArea(img, image.Rect(3, 2, 11, 6))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(center-want) < 1e-6 {
+		t.Fatalf("oracle image does not distinguish full-frame and center ROI: center=%0.17g", center)
+	}
+
+	path := filepath.Join(t.TempDir(), "frame.png")
+	writePreviewEVFixture(t, path, img)
+	values, err := analyzePreviewEVSequence([]Frame{{Image: path}}, imageInputOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(values) != 1 || math.Abs(values[0]-want) > 1e-14 {
+		t.Fatalf("default Preview EV=%v, want native full-frame value %.17g", values, want)
+	}
+}
+
 func TestPreviewEVCLIWritePreservesMetadataAndBacksUp(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "frame01.png")
