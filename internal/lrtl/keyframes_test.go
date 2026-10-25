@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -302,5 +303,47 @@ func TestLRTWizardCountAndHolyGrailStepCompensation(t *testing.T) {
 		if count := estimateAutoKeyframeCount(curve, markers); count != test.compensated {
 			t.Fatalf("frames=%d compensated quantity=%d want %d", test.frames, count, test.compensated)
 		}
+	}
+}
+
+func TestAutomaticKeyframeCountMatchesLRT755Oracle(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "lrt-keyframe-quantity-7.5.5.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Source string `json:"source"`
+		Cases  []struct {
+			Name             string    `json:"name"`
+			Measurements     []float64 `json:"measurements"`
+			HolyGrailRatings []int     `json:"holyGrailRatings"`
+			LRTCount         int       `json:"lrtCount"`
+		} `json:"cases"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.Source != "LRTimelapse 7.5.5 build 1059 installed runtime" {
+		t.Fatalf("unexpected oracle source %q", fixture.Source)
+	}
+	if len(fixture.Cases) != 8 {
+		t.Fatalf("LRT oracle fixture has %d cases, want 8", len(fixture.Cases))
+	}
+	for _, test := range fixture.Cases {
+		t.Run(test.Name, func(t *testing.T) {
+			if len(test.Measurements) == 0 || len(test.HolyGrailRatings) != len(test.Measurements) {
+				t.Fatalf("invalid oracle input dimensions: measurements=%d ratings=%d", len(test.Measurements), len(test.HolyGrailRatings))
+			}
+			markers := make([]bool, len(test.HolyGrailRatings))
+			for index, rating := range test.HolyGrailRatings {
+				if rating != 0 && rating != 2 && rating != 3 {
+					t.Fatalf("unexpected Holy Grail rating at frame %d: %d", index+1, rating)
+				}
+				markers[index] = rating == 2 || rating == 3
+			}
+			if got := estimateAutoKeyframeCount(test.Measurements, markers); got != test.LRTCount {
+				t.Fatalf("automatic keyframe count=%d, installed LRT 7.5.5 returned %d", got, test.LRTCount)
+			}
+		})
 	}
 }
