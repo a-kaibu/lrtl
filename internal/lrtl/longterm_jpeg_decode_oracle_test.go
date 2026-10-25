@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"image"
+	"image/png"
 	"math"
 	"os"
 	"path/filepath"
@@ -91,4 +92,75 @@ func TestLRTLongTermNativeJPEGDecodedMetrics(t *testing.T) {
 		standardDecodeFailures,
 		maxStandardDelta[0], maxStandardDelta[1], maxStandardDelta[2],
 		maxMeteringDelta[0], maxMeteringDelta[1], maxMeteringDelta[2])
+}
+
+func TestLRTLongTermAutomaticallyUsesCameraPreviewCache(t *testing.T) {
+	var fixture struct {
+		Cases []longTermJPEGDecodeCase `json:"cases"`
+	}
+	if err := json.Unmarshal(denoiseRead(t, "testdata/lrt-longterm-jpeg-7.5.5.json"), &fixture); err != nil || len(fixture.Cases) < 5 {
+		t.Fatalf("load native JPEG cases: %v", err)
+	}
+	inputDir := t.TempDir()
+	inputPath := filepath.Join(inputDir, "frame.png")
+	source := longTermMetricSource(64, 64, 0, false)
+	file, err := os.Create(inputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(file, source); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	cacheData := make([][]byte, 2)
+	cacheMetrics := make([]lrtLongTermMetrics, 2)
+	for index, caseIndex := range []int{0, 4} {
+		row := fixture.Cases[caseIndex]
+		cacheData[index] = denoiseRead(t, "../nativejpeg/testdata/"+row.File)
+		decoded, _, err := decodeLRTLongTermImage(cacheData[index])
+		if err != nil {
+			t.Fatal(err)
+		}
+		cacheMetrics[index] = measureLRTLongTermFrame(decoded)
+	}
+	if math.Abs(cacheMetrics[0].LuminanceMean-cacheMetrics[1].LuminanceMean) < 1e-5 {
+		t.Fatal("camera and visual cache fixtures do not distinguish their luminance")
+	}
+
+	for index, kind := range []string{"camera", "visual"} {
+		cachePath := lrtPreviewPath(inputPath, kind)
+		if err := os.MkdirAll(filepath.Dir(cachePath), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cachePath, cacheData[index], 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	measure := func(name string, args []string, want lrtLongTermMetrics) {
+		t.Helper()
+		output := filepath.Join(t.TempDir(), "selection.json")
+		command := []string{"long-term", inputDir, "--metric-profile", "lrt-7.5.5", "--output", output}
+		command = append(command, args...)
+		markerCommand(t, command...)
+		var manifest sequenceSelectionManifest
+		if err := json.Unmarshal(denoiseRead(t, output), &manifest); err != nil || len(manifest.Frames) != 1 {
+			t.Fatalf("%s: invalid manifest: %v", name, err)
+		}
+		got := manifest.Frames[0].LRTMetrics
+		if manifest.MetricRevision != "lrt-7.5.5-camera-cache-preview-histogram-v3" || got == nil || math.Abs(got.LuminanceMean-want.LuminanceMean) > 1e-12 || math.Abs(got.ContrastStdDev-want.ContrastStdDev) > 1e-12 || got.HueMeanDegrees == nil || want.HueMeanDegrees == nil || math.Abs(*got.HueMeanDegrees-*want.HueMeanDegrees) > 1e-12 {
+			t.Fatalf("%s: metrics=%+v want %+v revision=%q", name, got, want, manifest.MetricRevision)
+		}
+	}
+
+	measure("automatic camera cache", nil, cacheMetrics[0])
+	measure("explicit visual cache", []string{"--lrt-preview", "visual"}, cacheMetrics[1])
+	if err := os.WriteFile(lrtPreviewPath(inputPath, "camera"), []byte("broken cache"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	measure("source fallback for corrupt automatic cache", nil, measureLRTLongTermFrame(source))
 }

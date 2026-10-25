@@ -92,7 +92,7 @@ func TestLongTermNativeCLISelection(t *testing.T) {
 			if err := json.Unmarshal(denoiseRead(t, output), &manifest); err != nil {
 				t.Fatal(err)
 			}
-			if manifest.MetricRevision != "lrt-7.5.5-preview-histogram-v2" || len(manifest.Frames) != len(rows) {
+			if manifest.MetricRevision != "lrt-7.5.5-camera-cache-preview-histogram-v3" || len(manifest.Frames) != len(rows) {
 				t.Fatal("missing metric revision or frames", manifest)
 			}
 			included := 0
@@ -205,7 +205,7 @@ func TestLRTLongTermPreviewMetricsMatchNative(t *testing.T) {
 			if err := json.Unmarshal(denoiseRead(t, output), &manifest); err != nil {
 				t.Fatal(err)
 			}
-			if manifest.MetricRevision != "lrt-7.5.5-preview-histogram-v2" || len(manifest.Frames) != 1 {
+			if manifest.MetricRevision != "lrt-7.5.5-camera-cache-preview-histogram-v3" || len(manifest.Frames) != 1 {
 				t.Fatalf("unexpected native preview manifest: revision=%q frames=%d", manifest.MetricRevision, len(manifest.Frames))
 			}
 			got := manifest.Frames[0].LRTMetrics

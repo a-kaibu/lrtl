@@ -27,12 +27,23 @@ The caller's luminance division and contrast multiplier were checked in its
 bytecode; the oracle applies those scale factors to native helper results.
 It does not run the entire GUI workflow, preview creation or temporal filters.
 
-## Camera preview width before frame analysis
+## Frame image source and camera preview width
 
-The frame worker passes `LRTSettings.previewWidthCamera` and a height of
-`int(width / 1.5f)` into its image preparation path. The worker's bytecode then
-bilinearly resizes any resulting image wider than that setting before it
-invokes the native metric helper. The default setting is 1024 pixels.
+The native long-term frame method calls the same image preparation path used
+by its frame worker. That path first checks the per-image camera cache returned
+by `LRTimelapseMain.h(File)` (the `.lrt/previews/<stem>.lrtpreview` location).
+If a nonempty cache decodes, it becomes the metric input; if not, the worker
+falls through to source image preparation. The bytecode does not compare the
+cache timestamp here. lrtl now prefers a readable camera cache automatically
+for the `lrt-7.5.5` profile. A missing or unreadable cache falls through to
+the explicitly selected source input. `--raw-preview` and `--raw-develop`
+override this automatic cache selection, while `--lrt-preview visual` selects
+the visual cache explicitly.
+
+The image preparation call receives `LRTSettings.previewWidthCamera` and a
+height of `int(width / 1.5f)`. The frame worker bilinearly resizes any resulting
+image wider than that setting before invoking the native metric helper. The
+default setting is 1024 pixels.
 
 `lrt-longterm-preview-metrics-7.5.5.json` records five post-resize metric
 cases collected with the installed image resizer and metric helper. They cover
@@ -43,11 +54,12 @@ The fixture SHA-256 is
 `LongTermPreviewMetricOracle.java` recreates these synthetic rasters. The Go
 CLI regression tests verify its decoded PNG path, default and custom widths,
 and all three metrics. Together with the separate resize-pixel oracle, this
-checks the operation order without running the GUI sequence workflow. Camera
-RAW decoding, preview creation, and color management can still change source
-pixels before this scaling stage. lrtl uses 1024 by default and does not load
-the installed LRT settings file; pass the configured value explicitly when
-it differs.
+checks the operation order without running the GUI sequence workflow. A
+separate integration test distinguishes camera and visual cache inputs and
+checks cache-decode fallback. Camera RAW decoding, preview creation, cache
+freshness, and color management can still change source pixels before this
+scaling stage. lrtl uses 1024 by default and does not load the installed LRT
+settings file; pass the configured value explicitly when it differs.
 
 The histogram integer division is observable even for tiny inputs. A single
 black pixel has no mass after smoothing and receives luminance 255/256. A
@@ -128,7 +140,7 @@ the current fixture covers RGB JPEGs only.
 ## Manifest compatibility
 
 New native-profile manifests include
-`"metric_revision": "lrt-7.5.5-preview-histogram-v2"`. Existing version-one/two
+`"metric_revision": "lrt-7.5.5-camera-cache-preview-histogram-v3"`. Existing version-one/two
 selection manifests remain readable, and their saved inclusion flags are
 not recalculated when rendered. The historical JSON field
 `contrast_stddev_0_to_1` remains for compatibility; this revision stores
@@ -196,4 +208,13 @@ byte-for-byte (SHA-256
 full suite passed again (`internal/lrtl` 577.199 seconds and
 `internal/nativejpeg` 3.170 seconds); the preview-width, native metric, and
 encoded JPEG tests also passed with the race detector. `go vet ./...` and
+`go build ./...` passed.
+
+The frame-source review on 2026-10-26 found that the native worker checks the
+camera preview cache before preparing a source image. The Go integration test
+now distinguishes an automatic camera cache, an explicit visual cache, and a
+corrupt-cache source fallback. Long-term-related tests passed in 5.126 seconds;
+the cache, preview-width, native metric, and JPEG tests passed with the race
+detector in 12.127 seconds. The full suite passed (`internal/lrtl` 577.517
+seconds and `internal/nativejpeg` 3.291 seconds), and `go vet ./...` plus
 `go build ./...` passed.

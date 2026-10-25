@@ -100,12 +100,12 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 		Frames:        make([]longTermFrameMetrics, len(frames)),
 	}
 	if profile == longTermMetricProfileLRT755 {
-		manifest.MetricRevision = "lrt-7.5.5-preview-histogram-v2"
+		manifest.MetricRevision = "lrt-7.5.5-camera-cache-preview-histogram-v3"
 	}
 	width, height := 0, 0
 	var adjustments sequenceXMPAdjustments
 	for index, frame := range frames {
-		data, config, _, err := readRenderInputWithOptions(frame, options)
+		data, config, _, err := readLongTermInputWithOptions(frame, options, profile)
 		if err != nil {
 			return nil, fmt.Errorf("long-term analysis: %w", err)
 		}
@@ -165,6 +165,25 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 		manifest.Frames[index] = metrics
 	}
 	return manifest, nil
+}
+
+func readLongTermInputWithOptions(frame Frame, options imageInputOptions, profile longTermMetricProfile) ([]byte, image.Config, string, error) {
+	if profile != longTermMetricProfileLRT755 || options.LRTPreview != "" || options.RawPreview || options.RawDevelop {
+		return readRenderInputWithOptions(frame, options)
+	}
+
+	// The native frame worker first reads its per-image camera-preview cache.
+	// A corrupt cache falls through to source decoding, where a full LRT run
+	// would normally regenerate that preview.
+	cache := lrtPreviewPath(frame.Image, "camera")
+	if info, err := os.Stat(cache); err == nil && info.Size() > 0 {
+		cacheOptions := options
+		cacheOptions.LRTPreview = "camera"
+		if data, config, format, cacheErr := readRenderInputWithOptions(frame, cacheOptions); cacheErr == nil {
+			return data, config, format, nil
+		}
+	}
+	return readRenderInputWithOptions(frame, options)
 }
 
 func measureLongTermFrame(img image.Image) longTermFrameMetrics {
