@@ -236,6 +236,16 @@ func TestLinearDNGCameraWhiteBalanceAndColorMatrix(t *testing.T) {
 func FuzzLinearDNG(f *testing.F) {
 	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		f.Add(linearDNGFixture(order, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{50730: dngTestDouble(order, -.5), 51109: dngTestSRational(order, 3, 2)}))
+		stage1Area := testDNGArea(image.Rect(0, 0, 2, 2), 0, 1, 1, 1)
+		f.Add(linearDNGFixture(order, 2, 2, 1, []uint16{4096, 8192, 16384, 32768}, map[uint16]dngTestField{
+			51008: testDNGOpcodeList(
+				testDNGGainMap(testDNGGainMapPayload(2, 2, 1, 1, 1, 1.5)),
+				testDNGAxisOpcode(10, stage1Area, 512, -512),
+				testDNGAxisOpcode(11, stage1Area, -256, 256),
+				testDNGAxisOpcode(12, stage1Area, 1.25, .75),
+				testDNGAxisOpcode(13, stage1Area, .8, 1.2),
+			),
+		}))
 		stage1Pixels := []uint16{900, 900, 900, 900, 65535, 900, 900, 900, 900}
 		f.Add(linearDNGFixture(order, 3, 3, 1, stage1Pixels, map[uint16]dngTestField{
 			51008: testDNGOpcodeList(testDNGBadPixelConstant(65535, 0)),

@@ -164,8 +164,6 @@ func TestDNGGainMapListOrderClippingAndOptionalFlags(t *testing.T) {
 		{51022, testDNGOpcode{999, 0x01030000, 1, []byte{1, 2, 3}}, true},
 		{51022, testDNGOpcode{999, 0x01030000, 0, nil}, false},
 		{51022, testDNGOpcode{999, 0x01030000, 2, nil}, false},
-		{51008, testDNGGainMap(testDNGGainMapPayload(1, 1, 1, 1, 1, 2)), false},
-		{51008, testDNGOpcode{9, 0x01030000, 1, testDNGGainMapPayload(1, 1, 1, 1, 1, 2)}, true},
 		{51022, testDNGOpcode{9, 0x01080000, 1, nil}, true},
 		{51022, testDNGOpcode{9, 0x01080000, 0, nil}, false},
 		{51022, testDNGOpcode{9, 0x01030000, 1, nil}, false},
@@ -184,6 +182,21 @@ func TestDNGGainMapListOrderClippingAndOptionalFlags(t *testing.T) {
 		plain, err := decodeLinearDNG(linearDNGFixture(order, 1, 1, 1, []uint16{16384}, nil))
 		if err != nil || img.NRGBA64At(0, 0) != plain.NRGBA64At(0, 0) {
 			t.Fatal("optional unsupported opcode affected pixels")
+		}
+	}
+	for _, flags := range []uint32{0, 1} {
+		stage1GainMap := testDNGGainMap(testDNGGainMapPayload(1, 1, 1, 1, 1, 2))
+		stage1GainMap.flags = flags
+		data := linearDNGFixture(order, 1, 1, 1, []uint16{16384}, map[uint16]dngTestField{
+			50717: dngTestLong(order, 65535),
+			51008: testDNGOpcodeList(stage1GainMap),
+		})
+		img, err := decodeLinearDNG(data)
+		if err != nil {
+			t.Fatalf("Stage 1 GainMap flags %d: %v", flags, err)
+		}
+		if got, want := img.NRGBA64At(0, 0).R, testDNGLinearToSRGB16(32768); got != want {
+			t.Fatalf("Stage 1 GainMap flags %d pixel=%d want %d", flags, got, want)
 		}
 	}
 }

@@ -99,7 +99,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 				}
 			}
 			stage1 := tag == 51008
-			unsupportedStage1 := stage1 && id != 4 && id != 5 && id != 7 && id != 8
+			unsupportedStage1 := stage1 && id != 4 && id != 5 && (id < 7 || id > 13)
 			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 14)) || unsupportedStage1 || version > 0x01070100 || id == 5 && version < 0x01030000 {
 				if flags&1 != 0 {
 					continue
@@ -193,10 +193,14 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 				return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG Stage 1 opcode %d plane range exceeds the image channels", id)
 			}
 			if opcode.area.Empty() {
-				if (id == 10 || id == 12) && (opcode.area.Min.Y > imageBounds.Min.Y || opcode.area.Max.Y < imageBounds.Max.Y) {
+				coverageBounds := imageBounds
+				if stage1 {
+					coverageBounds = image.Rect(0, 0, width, height)
+				}
+				if (id == 10 || id == 12) && (opcode.area.Min.Y > coverageBounds.Min.Y || opcode.area.Max.Y < coverageBounds.Max.Y) {
 					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose row table does not cover the current image", id, tag)
 				}
-				if (id == 11 || id == 13) && (opcode.area.Min.X > imageBounds.Min.X || opcode.area.Max.X < imageBounds.Max.X) {
+				if (id == 11 || id == 13) && (opcode.area.Min.X > coverageBounds.Min.X || opcode.area.Max.X < coverageBounds.Max.X) {
 					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose column table does not cover the current image", id, tag)
 				}
 			}
@@ -454,10 +458,10 @@ func applyDNGPointOpcodesAt(opcodes []dngPointOpcode, camera *[3]float64, x, y, 
 	}
 }
 
-// applyDNGPointOpcodeRaw applies a Stage 1 MapTable or MapPolynomial to
-// interleaved integer image samples. OpcodeList1 runs before linearization and
-// black subtraction, so its input and output domain is the stored 16-bit raw
-// value. Each opcode clips its output before a following opcode sees it.
+// applyDNGPointOpcodeRaw applies Stage 1 point opcodes to interleaved integer
+// image samples. MapTable and MapPolynomial operate in the stored 16-bit raw
+// domain. GainMap and row/column corrections use the normalized float domain
+// used by the DNG SDK, then return to the stored 16-bit range after each opcode.
 func applyDNGPointOpcodeRaw(source, destination []uint16, width, height, channels int, opcode dngPointOpcode) error {
 	if width < 1 || height < 1 || channels < 1 || uint64(width) > uint64(math.MaxInt)/uint64(height) {
 		return fmt.Errorf("invalid Stage 1 point opcode image dimensions")
@@ -480,6 +484,20 @@ func applyDNGPointOpcodeRaw(source, destination []uint16, width, height, channel
 	} else if opcode.id == 8 {
 		if len(opcode.coefficients) < 1 || len(opcode.coefficients) > 9 {
 			return fmt.Errorf("invalid Stage 1 MapPolynomial coefficients")
+		}
+	} else if opcode.id == 9 {
+		if opcode.gainMap == nil || opcode.gainMap.mapPlanes < 1 || len(opcode.gainMap.values) == 0 {
+			return fmt.Errorf("invalid Stage 1 GainMap")
+		}
+	} else if opcode.id >= 10 && opcode.id <= 13 {
+		span := opcode.area.Dy()
+		pitch := opcode.rowPitch
+		if opcode.id == 11 || opcode.id == 13 {
+			span = opcode.area.Dx()
+			pitch = opcode.colPitch
+		}
+		if span < 1 || pitch < 1 || len(opcode.table) != (span-1)/pitch+1 {
+			return fmt.Errorf("invalid Stage 1 row/column opcode table")
 		}
 	} else {
 		return fmt.Errorf("unsupported Stage 1 point opcode %d", opcode.id)
@@ -506,11 +524,45 @@ func applyDNGPointOpcodeRaw(source, destination []uint16, width, height, channel
 				if opcode.id == 7 {
 					lookupIndex := min(int(input), len(opcode.lookup)-1)
 					value = float64(opcode.lookup[lookupIndex])
-				} else {
+				} else if opcode.id == 8 {
 					value = opcode.coefficients[len(opcode.coefficients)-1]
 					for coefficient := len(opcode.coefficients) - 2; coefficient >= 0; coefficient-- {
 						value = value*float64(input) + opcode.coefficients[coefficient]
 					}
+				} else {
+					normalized := float32(input) / 65535
+					switch opcode.id {
+					case 9:
+						normalized *= float32(opcode.gainMap.gain(x, y, plane, width, height))
+					case 10:
+						row := (y - opcode.area.Min.Y) / opcode.rowPitch
+						if row < 0 || row >= len(opcode.table) {
+							return fmt.Errorf("Stage 1 DeltaPerRow table index %d is outside %d entries", row, len(opcode.table))
+						}
+						normalized += opcode.table[row] * (1.0 / 65535.0)
+					case 11:
+						col := (x - opcode.area.Min.X) / opcode.colPitch
+						if col < 0 || col >= len(opcode.table) {
+							return fmt.Errorf("Stage 1 DeltaPerColumn table index %d is outside %d entries", col, len(opcode.table))
+						}
+						normalized += opcode.table[col] * (1.0 / 65535.0)
+					case 12:
+						row := (y - opcode.area.Min.Y) / opcode.rowPitch
+						if row < 0 || row >= len(opcode.table) {
+							return fmt.Errorf("Stage 1 ScalePerRow table index %d is outside %d entries", row, len(opcode.table))
+						}
+						normalized *= opcode.table[row]
+					case 13:
+						col := (x - opcode.area.Min.X) / opcode.colPitch
+						if col < 0 || col >= len(opcode.table) {
+							return fmt.Errorf("Stage 1 ScalePerColumn table index %d is outside %d entries", col, len(opcode.table))
+						}
+						normalized *= opcode.table[col]
+					}
+					if math.IsNaN(float64(normalized)) {
+						return fmt.Errorf("Stage 1 opcode %d produced a non-finite sample", opcode.id)
+					}
+					value = float64(min(float32(1), max(float32(0), normalized))) * 65535
 				}
 				if math.IsNaN(value) {
 					return fmt.Errorf("Stage 1 opcode %d produced a non-finite sample", opcode.id)
