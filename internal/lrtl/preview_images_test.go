@@ -3,6 +3,7 @@ package lrtl
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -200,6 +201,108 @@ func TestPreviewImagesFailureKeepsSourcesAndDestination(t *testing.T) {
 	}
 }
 
+func TestPreviewImagesWriteAndReadLRTVisualCaches(t *testing.T) {
+	frames := cropFixture(t, 3)
+	dir := filepath.Dir(frames[0].Image)
+	before := batchFileSnapshot(t, dir)
+	output := filepath.Join(t.TempDir(), "previews")
+	var stdout, stderr bytes.Buffer
+	if code := Main([]string{"preview-images", dir, "--output", output, "--long-edge", "24", "--write-lrt-visual-cache"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("preview generation exit=%d: %s", code, &stderr)
+	}
+	manifest := readPreviewManifest(t, output)
+	if len(manifest.Frames) != len(frames) {
+		t.Fatalf("manifest has %d frames, want %d", len(manifest.Frames), len(frames))
+	}
+	for i, frame := range frames {
+		cache := lrtPreviewPath(frame.Image, "visual")
+		cacheData, err := os.ReadFile(cache)
+		if err != nil {
+			t.Fatalf("read cache %s: %v", cache, err)
+		}
+		preview, err := os.ReadFile(filepath.Join(output, manifest.Frames[i].File))
+		if err != nil || !bytes.Equal(cacheData, preview) {
+			t.Fatalf("cache %s differs from generated JPEG: %v", cache, err)
+		}
+		pixels, config, format, err := readRenderInputWithOptions(frame, imageInputOptions{LRTPreview: "visual"})
+		if err != nil || format != "jpeg" || config.Width != manifest.Width || config.Height != manifest.Height || !bytes.Equal(pixels, preview) {
+			t.Fatalf("cache readback for %s: format=%s config=%+v err=%v", frame.Image, format, config, err)
+		}
+	}
+	for path, data := range before {
+		assertPreviewEVFileBytes(t, path, data)
+	}
+}
+
+func TestPreviewImagesLRTVisualCacheExistingAndRollback(t *testing.T) {
+	t.Run("existing cache rejects the full set before writing", func(t *testing.T) {
+		frames := cropFixture(t, 2)
+		dir := filepath.Dir(frames[0].Image)
+		secondCache := lrtPreviewPath(frames[1].Image, "visual")
+		if err := os.MkdirAll(filepath.Dir(secondCache), 0755); err != nil {
+			t.Fatal(err)
+		}
+		original := []byte("keep the existing LRT cache")
+		if err := os.WriteFile(secondCache, original, 0600); err != nil {
+			t.Fatal(err)
+		}
+		before := batchFileSnapshot(t, dir)
+		output := filepath.Join(t.TempDir(), "previews")
+		var stdout, stderr bytes.Buffer
+		if code := Main([]string{"preview-images", dir, "--output", output, "--write-lrt-visual-cache"}, &stdout, &stderr); code == 0 || !strings.Contains(stderr.String(), "already exists") {
+			t.Fatalf("existing cache should reject write; exit=%d stderr=%s", code, &stderr)
+		}
+		if _, err := os.Stat(lrtPreviewPath(frames[0].Image, "visual")); !os.IsNotExist(err) {
+			t.Fatal("preflight conflict left a partial cache set")
+		}
+		assertPreviewEVFileBytes(t, secondCache, original)
+		for path, data := range before {
+			assertPreviewEVFileBytes(t, path, data)
+		}
+		if _, err := os.Stat(filepath.Join(output, "frames.json")); err != nil {
+			t.Fatalf("generated JPEG previews should remain available after cache failure: %v", err)
+		}
+	})
+
+	t.Run("mid-write failure rolls back new files and directories", func(t *testing.T) {
+		root := t.TempDir()
+		files := []lrtPreviewCacheFile{
+			{path: filepath.Join(root, "one", ".lrt", "visual", "one.lrtpreview"), data: []byte("first")},
+			{path: filepath.Join(root, "two", ".lrt", "visual", "two.lrtpreview"), data: []byte("second")},
+		}
+		calls := 0
+		injected := fmt.Errorf("injected write failure")
+		err := publishNewLRTPreviewCaches(files, func(path string, data []byte) error {
+			calls++
+			if calls == 2 {
+				return injected
+			}
+			return writeLRTPreviewCacheFile(path, data)
+		})
+		if err == nil || !strings.Contains(err.Error(), injected.Error()) {
+			t.Fatalf("expected injected write failure, got %v", err)
+		}
+		if calls != 2 {
+			t.Fatalf("writer called %d times, want 2", calls)
+		}
+		if entries, readErr := os.ReadDir(root); readErr != nil || len(entries) != 0 {
+			t.Fatalf("rollback left filesystem entries: %v %v", entries, readErr)
+		}
+	})
+}
+
+func TestBatchPreviewImagesRejectsSourceLRTCacheWrite(t *testing.T) {
+	root := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	output := filepath.Join(t.TempDir(), "previews")
+	if code := Main([]string{"batch-preview-images", root, "--output", output, "--", "--write-lrt-visual-cache"}, &stdout, &stderr); code == 0 || !strings.Contains(stderr.String(), "controls --write-lrt-visual-cache") {
+		t.Fatalf("batch cache write should fail before processing; exit=%d stderr=%s", code, &stderr)
+	}
+	if _, err := os.Stat(output); !os.IsNotExist(err) {
+		t.Fatal("rejected batch command published output")
+	}
+}
+
 func TestPreviewImagesRAWAndOptions(t *testing.T) {
 	executable, _, data := fakeDNGConverter(t)
 	dir := t.TempDir()
@@ -223,7 +326,7 @@ func TestPreviewImagesRAWAndOptions(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if Main([]string{"preview-images", "--help"}, &stdout, &stderr) != 0 || !strings.Contains(stderr.String(), "quality") {
+	if Main([]string{"preview-images", "--help"}, &stdout, &stderr) != 0 || !strings.Contains(stderr.String(), "quality") || !strings.Contains(stderr.String(), "write-lrt-visual-cache") {
 		t.Fatal("missing preview help")
 	}
 	// Small constant fields exercise the same neutral measurement after JPEG decode.

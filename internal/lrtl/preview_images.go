@@ -3,12 +3,15 @@ package lrtl
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type PreviewImageFrame struct {
@@ -160,4 +163,153 @@ func GeneratePreviewImages(frames []Frame, output string, options RenderOptions)
 		return nil, fmt.Errorf("publish previews: %w", err)
 	}
 	return manifest, nil
+}
+
+type lrtPreviewCacheFile struct {
+	path string
+	data []byte
+}
+
+// writeLRTVisualPreviewCaches stores the generated JPEGs at LRT's observed
+// .lrt/visual/<source-stem>.lrtpreview paths. It never replaces an existing
+// cache: stale caches must be removed explicitly before writing new ones.
+func writeLRTVisualPreviewCaches(frames []Frame, output string, manifest *PreviewImageManifest) error {
+	if manifest == nil || len(frames) == 0 || len(manifest.Frames) != len(frames) {
+		return fmt.Errorf("preview manifest does not match source frames")
+	}
+	files := make([]lrtPreviewCacheFile, len(frames))
+	seen := make(map[string]bool, len(frames))
+	for i, frame := range frames {
+		item := manifest.Frames[i]
+		if item.Source != filepath.Base(frame.Image) || item.SourceIndex != frame.Index {
+			return fmt.Errorf("preview/source mapping differs at frame %d", i+1)
+		}
+		if item.File == "" || filepath.Base(item.File) != item.File || filepath.Clean(item.File) != item.File {
+			return fmt.Errorf("invalid preview filename for frame %d", i+1)
+		}
+		previewPath := filepath.Join(output, item.File)
+		data, err := os.ReadFile(previewPath)
+		if err != nil {
+			return fmt.Errorf("read generated preview %s: %w", previewPath, err)
+		}
+		config, format, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil || format != "jpeg" || config.Width != manifest.Width || config.Height != manifest.Height {
+			return fmt.Errorf("generated preview %s is not a %dx%d JPEG", previewPath, manifest.Width, manifest.Height)
+		}
+		cachePath := lrtPreviewPath(frame.Image, "visual")
+		key := strings.ToLower(filepath.Clean(cachePath))
+		if seen[key] {
+			return fmt.Errorf("multiple frames map to the same LRT visual cache: %s", cachePath)
+		}
+		seen[key] = true
+		files[i] = lrtPreviewCacheFile{path: cachePath, data: data}
+	}
+	return publishNewLRTPreviewCaches(files, writeLRTPreviewCacheFile)
+}
+
+// publishNewLRTPreviewCaches preflights the whole set and removes all files
+// successfully written by this call if a later write fails. writeFile must
+// leave no file behind when it returns an error. It is injectable so the
+// rollback contract can be exercised without OS-specific failures.
+func publishNewLRTPreviewCaches(files []lrtPreviewCacheFile, writeFile func(string, []byte) error) error {
+	if len(files) == 0 || writeFile == nil {
+		return fmt.Errorf("no LRT preview cache files to publish")
+	}
+	seen := make(map[string]bool, len(files))
+	for _, file := range files {
+		key := strings.ToLower(filepath.Clean(file.path))
+		if seen[key] {
+			return fmt.Errorf("duplicate LRT preview cache path: %s", file.path)
+		}
+		seen[key] = true
+		if _, err := os.Lstat(file.path); err == nil {
+			return fmt.Errorf("LRT preview cache already exists: %s", file.path)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("check LRT preview cache %s: %w", file.path, err)
+		}
+	}
+
+	createdDirectories := make([]string, 0)
+	cleanupDirectories := func() {
+		for i := len(createdDirectories) - 1; i >= 0; i-- {
+			_ = os.Remove(createdDirectories[i])
+		}
+	}
+	for _, file := range files {
+		created, err := ensureLRTCacheDirectory(filepath.Dir(file.path))
+		createdDirectories = append(createdDirectories, created...)
+		if err != nil {
+			cleanupDirectories()
+			return err
+		}
+	}
+
+	written := make([]string, 0, len(files))
+	for _, file := range files {
+		if err := writeFile(file.path, file.data); err != nil {
+			for i := len(written) - 1; i >= 0; i-- {
+				_ = os.Remove(written[i])
+			}
+			cleanupDirectories()
+			return fmt.Errorf("write LRT preview cache %s: %w", file.path, err)
+		}
+		written = append(written, file.path)
+	}
+	return nil
+}
+
+func ensureLRTCacheDirectory(directory string) ([]string, error) {
+	var missing []string
+	for current := directory; ; current = filepath.Dir(current) {
+		info, err := os.Lstat(current)
+		if err == nil {
+			if !info.IsDir() {
+				return nil, fmt.Errorf("LRT cache parent is not a directory: %s", current)
+			}
+			break
+		}
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("inspect LRT cache directory %s: %w", current, err)
+		}
+		missing = append(missing, current)
+		parent := filepath.Dir(current)
+		if parent == current {
+			return nil, fmt.Errorf("could not find an existing parent for LRT cache directory %s", directory)
+		}
+	}
+	created := make([]string, 0, len(missing))
+	for i := len(missing) - 1; i >= 0; i-- {
+		if err := os.Mkdir(missing[i], 0755); err != nil {
+			if os.IsExist(err) {
+				info, statErr := os.Lstat(missing[i])
+				if statErr == nil && info.IsDir() {
+					continue
+				}
+			}
+			for j := len(created) - 1; j >= 0; j-- {
+				_ = os.Remove(created[j])
+			}
+			return nil, fmt.Errorf("create LRT cache directory %s: %w", missing[i], err)
+		}
+		created = append(created, missing[i])
+	}
+	return created, nil
+}
+
+func writeLRTPreviewCacheFile(path string, data []byte) error {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if err != nil {
+		return err
+	}
+	n, writeErr := file.Write(data)
+	if writeErr == nil && n != len(data) {
+		writeErr = io.ErrShortWrite
+	}
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	if writeErr != nil || syncErr != nil || closeErr != nil {
+		_ = os.Remove(path)
+		return errors.Join(writeErr, syncErr, closeErr)
+	}
+	return nil
 }

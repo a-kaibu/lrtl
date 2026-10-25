@@ -21,11 +21,13 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 	set := newFlagSet(name, stderr)
 	sortMode := set.String("sort", "name", "frame order: name, capture-time, lrt-name, lrt-ascii, lrt-date or lrt-settings")
 	quality, writeEV, noBackup := new(int), new(bool), new(bool)
+	writeLRTVisualCache := new(bool)
 	*quality = 90
 	if previews {
 		quality = set.Int("quality", 90, "preview JPEG quality (1-100)")
 		writeEV = set.Bool("write-preview-ev", false, "write measurements to source XMP after preview images are published")
 		noBackup = set.Bool("no-backup", false, "omit XMP backups with --write-preview-ev")
+		writeLRTVisualCache = set.Bool("write-lrt-visual-cache", false, "write generated JPEGs to new LRT .lrt/visual preview cache files")
 	}
 	output := set.String("output", "", outputDescription)
 	selection := set.String("selection", "", "use included frames from a long-term selection manifest")
@@ -179,6 +181,11 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 		manifest, err := GeneratePreviewImages(frames, *output, options)
 		if err != nil {
 			return reportError(stderr, err)
+		}
+		if *writeLRTVisualCache {
+			if err := writeLRTVisualPreviewCaches(frames, *output, manifest); err != nil {
+				return reportError(stderr, fmt.Errorf("JPEG previews remain at %s; LRT visual cache write failed: %w", *output, err))
+			}
 		}
 		for i, packet := range packets {
 			if err := packet.SetScalar("lrt:ExternalExposureDefault", formatNumber(manifest.Frames[i].ExternalExposureDefault)); err != nil {

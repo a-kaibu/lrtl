@@ -52,7 +52,7 @@ func runBatchPreviewImages(arguments []string, stdout, stderr io.Writer) int {
 	}
 	for _, arg := range imageArgs {
 		name := strings.SplitN(strings.TrimLeft(arg, "-"), "=", 2)[0]
-		if strings.HasPrefix(arg, "-") && (name == "output" || name == "write-preview-ev" || name == "no-backup" || name == "help" || name == "h") {
+		if strings.HasPrefix(arg, "-") && (name == "output" || name == "write-preview-ev" || name == "no-backup" || name == "write-lrt-visual-cache" || name == "help" || name == "h") {
 			return reportError(stderr, fmt.Errorf("batch-preview-images controls --%s; do not pass it after --", name))
 		}
 	}
