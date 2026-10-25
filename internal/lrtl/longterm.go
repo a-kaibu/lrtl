@@ -100,7 +100,7 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 		Frames:        make([]longTermFrameMetrics, len(frames)),
 	}
 	if profile == longTermMetricProfileLRT755 {
-		manifest.MetricRevision = "lrt-7.5.5-histogram-v1"
+		manifest.MetricRevision = "lrt-7.5.5-preview-histogram-v2"
 	}
 	width, height := 0, 0
 	var adjustments sequenceXMPAdjustments
@@ -136,6 +136,14 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 		luminance, contrast := 0.0, 0.0
 		var hue *float64
 		if profile == longTermMetricProfileLRT755 {
+			previewWidth := options.PreviewWidthCamera
+			if previewWidth == 0 {
+				previewWidth = lrtDefaultCameraPreviewWidth
+			}
+			img, err = resizeLRTCameraPreviewWidth(img, previewWidth)
+			if err != nil {
+				return nil, fmt.Errorf("prepare LRT long-term image %s: %w", frame.Image, err)
+			}
 			measured := measureLRTLongTermFrame(img)
 			metrics.LRTMetrics = &measured
 			luminance, contrast, hue = measured.LuminanceMean, measured.ContrastStdDev, measured.HueMeanDegrees

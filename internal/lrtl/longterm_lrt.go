@@ -12,7 +12,8 @@ const lrtLongTermBlurScale = 4
 // measureLRTLongTermFrame follows the 7.5.5 frame-analysis path observed in
 // the installed application: smoothed source RGB histograms for luminance,
 // and bilinear 64x64 sampling plus Gaussian blur for contrast and hue.
-// It processes the full image; an XMP crop can be applied by the caller first.
+// The caller applies the native camera-preview width resize and any selected
+// XMP adjustments before measuring this image.
 func measureLRTLongTermFrame(img image.Image) lrtLongTermMetrics {
 	sampled := sampleLRTLongTermFrame(img)
 	blurred := blurLRTLongTermFrame(sampled, lrtGaussianKernel(lrtLongTermBlurScale))

@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -90,7 +92,7 @@ func TestLongTermNativeCLISelection(t *testing.T) {
 			if err := json.Unmarshal(denoiseRead(t, output), &manifest); err != nil {
 				t.Fatal(err)
 			}
-			if manifest.MetricRevision != "lrt-7.5.5-histogram-v1" || len(manifest.Frames) != len(rows) {
+			if manifest.MetricRevision != "lrt-7.5.5-preview-histogram-v2" || len(manifest.Frames) != len(rows) {
 				t.Fatal("missing metric revision or frames", manifest)
 			}
 			included := 0
@@ -159,6 +161,92 @@ func TestLongTermNativeCLISelection(t *testing.T) {
 		t.Fatal("accepted corrupt future image")
 	}
 	assertPreviewEVFileBytes(t, output, []byte("preserve existing output"))
+}
+
+func TestLRTLongTermPreviewMetricsMatchNative(t *testing.T) {
+	data, err := os.ReadFile("testdata/lrt-longterm-preview-metrics-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		SourceWidth, SourceHeight int
+		PreviewWidthCamera        int
+		Pattern                   int
+		Width, Height             int
+		Luminance, Contrast, Hue  float64
+	}
+	if err := json.Unmarshal(data, &cases); err != nil || len(cases) != 5 {
+		t.Fatalf("expected five native preview metric cases: %v", err)
+	}
+	for index, tc := range cases {
+		t.Run(fmt.Sprintf("%dx%d/width%d/p%d", tc.SourceWidth, tc.SourceHeight, tc.PreviewWidthCamera, tc.Pattern), func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "frame.png")
+			file, err := os.Create(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := png.Encode(file, longTermMetricSource(tc.SourceWidth, tc.SourceHeight, tc.Pattern, false)); err != nil {
+				_ = file.Close()
+				t.Fatal(err)
+			}
+			if err := file.Close(); err != nil {
+				t.Fatal(err)
+			}
+			output := filepath.Join(t.TempDir(), "selection.json")
+			args := []string{"long-term", dir, "--metric-profile", "lrt-7.5.5", "--output", output}
+			// The first case exercises the 1024 default. The other default-width
+			// cases exercise the flag, and the final case verifies a custom width.
+			if index != 0 {
+				args = append(args, "--preview-width-camera", strconv.Itoa(tc.PreviewWidthCamera))
+			}
+			markerCommand(t, args...)
+			var manifest sequenceSelectionManifest
+			if err := json.Unmarshal(denoiseRead(t, output), &manifest); err != nil {
+				t.Fatal(err)
+			}
+			if manifest.MetricRevision != "lrt-7.5.5-preview-histogram-v2" || len(manifest.Frames) != 1 {
+				t.Fatalf("unexpected native preview manifest: revision=%q frames=%d", manifest.MetricRevision, len(manifest.Frames))
+			}
+			got := manifest.Frames[0].LRTMetrics
+			if got == nil || math.Abs(got.LuminanceMean-tc.Luminance) > 1e-12 || math.Abs(got.ContrastStdDev-tc.Contrast) > 1e-12 || got.HueMeanDegrees == nil || math.Abs(*got.HueMeanDegrees-tc.Hue) > 1e-12 {
+				t.Fatalf("long-term metrics after %dx%d preview resize=%+v, native %dx%d wants %.17g/%.17g/%.17g", tc.SourceWidth, tc.SourceHeight, got, tc.Width, tc.Height, tc.Luminance, tc.Contrast, tc.Hue)
+			}
+		})
+	}
+}
+
+func TestLongTermPreviewWidthFlagValidation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "frame.png")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(file, longTermMetricSource(2, 2, 4, false)); err != nil {
+		_ = file.Close()
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"too small", []string{"--metric-profile", "lrt-7.5.5", "--preview-width-camera", "1"}, "at least 2 pixels"},
+		{"requires native profile", []string{"--preview-width-camera", "512"}, "requires --metric-profile lrt-7.5.5"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			args := append([]string{"long-term", dir, "--output", filepath.Join(t.TempDir(), "selection.json")}, test.args...)
+			var stdout, stderr bytes.Buffer
+			if Main(args, &stdout, &stderr) == 0 || !strings.Contains(stderr.String(), test.want) {
+				t.Fatalf("accepted invalid preview-width arguments: stdout=%q stderr=%q", stdout.String(), stderr.String())
+			}
+		})
+	}
 }
 
 func TestLongTermNativeOffsetBounds(t *testing.T) {

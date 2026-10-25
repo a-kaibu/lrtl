@@ -192,7 +192,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  batch-holy-grail ROOT [--recursive] [--workers N] [HOLY_GRAIL_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  export DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--apply-xmp-basic] [--apply-xmp-crop] [--long-edge N] export RGB16 TIFF frames")
 	fmt.Fprintln(writer, "  preview-images DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--long-edge N] [--quality 1-100] [--write-preview-ev] [--write-lrt-visual-cache] [--no-backup]")
-	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--preview-width-camera N] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--preview-width-camera N] [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
@@ -1445,6 +1445,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
 	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
+	previewWidthCamera := set.Int("preview-width-camera", 0, "camera-preview width before native long-term metrics (default 1024)")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 in image analysis")
@@ -1461,16 +1462,17 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 		"--contrast-range": true, "-contrast-range": true,
 		"--hue-range": true, "-hue-range": true,
 		"--lrt-preview": true, "-lrt-preview": true,
+		"--preview-width-camera": true, "-preview-width-camera": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
-			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--preview-width-camera N] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--preview-width-camera N] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
 	}
 	profile := longTermMetricProfile(*metricProfileName)
 	var savedFilter *lrtLongTermSavedFilter
@@ -1507,6 +1509,15 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	if profile != longTermMetricProfileLRTL && profile != longTermMetricProfileLRT755 {
 		return reportError(stderr, fmt.Errorf("--metric-profile must be lrtl or lrt-7.5.5"))
 	}
+	previewWidthCameraSpecified := false
+	set.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "preview-width-camera" {
+			previewWidthCameraSpecified = true
+		}
+	})
+	if previewWidthCameraSpecified && profile != longTermMetricProfileLRT755 {
+		return reportError(stderr, fmt.Errorf("--preview-width-camera requires --metric-profile lrt-7.5.5"))
+	}
 	ranges := longTermRanges{}
 	var err error
 	if *luminanceRange != "" {
@@ -1533,7 +1544,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	}
 	inputOptions := imageInputOptions{
 		LRTPreview: *lrtPreview, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
-		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
+		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop, PreviewWidthCamera: *previewWidthCamera,
 	}
 	manifest, err := analyzeLongTermSequence(frames, inputOptions, ranges, profile)
 	if err != nil {

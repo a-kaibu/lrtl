@@ -11,7 +11,7 @@ The previous Go profile used an antialiased bilinear shrink, measured
 luminance from the blurred grayscale image, and returned the unscaled
 standard deviation. The native frame-analysis helper and caller use:
 
-- **Luminance:** RGB histograms from the original image, independently
+- **Luminance:** RGB histograms from the frame image passed to the helper, independently
   smoothed with a radius-two box. Each bin divides the sum of available
   neighboring counts by the number of available bins using integer division.
   The mean across the three resulting histograms is divided by **256**.
@@ -26,6 +26,28 @@ standard deviation. The native frame-analysis helper and caller use:
 The caller's luminance division and contrast multiplier were checked in its
 bytecode; the oracle applies those scale factors to native helper results.
 It does not run the entire GUI workflow, preview creation or temporal filters.
+
+## Camera preview width before frame analysis
+
+The frame worker passes `LRTSettings.previewWidthCamera` and a height of
+`int(width / 1.5f)` into its image preparation path. The worker's bytecode then
+bilinearly resizes any resulting image wider than that setting before it
+invokes the native metric helper. The default setting is 1024 pixels.
+
+`lrt-longterm-preview-metrics-7.5.5.json` records five post-resize metric
+cases collected with the installed image resizer and metric helper. They cover
+three large source dimensions and patterns at the default width, an image at
+the exact width threshold that stays unscaled, and a custom 512-pixel width.
+The fixture SHA-256 is
+`1c831a2471ac9794271ca71962dacd2493672ee2957b45efd12974d1127aa55d`.
+`LongTermPreviewMetricOracle.java` recreates these synthetic rasters. The Go
+CLI regression tests verify its decoded PNG path, default and custom widths,
+and all three metrics. Together with the separate resize-pixel oracle, this
+checks the operation order without running the GUI sequence workflow. Camera
+RAW decoding, preview creation, and color management can still change source
+pixels before this scaling stage. lrtl uses 1024 by default and does not load
+the installed LRT settings file; pass the configured value explicitly when
+it differs.
 
 The histogram integer division is observable even for tiny inputs. A single
 black pixel has no mass after smoothing and receives luminance 255/256. A
@@ -88,7 +110,8 @@ native decoder and metric helper rather than supplying an already-decoded
 
 Long-term analysis in the `lrt-7.5.5` profile now uses the pure-Go
 `nativejpeg` decoder through `decodeLRTLongTermImage`, followed by the measured
-LRT chroma reconstruction. Preview EV keeps the standard decoder's existing
+LRT chroma reconstruction and camera-preview width resize before metrics.
+Preview EV keeps the standard decoder's existing
 pixel output when available and falls back to `nativejpeg` only if standard
 decoding fails. Go's standard JPEG decoder rejected two of the 28
 restart-marked progressive files and had up to 3.970° hue error on the cases it
@@ -97,15 +120,15 @@ accepted. The LRT-compatible path decoded all 28; maximum metric deltas were
 runs every encoded file and enforces limits of 0.004, 0.0016, and 0.55°.
 
 These are generated JPEG fixtures, not camera photographs. They do not verify
-camera-specific JPEG decoders, RAW preview creation, preview-width scaling,
-cache freshness/order, or the complete native sequence workflow. A grayscale
+camera-specific JPEG decoders, RAW preview creation, cache freshness/order,
+or the complete native sequence workflow. A grayscale
 JPEG passed directly to the metric helper also raised an internal exception;
 the current fixture covers RGB JPEGs only.
 
 ## Manifest compatibility
 
 New native-profile manifests include
-`"metric_revision": "lrt-7.5.5-histogram-v1"`. Existing version-one/two
+`"metric_revision": "lrt-7.5.5-preview-histogram-v2"`. Existing version-one/two
 selection manifests remain readable, and their saved inclusion flags are
 not recalculated when rendered. The historical JSON field
 `contrast_stddev_0_to_1` remains for compatibility; this revision stores
@@ -115,10 +138,13 @@ native metrics and decisions from an older native-profile manifest.
 ## Reproduction
 
 ```powershell
+New-Item -ItemType Directory -Force work/longterm-classes | Out-Null
 javac -d work/longterm-classes scripts/probes/LongTermMetricOracle.java
 java -cp 'work/longterm-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermMetricOracle work/longterm-metrics.json
 javac -cp 'C:\Program Files\LRTimelapse 7\LRTimelapse.jar' -d work/longterm-classes scripts/probes/LongTermJPEGDecodeOracle.java
 java -cp 'work/longterm-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermJPEGDecodeOracle internal/nativejpeg/testdata internal/lrtl/testdata/lrt-longterm-jpeg-7.5.5.json
+javac -cp 'C:\Program Files\LRTimelapse 7\LRTimelapse.jar' -d work/longterm-classes scripts/probes/LongTermPreviewMetricOracle.java
+java -cp 'work/longterm-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermPreviewMetricOracle internal/lrtl/testdata/lrt-longterm-preview-metrics-7.5.5.json
 javac -d work/longterm-classes scripts/probes/LongTermHueOracle.java
 java -cp work/longterm-classes lrtlprobe.LongTermHueOracle work/java-hue-rgb-25.json
 go test ./internal/lrtl -run '^TestLongTermNative' -count=1
@@ -163,3 +189,11 @@ The focused JPEG/Preview EV regressions and race run passed; the full
 `go test ./... -count=1 -timeout 20m` rerun also passed (`internal/lrtl`
 577.531 seconds, `internal/nativejpeg` 3.278 seconds). `go vet ./...` and
 `go build ./...` passed in the same revision.
+
+On 2026-10-26, the preview-width metric oracle reproduced the stored fixture
+byte-for-byte (SHA-256
+`1c831a2471ac9794271ca71962dacd2493672ee2957b45efd12974d1127aa55d`). The
+full suite passed again (`internal/lrtl` 577.199 seconds and
+`internal/nativejpeg` 3.170 seconds); the preview-width, native metric, and
+encoded JPEG tests also passed with the race detector. `go vet ./...` and
+`go build ./...` passed.
