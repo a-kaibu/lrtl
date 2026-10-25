@@ -174,37 +174,45 @@ type lrtPreviewCacheFile struct {
 // .lrt/visual/<source-stem>.lrtpreview paths. It never replaces an existing
 // cache: stale caches must be removed explicitly before writing new ones.
 func writeLRTVisualPreviewCaches(frames []Frame, output string, manifest *PreviewImageManifest) error {
+	files, err := planLRTVisualPreviewCaches(frames, output, manifest)
+	if err != nil {
+		return err
+	}
+	return publishNewLRTPreviewCaches(files, writeLRTPreviewCacheFile)
+}
+
+func planLRTVisualPreviewCaches(frames []Frame, output string, manifest *PreviewImageManifest) ([]lrtPreviewCacheFile, error) {
 	if manifest == nil || len(frames) == 0 || len(manifest.Frames) != len(frames) {
-		return fmt.Errorf("preview manifest does not match source frames")
+		return nil, fmt.Errorf("preview manifest does not match source frames")
 	}
 	files := make([]lrtPreviewCacheFile, len(frames))
 	seen := make(map[string]bool, len(frames))
 	for i, frame := range frames {
 		item := manifest.Frames[i]
 		if item.Source != filepath.Base(frame.Image) || item.SourceIndex != frame.Index {
-			return fmt.Errorf("preview/source mapping differs at frame %d", i+1)
+			return nil, fmt.Errorf("preview/source mapping differs at frame %d", i+1)
 		}
 		if item.File == "" || filepath.Base(item.File) != item.File || filepath.Clean(item.File) != item.File {
-			return fmt.Errorf("invalid preview filename for frame %d", i+1)
+			return nil, fmt.Errorf("invalid preview filename for frame %d", i+1)
 		}
 		previewPath := filepath.Join(output, item.File)
 		data, err := os.ReadFile(previewPath)
 		if err != nil {
-			return fmt.Errorf("read generated preview %s: %w", previewPath, err)
+			return nil, fmt.Errorf("read generated preview %s: %w", previewPath, err)
 		}
 		config, format, err := image.DecodeConfig(bytes.NewReader(data))
 		if err != nil || format != "jpeg" || config.Width != manifest.Width || config.Height != manifest.Height {
-			return fmt.Errorf("generated preview %s is not a %dx%d JPEG", previewPath, manifest.Width, manifest.Height)
+			return nil, fmt.Errorf("generated preview %s is not a %dx%d JPEG", previewPath, manifest.Width, manifest.Height)
 		}
 		cachePath := lrtPreviewPath(frame.Image, "visual")
 		key := strings.ToLower(filepath.Clean(cachePath))
 		if seen[key] {
-			return fmt.Errorf("multiple frames map to the same LRT visual cache: %s", cachePath)
+			return nil, fmt.Errorf("multiple frames map to the same LRT visual cache: %s", cachePath)
 		}
 		seen[key] = true
 		files[i] = lrtPreviewCacheFile{path: cachePath, data: data}
 	}
-	return publishNewLRTPreviewCaches(files, writeLRTPreviewCacheFile)
+	return files, nil
 }
 
 // publishNewLRTPreviewCaches preflights the whole set and removes all files
@@ -215,18 +223,8 @@ func publishNewLRTPreviewCaches(files []lrtPreviewCacheFile, writeFile func(stri
 	if len(files) == 0 || writeFile == nil {
 		return fmt.Errorf("no LRT preview cache files to publish")
 	}
-	seen := make(map[string]bool, len(files))
-	for _, file := range files {
-		key := strings.ToLower(filepath.Clean(file.path))
-		if seen[key] {
-			return fmt.Errorf("duplicate LRT preview cache path: %s", file.path)
-		}
-		seen[key] = true
-		if _, err := os.Lstat(file.path); err == nil {
-			return fmt.Errorf("LRT preview cache already exists: %s", file.path)
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("check LRT preview cache %s: %w", file.path, err)
-		}
+	if err := validateNewLRTPreviewCacheFiles(files); err != nil {
+		return err
 	}
 
 	createdDirectories := make([]string, 0)
@@ -254,6 +252,26 @@ func publishNewLRTPreviewCaches(files []lrtPreviewCacheFile, writeFile func(stri
 			return fmt.Errorf("write LRT preview cache %s: %w", file.path, err)
 		}
 		written = append(written, file.path)
+	}
+	return nil
+}
+
+func validateNewLRTPreviewCacheFiles(files []lrtPreviewCacheFile) error {
+	if len(files) == 0 {
+		return fmt.Errorf("no LRT preview cache files to publish")
+	}
+	seen := make(map[string]bool, len(files))
+	for _, file := range files {
+		key := strings.ToLower(filepath.Clean(file.path))
+		if seen[key] {
+			return fmt.Errorf("duplicate LRT preview cache path: %s", file.path)
+		}
+		seen[key] = true
+		if _, err := os.Lstat(file.path); err == nil {
+			return fmt.Errorf("LRT preview cache already exists: %s", file.path)
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("check LRT preview cache %s: %w", file.path, err)
+		}
 	}
 	return nil
 }

@@ -42,7 +42,7 @@ func TestBatchPreviewImagesMatchIndividualAndParallel(t *testing.T) {
 	if !reflect.DeepEqual(before, batchFileSnapshot(t, root)) {
 		t.Fatal("default batch preview changed sources")
 	}
-	if Main(append([]string{"batch-preview-images", root, "--output", parallel, "--recursive", "--workers", "4", "--write-preview-ev", "--"}, options...), &out, &stderr) != 0 {
+	if Main(append([]string{"batch-preview-images", root, "--output", parallel, "--recursive", "--workers", "4", "--write-preview-ev", "--write-lrt-visual-cache", "--"}, options...), &out, &stderr) != 0 {
 		t.Fatal(&stderr)
 	}
 	sm, pm := readBatchPreviewManifest(t, serial), readBatchPreviewManifest(t, parallel)
@@ -53,6 +53,7 @@ func TestBatchPreviewImagesMatchIndividualAndParallel(t *testing.T) {
 		if entry.Frames != 3 || entry.Directory != filepath.Base(entry.Directory) {
 			t.Fatal("wrong job mapping")
 		}
+		batchPreviews := readPreviewManifest(t, filepath.Join(parallel, entry.Directory))
 		individual := filepath.Join(t.TempDir(), "individual")
 		input := filepath.Join(reference, filepath.FromSlash(entry.Source))
 		if Main(append([]string{"preview-images", input, "--output", individual, "--write-preview-ev"}, options...), &out, &stderr) != 0 {
@@ -61,6 +62,15 @@ func TestBatchPreviewImagesMatchIndividualAndParallel(t *testing.T) {
 		for rel, data := range relativeBatchPreviewFiles(t, individual) {
 			assertPreviewEVFileBytes(t, filepath.Join(parallel, entry.Directory, rel), data)
 			assertPreviewEVFileBytes(t, filepath.Join(serial, entry.Directory, rel), data)
+		}
+		for _, measurement := range batchPreviews.Frames {
+			source := filepath.Join(root, filepath.FromSlash(entry.Source), measurement.Source)
+			cache := lrtPreviewPath(source, "visual")
+			generated, err := os.ReadFile(filepath.Join(parallel, entry.Directory, measurement.File))
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertPreviewEVFileBytes(t, cache, generated)
 		}
 		frames, err := DiscoverSequence(filepath.Join(root, filepath.FromSlash(entry.Source)))
 		if err != nil {
@@ -100,7 +110,7 @@ func relativeBatchPreviewFiles(t *testing.T, root string) map[string][]byte {
 }
 
 func TestBatchPreviewImagesFailurePublishesNothing(t *testing.T) {
-	for _, kind := range []string{"image", "xmp", "quality", "late-xmp"} {
+	for _, kind := range []string{"image", "xmp", "quality", "late-xmp", "cache-conflict"} {
 		t.Run(kind, func(t *testing.T) {
 			root := t.TempDir()
 			batchDeflickerFixture(t, root, "a")
@@ -109,6 +119,15 @@ func TestBatchPreviewImagesFailurePublishesNothing(t *testing.T) {
 			output := filepath.Join(parent, "previews")
 			args := []string{"batch-preview-images", root, "--output", output, "--workers", "4", "--write-preview-ev", "--"}
 			switch kind {
+			case "cache-conflict":
+				cache := lrtPreviewPath(filepath.Join(dir, "frame1.png"), "visual")
+				if err := os.MkdirAll(filepath.Dir(cache), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(cache, []byte("preserve existing cache"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				args = []string{"batch-preview-images", root, "--output", output, "--workers", "4", "--write-lrt-visual-cache", "--"}
 			case "image":
 				if err := os.WriteFile(filepath.Join(dir, "frame1.png"), []byte("broken"), 0600); err != nil {
 					t.Fatal(err)
@@ -163,7 +182,7 @@ func TestBatchPreviewImagesArgumentsAndNestedOutput(t *testing.T) {
 		t.Fatal("invalid flags changed sources")
 	}
 	var out, stderr bytes.Buffer
-	if Main([]string{"batch-preview-images", "--help"}, &out, &stderr) != 0 || !strings.Contains(stderr.String(), "workers") {
+	if Main([]string{"batch-preview-images", "--help"}, &out, &stderr) != 0 || !strings.Contains(stderr.String(), "workers") || !strings.Contains(stderr.String(), "write-lrt-visual-cache") {
 		t.Fatal("missing help")
 	}
 	output := filepath.Join(root, "previews")

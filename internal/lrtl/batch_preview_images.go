@@ -61,6 +61,7 @@ func runBatchPreviewImages(arguments []string, stdout, stderr io.Writer) int {
 	workers := set.Int("workers", 1, "number of sequences to generate concurrently (1-64)")
 	recursive := set.Bool("recursive", false, "find image sequences at any depth")
 	writeEV := set.Bool("write-preview-ev", false, "save source XMP measurements after every preview sequence succeeds")
+	writeLRTVisualCache := set.Bool("write-lrt-visual-cache", false, "write generated JPEGs to new LRT .lrt/visual preview cache files")
 	noBackup := set.Bool("no-backup", false, "omit source XMP backups with --write-preview-ev")
 	if err := set.Parse(flagFirst(batchArgs, map[string]bool{"--output": true, "-output": true, "--workers": true, "-workers": true})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -163,6 +164,28 @@ func runBatchPreviewImages(arguments []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "Batch previews: %d sequence(s) failed; no previews published and no source XMP written.\n", failures)
 		return 1
 	}
+	var cacheFiles []lrtPreviewCacheFile
+	if *writeLRTVisualCache {
+		for i, result := range results {
+			frames, err := DiscoverSequence(directories[i])
+			if err != nil {
+				return reportError(stderr, err)
+			}
+			orderedFrames, err := previewSourceFrames(frames, &result.manifest)
+			if err != nil {
+				return reportError(stderr, fmt.Errorf("%s: %w", directories[i], err))
+			}
+			job := filepath.Join(staging, manifest.Sequences[i].Directory)
+			files, err := planLRTVisualPreviewCaches(orderedFrames, job, &result.manifest)
+			if err != nil {
+				return reportError(stderr, fmt.Errorf("%s: %w", directories[i], err))
+			}
+			cacheFiles = append(cacheFiles, files...)
+		}
+		if err := validateNewLRTPreviewCacheFiles(cacheFiles); err != nil {
+			return reportError(stderr, fmt.Errorf("batch LRT visual cache preflight: %w", err))
+		}
+	}
 	var writes []packetOutput
 	if *writeEV {
 		seen := map[string]bool{}
@@ -222,6 +245,38 @@ func runBatchPreviewImages(arguments []string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "Saved: %s\n", output.Path)
 	}
-	fmt.Fprintf(stdout, "Batch previews: %d sequence(s), %d JPEG preview(s), %d XMP file(s) saved: %s\n", len(results), total, len(writes), destination)
+	if len(cacheFiles) > 0 {
+		if err := publishNewLRTPreviewCaches(cacheFiles, writeLRTPreviewCacheFile); err != nil {
+			return reportError(stderr, fmt.Errorf("batch previews remain at %s; LRT visual cache write failed: %w", destination, err))
+		}
+	}
+	fmt.Fprintf(stdout, "Batch previews: %d sequence(s), %d JPEG preview(s), %d XMP file(s), %d LRT visual cache file(s) saved: %s\n", len(results), total, len(writes), len(cacheFiles), destination)
 	return 0
+}
+
+func previewSourceFrames(frames []Frame, preview *PreviewImageManifest) ([]Frame, error) {
+	if preview == nil || len(frames) == 0 || len(preview.Frames) == 0 {
+		return nil, fmt.Errorf("preview manifest does not match source frames")
+	}
+	byIndex := make(map[int]Frame, len(frames))
+	for _, frame := range frames {
+		if _, exists := byIndex[frame.Index]; exists {
+			return nil, fmt.Errorf("duplicate source frame index %d", frame.Index)
+		}
+		byIndex[frame.Index] = frame
+	}
+	ordered := make([]Frame, len(preview.Frames))
+	seen := make(map[int]bool, len(preview.Frames))
+	for i, item := range preview.Frames {
+		frame, ok := byIndex[item.SourceIndex]
+		if !ok || filepath.Base(frame.Image) != item.Source {
+			return nil, fmt.Errorf("preview/source mapping differs at frame %d", i+1)
+		}
+		if seen[item.SourceIndex] {
+			return nil, fmt.Errorf("preview manifest repeats source frame index %d", item.SourceIndex)
+		}
+		seen[item.SourceIndex] = true
+		ordered[i] = frame
+	}
+	return ordered, nil
 }
