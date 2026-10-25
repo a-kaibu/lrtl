@@ -3,6 +3,7 @@ package lrtl
 import (
 	"encoding/binary"
 	"fmt"
+	"image"
 	"math"
 )
 
@@ -29,6 +30,7 @@ type dngImageOpcode struct {
 	point    *dngPointOpcode
 	warp     *dngWarp
 	vignette *dngVignetteRadial
+	trim     *image.Rectangle
 }
 
 func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarp, error) {
@@ -229,15 +231,49 @@ func sampleDNGWarpPlane(data []float32, width, height, channels, plane int, x, y
 }
 
 func applyDNGImageOpcodes(opcodes []dngImageOpcode, data []float32, width, height, channels int, verticalScale float64) ([]float32, error) {
+	result, _, err := applyDNGImageOpcodesWithBounds(opcodes, data, width, height, channels, verticalScale)
+	return result, err
+}
+
+// applyDNGImageOpcodesWithBounds returns the current image bounds in the input
+// image's coordinate system. TrimBounds keeps those coordinates for following
+// opcodes, as DNG image bounds do not rebase when an image is trimmed.
+func applyDNGImageOpcodesWithBounds(opcodes []dngImageOpcode, data []float32, width, height, channels int, verticalScale float64) ([]float32, image.Rectangle, error) {
+	if width < 1 || height < 1 || channels < 1 || uint64(width)*uint64(height)*uint64(channels) != uint64(len(data)) {
+		return nil, image.Rectangle{}, fmt.Errorf("invalid DNG image opcode buffer dimensions")
+	}
+	bounds := image.Rect(0, 0, width, height)
 	var scratch []float32
 	for i := 0; i < len(opcodes); {
+		if trim := opcodes[i].trim; trim != nil {
+			i++
+			if trim.Empty() || !trim.In(bounds) {
+				return nil, image.Rectangle{}, fmt.Errorf("DNG TrimBounds is outside the current image")
+			}
+			if *trim == bounds {
+				continue
+			}
+			trimmed := make([]float32, trim.Dx()*trim.Dy()*channels)
+			for y := 0; y < trim.Dy(); y++ {
+				for x := 0; x < trim.Dx(); x++ {
+					source := ((trim.Min.Y-bounds.Min.Y+y)*width + trim.Min.X - bounds.Min.X + x) * channels
+					destination := (y*trim.Dx() + x) * channels
+					copy(trimmed[destination:destination+channels], data[source:source+channels])
+				}
+			}
+			data = trimmed
+			width, height = trim.Dx(), trim.Dy()
+			bounds = *trim
+			scratch = nil
+			continue
+		}
 		if vignette := opcodes[i].vignette; vignette != nil {
 			i++
 			if vignette.identity() {
 				continue
 			}
 			if err := vignette.apply(data, width, height, channels); err != nil {
-				return nil, err
+				return nil, image.Rectangle{}, err
 			}
 			continue
 		}
@@ -255,7 +291,7 @@ func applyDNGImageOpcodes(opcodes []dngImageOpcode, data []float32, width, heigh
 					for plane := 0; plane < channels; plane++ {
 						sx, sy := geometry.source(x, y, plane)
 						if math.IsNaN(sx) || math.IsNaN(sy) || math.IsInf(sx, 0) || math.IsInf(sy, 0) {
-							return nil, fmt.Errorf("non-finite DNG warp coordinate")
+							return nil, image.Rectangle{}, fmt.Errorf("non-finite DNG warp coordinate")
 						}
 						scratch[(y*width+x)*channels+plane] = sampleDNGWarpPlane(data, width, height, channels, plane, sx, sy)
 					}
@@ -266,7 +302,7 @@ func applyDNGImageOpcodes(opcodes []dngImageOpcode, data []float32, width, heigh
 		}
 		var points []dngPointOpcode
 		if opcodes[i].point == nil {
-			return nil, fmt.Errorf("invalid DNG image opcode")
+			return nil, image.Rectangle{}, fmt.Errorf("invalid DNG image opcode")
 		}
 		for i < len(opcodes) && opcodes[i].point != nil {
 			points = append(points, *opcodes[i].point)
@@ -279,12 +315,12 @@ func applyDNGImageOpcodes(opcodes []dngImageOpcode, data []float32, width, heigh
 				for channel := 0; channel < channels; channel++ {
 					camera[channel] = float64(data[index+channel])
 				}
-				applyDNGPointOpcodes(points, &camera, x, y, channels, width, height)
+				applyDNGPointOpcodesAt(points, &camera, x, y, bounds.Min.X, bounds.Min.Y, channels, width, height)
 				for channel := 0; channel < channels; channel++ {
 					data[index+channel] = float32(camera[channel])
 				}
 			}
 		}
 	}
-	return data, nil
+	return data, bounds, nil
 }

@@ -327,22 +327,16 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 	if fields.err != nil {
 		return nil, fields.err
 	}
-	scaledWidth, scaledHeight := crop.Dx(), crop.Dy()
 	if len(scale) != 0 {
 		if len(scale) != 2 || scale[0] <= 0 || scale[1] <= 0 || scale[0] > 8 || scale[1] > 8 {
 			return nil, fmt.Errorf("invalid Linear DNG DefaultScale")
-		}
-		scaledWidth = int(math.Round(float64(scaledWidth) * scale[0]))
-		scaledHeight = int(math.Round(float64(scaledHeight) * scale[1]))
-		if scaledWidth < 1 || scaledHeight < 1 || scaledWidth > 32768 || scaledHeight > 32768 || uint64(scaledWidth)*uint64(scaledHeight)*8 > maxDevelopedRAWBytes {
-			return nil, fmt.Errorf("scaled Linear DNG exceeds development limits")
 		}
 	}
 	gain := math.Exp2(exposure)
 	var pointOpcodes []dngPointOpcode
 	needsOpcodeBuffer := false
 	for _, opcode := range imageOpcodes {
-		if (opcode.warp != nil && !opcode.warp.identity()) || (opcode.vignette != nil && !opcode.vignette.identity()) {
+		if (opcode.warp != nil && !opcode.warp.identity()) || (opcode.vignette != nil && !opcode.vignette.identity()) || opcode.trim != nil {
 			needsOpcodeBuffer = true
 		}
 		if opcode.point != nil {
@@ -367,6 +361,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		return camera
 	}
 	var cameraPixels []float32
+	processedBounds := image.Rect(0, 0, activeArea.Dx(), activeArea.Dy())
 	if needsOpcodeBuffer {
 		count := uint64(activeArea.Dx()) * uint64(activeArea.Dy()) * uint64(channels)
 		if count > uint64(maxDevelopedRAWBytes)/8 {
@@ -385,23 +380,42 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		if len(scale) == 2 {
 			verticalScale = scale[1] / scale[0]
 		}
-		cameraPixels, err = applyDNGImageOpcodes(imageOpcodes, cameraPixels, activeArea.Dx(), activeArea.Dy(), channels, verticalScale)
+		cameraPixels, processedBounds, err = applyDNGImageOpcodesWithBounds(imageOpcodes, cameraPixels, activeArea.Dx(), activeArea.Dy(), channels, verticalScale)
 		if err != nil {
 			return nil, err
 		}
 	}
-	img := image.NewNRGBA64(image.Rect(0, 0, crop.Dx(), crop.Dy()))
-	for y := crop.Min.Y; y < crop.Max.Y; y++ {
-		for x := crop.Min.X; x < crop.Max.X; x++ {
+	outputCrop := crop
+	if needsOpcodeBuffer {
+		outputCrop = crop.Sub(activeArea.Min).Intersect(processedBounds)
+		if outputCrop.Empty() {
+			return nil, fmt.Errorf("Linear DNG crop does not overlap the TrimBounds image")
+		}
+	}
+	outputWidth, outputHeight := outputCrop.Dx(), outputCrop.Dy()
+	scaledWidth, scaledHeight := outputWidth, outputHeight
+	if len(scale) == 2 {
+		scaledWidth = int(math.Round(float64(outputWidth) * scale[0]))
+		scaledHeight = int(math.Round(float64(outputHeight) * scale[1]))
+		if scaledWidth < 1 || scaledHeight < 1 || scaledWidth > 32768 || scaledHeight > 32768 || uint64(scaledWidth)*uint64(scaledHeight)*8 > maxDevelopedRAWBytes {
+			return nil, fmt.Errorf("scaled Linear DNG exceeds development limits")
+		}
+	}
+	img := image.NewNRGBA64(image.Rect(0, 0, outputWidth, outputHeight))
+	for outputY := 0; outputY < outputHeight; outputY++ {
+		for outputX := 0; outputX < outputWidth; outputX++ {
 			var camera [3]float64
 			if needsOpcodeBuffer {
-				index := ((y-activeArea.Min.Y)*activeArea.Dx() + x - activeArea.Min.X) * channels
+				localX := outputCrop.Min.X - processedBounds.Min.X + outputX
+				localY := outputCrop.Min.Y - processedBounds.Min.Y + outputY
+				index := (localY*processedBounds.Dx() + localX) * channels
 				for channel := 0; channel < channels; channel++ {
 					camera[channel] = float64(cameraPixels[index+channel])
 				}
 			} else {
-				camera = readCamera(x, y)
-				applyDNGPointOpcodes(pointOpcodes, &camera, x-activeArea.Min.X, y-activeArea.Min.Y, channels, activeArea.Dx(), activeArea.Dy())
+				sourceX, sourceY := outputCrop.Min.X+outputX, outputCrop.Min.Y+outputY
+				camera = readCamera(sourceX, sourceY)
+				applyDNGPointOpcodes(pointOpcodes, &camera, sourceX-activeArea.Min.X, sourceY-activeArea.Min.Y, channels, activeArea.Dx(), activeArea.Dy())
 			}
 			if channels == 1 {
 				camera[1], camera[2] = camera[0], camera[0]
@@ -432,7 +446,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 					rgb[channel] *= gain
 				}
 			}
-			img.SetNRGBA64(x-crop.Min.X, y-crop.Min.Y, color.NRGBA64{
+			img.SetNRGBA64(outputX, outputY, color.NRGBA64{
 				R: encodeDNGSRGB(rgb[0]), G: encodeDNGSRGB(rgb[1]), B: encodeDNGSRGB(rgb[2]), A: 65535,
 			})
 		}

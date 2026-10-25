@@ -87,7 +87,7 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 			}
 			// Stage 1 uses a different raw-value domain. Only normalized
 			// post-linearization and post-demosaic operations are supported.
-			if (id != 1 && id != 2 && id != 3 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 {
+			if (id != 1 && id != 2 && id != 3 && id != 6 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 {
 				if flags&1 != 0 {
 					continue
 				}
@@ -128,6 +128,14 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 				}
 				continue
 			}
+			if id == 6 {
+				trim, err := parseDNGTrimBounds(payload)
+				if err != nil {
+					return nil, fmt.Errorf("Linear DNG TrimBounds in tag %d: %w", tag, err)
+				}
+				opcodes = append(opcodes, dngImageOpcode{trim: &trim})
+				continue
+			}
 			opcode, err := parseDNGPointOpcode(id, payload)
 			if err != nil {
 				return nil, fmt.Errorf("Linear DNG opcode %d in tag %d: %w", id, tag, err)
@@ -139,6 +147,21 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 		}
 	}
 	return opcodes, nil
+}
+
+func parseDNGTrimBounds(data []byte) (image.Rectangle, error) {
+	if len(data) != 16 {
+		return image.Rectangle{}, fmt.Errorf("invalid TrimBounds parameter size")
+	}
+	top := int(int32(binary.BigEndian.Uint32(data)))
+	left := int(int32(binary.BigEndian.Uint32(data[4:])))
+	bottom := int(int32(binary.BigEndian.Uint32(data[8:])))
+	right := int(int32(binary.BigEndian.Uint32(data[12:])))
+	trim := image.Rect(left, top, right, bottom)
+	if trim.Empty() {
+		return image.Rectangle{}, fmt.Errorf("empty TrimBounds rectangle")
+	}
+	return trim, nil
 }
 
 func parseDNGOpcodeArea(data []byte) (dngOpcodeArea, error) {
@@ -299,9 +322,14 @@ func (gainMap *dngGainMap) gain(x, y, plane, width, height int) float64 {
 }
 
 func applyDNGPointOpcodes(opcodes []dngPointOpcode, camera *[3]float64, x, y, channels, width, height int) {
+	applyDNGPointOpcodesAt(opcodes, camera, x, y, 0, 0, channels, width, height)
+}
+
+func applyDNGPointOpcodesAt(opcodes []dngPointOpcode, camera *[3]float64, x, y, originX, originY, channels, width, height int) {
+	imageX, imageY := x+originX, y+originY
 	for i := range opcodes {
 		opcode := &opcodes[i]
-		if !image.Pt(x, y).In(opcode.area) || (y-opcode.area.Min.Y)%opcode.rowPitch != 0 || (x-opcode.area.Min.X)%opcode.colPitch != 0 {
+		if !image.Pt(imageX, imageY).In(opcode.area) || (imageY-opcode.area.Min.Y)%opcode.rowPitch != 0 || (imageX-opcode.area.Min.X)%opcode.colPitch != 0 {
 			continue
 		}
 		for plane := opcode.plane; plane < min(channels, opcode.plane+opcode.planes); plane++ {
@@ -319,13 +347,13 @@ func applyDNGPointOpcodes(opcodes []dngPointOpcode, camera *[3]float64, x, y, ch
 			case 9:
 				value *= opcode.gainMap.gain(x, y, plane, width, height)
 			case 10:
-				value += float64(opcode.table[(y-opcode.area.Min.Y)/opcode.rowPitch])
+				value += float64(opcode.table[(imageY-opcode.area.Min.Y)/opcode.rowPitch])
 			case 11:
-				value += float64(opcode.table[(x-opcode.area.Min.X)/opcode.colPitch])
+				value += float64(opcode.table[(imageX-opcode.area.Min.X)/opcode.colPitch])
 			case 12:
-				value *= float64(opcode.table[(y-opcode.area.Min.Y)/opcode.rowPitch])
+				value *= float64(opcode.table[(imageY-opcode.area.Min.Y)/opcode.rowPitch])
 			case 13:
-				value *= float64(opcode.table[(x-opcode.area.Min.X)/opcode.colPitch])
+				value *= float64(opcode.table[(imageX-opcode.area.Min.X)/opcode.colPitch])
 			}
 			camera[plane] = min(1, max(0, value))
 		}
