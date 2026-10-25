@@ -8,8 +8,21 @@ import (
 
 type dngWarp struct {
 	coefficients     [][6]float64
+	rectilinear2     []dngWarpRectilinear2Parameters
+	reciprocalRadial bool
 	centerX, centerY float64
 	fisheye          bool
+}
+
+type dngWarpRectilinear2Parameters struct {
+	radial                         [15]float64
+	tangential                     [2]float64
+	minValidRadius, maxValidRadius float64
+	centerX, centerY               float64
+}
+
+type dngWarpPlaneGeometry struct {
+	centerX, centerY, radius float64
 }
 
 type dngImageOpcode struct {
@@ -24,6 +37,47 @@ func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarp, error) {
 
 func parseDNGWarpFisheye(data []byte, channels int) (*dngWarp, error) {
 	return parseDNGWarp(data, channels, 4, true)
+}
+
+func parseDNGWarpRectilinear2(data []byte, channels int) (*dngWarp, error) {
+	const parameterSetBytes = 21 * 8
+	if len(data) < 8 || channels < 1 {
+		return nil, fmt.Errorf("truncated WarpRectilinear2 parameters")
+	}
+	count := uint64(binary.BigEndian.Uint32(data))
+	if (count != 1 && count != uint64(channels)) || uint64(len(data)) != 8+count*parameterSetBytes {
+		return nil, fmt.Errorf("invalid WarpRectilinear2 coefficient count")
+	}
+	warp := &dngWarp{rectilinear2: make([]dngWarpRectilinear2Parameters, int(count)), reciprocalRadial: binary.BigEndian.Uint32(data[len(data)-4:]) != 0}
+	for plane := range warp.rectilinear2 {
+		parameters := &warp.rectilinear2[plane]
+		start := 4 + plane*parameterSetBytes
+		for coefficient := range parameters.radial {
+			value := math.Float64frombits(binary.BigEndian.Uint64(data[start+coefficient*8:]))
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return nil, fmt.Errorf("non-finite WarpRectilinear2 radial coefficient")
+			}
+			parameters.radial[coefficient] = value
+		}
+		for tangent := range parameters.tangential {
+			value := math.Float64frombits(binary.BigEndian.Uint64(data[start+(15+tangent)*8:]))
+			if math.IsNaN(value) || math.IsInf(value, 0) {
+				return nil, fmt.Errorf("non-finite WarpRectilinear2 tangential coefficient")
+			}
+			parameters.tangential[tangent] = value
+		}
+		parameters.minValidRadius = math.Float64frombits(binary.BigEndian.Uint64(data[start+17*8:]))
+		parameters.maxValidRadius = math.Float64frombits(binary.BigEndian.Uint64(data[start+18*8:]))
+		parameters.centerX = math.Float64frombits(binary.BigEndian.Uint64(data[start+19*8:]))
+		parameters.centerY = math.Float64frombits(binary.BigEndian.Uint64(data[start+20*8:]))
+		if math.IsNaN(parameters.minValidRadius) || math.IsInf(parameters.minValidRadius, 0) || math.IsNaN(parameters.maxValidRadius) || math.IsInf(parameters.maxValidRadius, 0) || parameters.minValidRadius < 0 || parameters.minValidRadius >= parameters.maxValidRadius || parameters.maxValidRadius > 1 {
+			return nil, fmt.Errorf("invalid WarpRectilinear2 valid radius range")
+		}
+		if !isNormalizedDNGCoordinate(parameters.centerX) || !isNormalizedDNGCoordinate(parameters.centerY) {
+			return nil, fmt.Errorf("WarpRectilinear2 center must be within normalized image bounds")
+		}
+	}
+	return warp, nil
 }
 
 func parseDNGWarp(data []byte, channels, coefficientCount int, fisheye bool) (*dngWarp, error) {
@@ -59,6 +113,14 @@ func (warp *dngWarp) identity() bool {
 		// image, so even a zero-order fisheye coefficient needs resampling.
 		return false
 	}
+	if len(warp.rectilinear2) != 0 {
+		for _, parameters := range warp.rectilinear2 {
+			if parameters.radial != [15]float64{1} || parameters.tangential != [2]float64{} {
+				return false
+			}
+		}
+		return true
+	}
 	for _, c := range warp.coefficients {
 		if c != ([6]float64{1, 0, 0, 0, 0, 0}) {
 			return false
@@ -70,6 +132,7 @@ func (warp *dngWarp) identity() bool {
 type dngWarpGeometry struct {
 	warp                                    *dngWarp
 	centerX, centerY, radius, verticalScale float64
+	planeGeometry                           []dngWarpPlaneGeometry
 }
 
 func (warp *dngWarp) geometry(width, height int, verticalScale float64) dngWarpGeometry {
@@ -77,6 +140,17 @@ func (warp *dngWarp) geometry(width, height int, verticalScale float64) dngWarpG
 	// square-pixel height for its normalization radius, but keeps original
 	// image coordinates when locating the center and sampling pixels.
 	squareHeight := math.Round(float64(height) * verticalScale)
+	if len(warp.rectilinear2) != 0 {
+		geometry := dngWarpGeometry{warp: warp, verticalScale: verticalScale, planeGeometry: make([]dngWarpPlaneGeometry, len(warp.rectilinear2))}
+		for plane, parameters := range warp.rectilinear2 {
+			cx := float64(width) * parameters.centerX
+			cy := float64(height) * parameters.centerY
+			squareCenterY := squareHeight * parameters.centerY
+			radius := math.Hypot(max(math.Abs(cx), math.Abs(float64(width)-cx)), max(math.Abs(squareCenterY), math.Abs(squareHeight-squareCenterY)))
+			geometry.planeGeometry[plane] = dngWarpPlaneGeometry{centerX: cx, centerY: cy, radius: radius}
+		}
+		return geometry
+	}
 	x := float64(width) * warp.centerX
 	y := squareHeight * warp.centerY
 	radius := math.Hypot(max(x, float64(width)-x), max(y, squareHeight-y))
@@ -84,6 +158,26 @@ func (warp *dngWarp) geometry(width, height int, verticalScale float64) dngWarpG
 }
 
 func (geometry dngWarpGeometry) source(x, y, plane int) (float64, float64) {
+	if len(geometry.warp.rectilinear2) != 0 {
+		index := plane % len(geometry.warp.rectilinear2)
+		parameters := geometry.warp.rectilinear2[index]
+		planeGeometry := geometry.planeGeometry[index]
+		dx, dy := float64(x)-planeGeometry.centerX, float64(y)-planeGeometry.centerY
+		u, v := dx/planeGeometry.radius, dy*geometry.verticalScale/planeGeometry.radius
+		r := math.Min(1, math.Hypot(u, v))
+		validRadius := min(parameters.maxValidRadius, max(parameters.minValidRadius, r))
+		factor := parameters.radial[14]
+		for coefficient := 13; coefficient >= 0; coefficient-- {
+			factor = factor*validRadius + parameters.radial[coefficient]
+		}
+		if geometry.warp.reciprocalRadial {
+			factor = 1 / factor
+		}
+		r2 := u*u + v*v
+		tangentX := 2*parameters.tangential[0]*u*v + parameters.tangential[1]*(r2+2*u*u)
+		tangentY := 2*parameters.tangential[1]*u*v + parameters.tangential[0]*(r2+2*v*v)
+		return planeGeometry.centerX + dx*factor + planeGeometry.radius*tangentX, planeGeometry.centerY + dy*factor + planeGeometry.radius*tangentY/geometry.verticalScale
+	}
 	c := geometry.warp.coefficients[plane%len(geometry.warp.coefficients)]
 	dx, dy := float64(x)-geometry.centerX, float64(y)-geometry.centerY
 	u, v := dx/geometry.radius, dy*geometry.verticalScale/geometry.radius

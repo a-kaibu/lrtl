@@ -473,7 +473,7 @@ func TestLinearDNGWarpFallbackAfterUnsupportedOptional(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, flags := range []uint32{0, 1} {
-			data := linearDNGFixture(order, 8, 8, 1, pixels, map[uint16]dngTestField{51022: testDNGOpcodeList(testDNGOpcode{14, 0x01070100, flags, nil}, warp)})
+			data := linearDNGFixture(order, 8, 8, 1, pixels, map[uint16]dngTestField{51022: testDNGOpcodeList(testDNGOpcode{15, 0x01070100, flags, nil}, warp)})
 			got, err := decodeLinearDNG(data)
 			if flags == 0 {
 				if err == nil {

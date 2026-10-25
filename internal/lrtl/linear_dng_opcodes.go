@@ -66,6 +66,7 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 		if count > 1024 || count > uint64(len(data))/16 {
 			return nil, fmt.Errorf("invalid Linear DNG opcode count in tag %d", tag)
 		}
+		skipNextWarpFallback := false
 		for i := uint64(0); i < count; i++ {
 			if len(data) < 16 {
 				return nil, fmt.Errorf("truncated Linear DNG opcode header")
@@ -78,29 +79,43 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 			}
 			payload := data[:size]
 			data = data[size:]
+			if skipNextWarpFallback {
+				skipNextWarpFallback = false
+				if id == 1 || id == 2 {
+					continue
+				}
+			}
 			// Stage 1 uses a different raw-value domain. Only normalized
 			// post-linearization and post-demosaic operations are supported.
-			if (id != 1 && id != 2 && id != 3 && (id < 7 || id > 13)) || tag == 51008 || version > 0x01070100 {
+			if (id != 1 && id != 2 && id != 3 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 {
 				if flags&1 != 0 {
 					continue
 				}
 				return nil, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
 			}
-			if id == 1 || id == 2 {
+			if id == 1 || id == 2 || id == 14 {
 				var warp *dngWarp
 				var err error
 				if id == 1 {
 					warp, err = parseDNGWarpRectilinear(payload, channels)
-				} else {
+				} else if id == 2 {
 					warp, err = parseDNGWarpFisheye(payload, channels)
+				} else {
+					warp, err = parseDNGWarpRectilinear2(payload, channels)
 				}
 				if err != nil {
 					return nil, fmt.Errorf("Linear DNG warp in tag %d: %w", tag, err)
 				}
 				if warp.identity() {
+					if id == 14 && flags&1 != 0 {
+						skipNextWarpFallback = true
+					}
 					continue
 				}
 				opcodes = append(opcodes, dngImageOpcode{warp: warp})
+				if id == 14 && flags&1 != 0 {
+					skipNextWarpFallback = true
+				}
 				continue
 			}
 			if id == 3 {

@@ -25,13 +25,13 @@ func parseDNGVignetteRadial(data []byte) (*dngVignetteRadial, error) {
 	}
 	result.centerX = math.Float64frombits(binary.BigEndian.Uint64(data[40:]))
 	result.centerY = math.Float64frombits(binary.BigEndian.Uint64(data[48:]))
-	if !isNormalizedVignetteCenter(result.centerX) || !isNormalizedVignetteCenter(result.centerY) {
+	if !isNormalizedDNGCoordinate(result.centerX) || !isNormalizedDNGCoordinate(result.centerY) {
 		return nil, fmt.Errorf("optical center must be within normalized image bounds")
 	}
 	return result, nil
 }
 
-func isNormalizedVignetteCenter(value float64) bool {
+func isNormalizedDNGCoordinate(value float64) bool {
 	return !math.IsNaN(value) && !math.IsInf(value, 0) && value >= 0 && value <= 1
 }
 
