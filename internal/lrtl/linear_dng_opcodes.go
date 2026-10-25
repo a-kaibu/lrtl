@@ -48,8 +48,12 @@ func dngOpcodeBytes(fields *dngFields, tag uint16) ([]byte, error) {
 	return fields.scanner.data[offset : offset+uint64(entry.count)], nil
 }
 
-func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, error) {
+func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngImageOpcode, error) {
+	if width < 1 || height < 1 {
+		return nil, fmt.Errorf("invalid Linear DNG opcode image dimensions")
+	}
 	var opcodes []dngImageOpcode
+	imageBounds := image.Rect(0, 0, width, height)
 	for _, tag := range []uint16{51008, 51009, 51022} {
 		data, err := dngOpcodeBytes(fields, tag)
 		if err != nil {
@@ -133,12 +137,24 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 				if err != nil {
 					return nil, fmt.Errorf("Linear DNG TrimBounds in tag %d: %w", tag, err)
 				}
+				if !trim.In(imageBounds) {
+					return nil, fmt.Errorf("Linear DNG TrimBounds in tag %d is outside the current image", tag)
+				}
+				imageBounds = trim
 				opcodes = append(opcodes, dngImageOpcode{trim: &trim})
 				continue
 			}
 			opcode, err := parseDNGPointOpcode(id, payload)
 			if err != nil {
 				return nil, fmt.Errorf("Linear DNG opcode %d in tag %d: %w", id, tag, err)
+			}
+			if opcode.area.Empty() {
+				if (id == 10 || id == 12) && (opcode.area.Min.Y > imageBounds.Min.Y || opcode.area.Max.Y < imageBounds.Max.Y) {
+					return nil, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose row table does not cover the current image", id, tag)
+				}
+				if (id == 11 || id == 13) && (opcode.area.Min.X > imageBounds.Min.X || opcode.area.Max.X < imageBounds.Max.X) {
+					return nil, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose column table does not cover the current image", id, tag)
+				}
 			}
 			opcodes = append(opcodes, dngImageOpcode{point: &opcode})
 		}
@@ -173,11 +189,25 @@ func parseDNGOpcodeArea(data []byte) (dngOpcodeArea, error) {
 	for i := range values {
 		values[i] = binary.BigEndian.Uint32(data[i*4:])
 	}
-	if values[0] >= values[2] || values[1] >= values[3] || values[2] > math.MaxInt32 || values[3] > math.MaxInt32 || uint64(values[4])+uint64(values[5]) > math.MaxInt32 || values[5] == 0 || values[6] == 0 || values[7] == 0 || values[6] > math.MaxInt32 || values[7] > math.MaxInt32 {
+	if values[0] > math.MaxInt32 || values[1] > math.MaxInt32 || values[2] > math.MaxInt32 || values[3] > math.MaxInt32 || uint64(values[4])+uint64(values[5]) > math.MaxInt32 || values[5] == 0 || values[6] == 0 || values[7] == 0 || values[6] > math.MaxInt32 || values[7] > math.MaxInt32 {
 		return result, fmt.Errorf("invalid area, plane range or pitch")
 	}
-	result.area = image.Rect(int(values[1]), int(values[0]), int(values[3]), int(values[2]))
 	result.plane, result.planes, result.rowPitch, result.colPitch = int(values[4]), int(values[5]), int(values[6]), int(values[7])
+	if values[0] > values[2] || values[1] > values[3] {
+		return dngOpcodeArea{}, fmt.Errorf("inverted area rectangle")
+	}
+	if values[0] == values[2] || values[1] == values[3] {
+		if values[6] != 1 || values[7] != 1 {
+			return dngOpcodeArea{}, fmt.Errorf("empty area requires unit row and column pitch")
+		}
+		result.area = image.Rect(int(values[1]), int(values[0]), int(values[3]), int(values[2]))
+		return result, nil
+	}
+	height, width := values[2]-values[0], values[3]-values[1]
+	if values[6] > height || values[7] > width {
+		return dngOpcodeArea{}, fmt.Errorf("area pitch exceeds its dimensions")
+	}
+	result.area = image.Rect(int(values[1]), int(values[0]), int(values[3]), int(values[2]))
 	return result, nil
 }
 
@@ -231,11 +261,14 @@ func parseDNGPointOpcode(id uint32, data []byte) (dngPointOpcode, error) {
 	if id == 11 || id == 13 {
 		span, pitch = area.area.Dx(), area.colPitch
 	}
-	expected := (span-1)/pitch + 1
-	if count != uint64(expected) || count > uint64((len(data)-36)/4) || uint64(len(data)) != 36+count*4 {
+	if span < 1 {
+		return result, fmt.Errorf("empty area has no row/column span")
+	}
+	expected := uint64((span-1)/pitch + 1)
+	if count != expected || count > uint64((len(data)-36)/4) || uint64(len(data)) != 36+count*4 {
 		return result, fmt.Errorf("invalid row/column table count")
 	}
-	result.table = make([]float32, expected)
+	result.table = make([]float32, int(expected))
 	for i := range result.table {
 		value := math.Float32frombits(binary.BigEndian.Uint32(data[36+i*4:]))
 		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
@@ -329,7 +362,8 @@ func applyDNGPointOpcodesAt(opcodes []dngPointOpcode, camera *[3]float64, x, y, 
 	imageX, imageY := x+originX, y+originY
 	for i := range opcodes {
 		opcode := &opcodes[i]
-		if !image.Pt(imageX, imageY).In(opcode.area) || (imageY-opcode.area.Min.Y)%opcode.rowPitch != 0 || (imageX-opcode.area.Min.X)%opcode.colPitch != 0 {
+		areaEmpty := opcode.area.Empty()
+		if (!areaEmpty && !image.Pt(imageX, imageY).In(opcode.area)) || (!areaEmpty && ((imageY-opcode.area.Min.Y)%opcode.rowPitch != 0 || (imageX-opcode.area.Min.X)%opcode.colPitch != 0)) {
 			continue
 		}
 		for plane := opcode.plane; plane < min(channels, opcode.plane+opcode.planes); plane++ {
@@ -347,13 +381,17 @@ func applyDNGPointOpcodesAt(opcodes []dngPointOpcode, camera *[3]float64, x, y, 
 			case 9:
 				value *= opcode.gainMap.gain(x, y, plane, width, height)
 			case 10:
-				value += float64(opcode.table[(imageY-opcode.area.Min.Y)/opcode.rowPitch])
+				row := (imageY - opcode.area.Min.Y) / opcode.rowPitch
+				value += float64(opcode.table[row])
 			case 11:
-				value += float64(opcode.table[(imageX-opcode.area.Min.X)/opcode.colPitch])
+				col := (imageX - opcode.area.Min.X) / opcode.colPitch
+				value += float64(opcode.table[col])
 			case 12:
-				value *= float64(opcode.table[(imageY-opcode.area.Min.Y)/opcode.rowPitch])
+				row := (imageY - opcode.area.Min.Y) / opcode.rowPitch
+				value *= float64(opcode.table[row])
 			case 13:
-				value *= float64(opcode.table[(imageX-opcode.area.Min.X)/opcode.colPitch])
+				col := (imageX - opcode.area.Min.X) / opcode.colPitch
+				value *= float64(opcode.table[col])
 			}
 			camera[plane] = min(1, max(0, value))
 		}

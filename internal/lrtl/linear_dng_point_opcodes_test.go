@@ -105,6 +105,175 @@ func testDNGAxisOpcode(id uint32, area []byte, values ...float32) testDNGOpcode 
 	return testDNGOpcode{id, 0x01030000, 0, data}
 }
 
+func TestDNGPointOpcodesEmptyAreaCoversWholeImage(t *testing.T) {
+	empty := testDNGArea(image.Rectangle{}, 0, 1, 1, 1)
+	area, err := parseDNGOpcodeArea(empty)
+	if err != nil || !area.area.Empty() {
+		t.Fatalf("empty opcode area: area=%+v err=%v", area, err)
+	}
+	for name, malformed := range map[string][]byte{
+		"row pitch":    testDNGArea(image.Rectangle{}, 0, 1, 2, 1),
+		"column pitch": testDNGArea(image.Rectangle{}, 0, 1, 1, 2),
+		"inverted row": func() []byte {
+			data := append([]byte(nil), empty...)
+			binary.BigEndian.PutUint32(data[0:], 1)
+			return data
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseDNGOpcodeArea(malformed); err == nil {
+				t.Fatal("invalid empty area accepted")
+			}
+		})
+	}
+
+	for _, test := range []struct {
+		id     uint32
+		values []float32
+	}{
+		{10, []float32{.125, .25}},
+		{11, []float32{.0625, .125, .1875}},
+		{12, []float32{2, 3}},
+		{13, []float32{.5, 1, 2}},
+	} {
+		area := image.Rect(0, 0, 0, len(test.values))
+		if test.id == 11 || test.id == 13 {
+			area = image.Rect(0, 0, len(test.values), 0)
+		}
+		opcode, err := parseDNGPointOpcode(test.id, testDNGAxisOpcode(test.id, testDNGArea(area, 0, 1, 1, 1), test.values...).payload)
+		if err != nil {
+			t.Fatalf("opcode %d: %v", test.id, err)
+		}
+		for y := 0; y < 2; y++ {
+			for x := 0; x < 3; x++ {
+				camera := [3]float64{.125, .25, .5}
+				applyDNGPointOpcodes([]dngPointOpcode{opcode}, &camera, x, y, 3, 3, 2)
+				for plane := range camera {
+					want := []float64{.125, .25, .5}[plane]
+					if plane == 0 {
+						index := y
+						if test.id == 11 || test.id == 13 {
+							index = x
+						}
+						factor := float64(test.values[index])
+						switch test.id {
+						case 10, 11:
+							want += factor
+						case 12, 13:
+							want *= factor
+						}
+						want = min(1, max(0, want))
+					}
+					if camera[plane] != want {
+						t.Fatalf("opcode %d pixel (%d,%d) plane %d=%g want %g", test.id, x, y, plane, camera[plane], want)
+					}
+				}
+			}
+		}
+	}
+	if _, err := parseDNGPointOpcode(10, testDNGAxisOpcode(10, empty).payload); err == nil {
+		t.Fatal("empty-area row opcode without an encoded row span accepted")
+	}
+
+	for _, test := range []struct {
+		name string
+		id   uint32
+		make func() testDNGOpcode
+		want float64
+	}{
+		{"map table", 7, func() testDNGOpcode { return testDNGMapTable(empty, 0, 65535) }, 1},
+		{"polynomial", 8, func() testDNGOpcode { return testDNGPolynomial(empty, .125, .5) }, .25},
+		{"gain map", 9, func() testDNGOpcode { return testDNGGainMap(testDNGGainMapPayload(0, 0, 1, 1, 1, 2)) }, .5},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			encoded := test.make()
+			opcode, err := parseDNGPointOpcode(test.id, encoded.payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for y := 0; y < 2; y++ {
+				for x := 0; x < 3; x++ {
+					camera := [3]float64{.25, .25, .25}
+					applyDNGPointOpcodes([]dngPointOpcode{opcode}, &camera, x, y, 1, 3, 2)
+					if camera[0] != test.want || camera[1] != .25 || camera[2] != .25 {
+						t.Fatalf("pixel (%d,%d)=%v want channel 0 %g", x, y, camera, test.want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestLinearDNGEmptyAreaTablesUseEncodedAxisExtentAndPostTrimCoordinates(t *testing.T) {
+	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		const width, height = 5, 4
+		pixels := make([]uint16, width*height)
+		for i := range pixels {
+			pixels[i] = 16384
+		}
+		emptyRows := testDNGArea(image.Rect(0, 0, 0, height), 0, 1, 1, 1)
+		emptyColumns := testDNGArea(image.Rect(0, 0, width, 0), 0, 1, 1, 1)
+		trim := testDNGTrimBounds(1, 1, 3, 4)
+		fields := map[uint16]dngTestField{
+			50717: dngTestLong(order, 65535),
+			51009: testDNGOpcodeList(trim,
+				testDNGAxisOpcode(10, emptyRows, 0, .125, .25, 0),
+				testDNGAxisOpcode(11, emptyColumns, 0, .0625, .125, .1875, 0),
+				testDNGAxisOpcode(12, emptyRows, 1, 2, 3, 1),
+				testDNGAxisOpcode(13, emptyColumns, 1, .5, 1, 2, 1)),
+		}
+		img, err := decodeLinearDNG(linearDNGFixture(order, width, height, 1, pixels, fields))
+		if err != nil {
+			t.Fatalf("%s: %v", order, err)
+		}
+		if img.Bounds() != image.Rect(0, 0, 3, 2) {
+			t.Fatalf("%s bounds=%v", order, img.Bounds())
+		}
+		for y := 0; y < 2; y++ {
+			for x := 0; x < 3; x++ {
+				linear := float64(float32(float64(16384)/65535)) + float64(float32([]float32{.125, .25}[y]))
+				linear = min(1, max(0, linear))
+				linear += float64(float32([]float32{.0625, .125, .1875}[x]))
+				linear = min(1, max(0, linear))
+				linear *= []float64{2, 3}[y]
+				linear = min(1, max(0, linear))
+				linear *= []float64{.5, 1, 2}[x]
+				linear = min(1, max(0, linear))
+				want := encodeDNGSRGB(float64(float32(linear)))
+				pixel := img.NRGBA64At(x, y)
+				if pixel.R != want || pixel.G != want || pixel.B != want {
+					t.Fatalf("%s (%d,%d)=%v want %d", order, x, y, pixel, want)
+				}
+			}
+		}
+
+		// Empty AreaSpec tables use their encoded axis extent, and their
+		// coordinates remain based on the pre-trim image.
+		for _, bad := range []testDNGOpcode{
+			testDNGAxisOpcode(10, emptyRows, .125, .25, .375),
+			testDNGAxisOpcode(11, emptyColumns, .0625, .125, .1875, .25),
+		} {
+			badFixture := linearDNGFixture(order, width, height, 1, pixels, map[uint16]dngTestField{
+				51009: testDNGOpcodeList(trim, bad),
+			})
+			if _, err := decodeLinearDNG(badFixture); err == nil {
+				t.Fatalf("%s opcode %d accepted a table count that disagrees with the encoded axis extent", order, bad.id)
+			}
+		}
+		for _, bad := range []testDNGOpcode{
+			testDNGAxisOpcode(10, testDNGArea(image.Rect(2, 0, 0, 4), 0, 1, 1, 1), .125, .25),
+			testDNGAxisOpcode(11, testDNGArea(image.Rect(0, 2, 4, 0), 0, 1, 1, 1), .0625, .125),
+		} {
+			badFixture := linearDNGFixture(order, width, height, 1, pixels, map[uint16]dngTestField{
+				51009: testDNGOpcodeList(trim, bad),
+			})
+			if _, err := decodeLinearDNG(badFixture); err == nil {
+				t.Fatalf("%s opcode %d accepted an empty-area table that does not cover the trimmed image", order, bad.id)
+			}
+		}
+	}
+}
+
 func TestDNGPolynomialDegreesAgainstPowerSum(t *testing.T) {
 	area := testDNGArea(image.Rect(0, 0, 1, 1), 0, 1, 1, 1)
 	coefficients := []float64{.0625, .5, -.125, .25, -.125, .0625, -.03125, .015625, -.0078125}

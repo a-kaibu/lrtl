@@ -1659,7 +1659,7 @@ Adobe DNG Converterが出力したLinear DNGを、Go側で黒レベル・白レ�
 | 12 / 13 | ScalePerRow / ScalePerColumn | 対象の各行/列へテーブル値を乗算 |
 | 14 | WarpRectilinear2 | 径方向0〜14次、接線方向2係数、有効半径、逆数モードを備えたワープ。色面ごとの中心・係数に対応 |
 
-OpcodeのデータはTIFF本体のバイト順と独立してbig-endianで読みます。必須の未対応Opcode、将来バージョンの必須Opcode、不正なサイズ・非有限値はエラーです。行/列のテーブル数は指定領域と間引き後の要素数に一致する必要があります。オプション指定された未対応Opcodeはスキップし、対応済みのOpcodeはオプション/プレビュー指定でも適用します。対応する`WarpRectilinear2`がオプション指定の場合、その次に置かれた`WarpRectilinear`または`WarpFisheye`だけを互換用フォールバックとしてスキップします。`TrimBounds`後の配列を縮小し、後続Opcodeの座標原点を保持してDefaultCropと交差します。現在は1リスト1024個・16 MiBまでです。`OpcodeList1`、欠陥画素補間など他のOpcodeは未対応です。画像IFDごとのリストを使い、別のルートプレビューのリストは継承しません。
+OpcodeのデータはTIFF本体のバイト順と独立してbig-endianで読みます。必須の未対応Opcode、将来バージョンの必須Opcode、不正なサイズ・非有限値はエラーです。行/列のテーブル数は指定領域と間引き後の要素数に一致する必要があります。空領域はそのOpcode時点の画像全体を表し、row/column pitchは1にします。行/列Opcodeでは空領域でもテーブル添字の基準座標と行数/列数は格納された領域のTop/BottomまたはLeft/Rightを使い、`TrimBounds`後も画像座標を保持します。オプション指定された未対応Opcodeはスキップし、対応済みのOpcodeはオプション/プレビュー指定でも適用します。対応する`WarpRectilinear2`がオプション指定の場合、その次に置かれた`WarpRectilinear`または`WarpFisheye`だけを互換用フォールバックとしてスキップします。`TrimBounds`後の配列を縮小し、後続Opcodeの座標原点を保持してDefaultCropと交差します。現在は1リスト1024個・16 MiBまでです。`OpcodeList1`、欠陥画素補間など他のOpcodeは未対応です。画像IFDごとのリストを使い、別のルートプレビューのリストは継承しません。
 
 FixVignetteRadialはActiveAreaを基準に正規化した光学中心と、最も遠い角までの距離から半径を求めます。ゲイン`1 + k0·r² + k1·r⁴ + … + k4·r¹⁰`を線形値へ乗算し、Opcodeの後で0〜1にクリップします。WarpRectilinear2は色面ごとの15径方向係数、2接線係数、有効半径と任意の逆数モードを使い、WarpRectilinear/WarpFisheyeと同じ再サンプル処理へ渡します。WarpRectilinear/WarpRectilinear2/WarpFisheyeは変形先から入力位置を求め、画像外は端へ制限し、係数A=-0.75のバイキュービック補間で読みます。幾何補正・ビネット補正を含む場合はActiveArea全体の線形カメラ値をfloat32で保持して他の補正との記録順を守り、作業バッファーの上限を1 GiBにします（画像ファイルや出力画像のメモリーは別です）。恒等ワープでは再サンプルせず、従来の精度を保ちます。補間重みは直接計算しており、SDKの座標・重みテーブルの量子化とは一致しません。サイズ・有限値・中心範囲・有効半径・演算時の座標を検査しますが、全係数モデルの可逆性を保証する検査は未実装です。
 

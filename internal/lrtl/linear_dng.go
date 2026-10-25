@@ -257,7 +257,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		return nil, err
 	}
 	activeArea := crop
-	imageOpcodes, err := readDNGImageOpcodes(fields, channels)
+	imageOpcodes, err := readDNGImageOpcodes(fields, channels, activeArea.Dx(), activeArea.Dy())
 	if err != nil {
 		return nil, err
 	}

@@ -192,7 +192,11 @@ func TestDNGGainMapRejectsMalformedData(t *testing.T) {
 	payload := testDNGGainMapPayload(4, 4, 2, 2, 1, 1, 2, 3, 4)
 	for name, mutate := range map[string]func([]byte) []byte{
 		"truncated": func(p []byte) []byte { return p[:70] }, "missing-sample": func(p []byte) []byte { return p[:len(p)-4] }, "trailing": func(p []byte) []byte { return append(p, 0) },
-		"zero-row-pitch": func(p []byte) []byte { binary.BigEndian.PutUint32(p[24:], 0); return p }, "empty-area": func(p []byte) []byte { binary.BigEndian.PutUint32(p[8:], 0); return p },
+		"zero-row-pitch": func(p []byte) []byte { binary.BigEndian.PutUint32(p[24:], 0); return p }, "empty-area-nonunit-pitch": func(p []byte) []byte {
+			binary.BigEndian.PutUint32(p[8:], 0)
+			binary.BigEndian.PutUint32(p[24:], 2)
+			return p
+		},
 		"huge-grid": func(p []byte) []byte { binary.BigEndian.PutUint32(p[32:], 0xffffffff); return p }, "zero-planes": func(p []byte) []byte { binary.BigEndian.PutUint32(p[72:], 0); return p },
 		"nan-spacing": func(p []byte) []byte { binary.BigEndian.PutUint64(p[40:], math.Float64bits(math.NaN())); return p }, "underflow-spacing": func(p []byte) []byte { binary.BigEndian.PutUint64(p[48:], math.Float64bits(1e-300)); return p },
 		"negative-spacing": func(p []byte) []byte { binary.BigEndian.PutUint64(p[40:], math.Float64bits(-1)); return p }, "nan-origin": func(p []byte) []byte { binary.BigEndian.PutUint64(p[56:], math.Float64bits(math.NaN())); return p },
