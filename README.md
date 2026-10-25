@@ -12,12 +12,12 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### テスト状況
 
-機能変更には回帰テストを追加し、可能な項目はLRT 7.5.5の保存済み観測値と照合します。2026-10-25にGo 1.27.0（Windows/amd64）で`go test ./... -count=1 -timeout 20m`が成功し、`internal/lrtl`は572秒でした。`go vet ./...`も成功しています。通常テストは記録済みfixtureを使い、FFmpegがある環境では実動画の生成・復号テストも実行します。
+機能変更には回帰テストを追加し、可能な項目はLRT 7.5.5の保存済み観測値と照合します。2026-10-25にGo 1.27.0（Windows/amd64）で`go test ./... -count=1 -timeout 20m`が成功し、`internal/lrtl`は576.544秒でした。`go vet ./...`も成功しています。通常テストは記録済みfixtureを使い、FFmpegがある環境では実動画の生成・復号テストも実行します。
 
 ### 今回の互換性改善
 
 - `preview-ev`でLRT 7.5.5のカメラプレビュー縮小を再現しました。画像幅が設定値を超える場合、既定の1024×682へ1パスbilinearで縮小してから測光します。LRT本体の合成画像3条件でPreview EVを1e-5以内に比較し、拡大・縮小を含む6条件の82画素（246色成分）も完全一致を確認しました。`--preview-width-camera N`でLRTの設定幅も指定できます。LRT/Camera Rawの元画像デコード・色管理は未対応です。[JAR解析・オラクル・制限](internal/lrtl/testdata/lrt-preview-resize-7.5.5.md)
-- `keyframes`の自動数量・候補位置・既存評価との衝突処理を、インストール済みLRT 7.5.5の内部ヘルパーへ合成フレームを渡して照合しました。数量8件、選択位置8件、評価衝突8件をfixture化し、Goの回帰テストで比較します。50フレーム間隔の境界、250フレームごとの最低数、HGペア補正、衝突時の最大9枚前への移動を含みます。CLIの置換保存・バックアップ・元画像保持・再実行もテストしています。LRTは端点の2*/3* HG評価を上書きしますが、lrtlは保護します。LRTの元画像生成・ウィザードUI全体との一致は示しません。[オラクルと再生成手順](internal/lrtl/testdata/lrt-keyframe-quantity-7.5.5.md)
+- `keyframes`の自動数量・候補位置・既存評価との衝突処理を、インストール済みLRT 7.5.5の内部ヘルパーへ合成フレームを渡して照合しました。数量8件に加え、23種類の長さ・50/250枚境界・浮動小数切り捨て前後を含む747条件で測定レンジ、数量、配置を比較します。先頭フレームはLRTの数量測定レンジには含めず、HGペア補正の直前値として使う挙動も再現しました。評価衝突8件、HGマーカー順序と単独評価も検査し、CLIの置換保存・バックアップ・元画像保持・再実行もテストしています。LRTは端点の2*/3* HG評価を上書きしますが、lrtlは保護します。LRTの元画像生成・ウィザードUI全体との一致は示しません。[オラクルと再生成手順](internal/lrtl/testdata/lrt-keyframe-quantity-7.5.5.md)
 - Native Deflickerと`preview-ev`のJPEG測光で、LRT 7.5.5との実測に基づく4:2:0／4:2:2の中央配置色差補間と、4:4:0／4:1:1／4:1:0の最近傍選択を純Goで再現しました。FFmpeg／ImageMagick製の合成JPEG計14条件で、LRT復号ラスターとのRGB平均絶対差は最大0.364階調・最大3階調、Preview EV差は4:2:0で0.0024 EV未満、FFmpeg製4:2:2／4:4:4で0.0001 EV未満、ImageMagick製では0.001357 EV以下、最近傍の3形式で0.0007 EV未満です。合成Display P3 ICC付きサンプルでは、LRTのJPEG測光がICC APP2を外したJPEGと同じ復号画像・EVになることを確認しました。実写真と他のICC形式・JPEGエンコーダは未確認です。各サンプルの許容差と上限は回帰テストで検査しています。[測光オラクル](internal/lrtl/testdata/lrt-native-deflicker-image-7.5.5.md)／[ICC付きJPEG](internal/lrtl/testdata/lrt-icc-jpeg-metering-7.5.5.md)／[サブサンプリング検証](internal/lrtl/testdata/lrt-native-jpeg-subsampling-7.5.5.md)
 - Linear DNGの`OpcodeList2/3`に、放射状ビネット補正`FixVignetteRadial`（ID 3）を追加しました。r²〜r¹⁰の5係数と正規化中心を読み、Opcodeの順序どおり線形カメラ値へ適用します。仕様式との独立計算、両バイト順、色面、クリップ、RAW→16-bit TIFF→AVIと失敗時の出力取消をテストしています。Camera Rawの画素一致を示すものではありません。
 - Linear DNGの`OpcodeList2/3`に`WarpRectilinear2`（ID 14）を追加しました。r⁰〜r¹⁴の係数、多項式の有効半径、逆数モード、色面別の中心を使い、オプションOpcode直後の旧式ワープを省く互換規則も処理します。独立座標式、破損データ、両バイト順、RAW→16-bit TIFF→AVIをテストしています。

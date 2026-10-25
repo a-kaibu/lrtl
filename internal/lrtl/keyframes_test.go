@@ -389,6 +389,30 @@ func TestLRTWizardCountAndHolyGrailStepCompensation(t *testing.T) {
 	}
 }
 
+func TestLRTQuantityRangeSkipsFirstFrameButUsesItForHGPairCorrection(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		measurements []float64
+		markers      []bool
+		wantRange    float64
+		wantCount    int
+	}{
+		{name: "first_frame_only_spike_is_ignored", measurements: []float64{2, 0, 0}, markers: []bool{false, false, false}, wantRange: 0, wantCount: 1},
+		{name: "second_frame_spike_is_included", measurements: []float64{0, 2, 0}, markers: []bool{false, false, false}, wantRange: 2, wantCount: 1},
+		{name: "last_frame_spike_is_included", measurements: []float64{0, 0, 2}, markers: []bool{false, false, false}, wantRange: 2, wantCount: 1},
+		{name: "first_value_compensates_adjacent_hg_pair", measurements: []float64{0, 2, 2}, markers: []bool{true, true, false}, wantRange: 0, wantCount: 2},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := lrtKeyframeMeasurementRange(test.measurements, test.markers); got != test.wantRange {
+				t.Fatalf("measurement range=%.17g, want %.17g", got, test.wantRange)
+			}
+			if got := estimateAutoKeyframeCount(test.measurements, test.markers); got != test.wantCount {
+				t.Fatalf("automatic keyframe count=%d, want %d", got, test.wantCount)
+			}
+		})
+	}
+}
+
 func TestAutomaticKeyframeCountMatchesLRT755Oracle(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("testdata", "lrt-keyframe-quantity-7.5.5.json"))
 	if err != nil {
@@ -403,6 +427,18 @@ func TestAutomaticKeyframeCountMatchesLRT755Oracle(t *testing.T) {
 			LRTCount         int       `json:"lrtCount"`
 			LRTIndices       []int     `json:"lrtIndices"`
 		} `json:"cases"`
+		SweepCases []struct {
+			Name          string  `json:"name"`
+			Frames        int     `json:"frames"`
+			Offset        float64 `json:"offset"`
+			Range         float64 `json:"range"`
+			StepAt        int     `json:"stepAt"`
+			RatingIndices []int   `json:"ratingIndices"`
+			Ratings       []int   `json:"ratings"`
+			LRTRange      float64 `json:"lrtRange"`
+			LRTCount      int     `json:"lrtCount"`
+			LRTIndices    []int   `json:"lrtIndices"`
+		} `json:"quantitySweepCases"`
 	}
 	if err := json.Unmarshal(data, &fixture); err != nil {
 		t.Fatal(err)
@@ -429,6 +465,55 @@ func TestAutomaticKeyframeCountMatchesLRT755Oracle(t *testing.T) {
 				t.Fatalf("automatic keyframe count=%d, installed LRT 7.5.5 returned %d", got, test.LRTCount)
 			}
 			indices, err := selectLRTWizardKeyframeIndices(len(test.Measurements), test.LRTCount)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slicesEqual(indices, test.LRTIndices) {
+				t.Fatalf("wizard selected indices %v, installed LRT 7.5.5 returned %v", indices, test.LRTIndices)
+			}
+		})
+	}
+	if len(fixture.SweepCases) != 747 {
+		t.Fatalf("LRT quantity boundary sweep has %d cases, want 747", len(fixture.SweepCases))
+	}
+	for _, test := range fixture.SweepCases {
+		t.Run(test.Name, func(t *testing.T) {
+			if test.Frames < 2 || test.StepAt < -1 || test.StepAt >= test.Frames {
+				t.Fatalf("invalid generated input dimensions: frames=%d stepAt=%d", test.Frames, test.StepAt)
+			}
+			if len(test.RatingIndices) != len(test.Ratings) {
+				t.Fatalf("rating index/value counts differ: %d vs %d", len(test.RatingIndices), len(test.Ratings))
+			}
+			measurements := make([]float64, test.Frames)
+			for index := range measurements {
+				if test.StepAt >= 0 {
+					if index >= test.StepAt {
+						measurements[index] = test.Offset + test.Range
+					} else {
+						measurements[index] = test.Offset
+					}
+				} else {
+					measurements[index] = test.Offset + test.Range*float64(index)/float64(test.Frames-1)
+				}
+			}
+			markers := make([]bool, test.Frames)
+			for marker, index := range test.RatingIndices {
+				if index < 0 || index >= test.Frames {
+					t.Fatalf("rating marker %d has out-of-range frame %d", marker, index)
+				}
+				rating := test.Ratings[marker]
+				if rating != 2 && rating != 3 && rating != 4 && rating != 5 {
+					t.Fatalf("unexpected rating at frame %d: %d", index+1, rating)
+				}
+				markers[index] = rating == 2 || rating == 3
+			}
+			if got := lrtKeyframeMeasurementRange(measurements, markers); got != test.LRTRange {
+				t.Fatalf("measurement range=%.17g, installed LRT 7.5.5 returned %.17g", got, test.LRTRange)
+			}
+			if got := estimateAutoKeyframeCount(measurements, markers); got != test.LRTCount {
+				t.Fatalf("automatic keyframe count=%d, installed LRT 7.5.5 returned %d", got, test.LRTCount)
+			}
+			indices, err := selectLRTWizardKeyframeIndices(test.Frames, test.LRTCount)
 			if err != nil {
 				t.Fatal(err)
 			}

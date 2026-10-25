@@ -201,18 +201,11 @@ func estimateAutoKeyframeCount(measurements []float64, holyGrailMarkers []bool) 
 		holyGrailMarkers = make([]bool, len(measurements))
 	}
 
-	minimum, maximum := math.Inf(1), math.Inf(-1)
-	correction := 0.0
 	hasHolyGrailMarker := false
-	for index, value := range measurements {
-		hasHolyGrailMarker = hasHolyGrailMarker || holyGrailMarkers[index]
-		if index > 0 && holyGrailMarkers[index] && holyGrailMarkers[index-1] {
-			correction += measurements[index-1] - value
-		}
-		value += correction
-		minimum = math.Min(minimum, value)
-		maximum = math.Max(maximum, value)
+	for _, marker := range holyGrailMarkers {
+		hasHolyGrailMarker = hasHolyGrailMarker || marker
 	}
+	measurementRange := lrtKeyframeMeasurementRange(measurements, holyGrailMarkers)
 
 	frameCount := len(measurements)
 	span := frameCount - 1
@@ -221,7 +214,7 @@ func estimateAutoKeyframeCount(measurements []float64, holyGrailMarkers []bool) 
 	frameFactor := float32(1) + float32(1000)/float32(frameCount)/float32(10)
 	// The installed Java helper divides by the float32 value 0.1, then
 	// multiplies by its float32 frame factor.
-	count := int((maximum - minimum) / float64(float32(0.1)) * float64(frameFactor))
+	count := int(measurementRange / float64(float32(0.1)) * float64(frameFactor))
 	if minimumSpacingCount := span / 250; count < minimumSpacingCount {
 		count = minimumSpacingCount
 	}
@@ -235,6 +228,26 @@ func estimateAutoKeyframeCount(measurements []float64, holyGrailMarkers []bool) 
 		count = 2
 	}
 	return count
+}
+
+// lrtKeyframeMeasurementRange mirrors cOM7.A() in the installed 7.5.5 JAR.
+// It uses frame zero when calculating an adjacent Holy Grail correction but
+// only updates the measurement extrema for frames 1..N-1.
+func lrtKeyframeMeasurementRange(measurements []float64, holyGrailMarkers []bool) float64 {
+	minimum, maximum := 100.0, -100.0
+	correction := 0.0
+	for index, value := range measurements {
+		if index > 0 && holyGrailMarkers[index] && holyGrailMarkers[index-1] {
+			correction += measurements[index-1] - value
+		}
+		if index == 0 {
+			continue
+		}
+		value += correction
+		minimum = math.Min(minimum, value)
+		maximum = math.Max(maximum, value)
+	}
+	return math.Abs(maximum - minimum)
 }
 
 // readLRTKeyframeMeasurements returns the per-frame values that the installed

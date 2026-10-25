@@ -17,6 +17,8 @@ import java.util.jar.JarOutputStream;
 @SuppressWarnings("removal")
 public final class LRTKeyframeQuantityOracle {
     private record Case(String name, double[] measurements, int[] ratings) {}
+    private record QuantitySweepCase(String name, int frames, double offset, double range, int stepAt,
+            int[] ratingIndices, int[] ratings) {}
     private record PlacementCase(String name, int frames, int count, int rating, int[] initialRatings,
             boolean guardDifference) {}
 
@@ -66,6 +68,10 @@ public final class LRTKeyframeQuantityOracle {
         Method setRating = frameClass.getMethod("E", int.class);
         Method autoCount = controllerClass.getDeclaredMethod("A", int.class, int.class);
         autoCount.setAccessible(true);
+        Method measurementRange = Arrays.stream(controllerClass.getMethods())
+                .filter(method -> method.getName().equals("A") && method.getReturnType() == double.class
+                        && method.getParameterCount() == 0)
+                .findFirst().orElseThrow();
         Method applyWizardPositions = controllerClass.getDeclaredMethod(
                 "A", sequenceClass, int.class, int[].class, int.class, boolean.class);
         applyWizardPositions.setAccessible(true);
@@ -109,6 +115,42 @@ public final class LRTKeyframeQuantityOracle {
             System.out.printf("%s frames=%d LRT-count=%d%n", test.name(), test.measurements().length, count);
         }
 
+        List<QuantitySweepCase> sweepCases = quantitySweepCases();
+        json.append("  ],\n  \"quantitySweepCases\": [\n");
+        for (int caseIndex = 0; caseIndex < sweepCases.size(); caseIndex++) {
+            QuantitySweepCase test = sweepCases.get(caseIndex);
+            sequenceClass.getMethod("clear").invoke(sequence);
+            double[] measurements = measurements(test);
+            int[] ratings = new int[test.frames()];
+            for (int marker = 0; marker < test.ratingIndices().length; marker++) {
+                ratings[test.ratingIndices()[marker]] = test.ratings()[marker];
+            }
+            for (int index = 0; index < measurements.length; index++) {
+                Object frame = frameConstructor.newInstance(String.format(Locale.ROOT, "sweep-%05d.jpg", index));
+                setMeasurement.invoke(frame, measurements[index]);
+                if (ratings[index] != 0) setRating.invoke(frame, ratings[index]);
+                sequenceClass.getMethod("add", Object.class).invoke(sequence, frame);
+            }
+            double lrtRange = ((Number) measurementRange.invoke(controller)).doubleValue();
+            int count = ((Number) autoCount.invoke(controller, 0, measurements.length - 1)).intValue();
+            int[] wizardRatings = runWizard(controller, sequenceClass, frameClass, frameConstructor,
+                    setRating, applyWizardPositions, measurements.length, count);
+            int[] indices = indicesWithRating(wizardRatings, 4);
+            json.append("    {\"name\":\"").append(test.name()).append("\",\"frames\":")
+                    .append(test.frames()).append(",\"offset\":")
+                    .append(String.format(Locale.ROOT, "%.17g", test.offset())).append(",\"range\":")
+                    .append(String.format(Locale.ROOT, "%.17g", test.range())).append(",\"stepAt\":")
+                    .append(test.stepAt()).append(",\"ratingIndices\":[");
+            appendInts(json, test.ratingIndices());
+            json.append("],\"ratings\":[");
+            appendInts(json, test.ratings());
+            json.append("],\"lrtRange\":").append(String.format(Locale.ROOT, "%.17g", lrtRange))
+                    .append(",\"lrtCount\":").append(count).append(",\"lrtIndices\":[");
+            appendInts(json, indices);
+            json.append("]}").append(caseIndex + 1 == sweepCases.size() ? "\n" : ",\n");
+        }
+        System.out.printf("quantity boundary sweep cases=%d%n", sweepCases.size());
+
         json.append("  ],\n  \"placementCases\": [\n");
         List<PlacementCase> placementCases = List.of(
                 new PlacementCase("interior_hg_collision_shifts_one_frame", 10, 3, 4,
@@ -144,6 +186,75 @@ public final class LRTKeyframeQuantityOracle {
         }
         json.append("  ]\n}\n");
         Files.writeString(Path.of(args[0]), json.toString(), StandardCharsets.UTF_8);
+    }
+
+    private static List<QuantitySweepCase> quantitySweepCases() {
+        int[] frameCounts = {2, 3, 49, 50, 51, 99, 100, 149, 150, 249, 250, 251, 499, 500, 501,
+                999, 1000, 1001, 1249, 1250, 1251, 2499, 2500};
+        double[] baseTargets = {0, 0.5, 0.9999999, 1, 1.0000001, 1.9999999, 2, 2.0000001,
+                3.9999999, 4, 4.0000001, 5.9999999, 6, 6.0000001, 9.999999, 10, 10.000001,
+                19.999999, 20, 20.000001, 39.999999, 40, 40.000001, 49.999999, 50, 50.000001};
+        List<QuantitySweepCase> result = new ArrayList<>();
+        for (int frames : frameCounts) {
+            List<Double> targets = new ArrayList<>();
+            for (double target : baseTargets) targets.add(target);
+            double minimumAnchorTarget = (frames - 1) / 250.0;
+            double spacingCapTarget = (frames - 1) / 50.0;
+            for (double boundary : new double[]{minimumAnchorTarget, spacingCapTarget}) {
+                targets.add(Math.max(0, boundary - 0.000001));
+                targets.add(boundary);
+                targets.add(boundary + 0.000001);
+            }
+            for (int targetIndex = 0; targetIndex < targets.size(); targetIndex++) {
+                double target = targets.get(targetIndex);
+                double offset = switch (targetIndex % 3) {
+                    case 1 -> -8.25;
+                    case 2 -> 6.5;
+                    default -> 0;
+                };
+                result.add(new QuantitySweepCase(
+                        String.format(Locale.ROOT, "linear_n%d_t%03d", frames, targetIndex),
+                        frames, offset, rangeForCount(frames, target), -1, new int[0], new int[0]));
+            }
+        }
+
+        result.add(new QuantitySweepCase("adjacent_2_3_pair_cancels_step", 500, 0, 2, 250,
+                new int[]{249, 250}, new int[]{2, 3}));
+        result.add(new QuantitySweepCase("adjacent_2_2_pair_cancels_step", 500, 0, 2, 250,
+                new int[]{249, 250}, new int[]{2, 2}));
+        result.add(new QuantitySweepCase("adjacent_3_2_pair_cancels_step", 500, 0, 2, 250,
+                new int[]{249, 250}, new int[]{3, 2}));
+        result.add(new QuantitySweepCase("adjacent_3_3_pair_cancels_step", 500, 0, 2, 250,
+                new int[]{249, 250}, new int[]{3, 3}));
+        result.add(new QuantitySweepCase("nonadjacent_2_3_does_not_cancel_step", 500, 0, 2, 250,
+                new int[]{249, 251}, new int[]{2, 3}));
+        result.add(new QuantitySweepCase("intervening_four_star_breaks_pair", 500, 0, 2, 250,
+                new int[]{249, 250, 251}, new int[]{2, 4, 3}));
+        result.add(new QuantitySweepCase("ordinary_four_five_stars_do_not_cancel_step", 500, 0, 2, 250,
+                new int[]{249, 250}, new int[]{4, 5}));
+        result.add(new QuantitySweepCase("single_two_star_raises_flat_quantity", 500, 0, 0, -1,
+                new int[]{250}, new int[]{2}));
+        result.add(new QuantitySweepCase("single_three_star_raises_flat_quantity", 500, 0, 0, -1,
+                new int[]{250}, new int[]{3}));
+        result.add(new QuantitySweepCase("single_four_star_does_not_raise_flat_quantity", 500, 0, 0, -1,
+                new int[]{250}, new int[]{4}));
+        result.add(new QuantitySweepCase("single_five_star_does_not_raise_flat_quantity", 500, 0, 0, -1,
+                new int[]{250}, new int[]{5}));
+        return result;
+    }
+
+    private static double[] measurements(QuantitySweepCase test) {
+        double[] values = new double[test.frames()];
+        if (test.stepAt() >= 0) {
+            for (int index = test.stepAt(); index < values.length; index++) {
+                values[index] = test.offset() + test.range();
+            }
+        } else {
+            for (int index = 0; index < values.length; index++) {
+                values[index] = test.offset() + test.range() * index / (values.length - 1);
+            }
+        }
+        return values;
     }
 
     private static double[] constant(int frames, double value) {
