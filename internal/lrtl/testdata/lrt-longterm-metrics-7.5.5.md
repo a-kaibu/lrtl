@@ -55,8 +55,11 @@ The fixture SHA-256 is
 CLI regression tests verify its decoded PNG path, default and custom widths,
 and all three metrics. Together with the separate resize-pixel oracle, this
 checks the operation order without running the GUI sequence workflow. A
-separate integration test distinguishes camera and visual cache inputs and
-checks cache-decode fallback. `LongTermCameraCacheOracle.java` also invokes the
+separate integration test distinguishes camera, visual, and source inputs; it
+checks fallback for invalid bytes, a header-valid truncated JPEG, an empty
+cache, and a missing cache. Full JPEG decoding is validated before an automatic
+camera cache is selected because header-only validation can accept a truncated
+file that later fails during metric analysis. `LongTermCameraCacheOracle.java` also invokes the
 installed LRT frame worker directly without opening the UI. It supplies a red
 source JPEG, a blue `.lrt/previews` JPEG, and a green `.lrt/visual` JPEG; the
 worker returns the blue camera cache. The stored native-worker raster hash is

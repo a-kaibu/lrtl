@@ -181,6 +181,16 @@ func TestLRTLongTermAutomaticallyUsesCameraPreviewCache(t *testing.T) {
 	if math.Abs(cacheMetrics[0].LuminanceMean-cacheMetrics[1].LuminanceMean) < 1e-5 {
 		t.Fatal("camera and visual cache fixtures do not distinguish their luminance")
 	}
+	truncatedCache := cacheData[0][:len(cacheData[0])/2]
+	if _, format, err := image.DecodeConfig(bytes.NewReader(truncatedCache)); err != nil || format != "jpeg" {
+		t.Fatalf("truncated-cache fixture must pass header decoding as JPEG: format=%q err=%v", format, err)
+	}
+	sourceMetrics := measureLRTLongTermFrame(source)
+	for index, metrics := range cacheMetrics {
+		if sameLRTLongTermMetrics(metrics, sourceMetrics) {
+			t.Fatalf("source fallback fixture is indistinguishable from cache %d: %+v", index, metrics)
+		}
+	}
 
 	for index, kind := range []string{"camera", "visual"} {
 		cachePath := lrtPreviewPath(inputPath, kind)
@@ -210,8 +220,43 @@ func TestLRTLongTermAutomaticallyUsesCameraPreviewCache(t *testing.T) {
 
 	measure("automatic camera cache", nil, cacheMetrics[0])
 	measure("explicit visual cache", []string{"--lrt-preview", "visual"}, cacheMetrics[1])
-	if err := os.WriteFile(lrtPreviewPath(inputPath, "camera"), []byte("broken cache"), 0600); err != nil {
+	cachePath := lrtPreviewPath(inputPath, "camera")
+	for _, corruption := range []struct {
+		name    string
+		data    []byte
+		missing bool
+	}{
+		{name: "invalid bytes", data: []byte("broken cache")},
+		{name: "truncated JPEG", data: truncatedCache},
+		{name: "empty file", data: []byte{}},
+		{name: "missing file", missing: true},
+	} {
+		if corruption.missing {
+			if err := os.Remove(cachePath); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := os.WriteFile(cachePath, corruption.data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("checking source fallback after %s camera cache", corruption.name)
+		measure("source fallback for "+corruption.name+" automatic camera cache", nil, sourceMetrics)
+	}
+	if err := os.WriteFile(cachePath, truncatedCache, 0600); err != nil {
 		t.Fatal(err)
 	}
-	measure("source fallback for corrupt automatic cache", nil, measureLRTLongTermFrame(source))
+	if _, _, _, _, err := readLongTermInputWithOptions(
+		Frame{Image: inputPath}, imageInputOptions{LRTPreview: "camera"}, longTermMetricProfileLRT755); err == nil {
+		t.Fatal("explicit truncated camera cache silently fell back to the source image")
+	}
+}
+
+func sameLRTLongTermMetrics(left, right lrtLongTermMetrics) bool {
+	if math.Abs(left.LuminanceMean-right.LuminanceMean) > 1e-8 ||
+		math.Abs(left.ContrastStdDev-right.ContrastStdDev) > 1e-8 {
+		return false
+	}
+	if left.HueMeanDegrees == nil || right.HueMeanDegrees == nil {
+		return left.HueMeanDegrees == nil && right.HueMeanDegrees == nil
+	}
+	return math.Abs(*left.HueMeanDegrees-*right.HueMeanDegrees) <= 1e-8
 }

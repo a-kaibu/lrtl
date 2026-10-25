@@ -105,18 +105,9 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 	width, height := 0, 0
 	var adjustments sequenceXMPAdjustments
 	for index, frame := range frames {
-		data, config, _, err := readLongTermInputWithOptions(frame, options, profile)
+		_, config, _, img, err := readLongTermInputWithOptions(frame, options, profile)
 		if err != nil {
 			return nil, fmt.Errorf("long-term analysis: %w", err)
-		}
-		var img image.Image
-		if profile == longTermMetricProfileLRT755 {
-			img, _, err = decodeLRTLongTermImage(data)
-		} else {
-			img, _, err = image.Decode(bytes.NewReader(data))
-		}
-		if err != nil {
-			return nil, fmt.Errorf("decode %s: %w", frame.Image, err)
 		}
 		bounds := img.Bounds()
 		if bounds.Empty() || config.Width <= 0 || config.Height <= 0 || config.Width != bounds.Dx() || config.Height != bounds.Dy() {
@@ -167,23 +158,41 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 	return manifest, nil
 }
 
-func readLongTermInputWithOptions(frame Frame, options imageInputOptions, profile longTermMetricProfile) ([]byte, image.Config, string, error) {
+func readLongTermInputWithOptions(frame Frame, options imageInputOptions, profile longTermMetricProfile) ([]byte, image.Config, string, image.Image, error) {
 	if profile != longTermMetricProfileLRT755 || options.LRTPreview != "" || options.RawPreview || options.RawDevelop {
-		return readRenderInputWithOptions(frame, options)
+		return readAndDecodeLongTermInput(frame, options, profile)
 	}
 
 	// The native frame worker first reads its per-image camera-preview cache.
-	// A corrupt cache falls through to source decoding, where a full LRT run
-	// would normally regenerate that preview.
+	// Decode the full cache before selecting it: DecodeConfig alone accepts
+	// truncated JPEGs that would otherwise fail during metric analysis. A full
+	// LRT run would normally regenerate a broken cache during source decoding.
 	cache := lrtPreviewPath(frame.Image, "camera")
 	if info, err := os.Stat(cache); err == nil && info.Size() > 0 {
 		cacheOptions := options
 		cacheOptions.LRTPreview = "camera"
-		if data, config, format, cacheErr := readRenderInputWithOptions(frame, cacheOptions); cacheErr == nil {
-			return data, config, format, nil
+		if data, config, format, img, cacheErr := readAndDecodeLongTermInput(frame, cacheOptions, profile); cacheErr == nil {
+			return data, config, format, img, nil
 		}
 	}
-	return readRenderInputWithOptions(frame, options)
+	return readAndDecodeLongTermInput(frame, options, profile)
+}
+
+func readAndDecodeLongTermInput(frame Frame, options imageInputOptions, profile longTermMetricProfile) ([]byte, image.Config, string, image.Image, error) {
+	data, config, format, err := readRenderInputWithOptions(frame, options)
+	if err != nil {
+		return nil, image.Config{}, "", nil, err
+	}
+	var img image.Image
+	if profile == longTermMetricProfileLRT755 {
+		img, format, err = decodeLRTLongTermImage(data)
+	} else {
+		img, format, err = image.Decode(bytes.NewReader(data))
+	}
+	if err != nil {
+		return nil, image.Config{}, "", nil, fmt.Errorf("decode %s: %w", frame.Image, err)
+	}
+	return data, config, format, img, nil
 }
 
 func measureLongTermFrame(img image.Image) longTermFrameMetrics {
