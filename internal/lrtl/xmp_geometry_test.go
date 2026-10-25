@@ -207,6 +207,210 @@ func TestXMPManualPerspectiveParsingAndLimits(t *testing.T) {
 	}
 }
 
+func TestXMPStoredUprightParsingAndValidation(t *testing.T) {
+	identity := "1,0,0,0,1,0,0,0,1"
+	shift := "1,0,0.25,0,1,0,0,0,1"
+	packet := EmptyXMPPacket()
+	for name, value := range map[string]string{
+		"crs:PerspectiveUpright":    "1",
+		"crs:UprightTransformCount": "6",
+		"crs:UprightTransform_0":    identity,
+		"crs:UprightTransform_1":    shift,
+	} {
+		if err := packet.SetScalar(name, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	basic, err := readXMPBasicPacket(packet)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if basic.geometry.upright == nil || !basic.geometry.active() {
+		t.Fatalf("selected Upright transform was not loaded: %+v", basic.geometry)
+	}
+	want := xmpHomography{1, 0, .25, 0, 1, 0, 0, 0, 1}
+	if *basic.geometry.upright != want {
+		t.Fatalf("selected transform=%v want %v", *basic.geometry.upright, want)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		values map[string]string
+	}{
+		{name: "mode zero ignores stale matrices", values: map[string]string{"crs:PerspectiveUpright": "0", "crs:UprightTransform_0": "malformed"}},
+		{name: "missing mode", values: map[string]string{"crs:UprightTransform_1": shift}},
+		{name: "mode selects its own matrix", values: map[string]string{"crs:PerspectiveUpright": "2", "crs:UprightTransformCount": "6", "crs:UprightTransform_1": shift, "crs:UprightTransform_2": identity}},
+		{name: "scaled identity does not resample", values: map[string]string{"crs:PerspectiveUpright": "1", "crs:UprightTransform_1": "7,0,0,0,7,0,0,0,7"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := EmptyXMPPacket()
+			for name, value := range tc.values {
+				if err := p.SetScalar(name, value); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := readXMPBasicPacket(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch tc.name {
+			case "mode zero ignores stale matrices", "missing mode":
+				if got.geometry.upright != nil || got.geometry.active() {
+					t.Fatalf("unexpected Upright geometry: %+v", got.geometry)
+				}
+			case "mode selects its own matrix":
+				if got.geometry.upright == nil || !got.geometry.upright.isIdentity() {
+					t.Fatalf("mode 2 did not select transform 2: %+v", got.geometry)
+				}
+			case "scaled identity does not resample":
+				if got.geometry.upright == nil || !got.geometry.upright.isIdentity() || got.geometry.active() {
+					t.Fatalf("scaled identity was not recognized: %+v", got.geometry)
+				}
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name   string
+		values map[string]string
+	}{
+		{name: "fractional mode", values: map[string]string{"crs:PerspectiveUpright": "1.5"}},
+		{name: "out of range mode", values: map[string]string{"crs:PerspectiveUpright": "6"}},
+		{name: "non-finite mode", values: map[string]string{"crs:PerspectiveUpright": "NaN"}},
+		{name: "fractional transform count", values: map[string]string{"crs:PerspectiveUpright": "1", "crs:UprightTransformCount": "6.0", "crs:UprightTransform_1": shift}},
+		{name: "count omits selected transform", values: map[string]string{"crs:PerspectiveUpright": "2", "crs:UprightTransformCount": "2", "crs:UprightTransform_2": shift}},
+		{name: "missing selected transform", values: map[string]string{"crs:PerspectiveUpright": "1", "crs:UprightTransformCount": "6"}},
+		{name: "too few coefficients", values: map[string]string{"crs:PerspectiveUpright": "1", "crs:UprightTransform_1": "1,0,0,0,1,0,0,0"}},
+		{name: "invalid coefficient", values: map[string]string{"crs:PerspectiveUpright": "1", "crs:UprightTransform_1": "1,0,0,0,NaN,0,0,0,1"}},
+		{name: "singular matrix", values: map[string]string{"crs:PerspectiveUpright": "1", "crs:UprightTransform_1": "1,2,3,2,4,6,0,0,0"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := EmptyXMPPacket()
+			for name, value := range tc.values {
+				if err := p.SetScalar(name, value); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := readXMPBasicPacket(p); err == nil {
+				t.Fatal("accepted invalid Upright transform")
+			}
+		})
+	}
+}
+
+func TestXMPStoredUprightInverseCoordinates(t *testing.T) {
+	// This projective map sends (u,v) to (u/(0.2u+1), v/(0.2u+1)).
+	// At destination (u,v)=(0.5,0.5), its inverse is (5/9,5/9).
+	transform := xmpHomography{1, 0, 0, 0, 1, 0, .2, 0, 1}
+	bounds := image.Rect(11, 17, 22, 22)
+	source := geometryRamp(bounds)
+	got := applyXMPGeometry(source, xmpGeometry{scale: 100, upright: &transform})
+	if got.Bounds() != bounds || !highPrecisionImage(got) {
+		t.Fatalf("changed output shape/precision: %T %v", got, got.Bounds())
+	}
+	// Pixel index (5,2) is normalized (0.5,0.5); inverse mapping reads
+	// source index (50/9,20/9). The ramp gives an independent bilinear oracle.
+	pixel := color.NRGBA64Model.Convert(got.At(16, 19)).(color.NRGBA64)
+	wantRed := 123 + (50.0/9)*500
+	wantGreen := 17 + (20.0/9)*700
+	if math.Abs(float64(pixel.R)-wantRed) > 3 || math.Abs(float64(pixel.G)-wantGreen) > 3 || pixel.B != 2000 || pixel.A != 65535 {
+		t.Fatalf("projective inverse got=%v want R=%g G=%g", pixel, wantRed, wantGreen)
+	}
+	_, _, _, alpha := got.At(bounds.Max.X-1, 19).RGBA()
+	if alpha != 0 {
+		t.Fatal("out-of-frame inverse sample was not transparent")
+	}
+
+	identity := xmpHomography{1, 0, 0, 0, 1, 0, 0, 0, 1}
+	if applyXMPGeometry(source, xmpGeometry{upright: &identity}) != source {
+		t.Fatal("identity Upright transform resampled the image")
+	}
+}
+
+func TestXMPStoredUprightRenderAVIAndPreservesInputs(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "frame.png")
+	source := geometryRamp(image.Rect(0, 0, 81, 61))
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writeTestXMP(t, path, map[string]string{
+		"crs:PerspectiveUpright":    "1",
+		"crs:UprightTransformCount": "6",
+		"crs:UprightTransform_0":    "1,0,0,0,1,0,0,0,1",
+		"crs:UprightTransform_1":    "1,0,0.1,0,1,0,0,0,1",
+	})
+	imageBefore, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xmpBefore, err := os.ReadFile(path + ".xmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "upright.avi")
+	var out, stderr bytes.Buffer
+	if code := Main([]string{"render", dir, "--output", output, "--quality", "100", "--apply-xmp-basic"}, &out, &stderr); code != 0 {
+		t.Fatalf("render: %s", &stderr)
+	}
+	video, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := bytes.Index(video, []byte{255, 216})
+	if start < 0 {
+		t.Fatal("missing AVI JPEG frame")
+	}
+	video = video[start:]
+	end := bytes.Index(video, []byte{255, 217})
+	if end < 0 {
+		t.Fatal("truncated AVI JPEG frame")
+	}
+	frame, err := jpeg.Decode(bytes.NewReader(video[:end+2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Inverse of the saved +0.1 normalized x translation: destination x=40
+	// reads source x=32. The input ramp makes the JPEG pixel expectation direct.
+	wantRed := (123 + 32*500) / 257
+	r, _, _, _ := frame.At(40, 30).RGBA()
+	if math.Abs(float64(r>>8)-float64(wantRed)) > 3 {
+		t.Fatalf("rendered red=%d want %d", r>>8, wantRed)
+	}
+	imageAfter, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(imageBefore, imageAfter) {
+		t.Fatal("render modified source image")
+	}
+	xmpAfter, err := os.ReadFile(path + ".xmp")
+	if err != nil || !bytes.Equal(xmpBefore, xmpAfter) {
+		t.Fatal("render modified source XMP")
+	}
+}
+
+func FuzzXMPStoredUprightMatrixParser(f *testing.F) {
+	f.Add("1", "6", "1,0,0,0,1,0,0,0,1")
+	f.Add("5", "6", "1.02,0.01,-0.02,-0.03,0.98,0.01,0.04,-0.02,1")
+	f.Add("1", "6", "1,0,0,0,1,0,0,0,0")
+	f.Add("not-a-mode", "not-a-count", "NaN,Inf,-Inf")
+	f.Fuzz(func(t *testing.T, mode, count, matrix string) {
+		packet := EmptyXMPPacket()
+		for name, value := range map[string]string{
+			"crs:PerspectiveUpright":    mode,
+			"crs:UprightTransformCount": count,
+			"crs:UprightTransform_1":    matrix,
+		} {
+			if err := packet.SetScalar(name, value); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_, _ = readXMPBasicPacket(packet)
+	})
+}
+
 func TestXMPManualPerspectiveExtremeSlidersRemainBounded(t *testing.T) {
 	img := geometryRamp(image.Rect(0, 0, 64, 48))
 	for _, tc := range []struct{ vertical, horizontal, aspect float64 }{
@@ -393,15 +597,25 @@ func TestXMPGeometryCLIInterpolationAndAVIPixels(t *testing.T) {
 }
 
 func TestXMPGeometryInvalidLateFrameDoesNotPublishVideo(t *testing.T) {
-	frames := cropFixture(t, 3)
-	writeTestXMP(t, frames[2].Image, map[string]string{"crs:PerspectiveScale": "0"})
-	output := filepath.Join(t.TempDir(), "invalid.avi")
-	var out, stderr bytes.Buffer
-	if code := Main([]string{"render", filepath.Dir(frames[0].Image), "--output", output, "--apply-xmp-basic"}, &out, &stderr); code == 0 {
-		t.Fatal("accepted invalid geometry")
-	}
-	if _, err := os.Stat(output); !os.IsNotExist(err) {
-		t.Fatal("published invalid video")
+	for _, tc := range []struct {
+		name   string
+		values map[string]string
+	}{
+		{name: "manual slider out of range", values: map[string]string{"crs:PerspectiveScale": "0"}},
+		{name: "selected Upright matrix missing", values: map[string]string{"crs:PerspectiveUpright": "1", "crs:UprightTransformCount": "6"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			frames := cropFixture(t, 3)
+			writeTestXMP(t, frames[2].Image, tc.values)
+			output := filepath.Join(t.TempDir(), "invalid.avi")
+			var out, stderr bytes.Buffer
+			if code := Main([]string{"render", filepath.Dir(frames[0].Image), "--output", output, "--apply-xmp-basic"}, &out, &stderr); code == 0 {
+				t.Fatal("accepted invalid geometry")
+			}
+			if _, err := os.Stat(output); !os.IsNotExist(err) {
+				t.Fatal("published invalid video")
+			}
+		})
 	}
 }
 

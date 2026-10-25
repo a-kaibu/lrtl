@@ -12,20 +12,27 @@ import (
 
 // Manual transform sliders on the oriented image canvas. The projective
 // camera model is an independent approximation of Adobe's manual perspective
-// controls; Upright analysis and Adobe's stored transform are not reproduced.
+// controls. When XMP contains Adobe's saved Upright homography, it is replayed
+// before the manual sliders; generating a new Upright solution is unsupported.
 type xmpGeometry struct {
 	rotate     float64
 	scale      float64
 	vertical   float64
 	horizontal float64
 	aspect     float64
+	upright    *xmpHomography
 }
 
 func (g xmpGeometry) active() bool {
-	return g.rotate != 0 || (g.scale != 0 && g.scale != 100) || g.vertical != 0 || g.horizontal != 0 || g.aspect != 0
+	return g.rotate != 0 || (g.scale != 0 && g.scale != 100) || g.vertical != 0 || g.horizontal != 0 || g.aspect != 0 ||
+		(g.upright != nil && !g.upright.isIdentity())
 }
 
 func applyXMPGeometry(source image.Image, g xmpGeometry) image.Image {
+	if g.upright != nil && !g.upright.isIdentity() {
+		source = applyXMPStoredUpright(source, *g.upright)
+		g.upright = nil
+	}
 	if !g.active() {
 		return source
 	}
@@ -46,6 +53,95 @@ func applyXMPGeometry(source image.Image, g xmpGeometry) image.Image {
 		return applyXMPProjectiveGeometry(destination, source, bounds, g, scale, aspectScale, sine, cosine, cx, cy)
 	}
 	xdraw.ApproxBiLinear.Transform(destination, transform, source, bounds, xdraw.Src, nil)
+	return destination
+}
+
+// XMP stores Adobe's Upright result as a row-major homography in per-axis
+// normalized frame coordinates. It maps source points to destination points;
+// rendering therefore inverse-maps each destination sample. Pixel coordinates
+// are normalized over [0,width-1] and [0,height-1], retaining non-zero image
+// origins while making the frame corners correspond to 0 and 1.
+type xmpHomography [9]float64
+
+func (h xmpHomography) isIdentity() bool {
+	return h[0] == h[4] && h[4] == h[8] && h[0] != 0 &&
+		h[1] == 0 && h[2] == 0 && h[3] == 0 && h[5] == 0 && h[6] == 0 && h[7] == 0
+}
+
+func (h xmpHomography) inverse() (xmpHomography, bool) {
+	a, b, c, d, e, f, g, i, j := h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[8]
+	cofactors := [9]float64{
+		e*j - f*i, c*i - b*j, b*f - c*e,
+		f*g - d*j, a*j - c*g, c*d - a*f,
+		d*i - e*g, b*g - a*i, a*e - b*d,
+	}
+	determinant := a*cofactors[0] + b*cofactors[3] + c*cofactors[6]
+	if math.IsNaN(determinant) || math.IsInf(determinant, 0) || math.Abs(determinant) < 1e-12 {
+		return xmpHomography{}, false
+	}
+	var inverse xmpHomography
+	maxAbs := 0.0
+	for index, value := range cofactors {
+		inverse[index] = value / determinant
+		if math.IsNaN(inverse[index]) || math.IsInf(inverse[index], 0) {
+			return xmpHomography{}, false
+		}
+		maxAbs = math.Max(maxAbs, math.Abs(inverse[index]))
+	}
+	if maxAbs == 0 || math.IsInf(maxAbs, 0) {
+		return xmpHomography{}, false
+	}
+	// Homographies are unchanged by a common scale factor. Normalize the
+	// inverse so mapping cannot overflow for otherwise equivalent matrices.
+	for index := range inverse {
+		inverse[index] /= maxAbs
+	}
+	return inverse, true
+}
+
+func (h xmpHomography) mapPoint(x, y float64) (float64, float64, bool) {
+	denominator := h[6]*x + h[7]*y + h[8]
+	if math.IsNaN(denominator) || math.IsInf(denominator, 0) || math.Abs(denominator) < 1e-12 {
+		return 0, 0, false
+	}
+	u := (h[0]*x + h[1]*y + h[2]) / denominator
+	v := (h[3]*x + h[4]*y + h[5]) / denominator
+	if math.IsNaN(u) || math.IsInf(u, 0) || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, 0, false
+	}
+	return u, v, true
+}
+
+func applyXMPStoredUpright(source image.Image, transform xmpHomography) image.Image {
+	if transform.isIdentity() {
+		return source
+	}
+	bounds := source.Bounds()
+	if bounds.Empty() {
+		return source
+	}
+	inverse, ok := transform.inverse()
+	if !ok {
+		// XMP parsing rejects singular matrices. Keep this renderer defensive for
+		// callers that construct xmpGeometry directly in package-level tests.
+		return source
+	}
+	destination := newFrameImage(bounds, source)
+	width, height := float64(max(bounds.Dx()-1, 1)), float64(max(bounds.Dy()-1, 1))
+	sourceWidth, sourceHeight := float64(max(bounds.Dx()-1, 0)), float64(max(bounds.Dy()-1, 0))
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		v := float64(y-bounds.Min.Y) / height
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			u := float64(x-bounds.Min.X) / width
+			sourceU, sourceV, valid := inverse.mapPoint(u, v)
+			if !valid || sourceU < 0 || sourceU > 1 || sourceV < 0 || sourceV > 1 {
+				continue
+			}
+			sourceX := float64(bounds.Min.X) + sourceU*sourceWidth
+			sourceY := float64(bounds.Min.Y) + sourceV*sourceHeight
+			destination.Set(x, y, sampleXMPGeometryBilinear(source, bounds, sourceX, sourceY))
+		}
+	}
 	return destination
 }
 

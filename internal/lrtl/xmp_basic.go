@@ -176,6 +176,11 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 		}
 		*property.target = number
 	}
+	upright, err := readXMPStoredUpright(packet)
+	if err != nil {
+		return xmpBasicAdjustments{}, err
+	}
+	adjustments.geometry.upright = upright
 	holyGrailCorrection, _, err := readHolyGrailRenderCorrection(packet)
 	if err != nil {
 		return xmpBasicAdjustments{}, err
@@ -314,6 +319,69 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 		return xmpBasicAdjustments{}, err
 	}
 	return adjustments, nil
+}
+
+// Lightroom writes the result of an Upright solve as one row-major 3x3
+// homography per mode. Replaying that stored result is deterministic; solving
+// a new Upright transform from pixels is outside this renderer's scope.
+func readXMPStoredUpright(packet *XMPPacket) (*xmpHomography, error) {
+	modeText, found, err := packet.GetRootScalar("crs:PerspectiveUpright")
+	if err != nil || !found {
+		return nil, err
+	}
+	modeValue, valid := scalarNumber(modeText)
+	if !valid || modeValue < 0 || modeValue > 5 || math.Trunc(modeValue) != modeValue {
+		return nil, fmt.Errorf("crs:PerspectiveUpright must be an integer between 0 and 5")
+	}
+	mode := int(modeValue)
+	if mode == 0 {
+		return nil, nil
+	}
+
+	countText, hasCount, err := packet.GetRootScalar("crs:UprightTransformCount")
+	if err != nil {
+		return nil, err
+	}
+	if hasCount {
+		count, parseErr := strconv.Atoi(strings.TrimSpace(countText))
+		if parseErr != nil || count < mode+1 || count > 6 {
+			return nil, fmt.Errorf("crs:UprightTransformCount must include selected transform %d and be at most 6", mode)
+		}
+	}
+	property := fmt.Sprintf("crs:UprightTransform_%d", mode)
+	value, found, err := packet.GetRootScalar(property)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("%s is required when crs:PerspectiveUpright=%d; generating Upright transforms is unsupported", property, mode)
+	}
+	fields := strings.Split(value, ",")
+	if len(fields) != 9 {
+		return nil, fmt.Errorf("%s must contain exactly 9 comma-separated numbers", property)
+	}
+	var transform xmpHomography
+	maxAbs := 0.0
+	for index, field := range fields {
+		number, valid := scalarNumber(field)
+		if !valid {
+			return nil, fmt.Errorf("%s contains an invalid number at index %d", property, index)
+		}
+		transform[index] = number
+		maxAbs = math.Max(maxAbs, math.Abs(number))
+	}
+	if maxAbs == 0 {
+		return nil, fmt.Errorf("%s must be an invertible homography", property)
+	}
+	// Homographies are invariant to a shared scalar; normalization keeps
+	// determinant and projective-coordinate checks stable for equivalent input.
+	for index := range transform {
+		transform[index] /= maxAbs
+	}
+	if _, invertible := transform.inverse(); !invertible {
+		return nil, fmt.Errorf("%s must be a finite, invertible homography", property)
+	}
+	return &transform, nil
 }
 
 func readXMPBasicNumber(packet *XMPPacket, name string, min, max float64) (float64, bool, error) {
