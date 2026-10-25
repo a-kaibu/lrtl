@@ -1,19 +1,17 @@
 package lrtl
 
 import (
-	"bytes"
 	"encoding/json"
 	"image"
-	_ "image/jpeg"
 	"image/png"
 	"math"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
-// Go's JPEG decoder and LRT's AWT decoder use different chroma upsampling.
-// These native samples currently bound the resulting meter delta to 0.007 EV.
-const maxNativeJPEGDecodeEVDelta = 0.007
+// These native samples bound the remaining decoder and rounding delta to 0.0024 EV.
+const maxNativeJPEGDecodeEVDelta = 0.0024
 
 func TestNativeDeflickerCachedImageMeasurementsMatchLRT(t *testing.T) {
 	data, err := os.ReadFile("testdata/lrt-native-deflicker-image-7.5.5.json")
@@ -43,9 +41,12 @@ func TestNativeDeflickerCachedImageMeasurementsMatchLRT(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			img, _, err := image.Decode(bytes.NewReader(jpegData))
+			img, format, err := decodeLRTMeteringImage(jpegData)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if format != "jpeg" {
+				t.Fatalf("cached source format=%q, want jpeg", format)
 			}
 			decodedFile, err := os.Open("testdata/" + tc.DecodedFile)
 			if err != nil {
@@ -61,6 +62,10 @@ func TestNativeDeflickerCachedImageMeasurementsMatchLRT(t *testing.T) {
 			}
 			if got := nativeImage.Bounds().Size(); got != image.Pt(tc.Width, tc.Height) {
 				t.Fatalf("LRT decoded image size=%v, want %dx%d", got, tc.Width, tc.Height)
+			}
+			meanPixelDelta, maxPixelDelta := lrtRGBDifference(img, nativeImage)
+			if meanPixelDelta > 0.25 || maxPixelDelta > 3 {
+				t.Fatalf("decoded JPEG RGB delta: mean %.3f, max %d; want mean <= 0.25 and max <= 3", meanPixelDelta, maxPixelDelta)
 			}
 			if math.Abs(tc.DirectEV-tc.PreviewEV) > 1e-12 || math.Abs(tc.StaticEV-tc.PreviewEV) > 1e-12 {
 				t.Fatalf("LRT measurement paths disagree: cached %.17g, static %.17g, preview %.17g", tc.DirectEV, tc.StaticEV, tc.PreviewEV)
@@ -91,4 +96,52 @@ func TestNativeDeflickerCachedImageMeasurementsMatchLRT(t *testing.T) {
 			}
 		})
 	}
+
+	// Exercise both production analysis entry points on a full-frame native
+	// fixture, in addition to the area-level oracle checks above.
+	frame := Frame{Image: filepath.Join("testdata", cases[0].File)}
+	preview, err := analyzePreviewEVSequence([]Frame{frame}, imageInputOptions{})
+	if err != nil || len(preview) != 1 || math.Abs(preview[0]-cases[0].PreviewEV) > maxNativeJPEGDecodeEVDelta {
+		t.Fatalf("Preview EV pipeline=%v, LRT 7.5.5=%.17g, err=%v", preview, cases[0].PreviewEV, err)
+	}
+	packet, err := PacketForFrame(frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	options := imageInputOptions{NativeDeflicker: nativeDeflickerOptions{Enabled: true}}
+	source := newFrameInputCache(options, false)
+	defer source.close()
+	measurements, err := measureDeflickerPackets([]Frame{frame}, image.Rectangle{}, options, []*XMPPacket{packet}, source, nil)
+	if err != nil || len(measurements) != 1 || math.Abs(measurements[0]-cases[0].PreviewEV) > maxNativeJPEGDecodeEVDelta {
+		t.Fatalf("Deflicker measurement pipeline=%v, LRT 7.5.5=%.17g, err=%v", measurements, cases[0].PreviewEV, err)
+	}
+}
+
+func lrtRGBDifference(a, b image.Image) (mean float64, max uint8) {
+	if a.Bounds().Size() != b.Bounds().Size() {
+		return math.Inf(1), 255
+	}
+	var sum uint64
+	count := 0
+	for y := 0; y < a.Bounds().Dy(); y++ {
+		for x := 0; x < a.Bounds().Dx(); x++ {
+			ar, ag, ab, _ := a.At(a.Bounds().Min.X+x, a.Bounds().Min.Y+y).RGBA()
+			br, bg, bb, _ := b.At(b.Bounds().Min.X+x, b.Bounds().Min.Y+y).RGBA()
+			for _, values := range [][2]uint32{{ar, br}, {ag, bg}, {ab, bb}} {
+				first, second := values[0]>>8, values[1]>>8
+				var delta uint32
+				if first > second {
+					delta = first - second
+				} else {
+					delta = second - first
+				}
+				sum += uint64(delta)
+				count++
+				if delta > uint32(max) {
+					max = uint8(delta)
+				}
+			}
+		}
+	}
+	return float64(sum) / float64(count), max
 }

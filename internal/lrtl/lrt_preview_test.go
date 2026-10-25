@@ -408,7 +408,7 @@ func TestLRTPreviewRenderExportAndPreview(t *testing.T) {
 func TestLRTPreviewEVWritesOriginalXMP(t *testing.T) {
 	root := t.TempDir()
 	frame, data := nativePreviewFixture(t, root)
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := decodeLRTMeteringImage(data)
 	if err != nil {
 		t.Fatal(err)
 	}

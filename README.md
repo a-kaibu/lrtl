@@ -13,7 +13,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 ### 今回の互換性改善
 
 - `preview-ev`でLRT 7.5.5のカメラプレビュー縮小を再現しました。画像幅が設定値を超える場合、既定の1024×682へ1パスbilinearで縮小してから測光します。LRT本体の合成画像3条件でPreview EVを1e-5以内に比較し、拡大・縮小を含む6条件の82画素（246色成分）も完全一致を確認しました。`--preview-width-camera N`でLRTの設定幅も指定できます。LRT/Camera Rawの元画像デコード・色管理は未対応です。[JAR解析・オラクル・制限](internal/lrtl/testdata/lrt-preview-resize-7.5.5.md)
-- Native Deflickerの画像測光を実LRT 7.5.5のキャッシュ経路6条件と比較しました。LRT復号済み画像では測光値が`1e-10 EV`以内で一致し、JPEG復号差を含む元JPEGでも`0.007 EV`以内です。GoとLRTではJPEGの色差サンプル補間が異なるため、JPEG復号の完全一致は未達です。[オラクル・条件・残る差](internal/lrtl/testdata/lrt-native-deflicker-image-7.5.5.md)
+- Native Deflickerと`preview-ev`のJPEG測光で、LRT 7.5.5との実測に基づく4:2:0中央配置色差アップサンプリングを純Goで再現しました。合成JPEG 6条件で、復号RGBの平均絶対差は0.25階調未満、Preview EV差は0.0024 EV未満です。他の色差サブサンプリング・JPEGエンコーダー・ICCプロファイルでの一致は未確認です。[オラクル・条件・残る差](internal/lrtl/testdata/lrt-native-deflicker-image-7.5.5.md)
 - Linear DNGの`OpcodeList2/3`に、放射状ビネット補正`FixVignetteRadial`（ID 3）を追加しました。r²〜r¹⁰の5係数と正規化中心を読み、Opcodeの順序どおり線形カメラ値へ適用します。仕様式との独立計算、両バイト順、色面、クリップ、RAW→16-bit TIFF→AVIと失敗時の出力取消をテストしています。Camera Rawの画素一致を示すものではありません。
 - Linear DNGの`OpcodeList2/3`に`WarpRectilinear2`（ID 14）を追加しました。r⁰〜r¹⁴の係数、多項式の有効半径、逆数モード、色面別の中心を使い、オプションOpcode直後の旧式ワープを省く互換規則も処理します。独立座標式、破損データ、両バイト順、RAW→16-bit TIFF→AVIをテストしています。
 - Linear DNGの`OpcodeList2/3`に`WarpFisheye`（ID 2）を追加しました。DNG仕様のarctan写像、共有／色面別の係数、`DefaultScale`の画素比を使い、既存のバイキュービック再サンプルへ接続します。独立した座標計算、異常入力、fuzz、RAW→16-bit TIFF→AVIの画素までテストしています。欠陥画素補間などは引き続き未対応です。

@@ -76,7 +76,12 @@ func measureDeflickerPackets(frames []Frame, reference image.Rectangle, options 
 		if err != nil {
 			return nil, err
 		}
-		img, _, err := image.Decode(bytes.NewReader(data))
+		var img image.Image
+		if options.NativeDeflicker.Enabled {
+			img, _, err = decodeLRTMeteringImage(data)
+		} else {
+			img, _, err = image.Decode(bytes.NewReader(data))
+		}
 		if err != nil {
 			return nil, fmt.Errorf("decode %s: %w", frame.Image, err)
 		}

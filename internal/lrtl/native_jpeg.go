@@ -5,9 +5,128 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image"
+	"image/color"
 
 	"github.com/a-kaibu/lrtl/internal/nativejpeg"
 )
+
+// decodeLRTMeteringImage reproduces the centered 4:2:0 chroma upsampling
+// observed in LRTimelapse's AWT JPEG decoder before native Preview EV
+// metering. Go's JPEG decoder exposes subsampled YCbCr and its At method
+// selects the nearest chroma sample; LRT interpolates between centered
+// chroma samples instead. Other sampling ratios use the same model but need
+// separate native measurements.
+func decodeLRTMeteringImage(data []byte) (image.Image, string, error) {
+	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil || format != "jpeg" {
+		return img, format, err
+	}
+	ycbcr, ok := img.(*image.YCbCr)
+	if !ok {
+		return img, format, nil
+	}
+	img, err = upsampleLRTJPEGChroma(ycbcr)
+	return img, format, err
+}
+
+func upsampleLRTJPEGChroma(src *image.YCbCr) (image.Image, error) {
+	bounds := src.Bounds()
+	if bounds.Empty() {
+		return nil, fmt.Errorf("invalid JPEG dimensions")
+	}
+	horizontal, vertical := 1, 1
+	switch src.SubsampleRatio {
+	case image.YCbCrSubsampleRatio444:
+		return src, nil
+	case image.YCbCrSubsampleRatio422:
+		horizontal = 2
+	case image.YCbCrSubsampleRatio420:
+		horizontal, vertical = 2, 2
+	case image.YCbCrSubsampleRatio440:
+		vertical = 2
+	case image.YCbCrSubsampleRatio411:
+		horizontal = 4
+	case image.YCbCrSubsampleRatio410:
+		horizontal, vertical = 4, 2
+	default:
+		return nil, fmt.Errorf("unsupported JPEG chroma subsampling %v", src.SubsampleRatio)
+	}
+	width, height := bounds.Dx(), bounds.Dy()
+	chromaWidth := (bounds.Max.X-1)/horizontal - bounds.Min.X/horizontal + 1
+	chromaHeight := (bounds.Max.Y-1)/vertical - bounds.Min.Y/vertical + 1
+	base := src.COffset(bounds.Min.X, bounds.Min.Y)
+	xTaps := make([]lrtChromaAxis, width)
+	for x := range xTaps {
+		xTaps[x] = centeredLRTChromaAxis(x, horizontal, chromaWidth)
+	}
+	yTaps := make([]lrtChromaAxis, height)
+	for y := range yTaps {
+		yTaps[y] = centeredLRTChromaAxis(y, vertical, chromaHeight)
+	}
+	return &lrtJPEGChromaImage{
+		source: src, base: base,
+		denominatorX: 2 * horizontal, denominatorY: 2 * vertical,
+		xTaps: xTaps, yTaps: yTaps,
+	}, nil
+}
+
+type lrtJPEGChromaImage struct {
+	source                     *image.YCbCr
+	base                       int
+	denominatorX, denominatorY int
+	xTaps, yTaps               []lrtChromaAxis
+}
+
+func (img *lrtJPEGChromaImage) ColorModel() color.Model { return color.RGBAModel }
+
+func (img *lrtJPEGChromaImage) Bounds() image.Rectangle { return img.source.Bounds() }
+
+func (img *lrtJPEGChromaImage) At(x, y int) color.Color {
+	bounds := img.source.Bounds()
+	if !image.Pt(x, y).In(bounds) {
+		return color.RGBA{}
+	}
+	xTap := img.xTaps[x-bounds.Min.X]
+	yTap := img.yTaps[y-bounds.Min.Y]
+	w00 := (img.denominatorX - xTap.fraction) * (img.denominatorY - yTap.fraction)
+	w10 := xTap.fraction * (img.denominatorY - yTap.fraction)
+	w01 := (img.denominatorX - xTap.fraction) * yTap.fraction
+	w11 := xTap.fraction * yTap.fraction
+	cb := interpolateLRTChroma(img.source.Cb, img.source.CStride, img.base, xTap, yTap, w00, w10, w01, w11, img.denominatorX*img.denominatorY)
+	cr := interpolateLRTChroma(img.source.Cr, img.source.CStride, img.base, xTap, yTap, w00, w10, w01, w11, img.denominatorX*img.denominatorY)
+	yValue := img.source.Y[img.source.YOffset(x, y)]
+	r, g, b := color.YCbCrToRGB(yValue, cb, cr)
+	return color.RGBA{R: r, G: g, B: b, A: 255}
+}
+
+type lrtChromaAxis struct {
+	first, second int
+	fraction      int
+}
+
+func centeredLRTChromaAxis(pixel, factor, samples int) lrtChromaAxis {
+	denominator := 2 * factor
+	numerator := 2*pixel - (factor - 1)
+	first := numerator / denominator
+	if numerator < 0 && numerator%denominator != 0 {
+		first--
+	}
+	fraction := numerator - first*denominator
+	if first < 0 {
+		return lrtChromaAxis{first: 0, second: 0}
+	}
+	if first >= samples-1 {
+		last := samples - 1
+		return lrtChromaAxis{first: last, second: last}
+	}
+	return lrtChromaAxis{first: first, second: first + 1, fraction: fraction}
+}
+
+func interpolateLRTChroma(plane []byte, stride, base int, x, y lrtChromaAxis, w00, w10, w01, w11, denominator int) byte {
+	top := int(plane[base+y.first*stride+x.first])*w00 + int(plane[base+y.first*stride+x.second])*w10
+	bottom := int(plane[base+y.second*stride+x.first])*w01 + int(plane[base+y.second*stride+x.second])*w11
+	return byte((top + bottom + denominator/2) / denominator)
+}
 
 func decodeRenderImage(data []byte, native bool) (image.Image, string, error) {
 	if native && len(data) >= 2 && data[0] == 0xff && data[1] == 0xd8 {

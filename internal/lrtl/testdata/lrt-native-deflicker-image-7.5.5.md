@@ -13,13 +13,17 @@ image is generated as a deterministic RGB pattern, JPEG-encoded, then decoded
 by LRT and saved as a PNG fixture. The input and decoded images are synthetic;
 no user photographs or vendor executable code are included.
 
-The Go test checks that the cached, static-histogram, and preview measurements
-reported by LRT agree; the Go histogram calculation on LRT's decoded raster
-matches the recorded value within `1e-10 EV`. On the original JPEG, Go's
-standard decoder differs from LRT's AWT decoder because their chroma upsampling
-paths differ. Across these six cases the metering delta stays below `0.007 EV`.
-This is a measured bound for these fixtures, not proof of general JPEG pixel or
-metering equivalence; reproducing LRT's JPEG decoder remains open work.
+The Go test checks that LRT's cached-frame, static-histogram, and preview
+measurement paths agree; the Go histogram calculation on LRT's decoded raster
+matches the recorded value within `1e-10 EV`. The metering path now upsamples
+subsampled JPEG chroma around centered sample sites before converting to RGB.
+All six source JPEGs use 4:2:0 chroma subsampling.
+Across these six cases, decoded RGB differs from LRT's AWT raster by at most 3
+levels per channel (mean absolute difference below 0.25), and Preview EV differs
+by less than `0.0024 EV`. Both `analyzePreviewEVSequence` and native Deflicker
+measurement are exercised through their production entry points. These are
+synthetic fixtures; other JPEG encoders, sampling ratios, color profiles, and
+LRT versions still need direct comparison.
 
 The Java probe can be rerun on a machine with LRTimelapse 7.5.5 and JDK 17 or
 newer:

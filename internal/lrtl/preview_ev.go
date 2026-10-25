@@ -1,7 +1,6 @@
 package lrtl
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"image"
@@ -40,7 +39,7 @@ func analyzePreviewEVSequence(frames []Frame, options imageInputOptions) ([]floa
 		if err != nil {
 			return nil, fmt.Errorf("Preview EV analysis: %w", err)
 		}
-		img, _, err := image.Decode(bytes.NewReader(data))
+		img, _, err := decodeLRTMeteringImage(data)
 		if err != nil {
 			return nil, fmt.Errorf("decode %s: %w", frame.Image, err)
 		}

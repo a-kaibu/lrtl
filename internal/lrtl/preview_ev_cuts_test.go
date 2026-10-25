@@ -154,7 +154,7 @@ func TestPreviewEVCutsNativeCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	img, _, err := image.Decode(bytes.NewReader(data))
+	img, _, err := decodeLRTMeteringImage(data)
 	if err != nil {
 		t.Fatal(err)
 	}

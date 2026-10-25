@@ -52,7 +52,7 @@ func (writer *previewImageWriter) AddFrame(rgb []byte) error {
 	}
 	// Measure the exact decoded JPEG that the user will see. Measuring the
 	// high-precision input would disagree after lossy encoding and subsampling.
-	preview, err := jpeg.Decode(bytes.NewReader(encoded.Bytes()))
+	preview, _, err := decodeLRTMeteringImage(encoded.Bytes())
 	if err != nil {
 		return err
 	}
