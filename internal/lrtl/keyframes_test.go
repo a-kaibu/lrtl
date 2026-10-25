@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -241,6 +242,88 @@ func TestKeyframesCLIPreviewsThenMarksSuggestedFrames(t *testing.T) {
 	}
 }
 
+func TestKeyframesReplaceExistingPreservesHolyGrailRatings(t *testing.T) {
+	root := t.TempDir()
+	initialRatings := map[int]int{0: 2, 2: 4, 5: 3, 7: 5, 9: 5}
+	imageContents := make([][]byte, 10)
+	for index := range imageContents {
+		path := filepath.Join(root, "frame"+strconvTwo(index+1)+".jpg")
+		imageContents[index] = []byte("synthetic keyframe test image")
+		if err := os.WriteFile(path, imageContents[index], 0600); err != nil {
+			t.Fatal(err)
+		}
+		metadata := map[string]string{}
+		if rating, found := initialRatings[index]; found {
+			metadata["xmp:Rating"] = strconv.Itoa(rating)
+		}
+		writeTestXMP(t, path, metadata)
+	}
+
+	var stdout, stderr bytes.Buffer
+	args := []string{"keyframes", root, "--evenly-spaced", "--count", "3", "--replace-existing", "--write"}
+	if code := Main(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("keyframes replace exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "new suggestions: 2") {
+		t.Fatalf("unexpected replacement plan: %s", stdout.String())
+	}
+	wantRatings := map[int]int{0: 2, 4: 4, 5: 3, 7: 5, 9: 4}
+	frames, err := DiscoverSequence(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, frame := range frames {
+		backups, err := filepath.Glob(frame.OutputSidecar() + ".lrtl-*.bak")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantBackup := index == 2 || index == 4 || index == 9
+		if (len(backups) == 1) != wantBackup {
+			t.Fatalf("frame %d has %d backups, want backup=%v", index+1, len(backups), wantBackup)
+		}
+	}
+	for index, frame := range frames {
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			t.Fatal(err)
+		}
+		rating, found := packet.Rating()
+		want, shouldHaveRating := wantRatings[index]
+		if found != shouldHaveRating || (found && rating != want) {
+			t.Fatalf("frame %d rating=(%d,%v), want (%d,%v)", index+1, rating, found, want, shouldHaveRating)
+		}
+		if index == 4 || index == 9 {
+			if packet.KeyframeKind() != "default" {
+				t.Fatalf("frame %d should be marked as a default keyframe, got %q", index+1, packet.KeyframeKind())
+			}
+		}
+		imageData, err := os.ReadFile(frame.Image)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(imageData, imageContents[index]) {
+			t.Fatalf("keyframe marking modified source image %s", frame.Image)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := Main(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("repeated keyframes replace exit=%d stderr=%s", code, stderr.String())
+	}
+	for index, frame := range frames {
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			t.Fatal(err)
+		}
+		rating, found := packet.Rating()
+		want, shouldHaveRating := wantRatings[index]
+		if found != shouldHaveRating || (found && rating != want) {
+			t.Fatalf("rerun changed frame %d rating to (%d,%v), want (%d,%v)", index+1, rating, found, want, shouldHaveRating)
+		}
+	}
+}
+
 func slicesEqual(left, right []int) bool {
 	if len(left) != len(right) {
 		return false
@@ -318,6 +401,7 @@ func TestAutomaticKeyframeCountMatchesLRT755Oracle(t *testing.T) {
 			Measurements     []float64 `json:"measurements"`
 			HolyGrailRatings []int     `json:"holyGrailRatings"`
 			LRTCount         int       `json:"lrtCount"`
+			LRTIndices       []int     `json:"lrtIndices"`
 		} `json:"cases"`
 	}
 	if err := json.Unmarshal(data, &fixture); err != nil {
@@ -343,6 +427,89 @@ func TestAutomaticKeyframeCountMatchesLRT755Oracle(t *testing.T) {
 			}
 			if got := estimateAutoKeyframeCount(test.Measurements, markers); got != test.LRTCount {
 				t.Fatalf("automatic keyframe count=%d, installed LRT 7.5.5 returned %d", got, test.LRTCount)
+			}
+			indices, err := selectLRTWizardKeyframeIndices(len(test.Measurements), test.LRTCount)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slicesEqual(indices, test.LRTIndices) {
+				t.Fatalf("wizard selected indices %v, installed LRT 7.5.5 returned %v", indices, test.LRTIndices)
+			}
+		})
+	}
+}
+
+func TestLRTWizardCollisionHandlingMatchesOracle(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "lrt-keyframe-quantity-7.5.5.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Source string `json:"source"`
+		Cases  []struct {
+			Name            string `json:"name"`
+			Count           int    `json:"count"`
+			TargetRating    int    `json:"targetRating"`
+			InitialRatings  []int  `json:"initialRatings"`
+			GuardDifference bool   `json:"guardDifference"`
+			LRTFinalRatings []int  `json:"lrtRatings"`
+		} `json:"placementCases"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.Source != "LRTimelapse 7.5.5 build 1059 installed runtime" {
+		t.Fatalf("unexpected oracle source %q", fixture.Source)
+	}
+	if len(fixture.Cases) != 8 {
+		t.Fatalf("LRT placement oracle has %d cases, want 8", len(fixture.Cases))
+	}
+	for _, test := range fixture.Cases {
+		t.Run(test.Name, func(t *testing.T) {
+			if len(test.InitialRatings) == 0 || len(test.LRTFinalRatings) != len(test.InitialRatings) {
+				t.Fatalf("invalid rating dimensions: initial=%d LRT=%d", len(test.InitialRatings), len(test.LRTFinalRatings))
+			}
+			packets := make([]*XMPPacket, len(test.InitialRatings))
+			for index, rating := range test.InitialRatings {
+				if rating != 0 {
+					if rating < 2 || rating > 5 {
+						t.Fatalf("unexpected initial rating at frame %d: %d", index+1, rating)
+					}
+					packet := EmptyXMPPacket()
+					if err := packet.SetScalar("xmp:Rating", strconv.Itoa(rating)); err != nil {
+						t.Fatal(err)
+					}
+					packets[index] = packet
+				} else {
+					packets[index] = EmptyXMPPacket()
+				}
+			}
+			indices, err := selectLRTWizardKeyframeIndices(len(packets), test.Count)
+			if err != nil {
+				t.Fatal(err)
+			}
+			selected := placeLRTWizardKeyframeIndices(indices, packets, make([]bool, len(packets)), test.TargetRating)
+			finalRatings := append([]int(nil), test.InitialRatings...)
+			for index, rating := range finalRatings {
+				if rating == test.TargetRating {
+					finalRatings[index] = 0
+				}
+			}
+			for _, index := range selected {
+				finalRatings[index] = test.TargetRating
+			}
+			if test.GuardDifference {
+				want := []int{2, 0, 0, 0, 0, 4, 0, 0, 0, 4}
+				if !reflect.DeepEqual(finalRatings, want) {
+					t.Fatalf("Holy Grail guard produced ratings %v, want %v", finalRatings, want)
+				}
+				if reflect.DeepEqual(finalRatings, test.LRTFinalRatings) {
+					t.Fatalf("fixture no longer records the known LRT endpoint overwrite: %v", test.LRTFinalRatings)
+				}
+				return
+			}
+			if !reflect.DeepEqual(finalRatings, test.LRTFinalRatings) {
+				t.Fatalf("final ratings=%v, installed LRT 7.5.5 returned %v", finalRatings, test.LRTFinalRatings)
 			}
 		})
 	}

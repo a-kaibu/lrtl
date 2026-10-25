@@ -1,19 +1,29 @@
 # Keyframe quantity oracle — LRTimelapse 7.5.5
 
 `lrt-keyframe-quantity-7.5.5.json` stores direct results from the installed
-LRTimelapse 7.5.5 build 1059 quantity helper. The probe creates synthetic frame
-models, supplies their `Preview EV` values and optional 2-star/3-star ratings,
-then invokes `cOM7.A(int,int)` from the installed JAR. It does not launch or
-display the application window. The checked-in fixture contains the exact input
-arrays and returned counts; the regular Go test compares against those values
+LRTimelapse 7.5.5 build 1059. The probe creates synthetic frame models, supplies
+their `Preview EV` values and optional ratings, then invokes `cOM7.A(int,int)`
+and the wizard's `cOM7.A(Rsa,int,int[],int,boolean)` helper from the installed
+JAR. It does not launch or display the application window. The checked-in
+fixture contains eight exact quantity results, eight selected-index results,
+and eight before/after rating cases. The regular Go tests compare these values
 without requiring Java or LRTimelapse.
 
-The eight cases cover a flat short sequence, the frame-count factor, the strict
-50-frame spacing boundary on both sides, the 250-frame minimum-anchor rule,
-spacing caps, an adjacent 2-star/3-star pair that cancels a measurement jump,
-and a single Holy Grail marker that raises the minimum count without cancelling
-the jump. The neighboring unit tests retain additional compact arithmetic and
-placement cases.
+The quantity cases cover a flat short sequence, the frame-count factor, the
+strict 50-frame spacing boundary on both sides, the 250-frame minimum-anchor
+rule, spacing caps, an adjacent 2-star/3-star pair that cancels a measurement
+jump, and a single Holy Grail marker that raises the minimum count without
+cancelling the jump. The placement cases cover 4/5-star targets, clearing and
+replacing the requested rating, shifts to the nearest free preceding frame, the
+ninth-frame boundary, and no available preceding slot.
+
+One observed behavior is intentionally kept as a safety difference: LRT's
+placement helper overwrites an endpoint 2-star/3-star Holy Grail rating when it
+places an ordinary keyframe there. lrtl preserves the Holy Grail rating at that
+endpoint. The Go test asserts both the installed LRT output and this documented
+lrtl guard behavior. A separate CLI test writes a sequence with both kinds of
+ratings, verifies the replacement positions, backup creation, unchanged source
+images, and stable results on a repeated run.
 
 To regenerate the fixture on Windows with the same LRT installation:
 
