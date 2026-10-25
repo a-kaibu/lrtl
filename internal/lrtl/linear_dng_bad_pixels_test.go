@@ -209,6 +209,77 @@ func TestLinearDNGFixBadPixelsConstantAcrossByteOrdersAndLists(t *testing.T) {
 	}
 }
 
+func TestLinearDNGStage1BadPixelOpcodesRunOnRawSamplesBeforeLinearization(t *testing.T) {
+	for _, opcodeKind := range []string{"constant", "list"} {
+		for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+			t.Run(fmt.Sprintf("%s-%s", opcodeKind, order.String()), func(t *testing.T) {
+				const width, height = 9, 9
+				pixels := make([]uint16, width*height)
+				for y := 0; y < height; y++ {
+					for x := 0; x < width; x++ {
+						pixels[y*width+x] = 10000
+						if opcodeKind == "list" {
+							pixels[y*width+x] = uint16(1000 + 20*x + 30*y)
+						}
+					}
+				}
+				center := 4*width + 4
+				pixels[center] = 1234
+				if opcodeKind == "constant" {
+					pixels[3*width+3] = 1000
+					pixels[3*width+5] = 2000
+					pixels[5*width+3] = 3000
+					pixels[5*width+5] = 4000
+				}
+
+				// The marker is present only in the pre-linearized raw values.
+				// Mapping it to 50000 proves Stage 1 ran before this lookup.
+				linearization := make([]uint16, 50001)
+				for index := range linearization {
+					linearization[index] = uint16(index)
+				}
+				linearization[1234] = 50000
+				opcode := testDNGBadPixelConstant(1234, 0)
+				wantSample := uint16(2500)
+				if opcodeKind == "list" {
+					opcode = testDNGBadPixelList(0, [][2]int32{{4, 4}}, nil)
+					wantSample = 1200
+				}
+				fixture := linearDNGFixture(order, width, height, 1, pixels, map[uint16]dngTestField{
+					50712: dngTestShort(order, linearization...),
+					50717: dngTestLong(order, 65535),
+					50829: dngTestLong(order, 2, 2, 7, 7),
+					51008: testDNGOpcodeList(opcode),
+				})
+				img, err := decodeLinearDNG(fixture)
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := testDNGLinearToSRGB16(wantSample)
+				if pixel := img.NRGBA64At(2, 2); pixel.R != want || pixel.G != want || pixel.B != want || pixel.A != 65535 {
+					t.Fatalf("Stage 1 %s center=%v want gray %d", opcodeKind, pixel, want)
+				}
+			})
+		}
+	}
+}
+
+func TestLinearDNGStage1RejectsRequiredUnsupportedOpcodeAndSkipsOptional(t *testing.T) {
+	for _, flags := range []uint32{0, 1} {
+		opcode := testDNGOpcode{6, 0x01030000, flags, nil}
+		fixture := linearDNGFixture(binary.LittleEndian, 2, 2, 1, []uint16{1000, 1000, 1000, 1000}, map[uint16]dngTestField{
+			51008: testDNGOpcodeList(opcode),
+		})
+		_, err := decodeLinearDNG(fixture)
+		if flags == 0 && err == nil {
+			t.Fatal("unsupported required Stage 1 opcode was accepted")
+		}
+		if flags == 1 && err != nil {
+			t.Fatalf("unsupported optional Stage 1 opcode was not skipped: %v", err)
+		}
+	}
+}
+
 func TestRAWBadPixelConstantCLIThroughTIFFAndAVI(t *testing.T) {
 	executable, fixtureDir, _ := fakeDNGConverter(t)
 	const width, height = 16, 16

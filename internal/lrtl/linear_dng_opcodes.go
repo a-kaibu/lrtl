@@ -57,38 +57,38 @@ func dngOpcodeBytes(fields *dngFields, tag uint16) ([]byte, error) {
 	return scanner.data[offset : offset+uint64(entry.count)], nil
 }
 
-func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngImageOpcode, error) {
-	if width < 1 || height < 1 {
-		return nil, fmt.Errorf("invalid Linear DNG opcode image dimensions")
+func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth, activeHeight, depth int) (dngImageOpcodeLists, error) {
+	if width < 1 || height < 1 || activeWidth < 1 || activeHeight < 1 {
+		return dngImageOpcodeLists{}, fmt.Errorf("invalid Linear DNG opcode image dimensions")
 	}
-	var opcodes []dngImageOpcode
-	imageBounds := image.Rect(0, 0, width, height)
+	var opcodes dngImageOpcodeLists
+	imageBounds := image.Rect(0, 0, activeWidth, activeHeight)
 	for _, tag := range []uint16{51008, 51009, 51022} {
 		data, err := dngOpcodeBytes(fields, tag)
 		if err != nil {
-			return nil, err
+			return dngImageOpcodeLists{}, err
 		}
 		if len(data) == 0 {
 			continue
 		}
 		if len(data) < 4 {
-			return nil, fmt.Errorf("truncated Linear DNG opcode list %d", tag)
+			return dngImageOpcodeLists{}, fmt.Errorf("truncated Linear DNG opcode list %d", tag)
 		}
 		count := uint64(binary.BigEndian.Uint32(data))
 		data = data[4:]
 		if count > 1024 || count > uint64(len(data))/16 {
-			return nil, fmt.Errorf("invalid Linear DNG opcode count in tag %d", tag)
+			return dngImageOpcodeLists{}, fmt.Errorf("invalid Linear DNG opcode count in tag %d", tag)
 		}
 		skipNextWarpFallback := false
 		for i := uint64(0); i < count; i++ {
 			if len(data) < 16 {
-				return nil, fmt.Errorf("truncated Linear DNG opcode header")
+				return dngImageOpcodeLists{}, fmt.Errorf("truncated Linear DNG opcode header")
 			}
 			order := binary.BigEndian
 			id, version, flags, size := order.Uint32(data), order.Uint32(data[4:]), order.Uint32(data[8:]), uint64(order.Uint32(data[12:]))
 			data = data[16:]
 			if size > uint64(len(data)) {
-				return nil, fmt.Errorf("truncated Linear DNG opcode %d payload", id)
+				return dngImageOpcodeLists{}, fmt.Errorf("truncated Linear DNG opcode %d payload", id)
 			}
 			payload := data[:size]
 			data = data[size:]
@@ -98,34 +98,44 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 					continue
 				}
 			}
-			// Stage 1 uses a different raw-value domain. Only normalized
-			// post-linearization and post-demosaic operations are supported.
-			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 || id == 5 && version < 0x01030000 {
+			stage1 := tag == 51008
+			unsupportedStage1 := stage1 && id != 4 && id != 5
+			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 14)) || unsupportedStage1 || version > 0x01070100 || id == 5 && version < 0x01030000 {
 				if flags&1 != 0 {
 					continue
 				}
-				return nil, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
+				return dngImageOpcodeLists{}, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
+			}
+			if stage1 && depth != 16 {
+				return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG Stage 1 bad-pixel opcodes require 16-bit samples")
+			}
+			appendOpcode := func(opcode dngImageOpcode) {
+				if stage1 {
+					opcodes.stage1 = append(opcodes.stage1, opcode)
+				} else {
+					opcodes.stage2 = append(opcodes.stage2, opcode)
+				}
 			}
 			if id == 4 {
 				if channels != 1 {
-					return nil, fmt.Errorf("Linear DNG FixBadPixelsConstant requires a single-channel Bayer image")
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG FixBadPixelsConstant requires a single-channel Bayer image")
 				}
 				badPixel, err := parseDNGBadPixelConstant(payload)
 				if err != nil {
-					return nil, fmt.Errorf("Linear DNG FixBadPixelsConstant in tag %d: %w", tag, err)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG FixBadPixelsConstant in tag %d: %w", tag, err)
 				}
-				opcodes = append(opcodes, dngImageOpcode{badPixelConstant: &badPixel})
+				appendOpcode(dngImageOpcode{badPixelConstant: &badPixel})
 				continue
 			}
 			if id == 5 {
 				if channels != 1 {
-					return nil, fmt.Errorf("Linear DNG FixBadPixelsList requires a single-channel Bayer image")
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG FixBadPixelsList requires a single-channel Bayer image")
 				}
 				badPixels, err := parseDNGBadPixelList(payload)
 				if err != nil {
-					return nil, fmt.Errorf("Linear DNG FixBadPixelsList in tag %d: %w", tag, err)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG FixBadPixelsList in tag %d: %w", tag, err)
 				}
-				opcodes = append(opcodes, dngImageOpcode{badPixelList: &badPixels})
+				appendOpcode(dngImageOpcode{badPixelList: &badPixels})
 				continue
 			}
 			if id == 1 || id == 2 || id == 14 {
@@ -139,7 +149,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 					warp, err = parseDNGWarpRectilinear2(payload, channels)
 				}
 				if err != nil {
-					return nil, fmt.Errorf("Linear DNG warp in tag %d: %w", tag, err)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG warp in tag %d: %w", tag, err)
 				}
 				if warp.identity() {
 					if id == 14 && flags&1 != 0 {
@@ -147,7 +157,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 					}
 					continue
 				}
-				opcodes = append(opcodes, dngImageOpcode{warp: warp})
+				appendOpcode(dngImageOpcode{warp: warp})
 				if id == 14 && flags&1 != 0 {
 					skipNextWarpFallback = true
 				}
@@ -156,41 +166,41 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 			if id == 3 {
 				vignette, err := parseDNGVignetteRadial(payload)
 				if err != nil {
-					return nil, fmt.Errorf("Linear DNG radial vignette in tag %d: %w", tag, err)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG radial vignette in tag %d: %w", tag, err)
 				}
 				if !vignette.identity() {
-					opcodes = append(opcodes, dngImageOpcode{vignette: vignette})
+					appendOpcode(dngImageOpcode{vignette: vignette})
 				}
 				continue
 			}
 			if id == 6 {
 				trim, err := parseDNGTrimBounds(payload)
 				if err != nil {
-					return nil, fmt.Errorf("Linear DNG TrimBounds in tag %d: %w", tag, err)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG TrimBounds in tag %d: %w", tag, err)
 				}
 				if !trim.In(imageBounds) {
-					return nil, fmt.Errorf("Linear DNG TrimBounds in tag %d is outside the current image", tag)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG TrimBounds in tag %d is outside the current image", tag)
 				}
 				imageBounds = trim
-				opcodes = append(opcodes, dngImageOpcode{trim: &trim})
+				appendOpcode(dngImageOpcode{trim: &trim})
 				continue
 			}
 			opcode, err := parseDNGPointOpcode(id, payload)
 			if err != nil {
-				return nil, fmt.Errorf("Linear DNG opcode %d in tag %d: %w", id, tag, err)
+				return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG opcode %d in tag %d: %w", id, tag, err)
 			}
 			if opcode.area.Empty() {
 				if (id == 10 || id == 12) && (opcode.area.Min.Y > imageBounds.Min.Y || opcode.area.Max.Y < imageBounds.Max.Y) {
-					return nil, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose row table does not cover the current image", id, tag)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose row table does not cover the current image", id, tag)
 				}
 				if (id == 11 || id == 13) && (opcode.area.Min.X > imageBounds.Min.X || opcode.area.Max.X < imageBounds.Max.X) {
-					return nil, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose column table does not cover the current image", id, tag)
+					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose column table does not cover the current image", id, tag)
 				}
 			}
-			opcodes = append(opcodes, dngImageOpcode{point: &opcode})
+			appendOpcode(dngImageOpcode{point: &opcode})
 		}
 		if len(data) != 0 {
-			return nil, fmt.Errorf("trailing bytes in Linear DNG opcode list %d", tag)
+			return dngImageOpcodeLists{}, fmt.Errorf("trailing bytes in Linear DNG opcode list %d", tag)
 		}
 	}
 	return opcodes, nil
@@ -482,6 +492,44 @@ func applyDNGBadPixelConstant(source, destination []float32, width, height int, 
 			if count != 0 {
 				repaired := (total + (count >> 1)) / count
 				destination[index] = float32(repaired) / 65535
+			}
+		}
+	}
+	return nil
+}
+
+func applyDNGBadPixelConstantRaw(source, destination []uint16, width, height int, opcode dngBadPixelConstant) error {
+	if width < 1 || height < 1 || uint64(width)*uint64(height) != uint64(len(source)) || len(destination) != len(source) || opcode.bayerPhase > 3 {
+		return fmt.Errorf("invalid FixBadPixelsConstant raw image or opcode")
+	}
+	copy(destination, source)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			index := y*width + x
+			if source[index] != opcode.value {
+				continue
+			}
+			isGreen := (x+y+int(opcode.bayerPhase)+int(opcode.bayerPhase>>1))&1 == 0
+			offsets := [4][2]int{{-2, 0}, {2, 0}, {0, -2}, {0, 2}}
+			if isGreen {
+				offsets = [4][2]int{{-1, -1}, {1, -1}, {-1, 1}, {1, 1}}
+			}
+			var total uint32
+			count := uint32(0)
+			for _, offset := range offsets {
+				sx, sy := x+offset[0], y+offset[1]
+				if sx < 0 || sy < 0 || sx >= width || sy >= height {
+					continue
+				}
+				value := source[sy*width+sx]
+				if value == opcode.value {
+					continue
+				}
+				total += uint32(value)
+				count++
+			}
+			if count != 0 {
+				destination[index] = uint16((total + (count >> 1)) / count)
 			}
 		}
 	}

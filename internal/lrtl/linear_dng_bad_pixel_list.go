@@ -190,6 +190,18 @@ func dngSample16(value float32) uint16 {
 }
 
 func repairDNGListedPixel(source []float32, width, height int, bounds image.Rectangle, index dngBadPixelIndex, phase uint32, x, y int) (uint16, bool) {
+	return repairDNGListedPixelWithReader(width, height, bounds, index, phase, x, y, func(localX, localY int) uint16 {
+		return dngSample16(source[localY*width+localX])
+	})
+}
+
+func repairDNGListedRawPixel(source []uint16, width, height int, bounds image.Rectangle, index dngBadPixelIndex, phase uint32, x, y int) (uint16, bool) {
+	return repairDNGListedPixelWithReader(width, height, bounds, index, phase, x, y, func(localX, localY int) uint16 {
+		return source[localY*width+localX]
+	})
+}
+
+func repairDNGListedPixelWithReader(width, height int, bounds image.Rectangle, index dngBadPixelIndex, phase uint32, x, y int, sample func(localX, localY int) uint16) (uint16, bool) {
 	const searchRadius = 4
 	directions := [4][2]int{{1, 0}, {0, 1}, {1, 1}, {1, -1}}
 	var estimates []dngBadPixelEstimate
@@ -207,8 +219,8 @@ func repairDNGListedPixel(source []float32, width, height int, bounds image.Rect
 			}
 			leftLocalX, leftLocalY := leftX-bounds.Min.X, leftY-bounds.Min.Y
 			rightLocalX, rightLocalY := rightX-bounds.Min.X, rightY-bounds.Min.Y
-			left := dngSample16(source[leftLocalY*width+leftLocalX])
-			right := dngSample16(source[rightLocalY*width+rightLocalX])
+			left := sample(leftLocalX, leftLocalY)
+			right := sample(rightLocalX, rightLocalY)
 			difference := int(left) - int(right)
 			if difference < 0 {
 				difference = -difference
@@ -261,6 +273,36 @@ func applyDNGBadPixelList(source, destination []float32, width, height int, boun
 		overlap := rectangle.Intersect(bounds)
 		for y := overlap.Min.Y; y < overlap.Max.Y; y++ {
 			for x := overlap.Min.X; x < overlap.Max.X; x++ {
+				applyPoint(image.Pt(x, y))
+			}
+		}
+	}
+	return nil
+}
+
+func applyDNGBadPixelListRaw(source, destination []uint16, width, height int, bounds image.Rectangle, opcode dngBadPixelList) error {
+	if width < 1 || height < 1 || uint64(width)*uint64(height) != uint64(len(source)) || len(destination) != len(source) || bounds.Dx() != width || bounds.Dy() != height || opcode.bayerPhase > 3 {
+		return fmt.Errorf("invalid FixBadPixelsList raw image or opcode")
+	}
+	copy(destination, source)
+	index := opcode.index()
+	applyPoint := func(point image.Point) {
+		if !point.In(bounds) {
+			return
+		}
+		repaired, ok := repairDNGListedRawPixel(source, width, height, bounds, index, opcode.bayerPhase, point.X, point.Y)
+		if ok {
+			localX, localY := point.X-bounds.Min.X, point.Y-bounds.Min.Y
+			destination[localY*width+localX] = repaired
+		}
+	}
+	for _, point := range opcode.points {
+		applyPoint(point)
+	}
+	for _, rectangle := range opcode.rectangles {
+		area := rectangle.Intersect(bounds)
+		for y := area.Min.Y; y < area.Max.Y; y++ {
+			for x := area.Min.X; x < area.Max.X; x++ {
 				applyPoint(image.Pt(x, y))
 			}
 		}

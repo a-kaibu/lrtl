@@ -313,7 +313,7 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 		return nil, err
 	}
 	activeArea := crop
-	imageOpcodes, err := readDNGImageOpcodes(fields, channels, activeArea.Dx(), activeArea.Dy())
+	imageOpcodes, err := readDNGImageOpcodes(fields, channels, width, height, activeArea.Dx(), activeArea.Dy(), depth)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 		return nil, err
 	}
 	if rgbTables.hasSemanticMasks() {
-		for _, opcode := range imageOpcodes {
+		for _, opcode := range imageOpcodes.stage2 {
 			if opcode.warp != nil && !opcode.warp.identity() {
 				return nil, fmt.Errorf("DNG RGBTables semantic masks cannot yet be combined with geometric warp opcodes")
 			}
@@ -405,7 +405,7 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 	gain := math.Exp2(exposure)
 	var pointOpcodes []dngPointOpcode
 	needsOpcodeBuffer := false
-	for _, opcode := range imageOpcodes {
+	for _, opcode := range imageOpcodes.stage2 {
 		if (opcode.warp != nil && !opcode.warp.identity()) || (opcode.vignette != nil && !opcode.vignette.identity()) || opcode.trim != nil || opcode.badPixelConstant != nil || opcode.badPixelList != nil {
 			needsOpcodeBuffer = true
 		}
@@ -413,15 +413,49 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 			pointOpcodes = append(pointOpcodes, *opcode.point)
 		}
 	}
-	readCamera := func(x, y int) [3]float64 {
+	readRawSample := func(x, y, channel int) uint16 {
 		block := y/blockHeight*blocksAcross + x/blockWidth
 		start := int(offsets[block]) + ((y%blockHeight)*blockWidth+x%blockWidth)*channels*sampleBytes
+		position := start + channel*sampleBytes
+		if depth == 16 {
+			return fields.scanner.order.Uint16(data[position : position+2])
+		}
+		return uint16(data[position])
+	}
+	var stage1Pixels []uint16
+	if len(imageOpcodes.stage1) != 0 {
+		pixelCount := uint64(width) * uint64(height)
+		if pixelCount > uint64(maxDevelopedRAWBytes)/4 {
+			return nil, fmt.Errorf("DNG Stage 1 opcode working buffers exceed development limits")
+		}
+		stage1Pixels = make([]uint16, int(pixelCount))
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				stage1Pixels[y*width+x] = readRawSample(x, y, 0)
+			}
+		}
+		destination := make([]uint16, len(stage1Pixels))
+		for _, opcode := range imageOpcodes.stage1 {
+			if opcode.badPixelConstant != nil {
+				err = applyDNGBadPixelConstantRaw(stage1Pixels, destination, width, height, *opcode.badPixelConstant)
+			} else if opcode.badPixelList != nil {
+				err = applyDNGBadPixelListRaw(stage1Pixels, destination, width, height, image.Rect(0, 0, width, height), *opcode.badPixelList)
+			} else {
+				err = fmt.Errorf("unsupported Linear DNG Stage 1 opcode implementation")
+			}
+			if err != nil {
+				return nil, err
+			}
+			stage1Pixels, destination = destination, stage1Pixels
+		}
+	}
+	readCamera := func(x, y int) [3]float64 {
 		var camera [3]float64
 		for channel := 0; channel < channels; channel++ {
-			position := start + channel*sampleBytes
-			raw := float64(data[position])
-			if depth == 16 {
-				raw = float64(fields.scanner.order.Uint16(data[position : position+2]))
+			rawSample := readRawSample(x, y, channel)
+			raw := float64(rawSample)
+			if stage1Pixels != nil {
+				raw = float64(stage1Pixels[y*width+x])
 			}
 			if len(linearization) != 0 {
 				raw = linearization[min(int(raw), len(linearization)-1)]
@@ -450,7 +484,7 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 		if len(scale) == 2 {
 			verticalScale = scale[1] / scale[0]
 		}
-		cameraPixels, processedBounds, err = applyDNGImageOpcodesWithBounds(imageOpcodes, cameraPixels, activeArea.Dx(), activeArea.Dy(), channels, verticalScale)
+		cameraPixels, processedBounds, err = applyDNGImageOpcodesWithBounds(imageOpcodes.stage2, cameraPixels, activeArea.Dx(), activeArea.Dy(), channels, verticalScale)
 		if err != nil {
 			return nil, err
 		}

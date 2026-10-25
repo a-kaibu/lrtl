@@ -35,6 +35,11 @@ type dngImageOpcode struct {
 	badPixelList     *dngBadPixelList
 }
 
+type dngImageOpcodeLists struct {
+	stage1 []dngImageOpcode
+	stage2 []dngImageOpcode
+}
+
 func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarp, error) {
 	return parseDNGWarp(data, channels, 6, false)
 }
