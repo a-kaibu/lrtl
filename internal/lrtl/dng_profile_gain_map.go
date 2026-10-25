@@ -38,18 +38,22 @@ func readDNGProfileGainTableMapTag(fields *dngFields, tag uint16, map2 bool) (*d
 	if entry.typeID != 7 || uint64(entry.count) < headerSize || entry.count > maxDNGProfileGainTableMapBytes {
 		return nil, fmt.Errorf("invalid DNG ProfileGainTableMap size or type")
 	}
+	scanner := entry.source
+	if scanner == nil {
+		scanner = fields.scanner
+	}
 	data := entry.value[:]
 	if entry.count > 4 {
-		offset := uint64(fields.scanner.order.Uint32(entry.value))
-		if !tiffRange(offset, uint64(entry.count), uint64(len(fields.scanner.data))) {
+		offset := uint64(scanner.order.Uint32(entry.value))
+		if !tiffRange(offset, uint64(entry.count), uint64(len(scanner.data))) {
 			return nil, fmt.Errorf("DNG ProfileGainTableMap exceeds file bounds")
 		}
-		data = fields.scanner.data[offset : offset+uint64(entry.count)]
+		data = scanner.data[offset : offset+uint64(entry.count)]
 	}
 	if uint64(len(data)) < headerSize {
 		return nil, fmt.Errorf("truncated DNG ProfileGainTableMap header")
 	}
-	order := fields.scanner.order
+	order := scanner.order
 	rows, cols, points := uint64(order.Uint32(data)), uint64(order.Uint32(data[4:])), uint64(order.Uint32(data[40:]))
 	if rows == 0 || cols == 0 || points == 0 {
 		return nil, fmt.Errorf("empty DNG ProfileGainTableMap")

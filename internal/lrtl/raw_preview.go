@@ -143,7 +143,11 @@ func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte,
 			if strings.TrimSpace(options.DNGLabPath) != "" {
 				data, err = developRawWithDNGLab(path, options.DNGLabPath)
 			} else {
-				data, err = developRawWithDNGConverter(path, options.DNGConverterPath)
+				cameraProfile, profileErr := readFrameCameraProfile(frame)
+				if profileErr != nil {
+					return nil, image.Config{}, "", profileErr
+				}
+				data, err = developRawWithDNGConverterProfile(path, options.DNGConverterPath, cameraProfile)
 			}
 		} else if options.RawPreview && supportsEmbeddedRawPreview(path) {
 			raw, readErr := os.ReadFile(path)
@@ -170,6 +174,24 @@ func readRenderInputWithOptions(frame Frame, options imageInputOptions) ([]byte,
 		return nil, image.Config{}, "", fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", path)
 	}
 	return data, config, format, nil
+}
+
+func readFrameCameraProfile(frame Frame) (string, error) {
+	packet, found, err := loadFramePacket(frame)
+	if err != nil {
+		return "", fmt.Errorf("read %s camera profile selection: %w", filepath.Base(frame.Image), err)
+	}
+	if !found {
+		return "", nil
+	}
+	profile, found, err := packet.GetRootScalar("crs:CameraProfile")
+	if err != nil {
+		return "", fmt.Errorf("read %s camera profile selection: %w", filepath.Base(frame.Image), err)
+	}
+	if !found {
+		return "", nil
+	}
+	return strings.TrimSpace(profile), nil
 }
 
 func extractRawPreview(path string, data []byte) ([]byte, error) {
@@ -410,6 +432,7 @@ type tiffPreviewEntry struct {
 	typeID uint16
 	count  uint32
 	value  []byte
+	source *tiffPreviewScanner
 }
 
 func (scanner *tiffPreviewScanner) readDirectory(offset uint32) ([]tiffPreviewEntry, uint32, error) {
@@ -432,7 +455,7 @@ func (scanner *tiffPreviewScanner) readDirectory(offset uint32) ([]tiffPreviewEn
 		encoded := scanner.data[begin : begin+12]
 		entries = append(entries, tiffPreviewEntry{
 			tag: scanner.order.Uint16(encoded[0:2]), typeID: scanner.order.Uint16(encoded[2:4]),
-			count: scanner.order.Uint32(encoded[4:8]), value: encoded[8:12],
+			count: scanner.order.Uint32(encoded[4:8]), value: encoded[8:12], source: scanner,
 		})
 	}
 	next := scanner.order.Uint32(scanner.data[entriesStart+entriesBytes : entriesStart+entriesBytes+4])
@@ -440,6 +463,9 @@ func (scanner *tiffPreviewScanner) readDirectory(offset uint32) ([]tiffPreviewEn
 }
 
 func (scanner *tiffPreviewScanner) values(entry tiffPreviewEntry) ([]uint64, error) {
+	if entry.source != nil {
+		scanner = entry.source
+	}
 	unitSize := tiffTypeSize(entry.typeID)
 	if unitSize == 0 || entry.count == 0 || entry.count > maxPreviewIFDEntries {
 		return nil, fmt.Errorf("unsupported TIFF value field")

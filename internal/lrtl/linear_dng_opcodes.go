@@ -38,14 +38,18 @@ func dngOpcodeBytes(fields *dngFields, tag uint16) ([]byte, error) {
 	if (entry.typeID != 7 && entry.typeID != 1) || entry.count > maxDNGOpcodeBytes {
 		return nil, fmt.Errorf("invalid Linear DNG opcode tag %d size/type", tag)
 	}
+	scanner := entry.source
+	if scanner == nil {
+		scanner = fields.scanner
+	}
 	if entry.count <= 4 {
 		return entry.value[:entry.count], nil
 	}
-	offset := uint64(fields.scanner.order.Uint32(entry.value))
-	if !tiffRange(offset, uint64(entry.count), uint64(len(fields.scanner.data))) {
+	offset := uint64(scanner.order.Uint32(entry.value))
+	if !tiffRange(offset, uint64(entry.count), uint64(len(scanner.data))) {
 		return nil, fmt.Errorf("Linear DNG opcode tag %d exceeds file bounds", tag)
 	}
-	return fields.scanner.data[offset : offset+uint64(entry.count)], nil
+	return scanner.data[offset : offset+uint64(entry.count)], nil
 }
 
 func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngImageOpcode, error) {

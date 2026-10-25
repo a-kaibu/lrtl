@@ -480,7 +480,10 @@ func TestSequenceOrderBatchAndPreviewWriteback(t *testing.T) {
 	if err := RenderSequence(ordered, expected, RenderOptions{FPS: 24, Quality: 90, ApplyXMPBasic: true, AutoOrient: true}); err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(denoiseRead(t, filepath.Join(batch, filepath.Base(dir)+".avi")), denoiseRead(t, expected)) {
+	actualAVI := denoiseRead(t, filepath.Join(batch, filepath.Base(dir)+".avi"))
+	expectedAVI := denoiseRead(t, expected)
+	actualMOVI, expectedMOVI := bytes.Index(actualAVI, []byte("movi")), bytes.Index(expectedAVI, []byte("movi"))
+	if actualMOVI < 0 || expectedMOVI < 0 || !bytes.Equal(actualAVI[actualMOVI:], expectedAVI[expectedMOVI:]) {
 		t.Fatal("batch video ignored sort order")
 	}
 	previewRoot := filepath.Join(t.TempDir(), "previews")

@@ -146,6 +146,14 @@ func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, float64
 	color2, hasColor2 := fields.matrix(50722, color1)
 	calibration1, _ := fields.matrix(50723, dngIdentityMatrix)
 	calibration2, _ := fields.matrix(50724, calibration1)
+	cameraCalibrationSignature := fields.text(50931)
+	profileCalibrationSignature := fields.text(50932)
+	if fields.err != nil {
+		return dngMatrix{}, 0, fields.err
+	}
+	if cameraCalibrationSignature != profileCalibrationSignature {
+		calibration1, calibration2 = dngIdentityMatrix, dngIdentityMatrix
+	}
 	forward1, hasForward1 := fields.matrix(50964, dngIdentityMatrix)
 	forward2, hasForward2 := fields.matrix(50965, forward1)
 	if !hasColor1 && hasColor2 {

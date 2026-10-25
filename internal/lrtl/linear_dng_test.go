@@ -240,6 +240,14 @@ func FuzzLinearDNG(f *testing.F) {
 	f.Add(profileMapDNGFixture(binary.BigEndian))
 	f.Add(profileToneDNGFixture(binary.LittleEndian, 0))
 	f.Add(profileToneDNGFixture(binary.BigEndian, 1))
+	profileIFD := linearDNGFixture(binary.LittleEndian, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
+		50933: dngTestLong(binary.LittleEndian, 0), 50934: dngTestASCII("Fuzz Profile"),
+		50936: dngTestASCII("Default"), 52544: testProfileGainMap2(binary.LittleEndian, 1),
+	})
+	profileIFD = appendDNGCameraProfile(f, profileIFD, binary.LittleEndian, binary.BigEndian, "Fuzz Profile", map[uint16]dngTestField{
+		52544: testProfileGainMap2(binary.BigEndian, 2),
+	})
+	f.Add(profileIFD)
 	f.Add(warpDNGFixture(binary.LittleEndian))
 	f.Add(warpDNGFixture(binary.BigEndian))
 	f.Add(mixedDNGPointFixture(binary.LittleEndian, 2, 2))

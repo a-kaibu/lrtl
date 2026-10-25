@@ -95,6 +95,10 @@ func runDNGConverter(executable, source, directory, name string, linear bool, co
 }
 
 func developRawWithDNGConverter(source, executable string) ([]byte, error) {
+	return developRawWithDNGConverterProfile(source, executable, "")
+}
+
+func developRawWithDNGConverterProfile(source, executable, cameraProfile string) ([]byte, error) {
 	directory, err := os.MkdirTemp("", "lrtl-linear-dng-*")
 	if err != nil {
 		return nil, fmt.Errorf("create RAW development directory: %w", err)
@@ -107,7 +111,7 @@ func developRawWithDNGConverter(source, executable string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	img, err := decodeLinearDNG(data)
+	img, err := decodeLinearDNGWithProfile(data, cameraProfile)
 	if err != nil {
 		return nil, fmt.Errorf("develop %s from Linear DNG: %w", filepath.Base(source), err)
 	}

@@ -3,11 +3,13 @@ package lrtl
 // This product includes DNG technology under license by Adobe.
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
 	"math"
+	"unicode/utf8"
 
 	xdraw "golang.org/x/image/draw"
 )
@@ -23,6 +25,10 @@ func (fields *dngFields) values(tag uint16) []float64 {
 	if !found || fields.err != nil {
 		return nil
 	}
+	scanner := entry.source
+	if scanner == nil {
+		scanner = fields.scanner
+	}
 	unit := uint64(tiffTypeSize(entry.typeID))
 	if unit == 0 || entry.count == 0 || entry.count > 1<<20 {
 		fields.err = fmt.Errorf("invalid Linear DNG tag %d size or type", tag)
@@ -31,15 +37,15 @@ func (fields *dngFields) values(tag uint16) []float64 {
 	length := uint64(entry.count) * unit
 	data := entry.value
 	if length > 4 {
-		offset := uint64(fields.scanner.order.Uint32(entry.value))
-		if !tiffRange(offset, length, uint64(len(fields.scanner.data))) {
+		offset := uint64(scanner.order.Uint32(entry.value))
+		if !tiffRange(offset, length, uint64(len(scanner.data))) {
 			fields.err = fmt.Errorf("Linear DNG tag %d extends beyond file", tag)
 			return nil
 		}
-		data = fields.scanner.data[offset : offset+length]
+		data = scanner.data[offset : offset+length]
 	}
 	values := make([]float64, entry.count)
-	order := fields.scanner.order
+	order := scanner.order
 	for index := range values {
 		value := data[uint64(index)*unit : uint64(index+1)*unit]
 		switch entry.typeID {
@@ -69,6 +75,35 @@ func (fields *dngFields) values(tag uint16) []float64 {
 	return values
 }
 
+func (fields *dngFields) text(tag uint16) string {
+	entry, found := fields.entries[tag]
+	if !found || fields.err != nil {
+		return ""
+	}
+	if (entry.typeID != 1 && entry.typeID != 2) || entry.count < 1 || entry.count > 1<<20 {
+		fields.err = fmt.Errorf("invalid string in Linear DNG tag %d", tag)
+		return ""
+	}
+	scanner := entry.source
+	if scanner == nil {
+		scanner = fields.scanner
+	}
+	data := entry.value
+	if entry.count > 4 {
+		offset := uint64(scanner.order.Uint32(entry.value))
+		if !tiffRange(offset, uint64(entry.count), uint64(len(scanner.data))) {
+			fields.err = fmt.Errorf("Linear DNG string tag %d extends beyond file", tag)
+			return ""
+		}
+		data = scanner.data[offset : offset+uint64(entry.count)]
+	}
+	if data[entry.count-1] != 0 || bytes.IndexByte(data[:entry.count-1], 0) >= 0 || !utf8.Valid(data[:entry.count-1]) {
+		fields.err = fmt.Errorf("invalid UTF-8 string in Linear DNG tag %d", tag)
+		return ""
+	}
+	return string(data[:entry.count-1])
+}
+
 func (fields *dngFields) scalar(tag uint16, fallback float64) float64 {
 	values := fields.values(tag)
 	if len(values) == 0 {
@@ -90,6 +125,10 @@ func (fields *dngFields) integer(tag uint16, fallback int) int {
 }
 
 func findLinearDNG(data []byte) (*dngFields, error) {
+	return findLinearDNGWithProfile(data, "")
+}
+
+func findLinearDNGWithProfile(data []byte, cameraProfile string) (*dngFields, error) {
 	if len(data) < 8 || len(data) > maxDevelopedRAWBytes {
 		return nil, fmt.Errorf("invalid Linear DNG file size")
 	}
@@ -176,14 +215,22 @@ func findLinearDNG(data []byte) (*dngFields, error) {
 			delete(merged, tag)
 		}
 	}
-	return &dngFields{scanner: scanner, entries: merged}, nil
+	fields := &dngFields{scanner: scanner, entries: merged}
+	if err := selectDNGCameraProfile(fields, root, cameraProfile); err != nil {
+		return nil, err
+	}
+	return fields, nil
 }
 
 // decodeLinearDNG reads the actual uncompressed, demosaiced sensor planes,
 // not an embedded JPEG. Camera-space values are black/white normalized,
 // white-balanced and transformed to display sRGB using the DNG color metadata.
 func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
-	fields, err := findLinearDNG(data)
+	return decodeLinearDNGWithProfile(data, "")
+}
+
+func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA64, error) {
+	fields, err := findLinearDNGWithProfile(data, cameraProfile)
 	if err != nil {
 		return nil, err
 	}
