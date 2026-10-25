@@ -340,10 +340,10 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 	}
 	gain := math.Exp2(exposure)
 	var pointOpcodes []dngPointOpcode
-	hasWarp := false
+	needsOpcodeBuffer := false
 	for _, opcode := range imageOpcodes {
-		if opcode.warp != nil && !opcode.warp.identity() {
-			hasWarp = true
+		if (opcode.warp != nil && !opcode.warp.identity()) || (opcode.vignette != nil && !opcode.vignette.identity()) {
+			needsOpcodeBuffer = true
 		}
 		if opcode.point != nil {
 			pointOpcodes = append(pointOpcodes, *opcode.point)
@@ -367,10 +367,10 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 		return camera
 	}
 	var cameraPixels []float32
-	if hasWarp {
+	if needsOpcodeBuffer {
 		count := uint64(activeArea.Dx()) * uint64(activeArea.Dy()) * uint64(channels)
 		if count > uint64(maxDevelopedRAWBytes)/8 {
-			return nil, fmt.Errorf("DNG warp working buffers exceed development limits")
+			return nil, fmt.Errorf("DNG image opcode working buffers exceed development limits")
 		}
 		cameraPixels = make([]float32, int(count))
 		for y := 0; y < activeArea.Dy(); y++ {
@@ -394,7 +394,7 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 	for y := crop.Min.Y; y < crop.Max.Y; y++ {
 		for x := crop.Min.X; x < crop.Max.X; x++ {
 			var camera [3]float64
-			if hasWarp {
+			if needsOpcodeBuffer {
 				index := ((y-activeArea.Min.Y)*activeArea.Dx() + x - activeArea.Min.X) * channels
 				for channel := 0; channel < channels; channel++ {
 					camera[channel] = float64(cameraPixels[index+channel])

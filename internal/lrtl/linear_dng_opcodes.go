@@ -80,7 +80,7 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 			data = data[size:]
 			// Stage 1 uses a different raw-value domain. Only normalized
 			// post-linearization and post-demosaic operations are supported.
-			if (id != 1 && id != 2 && (id < 7 || id > 13)) || tag == 51008 || version > 0x01070100 {
+			if (id != 1 && id != 2 && id != 3 && (id < 7 || id > 13)) || tag == 51008 || version > 0x01070100 {
 				if flags&1 != 0 {
 					continue
 				}
@@ -101,6 +101,16 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 					continue
 				}
 				opcodes = append(opcodes, dngImageOpcode{warp: warp})
+				continue
+			}
+			if id == 3 {
+				vignette, err := parseDNGVignetteRadial(payload)
+				if err != nil {
+					return nil, fmt.Errorf("Linear DNG radial vignette in tag %d: %w", tag, err)
+				}
+				if !vignette.identity() {
+					opcodes = append(opcodes, dngImageOpcode{vignette: vignette})
+				}
 				continue
 			}
 			opcode, err := parseDNGPointOpcode(id, payload)

@@ -12,6 +12,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- Linear DNGの`OpcodeList2/3`に、放射状ビネット補正`FixVignetteRadial`（ID 3）を追加しました。r²〜r¹⁰の5係数と正規化中心を読み、Opcodeの順序どおり線形カメラ値へ適用します。仕様式との独立計算、両バイト順、色面、クリップ、RAW→16-bit TIFF→AVIと失敗時の出力取消をテストしています。Camera Rawの画素一致を示すものではありません。
 - Linear DNGの`OpcodeList2/3`に`WarpFisheye`（ID 2）を追加しました。DNG仕様のarctan写像、共有／色面別の係数、`DefaultScale`の画素比を使い、既存のバイキュービック再サンプルへ接続します。独立した座標計算、異常入力、fuzz、RAW→16-bit TIFF→AVIの画素までテストしています。`WarpRectilinear2`などは引き続き未対応です。
 
 - 動画・TIFF・JPEGプレビュー・字幕で`--sort`の順序を選べます。`lrt-settings`は各連番に保存されたLRTの名前順／日時順を使います。本体方式の自然順・文字順を4,096組、日時順を8条件で比較しました。動画と字幕の選択・順序を合わせ、プレビューの元インデックスと測光保存先も保持します。[規則・時刻順との違い・テスト](docs/sequence-order.md)を参照してください。
@@ -1125,7 +1126,7 @@ lrtl import "E:\DCIM" --output "D:\Timelapse\DNG" --convert-dng
 
 Converterを`-u -l -p0 -dng1.4`で呼び、一時フォルダーにデモザイク済み・未圧縮Linear DNGを生成します。その実画素から黒/白レベル、AsShotホワイトバランス、CameraCalibration/AnalogBalance、ForwardMatrixまたはColorMatrix、BaselineExposureとプロファイルのBaselineExposureOffsetを使ってGoで16-bit sRGBを生成します。ストリップ/タイル、DefaultCrop/ActiveArea、DefaultScaleに対応します。`--raw-preview`は従来どおりカメラ内蔵プレビューを使う別の入力モードです。元RAWと隣接XMPは現像処理で変更しません。
 
-この現像はAdobeのデモザイクと独自の色変換を組み合わせたものです。デュアル光源の色温度推定、色域外のクリップ、画素端のクロップ丸めは近似です。DNG `OpcodeList2/3`のWarpRectilinear/MapTable/MapPolynomial/GainMap/DeltaPerRow/DeltaPerColumn/ScalePerRow/ScalePerColumnと、埋め込みプロファイルのHue/Sat・Lookテーブル・ProfileToneCurveを適用します。その他のOpcodeやCamera Rawの全現像工程は再現しません。未対応の必須Opcodeはエラーにし、オプション指定された未対応Opcodeだけスキップします。追加XMPは`--apply-xmp-basic`/`--apply-xmp-crop`を指定した場合に既存のlrtl近似処理で適用します。対応カメラはインストール済みConverterに依存し、変換失敗時は内蔵JPEGへ自動フォールバックせずエラーを返します。Converterの出力と1枚分の復号画像にはそれぞれ1 GiBの上限を設け、Converter実行は5分でタイムアウトします。
+この現像はAdobeのデモザイクと独自の色変換を組み合わせたものです。デュアル光源の色温度推定、色域外のクリップ、画素端のクロップ丸めは近似です。DNG `OpcodeList2/3`のWarpRectilinear/WarpFisheye/FixVignetteRadial/MapTable/MapPolynomial/GainMap/DeltaPerRow/DeltaPerColumn/ScalePerRow/ScalePerColumnと、埋め込みプロファイルのHue/Sat・Lookテーブル・ProfileToneCurveを適用します。その他のOpcodeやCamera Rawの全現像工程は再現しません。未対応の必須Opcodeはエラーにし、オプション指定された未対応Opcodeだけスキップします。追加XMPは`--apply-xmp-basic`/`--apply-xmp-crop`を指定した場合に既存のlrtl近似処理で適用します。対応カメラはインストール済みConverterに依存し、変換失敗時は内蔵JPEGへ自動フォールバックせずエラーを返します。Converterの出力と1枚分の復号画像にはそれぞれ1 GiBの上限を設け、Converter実行は5分でタイムアウトします。
 
 自動テストはAdobeを必要としない既知画素のLinear DNGと代替プロセスを使い、黒/白レベル、ガンマ、WB/色行列、タイル境界、異常データ、CLI/GUIの各経路と一時ファイルの後始末を確認します。実機ではAdobe DNG Converter 18.7でNikon D3S NEFとCanon 40D sRAW CR2を現像し、NEF連番のAVI、CR2のH.264 MP4、CR2→DNG取り込み→AVIを確認しました。完全なCamera Raw画素一致の検証ではありません。仕様は[AdobeのCLI資料](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section/download-1/dng_converter_commandline.pdf)と[DNG仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)を参照しました。
 
@@ -1647,6 +1648,7 @@ Adobe DNG Converterが出力したLinear DNGを、Go側で黒レベル・白レ�
 |---|---|---|
 | 1 | WarpRectilinear | 径方向4係数・接線方向2係数。共通の変形中心と全色面共通または色面別の係数を読み、DefaultScaleの画素比を反映して再サンプル |
 | 2 | WarpFisheye | arctan写像による径方向4係数。共通または色面別の係数と変形中心を読み、DefaultScaleの画素比を反映して再サンプル |
+| 3 | FixVignetteRadial | 正規化した光学中心と径方向の5係数（r²〜r¹⁰）で線形値を補正 |
 | 7 | MapTable | 正規化値を16-bit添字へ丸め、1〜65,536要素のLUTを参照。範囲外は末尾を延長 |
 | 8 | MapPolynomial | 定数項から順に指定された0〜8次の係数を適用 |
 | 9 | GainMap | 画素中心とActiveAreaの幅/高さから位置を求め、双線形補間。範囲外は端を延長し、不足色面は最後の面を使用 |
@@ -1655,9 +1657,9 @@ Adobe DNG Converterが出力したLinear DNGを、Go側で黒レベル・白レ�
 
 OpcodeのデータはTIFF本体のバイト順と独立してbig-endianで読みます。必須の未対応Opcode、将来バージョンの必須Opcode、不正なサイズ・非有限値はエラーです。行/列のテーブル数は指定領域と間引き後の要素数に一致する必要があります。オプション指定された未対応Opcodeはスキップし、対応済みのOpcodeはオプション/プレビュー指定でも適用します。現在は1リスト1024個・16 MiBまでです。`OpcodeList1`、WarpRectilinear2、欠陥画素補間など他のOpcodeは未対応です。オプションのWarpRectilinear2をスキップした場合は、後続の対応済みWarpRectilinearを適用します。画像IFDごとのリストを使い、別のルートプレビューのリストは継承しません。
 
-WarpRectilinearはActiveAreaの整数画素座標を使います。中心は幅・高さで正規化し、画素比を反映した対角距離で半径を正規化します。変形先から入力位置を求め、画像外は端へ制限し、係数A=-0.75のバイキュービック補間で読みます。ワープを含む場合はActiveArea全体の線形カメラ値をfloat32で保持し、他の補正との記録順を保ちます。2つの作業バッファーの合計には1 GiBの上限を設けています（画像ファイルや出力画像のメモリーは別です）。恒等変換では再サンプルせず、従来の精度を保ちます。補間重みは直接計算しており、SDKの座標・重みテーブルの量子化とは一致しません。サイズ・有限値・中心範囲と演算時の座標を検査しますが、全係数モデルの可逆性を保証する検査は未実装です。
+FixVignetteRadialはActiveAreaを基準に正規化した光学中心と、最も遠い角までの距離から半径を求めます。ゲイン`1 + k0·r² + k1·r⁴ + … + k4·r¹⁰`を線形値へ乗算し、Opcodeの後で0〜1にクリップします。WarpRectilinear/WarpFisheyeは変形先から入力位置を求め、画像外は端へ制限し、係数A=-0.75のバイキュービック補間で読みます。幾何補正・ビネット補正を含む場合はActiveArea全体の線形カメラ値をfloat32で保持して他の補正との記録順を守り、作業バッファーの上限を1 GiBにします（画像ファイルや出力画像のメモリーは別です）。恒等ワープでは再サンプルせず、従来の精度を保ちます。補間重みは直接計算しており、SDKの座標・重みテーブルの量子化とは一致しません。サイズ・有限値・中心範囲と演算時の座標を検査しますが、全係数モデルの可逆性を保証する検査は未実装です。
 
-処理は[Adobe DNG仕様の第7章](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)とSDKを参照した独立実装です。LUT全65,536入力、多項式と独立したべき乗和、座標・色面・混在する補正順・飽和、両バイト順、破損データ、合成RAWからXMP露出・TIFF・AVIへの画素をテストし、ファズテストも追加しています。Adobeの画素処理全体や、SDKの中間16-bit量子化・走査最適化を含むビット単位の一致を示すものではありません。
+処理は[Adobe DNG仕様の第7章](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)とSDKを参照した独立実装です。ビネットゲインは独立したべき乗和で、座標・中心・補正順・クリップ・両バイト順・異常値を検証します。既存のLUT全65,536入力、多項式、混在する補正順、破損データ、合成RAWからXMP露出・TIFF・AVIへの画素をテストし、ファズテストも追加しています。Adobeの画素処理全体や、SDKの中間16-bit量子化・走査最適化を含むビット単位の一致を示すものではありません。
 
 ### RAWプロファイルの露出オフセット
 

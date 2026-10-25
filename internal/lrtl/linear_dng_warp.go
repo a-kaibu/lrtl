@@ -13,8 +13,9 @@ type dngWarp struct {
 }
 
 type dngImageOpcode struct {
-	point *dngPointOpcode
-	warp  *dngWarp
+	point    *dngPointOpcode
+	warp     *dngWarp
+	vignette *dngVignetteRadial
 }
 
 func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarp, error) {
@@ -136,6 +137,16 @@ func sampleDNGWarpPlane(data []float32, width, height, channels, plane int, x, y
 func applyDNGImageOpcodes(opcodes []dngImageOpcode, data []float32, width, height, channels int, verticalScale float64) ([]float32, error) {
 	var scratch []float32
 	for i := 0; i < len(opcodes); {
+		if vignette := opcodes[i].vignette; vignette != nil {
+			i++
+			if vignette.identity() {
+				continue
+			}
+			if err := vignette.apply(data, width, height, channels); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if warp := opcodes[i].warp; warp != nil {
 			i++
 			if warp.identity() {
