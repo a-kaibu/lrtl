@@ -12,7 +12,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
-- 動画・TIFF・JPEGプレビュー・字幕で`--sort name|capture-time|lrt-name|lrt-ascii|lrt-date`を選べます。本体方式の自然順・文字順を4,096組、日時順を8条件で比較しました。動画と字幕の選択・順序を合わせ、プレビューの元インデックスと測光保存先も保持します。[規則・時刻順との違い・テスト](docs/sequence-order.md)を参照してください。
+- 動画・TIFF・JPEGプレビュー・字幕で`--sort`の順序を選べます。`lrt-settings`は各連番に保存されたLRTの名前順／日時順を使います。本体方式の自然順・文字順を4,096組、日時順を8条件で比較しました。動画と字幕の選択・順序を合わせ、プレビューの元インデックスと測光保存先も保持します。[規則・時刻順との違い・テスト](docs/sequence-order.md)を参照してください。
 
 - `remove-sequence`で選択画像を隣の`_REMOVED`フォルダーへ除外できます。既存先への追記・同内容XMP／キャッシュの再利用に対応し、`move-sequence --merge`でも同じ処理を使えます。追記途中の衝突・復元失敗・共有XMPの変更検出、繰り返し除外後のAVI画素をテストしています。[対象・衝突・本体との比較範囲](docs/remove-sequence.md)を参照してください。
 
@@ -1680,7 +1680,7 @@ lrtl render C:\photos\selected --output C:\photos\selected.avi --apply-xmp-basic
 
 `remove-sequence DIRECTORY --ratings -1`は選択画像を隣の`<元フォルダー名>_REMOVED`へ除外する計画を表示し、`--write`で移動します。既存先へ繰り返し追記でき、同内容のXMP／キャッシュは既存分を再利用します。任意の既存先へ移動する場合は`move-sequence --merge`を使います。同名画像や異なる内容のXMPは上書きしません。[追記と除外・復旧の制限](docs/remove-sequence.md)を参照してください。
 
-動画・TIFF・JPEGプレビュー・字幕の出力順序は`--sort`で指定できます。`capture-time`は撮影時刻を解釈し、`lrt-date`は本体同様に`xmp:CreateDate`の文字列で並べます。字幕には動画と同じ選択・並べ替えを指定してください。[順序の種類・バッチ・制限](docs/sequence-order.md)を参照してください。
+動画・TIFF・JPEGプレビュー・字幕の出力順序は`--sort`で指定できます。`capture-time`は撮影時刻を解釈し、`lrt-date`は本体同様に`xmp:CreateDate`の文字列で並べます。`lrt-settings`は連番の`.lrt/lrtsequence.json`に保存された`filenameSort`を読みます。字幕には動画と同じ選択・並べ替えを指定してください。[順序の種類・バッチ・制限](docs/sequence-order.md)を参照してください。
 
 フォルダー全体の改名は`rename-sequence`で行います。`.lrt`やサブフォルダーも含めて同じ親の中で移動し、個々のファイル名と内容を保持します。既定はプレビュー、`--write`で実行します。絶対パスを保存した選択JSONは改名後に再生成してください。[復元処理・対応OS・使用例](docs/rename-sequence.md)を参照してください。
 

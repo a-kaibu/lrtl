@@ -9,6 +9,7 @@
 | `lrt-name` | LRT 7.5.5方式のファイル名自然順 | 置換後のUTF-16文字数、それも同じなら入力順 |
 | `lrt-ascii` | 本体のASCII設定が使う、大文字小文字を区別しない文字順。Unicode名も比較する | 入力順を保持 |
 | `lrt-date` | グローバル`xmp:CreateDate`の文字列順。日時の解析やタイムゾーン変換はしない | 文字列が完全に同じなら`lrt-ascii`の名前順 |
+| `lrt-settings` | `.lrt/lrtsequence.json`の`filenameSort`設定。`true`なら`lrt-name`、`false`なら`lrt-date` | 選択された本体方式に従う |
 
 例えば`frame2.png`、`frame02.png`、`frame10.png`の順序は、`name`では02→2→10、`lrt-name`では2→02→10、`lrt-ascii`では02→10→2です。
 
@@ -17,6 +18,7 @@ lrtl render C:\photos\sequence --sort lrt-date --output C:\photos\movie.avi --ap
 lrtl export C:\photos\sequence --sort lrt-date --output C:\photos\tiff --apply-xmp-basic
 lrtl preview-images C:\photos\sequence --sort lrt-date --output C:\photos\preview
 lrtl subtitles C:\photos\sequence --sort lrt-date --output C:\photos\movie.srt
+lrtl render C:\photos\sequence --sort lrt-settings --output C:\photos\movie.avi
 
 # 撮影時刻をタイムゾーン込みで比べる場合
 lrtl render C:\photos\sequence --sort capture-time --output C:\photos\chronological.avi
@@ -36,13 +38,13 @@ lrtl batch-preview-images C:\photos --output C:\previews -- --sort lrt-name
 
 日時順は`2026-01-01T02:00:00+09:00`と`2026-01-01T01:00:00Z`などで、実時刻の前後関係と逆になる場合があります。また、`CreateDate`が大文字小文字だけ異なる場合は、その比較が同値になっても名前順へは切り替えません。本体の比較処理に合わせた動作です。
 
-この指定は出力時の順序だけを変えます。本体の`filenameSort`や`sortFoldersAscii`設定を読み替えたり保存したりはしません。ファイル読込直後の本体日時キャッシュ生成全体、未知のUnicode版での全比較、すべてのファイル名集合でのJava／Goのソート実装の一致を保証するものではありません。UTF-8として不正なファイル名は本体方式でエラーにします。
+`lrt-settings`は各連番の`.lrt/lrtsequence.json`から`filenameSort`だけを読み、保存済みの名前順／日時順を出力に使います。設定ファイルや連番データは変更しません。`sortFoldersAscii`はバッチ時のフォルダー列挙設定なので、このフレーム順指定には影響しません。ファイル読込直後の本体日時キャッシュ生成全体、未知のUnicode版での全比較、すべてのファイル名集合でのJava／Goのソート実装の一致を保証するものではありません。UTF-8として不正なファイル名は本体方式でエラーにします。
 
 ## 比較とテスト
 
 インストール済みLRT 7.5.5の実際の比較処理を、[独立した観測スクリプト](../scripts/probes/SequenceOrderOracle.java)で呼びました。64種類の名前の全4,096組について自然順・文字順を比較し、日時順8条件も[観測値](../internal/lrtl/testdata/lrt-sequence-order-7.5.5.json)へ保存しています。先頭ゼロ、64-bit境界と桁あふれ、置換文字、ギリシャ文字、トルコ語I、日本語、補助平面文字、ASCII／Unicode数字、空白を含みます。
 
-Goの回帰テストはその全観測値に加え、5方式それぞれの手動順序と、AVIフレーム・TIFF/JPEG・マニフェスト・SRTを比較します。バッチ処理、元インデックス、測光結果の正しいXMPへの保存とバックアップ、UTCオフセットと同時刻の安定順、修飾子付き日時、入れ子の日時の無視、選択後の読込、異常時の出力中止と元ファイル保持も検査します。並べ替え単体のfuzz testもあります。
+Goの回帰テストはその全観測値に加え、各順序と`lrt-settings`の手動順序を、AVIフレーム・TIFF/JPEG・マニフェスト・SRTと比較します。バッチ処理、元インデックス、測光結果の正しいXMPへの保存とバックアップ、UTCオフセットと同時刻の安定順、修飾子付き日時、入れ子の日時の無視、選択後の読込、異常時の出力中止と元ファイル保持も検査します。並べ替え単体のfuzz testもあります。
 
 ```powershell
 go test ./internal/lrtl -run '^TestSequenceOrder' -count=2

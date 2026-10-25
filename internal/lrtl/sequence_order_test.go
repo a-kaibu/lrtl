@@ -85,10 +85,13 @@ func TestSequenceOrderCLIImagesVideoAndSubtitles(t *testing.T) {
 		order []int
 	}{
 		{"name", []int{1, 0, 2}}, {"lrt-name", []int{0, 1, 2}}, {"lrt-ascii", []int{1, 2, 0}},
-		{"lrt-date", []int{2, 1, 0}}, {"capture-time", []int{2, 0, 1}},
+		{"lrt-date", []int{2, 1, 0}}, {"capture-time", []int{2, 0, 1}}, {"lrt-settings", []int{2, 1, 0}},
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			dir, frames := sequenceOrderImageFixture(t)
+			if tc.mode == "lrt-settings" {
+				writeLRTSequenceOrderSettings(t, dir, nativeLRTSequenceSortSetting(t, false))
+			}
 			before := renameTreeSnapshot(t, dir)
 			ordered := make([]Frame, len(frames))
 			for i, index := range tc.order {
@@ -161,6 +164,75 @@ func TestSequenceOrderCLIImagesVideoAndSubtitles(t *testing.T) {
 				t.Fatal("sorting modified source")
 			}
 		})
+	}
+}
+
+func writeLRTSequenceOrderSettings(t *testing.T, dir string, data []byte) {
+	t.Helper()
+	path := filepath.Join(dir, ".lrt", "lrtsequence.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func nativeLRTSequenceSortSetting(t *testing.T, filenameSort bool) []byte {
+	t.Helper()
+	data, err := os.ReadFile("testdata/lrt-deflicker-settings-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []json.RawMessage
+	if err := json.Unmarshal(data, &rows); err != nil || len(rows) == 0 {
+		t.Fatalf("read installed LRT settings fixture: rows=%d err=%v", len(rows), err)
+	}
+	var settings map[string]json.RawMessage
+	if err := json.Unmarshal(rows[0], &settings); err != nil {
+		t.Fatal(err)
+	}
+	value, err := json.Marshal(filenameSort)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings["filenameSort"] = value
+	result, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func TestSequenceOrderNativeFilenameSortSetting(t *testing.T) {
+	_, frames := sequenceOrderImageFixture(t)
+	for _, tc := range []struct {
+		filenameSort bool
+		want         []int
+	}{
+		{true, []int{0, 1, 2}},
+		{false, []int{2, 1, 0}},
+	} {
+		writeLRTSequenceOrderSettings(t, filepath.Dir(frames[0].Image), nativeLRTSequenceSortSetting(t, tc.filenameSort))
+		got, err := orderSequenceFrames(frames, "lrt-settings")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, sourceIndex := range tc.want {
+			if got[i] != frames[sourceIndex] {
+				t.Fatalf("filenameSort=%v: frame %d got %s want %s", tc.filenameSort, i, got[i].Image, frames[sourceIndex].Image)
+			}
+		}
+	}
+}
+
+func TestSequenceOrderNativeSettingsRejectsMissingOrMalformedValues(t *testing.T) {
+	dir, frames := sequenceOrderImageFixture(t)
+	for _, data := range [][]byte{[]byte("{"), []byte(`{"filenameSort":"false"}`), []byte(`{"imageCount":3}`)} {
+		writeLRTSequenceOrderSettings(t, dir, data)
+		if _, err := orderSequenceFrames(frames, "lrt-settings"); err == nil {
+			t.Fatalf("accepted invalid LRT settings %s", data)
+		}
 	}
 }
 
@@ -282,7 +354,7 @@ func TestSequenceOrderRootQualifiedDates(t *testing.T) {
 }
 
 func TestSequenceOrderErrorsBeforeOutput(t *testing.T) {
-	for _, kind := range []string{"unknown", "partial-dates", "invalid-capture", "overflow-name"} {
+	for _, kind := range []string{"unknown", "partial-dates", "invalid-capture", "overflow-name", "missing-native-settings"} {
 		t.Run(kind, func(t *testing.T) {
 			dir, frames := sequenceOrderImageFixture(t)
 			mode := "lrt-date"
@@ -315,6 +387,8 @@ func TestSequenceOrderErrorsBeforeOutput(t *testing.T) {
 			case "overflow-name":
 				mode = "lrt-name"
 				companionWrite(t, dir, "frame9223372036854775808.png", []byte("opaque"))
+			case "missing-native-settings":
+				mode = "lrt-settings"
 			}
 			before := renameTreeSnapshot(t, dir)
 			for _, command := range []string{"render", "export", "preview-images", "subtitles"} {
@@ -395,10 +469,11 @@ func FuzzSequenceOrderComparator(f *testing.F) {
 
 func TestSequenceOrderBatchAndPreviewWriteback(t *testing.T) {
 	dir, frames := sequenceOrderImageFixture(t)
+	writeLRTSequenceOrderSettings(t, dir, nativeLRTSequenceSortSetting(t, false))
 	ordered := []Frame{frames[2], frames[1], frames[0]}
 	var out, stderr bytes.Buffer
 	batch := filepath.Join(t.TempDir(), "videos")
-	if Main([]string{"batch-render", dir, "--output", batch, "--format", "avi", "--", "--sort", "lrt-date", "--apply-xmp-basic"}, &out, &stderr) != 0 {
+	if Main([]string{"batch-render", dir, "--output", batch, "--format", "avi", "--", "--sort", "lrt-settings", "--apply-xmp-basic"}, &out, &stderr) != 0 {
 		t.Fatal(&stderr)
 	}
 	expected := filepath.Join(t.TempDir(), "expected.avi")
@@ -409,7 +484,7 @@ func TestSequenceOrderBatchAndPreviewWriteback(t *testing.T) {
 		t.Fatal("batch video ignored sort order")
 	}
 	previewRoot := filepath.Join(t.TempDir(), "previews")
-	if Main([]string{"batch-preview-images", dir, "--output", previewRoot, "--", "--sort", "lrt-date"}, &out, &stderr) != 0 {
+	if Main([]string{"batch-preview-images", dir, "--output", previewRoot, "--", "--sort", "lrt-settings"}, &out, &stderr) != 0 {
 		t.Fatal(&stderr)
 	}
 	batchManifest := readBatchPreviewManifest(t, previewRoot)
@@ -420,7 +495,7 @@ func TestSequenceOrderBatchAndPreviewWriteback(t *testing.T) {
 		}
 	}
 	preview := filepath.Join(t.TempDir(), "writeback")
-	if Main([]string{"preview-images", dir, "--output", preview, "--sort", "lrt-date", "--write-preview-ev"}, &out, &stderr) != 0 {
+	if Main([]string{"preview-images", dir, "--output", preview, "--sort", "lrt-settings", "--write-preview-ev"}, &out, &stderr) != 0 {
 		t.Fatal(&stderr)
 	}
 	manifest = readPreviewManifest(t, preview)

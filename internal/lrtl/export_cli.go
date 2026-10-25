@@ -19,7 +19,7 @@ func runImageExport(arguments []string, stdout, stderr io.Writer, previews bool)
 		name, outputDescription, defaultLongEdge = "preview-images", "new output directory for JPEG previews and measurements", 1280
 	}
 	set := newFlagSet(name, stderr)
-	sortMode := set.String("sort", "name", "frame order: name, capture-time, lrt-name, lrt-ascii or lrt-date")
+	sortMode := set.String("sort", "name", "frame order: name, capture-time, lrt-name, lrt-ascii, lrt-date or lrt-settings")
 	quality, writeEV, noBackup := new(int), new(bool), new(bool)
 	*quality = 90
 	if previews {

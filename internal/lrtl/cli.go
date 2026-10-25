@@ -893,7 +893,7 @@ func runInterpolate(arguments []string, stdout, stderr io.Writer) int {
 
 func runRender(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("render", stderr)
-	sortMode := set.String("sort", "name", "frame order: name, capture-time, lrt-name, lrt-ascii or lrt-date")
+	sortMode := set.String("sort", "name", "frame order: name, capture-time, lrt-name, lrt-ascii, lrt-date or lrt-settings")
 	lrtPreset := set.String("lrt-render-preset", "", "read a native render preset or LRT settings JSON")
 	lrtPresetName := set.String("lrt-preset-name", "", "choose an exact name from native renderPresets")
 	output := set.String("output", "", "output AVI, MP4, or MOV path")
@@ -1322,7 +1322,7 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 
 func runSubtitles(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("subtitles", stderr)
-	sortMode := set.String("sort", "name", "match video order: name, capture-time, lrt-name, lrt-ascii or lrt-date")
+	sortMode := set.String("sort", "name", "match video order: name, capture-time, lrt-name, lrt-ascii, lrt-date or lrt-settings")
 	selection := set.String("selection", "", "match the video's selected frame manifest")
 	contains := set.String("filename-contains", "", "match the video's filename filter")
 	output := set.String("output", "", "write timestamp subtitles to an SRT file")
