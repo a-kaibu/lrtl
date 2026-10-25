@@ -190,33 +190,33 @@ func selectKeyframeIndicesWithAnchors(logLuminance []float64, count, smoothRadiu
 
 // estimateAutoKeyframeCount follows the quantity heuristic recovered from
 // LRTimelapse 7.5.5's keyframe helper. Holy Grail 2*/3* pairs compensate the
-// measured curve before its range is converted to a keyframe count. Candidate
+// measured values before their range is converted to a keyframe count. Candidate
 // placement is handled separately by the wizard spacing helper or the optional
 // luminance-deviation selector.
-func estimateAutoKeyframeCount(logLuminance []float64, holyGrailMarkers []bool) int {
-	if len(logLuminance) == 0 {
+func estimateAutoKeyframeCount(measurements []float64, holyGrailMarkers []bool) int {
+	if len(measurements) == 0 {
 		return 0
 	}
-	if len(holyGrailMarkers) != len(logLuminance) {
-		holyGrailMarkers = make([]bool, len(logLuminance))
+	if len(holyGrailMarkers) != len(measurements) {
+		holyGrailMarkers = make([]bool, len(measurements))
 	}
 
 	minimum, maximum := math.Inf(1), math.Inf(-1)
 	correction := 0.0
 	hasHolyGrailMarker := false
-	for index, value := range logLuminance {
+	for index, value := range measurements {
 		hasHolyGrailMarker = hasHolyGrailMarker || holyGrailMarkers[index]
 		if index > 0 && holyGrailMarkers[index] && holyGrailMarkers[index-1] {
-			correction += logLuminance[index-1] - value
+			correction += measurements[index-1] - value
 		}
 		value += correction
 		minimum = math.Min(minimum, value)
 		maximum = math.Max(maximum, value)
 	}
 
-	frameCount := len(logLuminance)
+	frameCount := len(measurements)
 	span := frameCount - 1
-	// LRT calculates in float32 here after dividing the luminance range by 0.1.
+	// LRT calculates in float32 here after dividing the measurement range by 0.1.
 	// Keep that rounding step so values near an integer boundary match its UI.
 	frameFactor := float32(1) + float32(1000)/float32(frameCount)/float32(10)
 	// The installed Java helper divides by the float32 value 0.1, then
@@ -239,8 +239,8 @@ func estimateAutoKeyframeCount(logLuminance []float64, holyGrailMarkers []bool) 
 
 // readLRTKeyframeMeasurements returns the per-frame values that the installed
 // LRT keyframe helper reads from ExternalExposureDefault / 4. The boolean is
-// false when any frame lacks a finite value, allowing callers to use image
-// luminance as a fallback.
+// false when any frame lacks a finite value, allowing callers to measure the
+// LRT Preview EV histogram from their selected image inputs.
 func readLRTKeyframeMeasurements(frames []Frame, packets []*XMPPacket) ([]float64, bool, error) {
 	if len(frames) == 0 || len(frames) != len(packets) {
 		return nil, false, nil

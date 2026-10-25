@@ -197,7 +197,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--preview-width-camera N] [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [DEFLICKER_OPTIONS...] [--lrt-deflicker-settings] [--lrt-preferences FILE] [--write]")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--preview-width-camera N] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--lrt-input] [--lrt-preview camera|visual] [--lrt-reference] [--lrt-holy-grail-settings] [--write] compensate camera exposure changes")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
@@ -1713,7 +1713,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 
 func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("keyframes", stderr)
-	count := set.Int("count", 0, "number of new keyframe suggestions (default estimated from luminance; 5 for --evenly-spaced; maximum 20)")
+	count := set.Int("count", 0, "number of new keyframe suggestions (default estimated from Preview EV; 5 for --evenly-spaced; maximum 20)")
 	ratingOption := set.Int("rating", 4, "keyframe star rating to mark: 4 (LRT default) or 5")
 	replaceExisting := set.Bool("replace-existing", false, "clear existing keyframes of the selected rating and shift star conflicts backward where possible")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius for --luminance-deviation")
@@ -1722,6 +1722,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported TIFF-based RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
 	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
+	previewWidthCamera := set.Int("preview-width-camera", 0, "camera-preview width for automatic Preview EV keyframe quantity")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 from sidecar XMP in luminance analysis")
@@ -1733,6 +1734,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		"--count": true, "-count": true, "--smooth": true, "-smooth": true,
 		"--rating": true, "-rating": true,
 		"--lrt-preview": true, "-lrt-preview": true,
+		"--preview-width-camera": true, "-preview-width-camera": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
@@ -1765,14 +1767,21 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if *smoothRadius < 0 || *smoothRadius > 1000 {
 		return reportError(stderr, fmt.Errorf("smoothing radius must be between 0 and 1000 frames: %d", *smoothRadius))
 	}
+	previewWidthCameraSpecified := false
+	set.Visit(func(parsed *flag.Flag) {
+		if parsed.Name == "preview-width-camera" {
+			previewWidthCameraSpecified = true
+		}
+	})
 	inputOptions := imageInputOptions{
 		LRTPreview: *lrtPreview, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
+		PreviewWidthCamera: *previewWidthCamera,
 	}
 	if err := validateImageInputOptions(inputOptions); err != nil {
 		return reportError(stderr, err)
 	}
-	if *evenlySpaced && (*lrtPreview != "" || *rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "" || *applyXMPExposure || *applyXMPBasic || *applyXMPCrop) {
+	if *evenlySpaced && (*lrtPreview != "" || *rawPreview || *rawDevelop || strings.TrimSpace(*dnglab) != "" || *applyXMPExposure || *applyXMPBasic || *applyXMPCrop || previewWidthCameraSpecified) {
 		return reportError(stderr, fmt.Errorf("image processing options cannot be combined with --evenly-spaced because that mode does not decode images"))
 	}
 	frameCount := len(frames)
@@ -1824,9 +1833,9 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err != nil {
 		return reportError(stderr, err)
 	}
-	useLRTMeasurements := hasLRTMeasurements && !*applyXMPExposure && !*applyXMPBasic && !*applyXMPCrop && *lrtPreview == "" && !*rawPreview && !*rawDevelop && strings.TrimSpace(*dnglab) == ""
+	useLRTMeasurements := hasLRTMeasurements && !*applyXMPExposure && !*applyXMPBasic && !*applyXMPCrop && *lrtPreview == "" && !*rawPreview && !*rawDevelop && strings.TrimSpace(*dnglab) == "" && !previewWidthCameraSpecified
 	var curve []float64
-	if !*evenlySpaced && (*luminanceDeviation || (!countSpecified && !useLRTMeasurements)) {
+	if !*evenlySpaced && *luminanceDeviation {
 		curve, err = analyzeLuminanceSequenceWithInputOptions(frames, inputOptions)
 		if err != nil {
 			return reportError(stderr, err)
@@ -1848,11 +1857,16 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		if *evenlySpaced {
 			suggestionCount = 5
 		} else {
-			countMeasurements := curve
-			countSource = "image luminance"
+			var countMeasurements []float64
 			if useLRTMeasurements {
 				countMeasurements = lrtMeasurements
 				countSource = "LRT XMP (lrt:ExternalExposureDefault / 4)"
+			} else {
+				countMeasurements, err = analyzePreviewEVSequence(frames, inputOptions)
+				if err != nil {
+					return reportError(stderr, err)
+				}
+				countSource = "LRT Preview EV histogram"
 			}
 			autoTargetCount = min(20, estimateAutoKeyframeCount(countMeasurements, holyGrailMarkers))
 			suggestionCount = autoTargetCount

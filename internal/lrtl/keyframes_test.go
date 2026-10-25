@@ -107,11 +107,16 @@ func TestKeyframesUsesSelectedLRTPreviewInsteadOfSavedPreviewEV(t *testing.T) {
 	}
 	out.Reset()
 	stderr.Reset()
-	if code := Main([]string{"keyframes", root, "--lrt-preview", "visual"}, &out, &stderr); code != 0 {
+	if code := Main([]string{"keyframes", root, "--lrt-preview", "visual", "--preview-width-camera", "6"}, &out, &stderr); code != 0 {
 		t.Fatalf("LRT-preview estimate exit=%d stderr=%s", code, stderr.String())
 	}
-	if !strings.Contains(out.String(), "source: image luminance): 3 total") {
+	if !strings.Contains(out.String(), "source: LRT Preview EV histogram): 3 total") {
 		t.Fatalf("selected LRT cache did not replace saved Preview EV measurements: %s", out.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Main([]string{"keyframes", root, "--preview-width-camera", "1"}, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "--preview-width-camera must be at least 2 pixels") {
+		t.Fatalf("invalid keyframe preview width did not fail validation: exit=%d stderr=%s", code, stderr.String())
 	}
 	if !reflect.DeepEqual(before, batchFileSnapshot(t, root)) {
 		t.Fatal("keyframe preview modified XMP or LRT preview caches")
@@ -120,6 +125,11 @@ func TestKeyframesUsesSelectedLRTPreviewInsteadOfSavedPreviewEV(t *testing.T) {
 	stderr.Reset()
 	if code := Main([]string{"keyframes", root, "--evenly-spaced", "--lrt-preview", "visual"}, &out, &stderr); code == 0 {
 		t.Fatal("evenly-spaced mode accepted an image input option it does not use")
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Main([]string{"keyframes", root, "--evenly-spaced", "--preview-width-camera", "6"}, &out, &stderr); code == 0 {
+		t.Fatal("evenly-spaced mode accepted a preview-width option it does not use")
 	}
 	if err := os.Remove(lrtPreviewPath(filepath.Join(root, "frame01.NEF"), "visual")); err != nil {
 		t.Fatal(err)
@@ -132,6 +142,42 @@ func TestKeyframesUsesSelectedLRTPreviewInsteadOfSavedPreviewEV(t *testing.T) {
 	}
 	if !reflect.DeepEqual(beforeMissingCache, batchFileSnapshot(t, root)) {
 		t.Fatal("missing LRT preview cache changed source files")
+	}
+}
+
+func TestKeyframesAutoQuantityFallsBackToLRTPreviewEV(t *testing.T) {
+	root := t.TempDir()
+	const frameCount = 201
+	for index := 0; index < frameCount; index++ {
+		level := uint8(128 + index*10/(frameCount-1))
+		path := filepath.Join(root, "frame"+strconvTwo(index+1)+".png")
+		writePreviewEVFixture(t, path, previewEVGray(level, 20, 20))
+	}
+	frames, err := DiscoverSequence(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previewMeasurements, err := analyzePreviewEVSequence(frames, imageInputOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantCount := estimateAutoKeyframeCount(previewMeasurements, nil)
+	if wantCount != 1 {
+		t.Fatalf("fixture Preview EV range produced %d suggestions; want 1", wantCount)
+	}
+	oldLuminanceMeasurements, err := analyzeLuminanceSequence(frames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldCount := estimateAutoKeyframeCount(oldLuminanceMeasurements, nil); oldCount == wantCount {
+		t.Fatalf("fixture does not distinguish Preview EV fallback from old log-luminance fallback: both suggest %d", wantCount)
+	}
+	var stdout, stderr bytes.Buffer
+	if code := Main([]string{"keyframes", root}, &stdout, &stderr); code != 0 {
+		t.Fatalf("keyframes exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "source: LRT Preview EV histogram): 1 total") {
+		t.Fatalf("keyframe quantity did not use the LRT Preview EV measurement: %s", stdout.String())
 	}
 }
 
