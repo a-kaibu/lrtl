@@ -76,13 +76,15 @@ func (inputs *numericTransitionInputs) fillMissingWBColumns(keyframes []int) {
 
 func prepareNumericTransitionInputs(packets []*XMPPacket) (numericTransitionInputs, error) {
 	plan := numericTransitionInputs{Values: make([]map[string]float64, len(packets)), Missing: make([]map[string]float64, len(packets))}
+	// These are global Camera Raw columns. A nested value such as PointColors
+	// Saturation or a mask's Exposure must not become a root transition input.
 	for _, name := range NumericCRSProperties {
 		if _, registered := globalTransitionSpecs[name]; !registered {
 			continue
 		}
 		input := make([]transitionScalar, len(packets))
 		for i, packet := range packets {
-			text, found, err := packet.GetScalar("crs:" + name)
+			text, found, err := packet.GetRootScalar("crs:" + name)
 			if err != nil {
 				return plan, fmt.Errorf("frame %d crs:%s: %w", i+1, name, err)
 			}

@@ -189,7 +189,7 @@ func planRootScalarTransitions(packets []*XMPPacket) ([]rootScalarChanges, error
 			qualified := "crs:" + name
 			input := make([]transitionScalar, len(packets))
 			for i, packet := range packets {
-				value, found, err := packet.GetScalar(qualified)
+				value, found, err := packet.GetRootScalar(qualified)
 				if err != nil {
 					return nil, fmt.Errorf("frame %d %s: %w", i+1, qualified, err)
 				}
@@ -232,7 +232,7 @@ func planRootScalarTransitions(packets []*XMPPacket) ([]rootScalarChanges, error
 				if clearWhiteBalanceNumbers {
 					for _, temperature := range []string{"Temperature", "Tint", "IncrementalTemperature", "IncrementalTint"} {
 						qualified := "crs:" + temperature
-						if _, found, err := packets[i].GetScalar(qualified); err != nil {
+						if _, found, err := packets[i].GetRootScalar(qualified); err != nil {
 							return nil, err
 						} else if found {
 							changes[i].Removals = append(changes[i].Removals, qualified)

@@ -398,6 +398,37 @@ func TestStructuredEqualizationCopiesAllRootPropertiesFromFirstFourStar(t *testi
 	})
 }
 
+func TestInterpolationDoesNotPromoteNestedPointColorSaturation(t *testing.T) {
+	frames := makeFrames(t, t.TempDir(), 3)
+	for index, nestedSaturation := range []int{18, 54, 91} {
+		rating := 0
+		if index == 0 || index == 2 {
+			rating = 4
+		}
+		xml := fmt.Sprintf(`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="%s"><rdf:Description xmlns:crs="%s" xmlns:xmp="%s" xmp:Rating="%d"><crs:PointColors><rdf:Description crs:Name="Red" crs:Saturation="%d"/></crs:PointColors></rdf:Description></rdf:RDF></x:xmpmeta>`, rdfNamespace, crsNamespace, xmpNamespace, rating, nestedSaturation)
+		if _, err := parseXMP([]byte(xml)); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(frames[index].OutputSidecar(), []byte(xml), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	frames, err := DiscoverSequence(filepath.Dir(frames[0].Image))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, packets := interpolationPackets(t, frames, 50)
+	for index, packet := range packets {
+		if _, found, err := packet.GetRootScalar("crs:Saturation"); err != nil || found {
+			t.Fatalf("frame %d acquired a global saturation from nested PointColors: found=%t err=%v", index, found, err)
+		}
+		differs, err := packet.RootPropertyDiffers(packets[0], "crs:PointColors")
+		if err != nil || differs {
+			t.Fatalf("frame %d PointColors did not follow the selected reference: differs=%t err=%v", index, differs, err)
+		}
+	}
+}
+
 func TestSparseTransitionsAgainstInstalledLRT755(t *testing.T) {
 	data, err := os.ReadFile("testdata/lrt-7.5.5-sparse-transition.json")
 	if err != nil {

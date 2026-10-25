@@ -230,7 +230,7 @@ func buildPlanWithMaskFormat(frames []Frame, smoothness int, maskFormat string) 
 			if exact {
 				rendered = strconv.FormatFloat(value, 'g', -1, 64)
 			}
-			currentText, found, err := target.Packet.GetScalar("crs:" + name)
+			currentText, found, err := target.Packet.GetRootScalar("crs:" + name)
 			if err != nil {
 				return err
 			}
@@ -304,7 +304,7 @@ func buildPlanWithMaskFormat(frames []Frame, smoothness int, maskFormat string) 
 		}
 		keyframeSet, keyframeFlags := transitionKeyframeFlags(len(frames), keyframes)
 		if name == "Exposure2012" && len(packets) > 0 {
-			mergedHDR, found, err := packets[0].GetScalar("crs:IsMergedHDR")
+			mergedHDR, found, err := packets[0].GetRootScalar("crs:IsMergedHDR")
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", frames[0].Image, err)
 			}
