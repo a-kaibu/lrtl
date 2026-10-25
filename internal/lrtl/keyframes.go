@@ -285,25 +285,68 @@ func selectLRTWizardKeyframeIndices(frameCount, count int) ([]int, error) {
 	if frameCount < 1 {
 		return nil, fmt.Errorf("sequence contains no frames")
 	}
+	rows := make([]int, frameCount)
+	for index := range rows {
+		rows[index] = index
+	}
+	return selectLRTWizardKeyframeIndicesForRows(rows, count)
+}
+
+// lrtWizardPlacementRows returns the rows used by LRT's keyframe wizard. Its
+// table falls back to the full sequence when fewer than two rows are selected.
+func lrtWizardPlacementRows(frames []Frame, directory, manifestPath string) ([]int, error) {
+	rows := make([]int, len(frames))
+	for index, frame := range frames {
+		rows[index] = frame.Index
+	}
+	if manifestPath == "" {
+		return rows, nil
+	}
+	selected, err := loadSelectionFrames(frames, manifestPath, directory, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(selected) < 2 {
+		return rows, nil
+	}
+	rows = make([]int, len(selected))
+	for index, frame := range selected {
+		rows[index] = frame.Index
+	}
+	return rows, nil
+}
+
+// selectLRTWizardKeyframeIndicesForRows follows the installed wizard helper
+// when it spaces marks across a list of selected sequence rows. The returned
+// positions are indexes in the complete sequence, not offsets in rows.
+func selectLRTWizardKeyframeIndicesForRows(rows []int, count int) ([]int, error) {
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("keyframe placement contains no rows")
+	}
 	if count < 1 {
 		return nil, fmt.Errorf("keyframe quantity must be at least 1")
 	}
+	for index, row := range rows {
+		if row < 0 || (index > 0 && row <= rows[index-1]) {
+			return nil, fmt.Errorf("keyframe placement rows must be non-negative and strictly increasing")
+		}
+	}
 	if count == 1 {
-		return []int{0}, nil
+		return []int{rows[0]}, nil
 	}
 
-	step := frameCount / (count - 1)
-	if step > frameCount {
-		step = frameCount - 1
+	step := len(rows) / (count - 1)
+	if step > len(rows) {
+		step = len(rows) - 1
 	}
 	if step == 0 {
 		step = 1
 	}
-	lastRegularIndex := frameCount - int(float64(step)*0.8)
+	lastRegularIndex := len(rows) - int(float64(step)*0.8)
 	indices := make([]int, 0, count+1)
-	for index := 0; index < frameCount; index++ {
-		if (index%step == 0 && index < lastRegularIndex) || index == frameCount-1 {
-			indices = append(indices, index)
+	for index := 0; index < len(rows); index++ {
+		if (index%step == 0 && index < lastRegularIndex) || index == len(rows)-1 {
+			indices = append(indices, rows[index])
 		}
 	}
 	return indices, nil
@@ -312,7 +355,18 @@ func selectLRTWizardKeyframeIndices(frameCount, count int) ([]int, error) {
 // placeLRTWizardKeyframeIndices applies the installed wizard's rating
 // replacement and collision-shift behavior to its nominal spacing positions.
 func placeLRTWizardKeyframeIndices(indices []int, packets []*XMPPacket, reserved []bool, rating int) []int {
+	rows := make([]int, len(packets))
+	for index := range rows {
+		rows[index] = index
+	}
+	return placeLRTWizardKeyframeIndicesForRows(indices, rows, packets, reserved, rating)
+}
+
+func placeLRTWizardKeyframeIndicesForRows(indices, rows []int, packets []*XMPPacket, reserved []bool, rating int) []int {
 	if len(packets) == 0 || len(reserved) != len(packets) || (rating != 4 && rating != 5) {
+		return nil
+	}
+	if len(rows) == 0 {
 		return nil
 	}
 
@@ -332,7 +386,8 @@ func placeLRTWizardKeyframeIndices(indices []int, packets []*XMPPacket, reserved
 			continue
 		}
 		current := workingRatings[index]
-		if index > 0 && index < len(packets)-1 && current >= 2 && current <= 5 && current != rating {
+		rowIsSelectedEndpoint := index == rows[0] || index == rows[len(rows)-1]
+		if !rowIsSelectedEndpoint && current >= 2 && current <= 5 && current != rating {
 			shifted := false
 			for distance := 1; distance < 10; distance++ {
 				previous := index - distance

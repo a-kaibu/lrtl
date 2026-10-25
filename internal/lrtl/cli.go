@@ -197,7 +197,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--preview-width-camera N] [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [DEFLICKER_OPTIONS...] [--lrt-deflicker-settings] [--lrt-preferences FILE] [--preview-width-camera N] [--write]")
-	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--preview-width-camera N] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--selection FILE.json] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--preview-width-camera N] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--lrt-input] [--lrt-preview camera|visual] [--lrt-reference] [--lrt-holy-grail-settings] [--write] compensate camera exposure changes")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
@@ -1716,6 +1716,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	set := newFlagSet("keyframes", stderr)
 	count := set.Int("count", 0, "number of new keyframe suggestions (default estimated from Preview EV; 5 for --evenly-spaced; maximum 20)")
 	ratingOption := set.Int("rating", 4, "keyframe star rating to mark: 4 (LRT default) or 5")
+	selectionManifest := set.String("selection", "", "use rows included in a selection manifest for LRT wizard placement")
 	replaceExisting := set.Bool("replace-existing", false, "clear existing keyframes of the selected rating and shift star conflicts backward where possible")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius for --luminance-deviation")
 	evenlySpaced := set.Bool("evenly-spaced", false, "use the LRT helper's uniform frame positions without decoding images")
@@ -1734,6 +1735,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--count": true, "-count": true, "--smooth": true, "-smooth": true,
 		"--rating": true, "-rating": true,
+		"--selection": true, "-selection": true,
 		"--lrt-preview": true, "-lrt-preview": true,
 		"--preview-width-camera": true, "-preview-width-camera": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
@@ -1759,6 +1761,9 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	}
 	if *evenlySpaced && *luminanceDeviation {
 		return reportError(stderr, fmt.Errorf("--evenly-spaced and --luminance-deviation select different placement methods"))
+	}
+	if *selectionManifest != "" && *luminanceDeviation {
+		return reportError(stderr, fmt.Errorf("--selection currently applies to LRT wizard spacing, not --luminance-deviation"))
 	}
 	directory := set.Arg(0)
 	frames, err := DiscoverSequence(directory)
@@ -1788,6 +1793,10 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	frameCount := len(frames)
 	if frameCount < 1 {
 		return reportError(stderr, fmt.Errorf("sequence contains no images"))
+	}
+	placementRows, err := lrtWizardPlacementRows(frames, directory, *selectionManifest)
+	if err != nil {
+		return reportError(stderr, err)
 	}
 	packets := make([]*XMPPacket, frameCount)
 	existingKeyframes := make([]int, 0)
@@ -1901,7 +1910,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	if *luminanceDeviation {
 		indices, err = selectKeyframeIndicesWithAnchors(curve, suggestionCount, *smoothRadius, selectionAnchors)
 	} else {
-		indices, err = selectLRTWizardKeyframeIndices(frameCount, suggestionCount)
+		indices, err = selectLRTWizardKeyframeIndicesForRows(placementRows, suggestionCount)
 		if err == nil && !*replaceExisting && len(selectionAnchors) > 0 {
 			blocked := make(map[int]struct{}, len(selectionAnchors))
 			for _, index := range selectionAnchors {
@@ -1921,7 +1930,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	if *replaceExisting {
-		indices = placeLRTWizardKeyframeIndices(indices, packets, reservedRows, *ratingOption)
+		indices = placeLRTWizardKeyframeIndicesForRows(indices, placementRows, packets, reservedRows, *ratingOption)
 	}
 	modifiedPackets := make(map[int]*XMPPacket)
 	if *write {
@@ -1947,7 +1956,8 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 			frame := frames[index]
 			packet := packets[index]
 			mark := MarkKeyframeWithRating
-			if *replaceExisting && (index == 0 || index == len(frames)-1) {
+			selectedEndpoint := index == placementRows[0] || index == placementRows[len(placementRows)-1]
+			if *replaceExisting && (index == 0 || index == len(frames)-1 || selectedEndpoint) {
 				mark = markLRTWizardKeyframeWithRating
 			}
 			if _, err := mark(packet, "default", *ratingOption); err != nil {

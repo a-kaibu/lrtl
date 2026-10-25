@@ -45,6 +45,26 @@ func TestSelectOneKeyframeUsesMedianLuminance(t *testing.T) {
 	}
 }
 
+func TestLRTWizardSelectedRowsValidation(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		rows  []int
+		count int
+	}{
+		{name: "empty rows", rows: nil, count: 1},
+		{name: "negative row", rows: []int{-1, 2}, count: 2},
+		{name: "duplicate rows", rows: []int{2, 2}, count: 2},
+		{name: "descending rows", rows: []int{3, 2}, count: 2},
+		{name: "zero count", rows: []int{1, 3}, count: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := selectLRTWizardKeyframeIndicesForRows(test.rows, test.count); err == nil {
+				t.Fatal("invalid selected rows or count were accepted")
+			}
+		})
+	}
+}
+
 func TestSelectKeyframeIndicesValidatesCountAndCurve(t *testing.T) {
 	for _, count := range []int{0, 4} {
 		if _, err := selectKeyframeIndices([]float64{0, 1, 2}, count, 1); err == nil {
@@ -240,6 +260,189 @@ func TestKeyframesCLIPreviewsThenMarksSuggestedFrames(t *testing.T) {
 	if marked != 3 {
 		t.Fatalf("got %d marked frames, want 3", marked)
 	}
+}
+
+func TestKeyframesSelectionUsesLRTSelectedRowsAndFullSequenceQuantity(t *testing.T) {
+	root := t.TempDir()
+	const frameCount = 251
+	includedRows := map[int]bool{5: true, 15: true, 25: true, 35: true, 45: true, 55: true}
+	for index := 0; index < frameCount; index++ {
+		path := filepath.Join(root, "frame"+strconvTwo(index+1)+".NEF")
+		if err := os.WriteFile(path, []byte("synthetic RAW; quantity comes from XMP"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		measurement := float64(index) / float64(frameCount-1) * 0.3
+		writeTestXMP(t, path, map[string]string{
+			"lrt:ExternalExposureDefault": strconv.FormatFloat(measurement*4, 'f', 8, 64),
+		})
+	}
+	frames, err := DiscoverSequence(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := writeKeyframeSelectionManifest(t, root, frames, includedRows)
+
+	measurements := make([]float64, frameCount)
+	for index := range measurements {
+		measurements[index] = float64(index) / float64(frameCount-1) * 0.3
+	}
+	if got := estimateAutoKeyframeCount(measurements, nil); got != 4 {
+		t.Fatalf("test fixture quantity=%d, want 4", got)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if code := Main([]string{"keyframes", root, "--selection", manifest, "--write"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("selected keyframes exit=%d stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "source: LRT XMP (lrt:ExternalExposureDefault / 4)): 4 total") {
+		t.Fatalf("automatic quantity was not measured from the full sequence: %s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "new suggestions: 4") {
+		t.Fatalf("selected-row placement did not create four suggestions: %s", stdout.String())
+	}
+	wantRows := map[int]bool{5: true, 25: true, 45: true, 55: true}
+	for index, frame := range frames {
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if packet.IsKeyframe() != wantRows[index] {
+			t.Errorf("frame %d keyframe=%v, want %v", index+1, packet.IsKeyframe(), wantRows[index])
+		}
+		if !wantRows[index] {
+			backups, err := filepath.Glob(frame.OutputSidecar() + ".lrtl-*.bak")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(backups) != 0 {
+				t.Errorf("unselected frame %d unexpectedly got a backup", index+1)
+			}
+		}
+	}
+}
+
+func TestKeyframesSelectionWithFewerThanTwoRowsFallsBackToWholeSequence(t *testing.T) {
+	for _, selectedRows := range [][]int{{}, {2}} {
+		name := "empty"
+		if len(selectedRows) == 1 {
+			name = "one-row"
+		}
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			for index := 1; index <= 7; index++ {
+				writeRenderFrame(t, filepath.Join(root, "frame"+strconvTwo(index)+".png"), "png", 8, 8)
+			}
+			frames, err := DiscoverSequence(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			included := make(map[int]bool, len(selectedRows))
+			for _, index := range selectedRows {
+				included[index] = true
+			}
+			manifest := writeKeyframeSelectionManifest(t, root, frames, included)
+			var invalidOut, invalidErr bytes.Buffer
+			invalidArgs := []string{"keyframes", root, "--selection", manifest, "--luminance-deviation"}
+			if code := Main(invalidArgs, &invalidOut, &invalidErr); code == 0 || !strings.Contains(invalidErr.String(), "--selection currently applies") {
+				t.Fatalf("incompatible selection mode was not rejected: exit=%d stderr=%s", code, invalidErr.String())
+			}
+			var stdout, stderr bytes.Buffer
+			args := []string{"keyframes", root, "--evenly-spaced", "--count", "3", "--selection", manifest}
+			if code := Main(args, &stdout, &stderr); code != 0 {
+				t.Fatalf("keyframes exit=%d stderr=%s", code, stderr.String())
+			}
+			for _, selected := range []string{"frame01.png", "frame04.png", "frame07.png"} {
+				if !strings.Contains(stdout.String(), selected) {
+					t.Errorf("LRT fallback did not place %s across the full sequence: %s", selected, stdout.String())
+				}
+			}
+			if strings.Contains(stdout.String(), "frame03.png") || strings.Contains(stdout.String(), "frame06.png") {
+				t.Fatalf("unexpected keyframe position in fallback: %s", stdout.String())
+			}
+		})
+	}
+}
+
+func TestKeyframesSelectionReplacementTreatsSubsetEndpointsLikeLRT(t *testing.T) {
+	root := t.TempDir()
+	for index := 0; index < 20; index++ {
+		path := filepath.Join(root, "frame"+strconvTwo(index+1)+".png")
+		writeRenderFrame(t, path, "png", 8, 8)
+		rating := map[int]string{2: "2", 14: "3", 19: "3"}[index]
+		metadata := map[string]string{}
+		if rating != "" {
+			metadata["xmp:Rating"] = rating
+		}
+		writeTestXMP(t, path, metadata)
+	}
+	frames, err := DiscoverSequence(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := writeKeyframeSelectionManifest(t, root, frames, map[int]bool{
+		2: true, 8: true, 14: true, 19: true,
+	})
+	var stdout, stderr bytes.Buffer
+	args := []string{"keyframes", root, "--count", "3", "--selection", manifest, "--replace-existing", "--write"}
+	if code := Main(args, &stdout, &stderr); code != 0 {
+		t.Fatalf("selected keyframe replacement exit=%d stderr=%s", code, stderr.String())
+	}
+	wantRatings := map[int]int{2: 4, 13: 4, 14: 3, 19: 4}
+	for index, frame := range frames {
+		packet, err := PacketForSidecar(frame.OutputSidecar())
+		if err != nil {
+			t.Fatal(err)
+		}
+		rating, found := packet.Rating()
+		want, wantFound := wantRatings[index]
+		if found != wantFound || (found && rating != want) {
+			t.Errorf("frame %d rating=(%d,%v), want (%d,%v)", index+1, rating, found, want, wantFound)
+		}
+		_, shouldBackUp := map[int]bool{2: true, 13: true, 19: true}[index]
+		backups, err := filepath.Glob(frame.OutputSidecar() + ".lrtl-*.bak")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if (len(backups) == 1) != shouldBackUp {
+			t.Errorf("frame %d backup count=%d, want backup=%v", index+1, len(backups), shouldBackUp)
+		}
+		if index == 2 || index == 19 {
+			if err := UnmarkKeyframe(packet, false); err != nil {
+				t.Fatal(err)
+			}
+			wantPreviousRating := 2
+			if index == 19 {
+				wantPreviousRating = 3
+			}
+			if restored, found := packet.Rating(); !found || restored != wantPreviousRating {
+				t.Fatalf("unmark did not restore selected endpoint's old rating: (%d,%v), want %d", restored, found, wantPreviousRating)
+			}
+		}
+	}
+}
+
+func writeKeyframeSelectionManifest(t *testing.T, directory string, frames []Frame, includedRows map[int]bool) string {
+	t.Helper()
+	manifest := &sequenceSelectionManifest{
+		Version:   selectionManifestVersion,
+		Directory: directory,
+		Frames:    make([]longTermFrameMetrics, len(frames)),
+	}
+	for index, frame := range frames {
+		info, err := os.Stat(frame.Image)
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifest.Frames[index] = longTermFrameMetrics{
+			Image: filepath.Base(frame.Image), Included: includedRows[frame.Index],
+			SizeBytes: info.Size(), ModifiedUnixNano: info.ModTime().UnixNano(),
+		}
+	}
+	path := filepath.Join(directory, "keyframe-selection.json")
+	if err := writeSelectionManifest(path, manifest, false); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestKeyframesReplaceExistingMatchesLRTEndpointOverwriteAndCanRestoreHG(t *testing.T) {
@@ -602,6 +805,68 @@ func TestLRTWizardCollisionHandlingMatchesOracle(t *testing.T) {
 			}
 			if !reflect.DeepEqual(finalRatings, test.LRTFinalRatings) {
 				t.Fatalf("final ratings=%v, installed LRT 7.5.5 returned %v", finalRatings, test.LRTFinalRatings)
+			}
+		})
+	}
+}
+
+func TestLRTWizardSelectedRowsMatchOracle(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "lrt-keyframe-quantity-7.5.5.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Source string `json:"source"`
+		Cases  []struct {
+			Name           string `json:"name"`
+			Frames         int    `json:"frames"`
+			Count          int    `json:"count"`
+			TargetRating   int    `json:"targetRating"`
+			RowIndices     []int  `json:"rowIndices"`
+			InitialRatings []int  `json:"initialRatings"`
+			LRTRatings     []int  `json:"lrtRatings"`
+		} `json:"selectedRowCases"`
+	}
+	if err := json.Unmarshal(data, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.Source != "LRTimelapse 7.5.5 build 1059 installed runtime" {
+		t.Fatalf("unexpected oracle source %q", fixture.Source)
+	}
+	if len(fixture.Cases) != 6 {
+		t.Fatalf("LRT selected-row oracle has %d cases, want 6", len(fixture.Cases))
+	}
+	for _, test := range fixture.Cases {
+		t.Run(test.Name, func(t *testing.T) {
+			if test.Frames < 1 || len(test.InitialRatings) != test.Frames || len(test.LRTRatings) != test.Frames {
+				t.Fatalf("invalid oracle frame dimensions: frames=%d initial=%d LRT=%d", test.Frames, len(test.InitialRatings), len(test.LRTRatings))
+			}
+			indices, err := selectLRTWizardKeyframeIndicesForRows(test.RowIndices, test.Count)
+			if err != nil {
+				t.Fatal(err)
+			}
+			packets := make([]*XMPPacket, test.Frames)
+			for index, rating := range test.InitialRatings {
+				packets[index] = EmptyXMPPacket()
+				if rating != 0 {
+					if err := packets[index].SetScalar("xmp:Rating", strconv.Itoa(rating)); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			selected := placeLRTWizardKeyframeIndicesForRows(indices, test.RowIndices, packets,
+				make([]bool, test.Frames), test.TargetRating)
+			finalRatings := append([]int(nil), test.InitialRatings...)
+			for index, rating := range finalRatings {
+				if rating == test.TargetRating {
+					finalRatings[index] = 0
+				}
+			}
+			for _, index := range selected {
+				finalRatings[index] = test.TargetRating
+			}
+			if !reflect.DeepEqual(finalRatings, test.LRTRatings) {
+				t.Fatalf("final ratings=%v, installed LRT 7.5.5 returned %v", finalRatings, test.LRTRatings)
 			}
 		})
 	}

@@ -768,5 +768,13 @@
     {"name":"holy_grail_endpoint_is_overwritten_by_lrt","count":3,"targetRating":4,"initialRatings":[2,0,0,0,0,0,0,0,0,0],"lrtRatings":[4,0,0,0,0,4,0,0,0,4]},
     {"name":"crop_target_shifts_default_keyframe","count":3,"targetRating":5,"initialRatings":[0,0,0,0,0,4,0,0,0,0],"lrtRatings":[5,0,0,0,5,4,0,0,0,5]},
     {"name":"crop_target_replaces_default_at_endpoint","count":3,"targetRating":5,"initialRatings":[0,0,0,0,0,0,0,0,0,4],"lrtRatings":[5,0,0,0,0,5,0,0,0,5]}
+  ],
+  "selectedRowCases": [
+    {"name":"sparse_rows_count_four","frames":40,"count":4,"targetRating":4,"rowIndices":[1,5,8,14,21,27,33,38],"initialRatings":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lrtRatings":[0,4,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,4,0]},
+    {"name":"sparse_rows_count_two","frames":30,"count":2,"targetRating":4,"rowIndices":[2,7,15,28],"initialRatings":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lrtRatings":[0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0]},
+    {"name":"count_exceeds_selected_row_count","frames":16,"count":5,"targetRating":4,"rowIndices":[1,6,11],"initialRatings":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lrtRatings":[0,4,0,0,0,0,4,0,0,0,0,4,0,0,0,0]},
+    {"name":"single_count_marks_first_selected_row","frames":20,"count":1,"targetRating":4,"rowIndices":[3,8,16],"initialRatings":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lrtRatings":[0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
+    {"name":"holy_grail_selected_endpoint_overwrites_rating","frames":20,"count":3,"targetRating":4,"rowIndices":[2,8,14,19],"initialRatings":[0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],"lrtRatings":[0,0,4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,4]},
+    {"name":"holy_grail_collision_shifts_before_selected_row","frames":20,"count":4,"targetRating":4,"rowIndices":[2,8,14,19],"initialRatings":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0],"lrtRatings":[0,0,4,0,0,0,0,0,4,0,0,0,0,4,3,0,0,0,0,4]}
   ]
 }

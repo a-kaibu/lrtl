@@ -20,6 +20,8 @@ public final class LRTKeyframeQuantityOracle {
     private record QuantitySweepCase(String name, int frames, double offset, double range, int stepAt,
             int[] ratingIndices, int[] ratings) {}
     private record PlacementCase(String name, int frames, int count, int rating, int[] initialRatings) {}
+    private record SelectedRowCase(String name, int frames, int count, int rating, int[] rowIndices,
+            int[] initialRatings) {}
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1 || args.length > 2) {
@@ -182,6 +184,41 @@ public final class LRTKeyframeQuantityOracle {
             json.append("]}").append(caseIndex + 1 == placementCases.size() ? "\n" : ",\n");
             System.out.printf("%s frames=%d count=%d rating=%d%n", test.name(), test.frames(), test.count(), test.rating());
         }
+
+        json.append("  ],\n  \"selectedRowCases\": [\n");
+        int[] selectedEndpointRatings = singleRating(20, 2, 2);
+        selectedEndpointRatings[19] = 3;
+        List<SelectedRowCase> selectedRowCases = List.of(
+                new SelectedRowCase("sparse_rows_count_four", 40, 4, 4,
+                        new int[]{1, 5, 8, 14, 21, 27, 33, 38}, ratings(40)),
+                new SelectedRowCase("sparse_rows_count_two", 30, 2, 4,
+                        new int[]{2, 7, 15, 28}, ratings(30)),
+                new SelectedRowCase("count_exceeds_selected_row_count", 16, 5, 4,
+                        new int[]{1, 6, 11}, ratings(16)),
+                new SelectedRowCase("single_count_marks_first_selected_row", 20, 1, 4,
+                        new int[]{3, 8, 16}, ratings(20)),
+                new SelectedRowCase("holy_grail_selected_endpoint_overwrites_rating", 20, 3, 4,
+                        new int[]{2, 8, 14, 19}, selectedEndpointRatings),
+                new SelectedRowCase("holy_grail_collision_shifts_before_selected_row", 20, 4, 4,
+                        new int[]{2, 8, 14, 19}, singleRating(20, 14, 3))
+        );
+        for (int caseIndex = 0; caseIndex < selectedRowCases.size(); caseIndex++) {
+            SelectedRowCase test = selectedRowCases.get(caseIndex);
+            int[] lrtRatings = runWizard(controller, sequenceClass, frameClass, frameConstructor,
+                    setRating, applyWizardPositions, test.frames(), test.count(), test.rating(),
+                    test.initialRatings(), test.rowIndices());
+            json.append("    {\"name\":\"").append(test.name()).append("\",\"frames\":")
+                    .append(test.frames()).append(",\"count\":").append(test.count())
+                    .append(",\"targetRating\":").append(test.rating()).append(",\"rowIndices\":[");
+            appendInts(json, test.rowIndices());
+            json.append("],\"initialRatings\":[");
+            appendInts(json, test.initialRatings());
+            json.append("],\"lrtRatings\":[");
+            appendInts(json, lrtRatings);
+            json.append("]}").append(caseIndex + 1 == selectedRowCases.size() ? "\n" : ",\n");
+            System.out.printf("%s frames=%d count=%d selected=%d%n", test.name(), test.frames(),
+                    test.count(), test.rowIndices().length);
+        }
         json.append("  ]\n}\n");
         Files.writeString(Path.of(args[0]), json.toString(), StandardCharsets.UTF_8);
     }
@@ -325,6 +362,13 @@ public final class LRTKeyframeQuantityOracle {
     private static int[] runWizard(Object controller, Class<?> sequenceClass, Class<?> frameClass,
             Constructor<?> frameConstructor, Method setRating, Method applyWizardPositions, int frameCount,
             int requestedCount, int requestedRating, int[] initialRatings) throws Exception {
+        return runWizard(controller, sequenceClass, frameClass, frameConstructor, setRating,
+                applyWizardPositions, frameCount, requestedCount, requestedRating, initialRatings, null);
+    }
+
+    private static int[] runWizard(Object controller, Class<?> sequenceClass, Class<?> frameClass,
+            Constructor<?> frameConstructor, Method setRating, Method applyWizardPositions, int frameCount,
+            int requestedCount, int requestedRating, int[] initialRatings, int[] requestedRows) throws Exception {
         Object sequence = sequenceClass.getConstructor().newInstance();
         Method add = sequenceClass.getMethod("add", Object.class);
         Method getRating = Arrays.stream(frameClass.getMethods())
@@ -340,7 +384,8 @@ public final class LRTKeyframeQuantityOracle {
             frames[index] = frame;
             add.invoke(sequence, frame);
         }
-        applyWizardPositions.invoke(controller, sequence, requestedCount, allIndices, requestedRating, false);
+        int[] rows = requestedRows == null ? allIndices : requestedRows;
+        applyWizardPositions.invoke(controller, sequence, requestedCount, rows, requestedRating, false);
         int[] result = new int[frameCount];
         for (int index = 0; index < frameCount; index++) {
             result[index] = ((Number) getRating.invoke(frames[index])).intValue();
