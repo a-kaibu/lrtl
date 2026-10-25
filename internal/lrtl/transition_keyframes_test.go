@@ -252,6 +252,152 @@ func TestStructuredTransitionsUseFirstFourStarReference(t *testing.T) {
 	}
 }
 
+func TestRootPropertyEqualityUsesExpandedNamespaceNames(t *testing.T) {
+	packet := func(prefix, namespace string) *XMPPacket {
+		t.Helper()
+		xml := fmt.Sprintf(`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="%s"><rdf:Description xmlns:%s="%s"><%s:Look %s:Fixture="same"/></rdf:Description></rdf:RDF></x:xmpmeta>`, rdfNamespace, prefix, namespace, prefix, prefix)
+		parsed, err := parseXMP([]byte(xml))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return parsed
+	}
+
+	canonical := packet("crs", crsNamespace)
+	alias := packet("camera", crsNamespace)
+	differs, err := canonical.RootPropertyDiffers(alias, "crs:Look")
+	if err != nil || differs {
+		t.Fatalf("equivalent prefix alias differs=%t err=%v", differs, err)
+	}
+
+	differentNamespace := packet("crs", "urn:another-camera-namespace")
+	differs, err = canonical.RootPropertyDiffers(differentNamespace, "crs:Look")
+	if err != nil || !differs {
+		t.Fatalf("different namespace was treated as equal: differs=%t err=%v", differs, err)
+	}
+}
+
+func TestStructuredEqualizationCopiesAllRootPropertiesFromFirstFourStar(t *testing.T) {
+	rows := []struct {
+		name   string
+		source string
+		other  string
+	}{
+		{"Look", `<crs:Look crs:FixtureName="ref-look" crs:FixtureAmount="0.75"/>`, `<crs:Look crs:FixtureName="other-look" crs:FixtureAmount="0.25"/>`},
+		{"PointColors", `<crs:PointColors><rdf:Description crs:FixtureName="Red" crs:FixtureHue="12" crs:FixtureChroma="34"/></crs:PointColors>`, `<crs:PointColors><rdf:Description crs:FixtureName="Blue" crs:FixtureHue="90"/></crs:PointColors>`},
+		{"Preset", `<crs:Preset crs:FixtureName="ref-preset"><rdf:Description crs:FixtureID="ref-id" crs:FixtureAmount="0.5"/></crs:Preset>`, `<crs:Preset crs:FixtureName="other-preset"><rdf:Description crs:FixtureID="other-id"/></crs:Preset>`},
+		{"ToneCurve", `<crs:ToneCurve><rdf:Description crs:FixtureName="ref-master" crs:FixturePoints="0,0 128,64 255,255"/></crs:ToneCurve>`, `<crs:ToneCurve><rdf:Description crs:FixtureName="other-master" crs:FixturePoints="0,0 128,180"/></crs:ToneCurve>`},
+		{"ToneCurveName", `<crs:ToneCurveName>ref-custom</crs:ToneCurveName>`, `<crs:ToneCurveName>other-custom</crs:ToneCurveName>`},
+		{"ToneCurvePV2012", `<crs:ToneCurvePV2012><rdf:Description crs:FixturePoints="0,0 128,64 255,255"/></crs:ToneCurvePV2012>`, `<crs:ToneCurvePV2012><rdf:Description crs:FixturePoints="0,0 128,180 255,255"/></crs:ToneCurvePV2012>`},
+		{"ToneCurvePV2012Blue", `<crs:ToneCurvePV2012Blue><rdf:Description crs:FixturePoints="0,0 128,72 255,255"/></crs:ToneCurvePV2012Blue>`, `<crs:ToneCurvePV2012Blue><rdf:Description crs:FixturePoints="0,0 128,190 255,255"/></crs:ToneCurvePV2012Blue>`},
+		{"ToneCurvePV2012Green", `<crs:ToneCurvePV2012Green><rdf:Description crs:FixturePoints="0,0 128,80 255,255"/></crs:ToneCurvePV2012Green>`, `<crs:ToneCurvePV2012Green><rdf:Description crs:FixturePoints="0,0 128,200 255,255"/></crs:ToneCurvePV2012Green>`},
+		{"ToneCurvePV2012Red", `<crs:ToneCurvePV2012Red><rdf:Description crs:FixturePoints="0,0 128,88 255,255"/></crs:ToneCurvePV2012Red>`, `<crs:ToneCurvePV2012Red><rdf:Description crs:FixturePoints="0,0 128,210 255,255"/></crs:ToneCurvePV2012Red>`},
+	}
+
+	propertyXML := func(useOther bool, includeBlue bool) string {
+		var content strings.Builder
+		for _, row := range rows {
+			if !includeBlue && row.name == "ToneCurvePV2012Blue" {
+				continue
+			}
+			fragment := row.source
+			if useOther {
+				fragment = row.other
+			}
+			content.WriteString(fragment)
+		}
+		return content.String()
+	}
+	writePacket := func(t *testing.T, frame Frame, rating, index int, useOther, includeBlue bool) {
+		t.Helper()
+		xml := fmt.Sprintf(`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:vendor="urn:lrtl:equalization-test" xmp:Rating="%d"><vendor:Keep>frame-%d</vendor:Keep>%s</rdf:Description></rdf:RDF></x:xmpmeta>`, rating, index, propertyXML(useOther, includeBlue))
+		if _, err := parseXMP([]byte(xml)); err != nil {
+			t.Fatalf("generated invalid fixture XMP: %v\n%s", err, xml)
+		}
+		if err := os.WriteFile(frame.OutputSidecar(), []byte(xml), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("copy reference properties and preserve unrelated fields", func(t *testing.T) {
+		frames := makeFrames(t, t.TempDir(), 4)
+		// A leading 5-star crop frame must not replace the first 4-star
+		// reference used for structured develop properties.
+		writePacket(t, frames[0], 5, 0, true, true)
+		writePacket(t, frames[1], 4, 1, false, true)
+		writePacket(t, frames[2], 0, 2, true, true)
+		writePacket(t, frames[3], 4, 3, true, true)
+		frames, err := DiscoverSequence(filepath.Dir(frames[0].Image))
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan, packets := interpolationPackets(t, frames, 50)
+		for _, row := range rows {
+			differs, err := plan.StructuredSource.RootPropertyDiffers(packets[1], "crs:"+row.name)
+			if err != nil || differs {
+				t.Fatalf("structured source did not come from the first 4-star frame: property=%s differs=%t err=%v", row.name, differs, err)
+			}
+		}
+		for _, targetIndex := range []int{0, 2, 3} {
+			for _, row := range rows {
+				differs, err := packets[targetIndex].RootPropertyDiffers(packets[1], "crs:"+row.name)
+				if err != nil || differs {
+					got, _ := packets[targetIndex].Serialize()
+					t.Fatalf("frame %d property %s differs from reference: differs=%t err=%v\n%s", targetIndex, row.name, differs, err, got)
+				}
+			}
+			rating, found, err := packets[targetIndex].GetScalar("xmp:Rating")
+			if err != nil || !found || rating != []string{"5", "4", "0", "4"}[targetIndex] {
+				t.Fatalf("frame %d rating changed: %q found=%t err=%v", targetIndex, rating, found, err)
+			}
+			serialized, err := packets[targetIndex].Serialize()
+			if err != nil || !bytes.Contains(serialized, []byte(fmt.Sprintf("<vendor:Keep>frame-%d</vendor:Keep>", targetIndex))) {
+				t.Fatalf("frame %d vendor metadata changed: err=%v\n%s", targetIndex, err, serialized)
+			}
+		}
+		for _, targetIndex := range []int{0, 2, 3} {
+			serialized, err := packets[targetIndex].Serialize()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(frames[targetIndex].OutputSidecar(), serialized, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		frames, err = DiscoverSequence(filepath.Dir(frames[0].Image))
+		if err != nil {
+			t.Fatal(err)
+		}
+		secondPlan, err := buildPlanWithSmoothness(frames, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, change := range secondPlan.Changes {
+			if len(change.StructuredProperties) != 0 {
+				t.Fatalf("second interpolation still schedules structured copies for %s: %v", change.Frame.Image, change.StructuredProperties)
+			}
+		}
+	})
+
+	t.Run("remove values absent from reference", func(t *testing.T) {
+		frames := makeFrames(t, t.TempDir(), 3)
+		writePacket(t, frames[0], 5, 0, true, true)
+		writePacket(t, frames[1], 4, 1, false, false)
+		writePacket(t, frames[2], 0, 2, true, true)
+		frames, err := DiscoverSequence(filepath.Dir(frames[0].Image))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, packets := interpolationPackets(t, frames, 50)
+		for _, targetIndex := range []int{0, 2} {
+			differs, err := packets[targetIndex].RootPropertyDiffers(packets[1], "crs:ToneCurvePV2012Blue")
+			if err != nil || differs {
+				t.Fatalf("frame %d retained a property absent from the reference: differs=%t err=%v", targetIndex, differs, err)
+			}
+		}
+	})
+}
+
 func TestSparseTransitionsAgainstInstalledLRT755(t *testing.T) {
 	data, err := os.ReadFile("testdata/lrt-7.5.5-sparse-transition.json")
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -457,21 +458,77 @@ func rootDescriptionAbout(description *etree.Element) (string, bool) {
 	return "", false
 }
 
-func sortElementAttributes(element *etree.Element) {
-	element.SortAttrs()
-	for _, token := range element.Child {
-		if child, ok := token.(*etree.Element); ok {
-			sortElementAttributes(child)
-		}
-	}
-}
-
 func xmpElementSignature(element *etree.Element) (string, error) {
-	copy := element.Copy()
-	sortElementAttributes(copy)
-	document := etree.NewDocumentWithRoot(copy)
-	data, err := document.WriteToBytes()
-	return string(data), err
+	type canonicalAttribute struct {
+		namespace string
+		local     string
+		value     string
+	}
+	var signature strings.Builder
+	writeField := func(value string) {
+		signature.WriteString(strconv.Itoa(len(value)))
+		signature.WriteByte(':')
+		signature.WriteString(value)
+	}
+	var writeElement func(*etree.Element)
+	writeElement = func(current *etree.Element) {
+		signature.WriteByte('E')
+		writeField(current.NamespaceURI())
+		writeField(current.Tag)
+		attributes := make([]canonicalAttribute, 0, len(current.Attr))
+		for _, attribute := range current.Attr {
+			if attribute.Space == "xmlns" || attribute.Space == "" && attribute.Key == "xmlns" {
+				continue
+			}
+			attributes = append(attributes, canonicalAttribute{
+				namespace: attribute.NamespaceURI(),
+				local:     attribute.Key,
+				value:     attribute.Value,
+			})
+		}
+		sort.Slice(attributes, func(i, j int) bool {
+			if attributes[i].namespace != attributes[j].namespace {
+				return attributes[i].namespace < attributes[j].namespace
+			}
+			if attributes[i].local != attributes[j].local {
+				return attributes[i].local < attributes[j].local
+			}
+			return attributes[i].value < attributes[j].value
+		})
+		signature.WriteByte('A')
+		writeField(strconv.Itoa(len(attributes)))
+		for _, attribute := range attributes {
+			writeField(attribute.namespace)
+			writeField(attribute.local)
+			writeField(attribute.value)
+		}
+		signature.WriteByte('C')
+		for _, token := range current.Child {
+			switch child := token.(type) {
+			case *etree.Element:
+				writeElement(child)
+			case *etree.CharData:
+				signature.WriteByte('T')
+				writeField(child.Data)
+			case *etree.Comment:
+				signature.WriteByte('!')
+				writeField(child.Data)
+			case *etree.Directive:
+				signature.WriteByte('D')
+				writeField(child.Data)
+			case *etree.ProcInst:
+				signature.WriteByte('P')
+				writeField(child.Target)
+				writeField(child.Inst)
+			default:
+				signature.WriteByte('?')
+				writeField(fmt.Sprintf("%T", token))
+			}
+		}
+		signature.WriteByte('e')
+	}
+	writeElement(element)
+	return signature.String(), nil
 }
 
 func sameRootProperty(left, right topLevelXMPProperty) (bool, error) {
