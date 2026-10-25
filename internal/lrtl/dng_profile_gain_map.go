@@ -14,16 +14,28 @@ type dngProfileGainTableMap struct {
 	rows, cols, points int
 	spacingV, spacingH float64
 	originV, originH   float64
+	gamma              float64
 	weights            [5]float64
 	data               []float32
 }
 
 func readDNGProfileGainTableMap(fields *dngFields) (*dngProfileGainTableMap, error) {
-	entry, found := fields.entries[52525]
+	if _, found := fields.entries[52544]; found {
+		return readDNGProfileGainTableMapTag(fields, 52544, true)
+	}
+	return readDNGProfileGainTableMapTag(fields, 52525, false)
+}
+
+func readDNGProfileGainTableMapTag(fields *dngFields, tag uint16, map2 bool) (*dngProfileGainTableMap, error) {
+	entry, found := fields.entries[tag]
 	if !found {
 		return nil, nil
 	}
-	if entry.typeID != 7 || entry.count < 64 || entry.count > maxDNGProfileGainTableMapBytes {
+	headerSize := uint64(64)
+	if map2 {
+		headerSize = 80
+	}
+	if entry.typeID != 7 || uint64(entry.count) < headerSize || entry.count > maxDNGProfileGainTableMapBytes {
 		return nil, fmt.Errorf("invalid DNG ProfileGainTableMap size or type")
 	}
 	data := entry.value[:]
@@ -34,7 +46,7 @@ func readDNGProfileGainTableMap(fields *dngFields) (*dngProfileGainTableMap, err
 		}
 		data = fields.scanner.data[offset : offset+uint64(entry.count)]
 	}
-	if len(data) < 64 {
+	if uint64(len(data)) < headerSize {
 		return nil, fmt.Errorf("truncated DNG ProfileGainTableMap header")
 	}
 	order := fields.scanner.order
@@ -42,7 +54,31 @@ func readDNGProfileGainTableMap(fields *dngFields) (*dngProfileGainTableMap, err
 	if rows == 0 || cols == 0 || points == 0 {
 		return nil, fmt.Errorf("empty DNG ProfileGainTableMap")
 	}
-	maxSamples := uint64((maxDNGProfileGainTableMapBytes - 64) / 4)
+	dataType, sampleBytes := uint32(3), uint64(4)
+	gamma, gainMin, gainMax := float64(1), float64(0), float64(0)
+	if map2 {
+		dataType = order.Uint32(data[64:])
+		switch dataType {
+		case 0:
+			sampleBytes = 1
+		case 1, 2:
+			sampleBytes = 2
+		case 3:
+			sampleBytes = 4
+		default:
+			return nil, fmt.Errorf("unsupported DNG ProfileGainTableMap2 data type %d", dataType)
+		}
+		gamma = float64(math.Float32frombits(order.Uint32(data[68:])))
+		gainMin = float64(math.Float32frombits(order.Uint32(data[72:])))
+		gainMax = float64(math.Float32frombits(order.Uint32(data[76:])))
+		if math.IsNaN(gamma) || math.IsInf(gamma, 0) || gamma < .25 || gamma > 4 {
+			return nil, fmt.Errorf("invalid DNG ProfileGainTableMap2 gamma")
+		}
+		if dataType < 2 && (math.IsNaN(gainMin) || math.IsInf(gainMin, 0) || math.IsNaN(gainMax) || math.IsInf(gainMax, 0) || gainMin < 0 || gainMax < gainMin) {
+			return nil, fmt.Errorf("invalid DNG ProfileGainTableMap2 gain range")
+		}
+	}
+	maxSamples := (uint64(maxDNGProfileGainTableMapBytes) - headerSize) / sampleBytes
 	samples := rows
 	if cols > maxSamples/samples {
 		return nil, fmt.Errorf("DNG ProfileGainTableMap exceeds limits")
@@ -52,7 +88,7 @@ func readDNGProfileGainTableMap(fields *dngFields) (*dngProfileGainTableMap, err
 		return nil, fmt.Errorf("DNG ProfileGainTableMap exceeds limits")
 	}
 	samples *= points
-	if uint64(len(data)) != 64+samples*4 {
+	if uint64(len(data)) != headerSize+samples*sampleBytes {
 		return nil, fmt.Errorf("DNG ProfileGainTableMap has incorrect sample count")
 	}
 	if rows > math.MaxInt32 || cols > math.MaxInt32 || points > math.MaxInt32 {
@@ -64,6 +100,7 @@ func readDNGProfileGainTableMap(fields *dngFields) (*dngProfileGainTableMap, err
 		spacingH: math.Float64frombits(order.Uint64(data[16:])),
 		originV:  math.Float64frombits(order.Uint64(data[24:])),
 		originH:  math.Float64frombits(order.Uint64(data[32:])),
+		gamma:    gamma,
 		data:     make([]float32, int(samples)),
 	}
 	if m.rows == 1 {
@@ -88,13 +125,45 @@ func readDNGProfileGainTableMap(fields *dngFields) (*dngProfileGainTableMap, err
 		m.weights[i] = float64(value)
 	}
 	for i := range m.data {
-		value := math.Float32frombits(order.Uint32(data[64+i*4:]))
-		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) || value < 0 {
+		position := headerSize + uint64(i)*sampleBytes
+		var value float64
+		switch {
+		case !map2 || dataType == 3:
+			value = float64(math.Float32frombits(order.Uint32(data[position:])))
+		case dataType == 0:
+			value = gainMin + float64(data[position])*(gainMax-gainMin)/255
+		case dataType == 1:
+			raw := order.Uint16(data[position:])
+			value = gainMin + float64(raw)*(gainMax-gainMin)/65535
+		case dataType == 2:
+			value = dngFloat16(order.Uint16(data[position:]))
+		}
+		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > math.MaxFloat32 {
 			return nil, fmt.Errorf("invalid DNG ProfileGainTableMap gain")
 		}
-		m.data[i] = value
+		m.data[i] = float32(value)
 	}
 	return m, nil
+}
+
+func dngFloat16(bits uint16) float64 {
+	sign := 1.0
+	if bits&0x8000 != 0 {
+		sign = -1
+	}
+	exponent := int((bits >> 10) & 0x1f)
+	fraction := int(bits & 0x03ff)
+	switch exponent {
+	case 0:
+		return sign * math.Ldexp(float64(fraction), -24)
+	case 0x1f:
+		if fraction == 0 {
+			return math.Inf(int(sign))
+		}
+		return math.NaN()
+	default:
+		return sign * math.Ldexp(float64(1024+fraction), exponent-25)
+	}
 }
 
 func (m *dngProfileGainTableMap) gain(rgb [3]float64, x, y, width, height int) (float64, error) {
@@ -107,6 +176,9 @@ func (m *dngProfileGainTableMap) gain(rgb [3]float64, x, y, width, height int) (
 		return 0, fmt.Errorf("invalid DNG ProfileGainTableMap table input")
 	}
 	input = min(1, max(0, input))
+	if m.gamma != 1 {
+		input = math.Pow(input, m.gamma)
+	}
 	// The DNG specification indexes the table directly by input*MapPointsN.
 	// Clamp the endpoint to the final stored sample, which is the only valid
 	// entry when input is exactly one.
