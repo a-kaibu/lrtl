@@ -172,7 +172,7 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 			// Keep fixture-specific oracle bounds explicit and capped. The
 			// ImageMagick samples expose small but real decoder differences that
 			// do not appear in the FFmpeg samples, especially in Preview EV.
-			if tc.Encoder == "" || tc.MaxRGBMeanDelta <= 0 || tc.MaxRGBMeanDelta > 0.5 || tc.MaxRGBChannelDelta == 0 || tc.MaxRGBChannelDelta > 4 || tc.MaxEVDelta <= 0 || tc.MaxEVDelta > 0.002 {
+			if tc.Encoder == "" || tc.MaxRGBMeanDelta <= 0 || tc.MaxRGBMeanDelta > 0.3 || tc.MaxRGBChannelDelta == 0 || tc.MaxRGBChannelDelta > 3 || tc.MaxEVDelta <= 0 || tc.MaxEVDelta > 0.0015 {
 				t.Fatalf("invalid JPEG oracle bounds: encoder=%q mean=%g channel=%d EV=%g", tc.Encoder, tc.MaxRGBMeanDelta, tc.MaxRGBChannelDelta, tc.MaxEVDelta)
 			}
 			data, err := os.ReadFile("testdata/" + tc.File)

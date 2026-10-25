@@ -90,8 +90,30 @@ func (img *lrtJPEGChromaImage) At(x, y int) color.Color {
 	cb := interpolateLRTChroma(img.source.Cb, img.source.CStride, img.base, xTap, yTap, w00, w10, w01, w11, img.denominatorX*img.denominatorY)
 	cr := interpolateLRTChroma(img.source.Cr, img.source.CStride, img.base, xTap, yTap, w00, w10, w01, w11, img.denominatorX*img.denominatorY)
 	yValue := img.source.Y[img.source.YOffset(x, y)]
-	r, g, b := color.YCbCrToRGB(yValue, cb, cr)
+	r, g, b := lrtJPEGYCbCrToRGB(yValue, cb, cr)
 	return color.RGBA{R: r, G: g, B: b, A: 255}
+}
+
+// lrtJPEGYCbCrToRGB uses the rounded fixed-point BT.601 coefficients and
+// rounding bias used by libjpeg's YCbCr conversion. In LRT 7.5.5 oracle tests
+// this matches the AWT JPEG decoder more closely than Go's conversion path.
+func lrtJPEGYCbCrToRGB(y, cb, cr byte) (r, g, b byte) {
+	cbDelta, crDelta := int(cb)-128, int(cr)-128
+	const rounding = 1 << 15
+	r = clampLRTJPEGColor(int(y) + ((91881*crDelta + rounding) >> 16))
+	g = clampLRTJPEGColor(int(y) + ((-22554*cbDelta - 46802*crDelta + rounding) >> 16))
+	b = clampLRTJPEGColor(int(y) + ((116130*cbDelta + rounding) >> 16))
+	return r, g, b
+}
+
+func clampLRTJPEGColor(value int) byte {
+	if value < 0 {
+		return 0
+	}
+	if value > 255 {
+		return 255
+	}
+	return byte(value)
 }
 
 type lrtChromaAxis struct {

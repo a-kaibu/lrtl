@@ -16,26 +16,26 @@ paths with exclusion off. Those two LRT EV results must agree within `1e-12`.
 
 | Encoder | Sampling | LRT Preview EV | Go RGB mean absolute delta | Max channel delta | Go Preview EV delta (bound) |
 | --- | --- | ---: | ---: | ---: | ---: |
-| FFmpeg 8.0.1 | 4:2:2 | 0.49571749748815770 | 0.332 | 3 | < 0.0001 EV |
+| FFmpeg 8.0.1 | 4:2:2 | 0.49571749748815770 | 0.209 | 3 | < 0.00025 EV |
 | FFmpeg 8.0.1 | 4:4:4 | 0.49321491040127800 | 0.206 | 2 | < 0.0001 EV |
-| ImageMagick 7.1.2 | 4:2:0 | 0.49852836178795457 | 0.246 | 3 | < 0.0007 EV |
-| ImageMagick 7.1.2 | 4:2:2 | 0.49809316830136030 | 0.364 | 3 | < 0.0005 EV |
+| ImageMagick 7.1.2 | 4:2:0 | 0.49852836178795457 | 0.097 | 3 | < 0.00015 EV |
+| ImageMagick 7.1.2 | 4:2:2 | 0.49809316830136030 | 0.232 | 3 | < 0.00035 EV |
 | ImageMagick 7.1.2 | 4:4:4 | 0.49683545704690846 | 0.205 | 3 | < 0.0015 EV |
-| ImageMagick 7.1.2 | 4:4:0 | 0.49807190186550293 | 0.197 | 2 | < 0.001 EV |
-| ImageMagick 7.1.2 | 4:1:1 | 0.49840236637889020 | 0.204 | 2 | < 0.001 EV |
-| ImageMagick 7.1.2 | 4:1:0 | 0.49852666689564296 | 0.210 | 2 | < 0.001 EV |
+| ImageMagick 7.1.2 | 4:4:0 | 0.49807190186550293 | 0.197 | 2 | < 0.00075 EV |
+| ImageMagick 7.1.2 | 4:1:1 | 0.49840236637889020 | 0.204 | 2 | < 0.0004 EV |
+| ImageMagick 7.1.2 | 4:1:0 | 0.49852666689564296 | 0.210 | 2 | < 0.00045 EV |
 
 The Go regression test verifies the JPEG component sampling ratio, raster
 dimensions, RGB differences against the LRT raster, and Preview EV through
 both production analysis entry points. The raster itself must reproduce LRT's
-Preview EV within `1e-10`. It checks centered interpolation for 4:2:0/4:2:2 and
-nearest chroma selection for 4:4:0/4:1:1/4:1:0. Fixture-specific bounds are
-stored in the JSON oracle and capped by the test (mean RGB delta at most 0.5,
-channel delta at most 4, EV delta at most 0.002). The largest measured
-ImageMagick EV delta is 0.001357 on 4:4:4; this is a known decoder difference,
-not a histogram-smoothing difference. The inputs are synthetic and re-encoded
-from an existing synthetic JPEG. Real photographs, ICC profiles, and other
-JPEG encoders remain unverified.
+Preview EV within `1e-10`. It checks centered interpolation for 4:2:0/4:2:2,
+nearest chroma selection for 4:4:0/4:1:1/4:1:0, and fixed-point YCbCr-to-RGB
+conversion. Fixture-specific bounds are stored in the JSON oracle and capped
+by the test (mean RGB delta at most 0.3, channel delta at most 3, EV delta at
+most 0.0015). The largest measured ImageMagick EV delta is 0.001357 on 4:4:4;
+this is a known decoder difference, not a histogram-smoothing difference. The
+inputs are synthetic and re-encoded from an existing synthetic JPEG. Real
+photographs, ICC profiles, and other JPEG encoders remain unverified.
 
 Recreate the 4:2:2 and 4:4:4 inputs with FFmpeg, then produce the LRT decoded
 rasters and measurement JSON with the included Java probe:
