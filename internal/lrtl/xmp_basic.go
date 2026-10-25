@@ -133,6 +133,8 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 		{"PerspectiveVertical", &adjustments.geometry.vertical, -100, 100},
 		{"PerspectiveHorizontal", &adjustments.geometry.horizontal, -100, 100},
 		{"PerspectiveAspect", &adjustments.geometry.aspect, -100, 100},
+		{"PerspectiveX", &adjustments.geometry.xOffset, -100, 100},
+		{"PerspectiveY", &adjustments.geometry.yOffset, -100, 100},
 		{"Contrast2012", &adjustments.contrast, -100, 100},
 		{"Highlights2012", &adjustments.highlights, -100, 100},
 		{"Shadows2012", &adjustments.shadows, -100, 100},

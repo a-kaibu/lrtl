@@ -32,7 +32,7 @@ var NumericCRSProperties = []string{
 	"LuminanceNoiseReductionContrast", "LuminanceNoiseReductionDetail", "LuminanceSmoothing",
 	"ParametricDarks", "ParametricHighlights", "ParametricHighlightSplit", "ParametricLights",
 	"ParametricMidtoneSplit", "ParametricShadowSplit", "ParametricShadows", "PerspectiveAspect",
-	"PerspectiveHorizontal", "PerspectiveRotate", "PerspectiveScale", "PerspectiveVertical",
+	"PerspectiveHorizontal", "PerspectiveRotate", "PerspectiveScale", "PerspectiveVertical", "PerspectiveX", "PerspectiveY",
 	"PostCropVignetteAmount", "PostCropVignetteFeather", "PostCropVignetteHighlightContrast",
 	"PostCropVignetteMidpoint", "PostCropVignetteRoundness", "RedHue", "RedSaturation",
 	"Saturation", "SaturationAdjustmentAqua", "SaturationAdjustmentBlue",

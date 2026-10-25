@@ -182,6 +182,8 @@ func TestXMPManualPerspectiveParsingAndLimits(t *testing.T) {
 		{"PerspectiveVertical", "-100"},
 		{"PerspectiveHorizontal", "100"},
 		{"PerspectiveAspect", "50"},
+		{"PerspectiveX", "100"},
+		{"PerspectiveY", "-100"},
 	} {
 		packet := EmptyXMPPacket()
 		if err := packet.SetScalar("crs:"+tc.name, tc.value); err != nil {
@@ -196,6 +198,8 @@ func TestXMPManualPerspectiveParsingAndLimits(t *testing.T) {
 		{"PerspectiveVertical", "-101"},
 		{"PerspectiveHorizontal", "101"},
 		{"PerspectiveAspect", "NaN"},
+		{"PerspectiveX", "-101"},
+		{"PerspectiveY", "101"},
 	} {
 		packet := EmptyXMPPacket()
 		if err := packet.SetScalar("crs:"+tc.name, tc.value); err != nil {
@@ -204,6 +208,105 @@ func TestXMPManualPerspectiveParsingAndLimits(t *testing.T) {
 		if _, err := readXMPBasicPacket(packet); err == nil {
 			t.Fatalf("accepted %s=%s", tc.name, tc.value)
 		}
+	}
+}
+
+func TestXMPManualPerspectiveOffsetCoordinates(t *testing.T) {
+	bounds := image.Rect(11, 17, 92, 78)
+	img := geometryRamp(bounds)
+	got := applyXMPGeometry(img, xmpGeometry{scale: 100, xOffset: 20, yOffset: 20})
+	if got.Bounds() != bounds || !highPrecisionImage(got) {
+		t.Fatalf("changed output shape/precision: %T %v", got, got.Bounds())
+	}
+	// Public Lightroom export measurements report +20 as +0.1621 widths on X
+	// and -0.1625 heights on Y. The independent linear-ramp oracle checks both
+	// directions and their scale in pixel coordinates on a non-zero image origin.
+	xShift := 20.0 / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dx())
+	yShift := -20.0 / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dy())
+	pixel := color.NRGBA64Model.Convert(got.At(51, 47)).(color.NRGBA64)
+	wantRed := 123 + (40-xShift)*500
+	wantGreen := 17 + (30-yShift)*700
+	if math.Abs(float64(pixel.R)-wantRed) > 3 || math.Abs(float64(pixel.G)-wantGreen) > 3 || pixel.B != 2000 || pixel.A != 65535 {
+		t.Fatalf("offset pixel got=%v want R=%g G=%g", pixel, wantRed, wantGreen)
+	}
+	if applyXMPGeometry(img, xmpGeometry{scale: 100, xOffset: 0, yOffset: 0}) != img {
+		t.Fatal("zero offsets resampled image")
+	}
+}
+
+func TestXMPManualPerspectiveOffsetsComposeWithProjectiveTransform(t *testing.T) {
+	bounds := image.Rect(11, 17, 92, 78)
+	img := geometryRamp(bounds)
+	g := xmpGeometry{scale: 100, vertical: 10, xOffset: 20, yOffset: 20}
+	got := applyXMPGeometry(img, g)
+	localX, localY := 40.0, 30.0
+	x, y := bounds.Min.X+int(localX), bounds.Min.Y+int(localY)
+	cx := float64(bounds.Min.X) + float64(bounds.Dx())/2
+	cy := float64(bounds.Min.Y) + float64(bounds.Dy())/2
+	focal := float64(max(bounds.Dx(), bounds.Dy())) / (2 * math.Tan(math.Pi/6))
+	shiftX := g.xOffset / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dx())
+	shiftY := -g.yOffset / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dy())
+	// Independently undo the final translation, then invert the camera pitch.
+	u := (float64(x) + .5 - cx - shiftX) / focal
+	v := (float64(y) + .5 - cy - shiftY) / focal
+	angle := g.vertical * math.Pi / 9 / 100
+	sine, cosine := math.Sincos(angle)
+	sourceX := cx + focal*u/(cosine-sine*v)
+	sourceY := cy + focal*(cosine*v+sine)/(cosine-sine*v)
+	pixel := color.NRGBA64Model.Convert(got.At(x, y)).(color.NRGBA64)
+	wantRed := 123 + (sourceX-.5-float64(bounds.Min.X))*500
+	wantGreen := 17 + (sourceY-.5-float64(bounds.Min.Y))*700
+	if math.Abs(float64(pixel.R)-wantRed) > 4 || math.Abs(float64(pixel.G)-wantGreen) > 4 {
+		t.Fatalf("composed transform got=%v want R=%g G=%g", pixel, wantRed, wantGreen)
+	}
+}
+
+func TestXMPManualPerspectiveOffsetsRenderAVI(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "frame.png")
+	source := geometryRamp(image.Rect(0, 0, 81, 61))
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writeTestXMP(t, path, nil)
+	var out, stderr bytes.Buffer
+	for _, setting := range [][2]string{{"PerspectiveX", "20"}, {"PerspectiveY", "20"}} {
+		if code := Main([]string{"set", path, setting[0], setting[1]}, &out, &stderr); code != 0 {
+			t.Fatalf("set %s: %s", setting[0], &stderr)
+		}
+	}
+	output := filepath.Join(t.TempDir(), "offset.avi")
+	if code := Main([]string{"render", dir, "--output", output, "--quality", "100", "--apply-xmp-basic"}, &out, &stderr); code != 0 {
+		t.Fatalf("render: %s", &stderr)
+	}
+	video, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := bytes.Index(video, []byte{255, 216})
+	if start < 0 {
+		t.Fatal("missing AVI JPEG frame")
+	}
+	video = video[start:]
+	end := bytes.Index(video, []byte{255, 217})
+	if end < 0 {
+		t.Fatal("truncated AVI JPEG frame")
+	}
+	frame, err := jpeg.Decode(bytes.NewReader(video[:end+2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	xShift := 20.0 / 100 * xmpGeometryOffsetPerSlider * float64(source.Bounds().Dx())
+	yShift := -20.0 / 100 * xmpGeometryOffsetPerSlider * float64(source.Bounds().Dy())
+	wantRed := (123 + (40-xShift)*500) / 257
+	wantGreen := (17 + (30-yShift)*700) / 257
+	r, g, _, _ := frame.At(40, 30).RGBA()
+	if math.Abs(float64(r>>8)-wantRed) > 3 || math.Abs(float64(g>>8)-wantGreen) > 3 {
+		t.Fatalf("AVI offset pixel got=(%d,%d) want=(%g,%g)", r>>8, g>>8, wantRed, wantGreen)
 	}
 }
 

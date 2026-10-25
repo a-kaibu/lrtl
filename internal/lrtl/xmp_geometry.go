@@ -20,13 +20,20 @@ type xmpGeometry struct {
 	vertical   float64
 	horizontal float64
 	aspect     float64
+	xOffset    float64
+	yOffset    float64
 	upright    *xmpHomography
 }
 
 func (g xmpGeometry) active() bool {
 	return g.rotate != 0 || (g.scale != 0 && g.scale != 100) || g.vertical != 0 || g.horizontal != 0 || g.aspect != 0 ||
-		(g.upright != nil && !g.upright.isIdentity())
+		g.xOffset != 0 || g.yOffset != 0 || (g.upright != nil && !g.upright.isIdentity())
 }
+
+// Independent Lightroom export measurements reported X+20 = +0.1621 frame
+// widths and Y+20 = -0.1625 frame heights. Keep the midpoint of those measured
+// coefficients and preserve the observed, opposite Y-axis sign.
+const xmpGeometryOffsetPerSlider = 0.8121
 
 func applyXMPGeometry(source image.Image, g xmpGeometry) image.Image {
 	if g.upright != nil && !g.upright.isIdentity() {
@@ -47,7 +54,9 @@ func applyXMPGeometry(source image.Image, g xmpGeometry) image.Image {
 	c, d := scaleX*sine, scaleY*cosine
 	bounds := source.Bounds()
 	cx, cy := float64(bounds.Min.X)+float64(bounds.Dx())/2, float64(bounds.Min.Y)+float64(bounds.Dy())/2
-	transform := f64.Aff3{a, b, cx - a*cx - b*cy, c, d, cy - c*cx - d*cy}
+	offsetX := g.xOffset / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dx())
+	offsetY := -g.yOffset / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dy())
+	transform := f64.Aff3{a, b, cx - a*cx - b*cy + offsetX, c, d, cy - c*cx - d*cy + offsetY}
 	destination := newFrameImage(bounds, source)
 	if g.vertical != 0 || g.horizontal != 0 {
 		return applyXMPProjectiveGeometry(destination, source, bounds, g, scale, aspectScale, sine, cosine, cx, cy)
@@ -156,6 +165,8 @@ func applyXMPProjectiveGeometry(destination draw.Image, source image.Image, boun
 	focal := float64(max(bounds.Dx(), bounds.Dy())) / (2 * math.Tan(math.Pi/6))
 	vertical := g.vertical * (math.Pi / 9) / 100
 	horizontal := g.horizontal * (math.Pi / 9) / 100
+	offsetX := g.xOffset / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dx())
+	offsetY := -g.yOffset / 100 * xmpGeometryOffsetPerSlider * float64(bounds.Dy())
 	sinV, cosV := math.Sincos(vertical)
 	sinH, cosH := math.Sincos(horizontal)
 	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
@@ -163,7 +174,9 @@ func applyXMPProjectiveGeometry(destination draw.Image, source image.Image, boun
 			// Undo uniform scale, aspect and roll before mapping through the
 			// inverse camera rotation. Coordinates use pixel edges, matching the
 			// affine path's pixel-center convention.
-			dx, dy := float64(x)+.5-cx, float64(y)+.5-cy
+			// X/Y offsets are the final forward-map step, so undo them before
+			// reversing scale, aspect, roll and the projective camera transform.
+			dx, dy := float64(x)+.5-cx-offsetX, float64(y)+.5-cy-offsetY
 			u := (cosine*dx + sine*dy) / (scale * aspectScale * focal)
 			v := (-sine*dx + cosine*dy) / (scale * focal)
 			// R = Ry(horizontal) * Rx(vertical), so the inverse ray is R^T p.
