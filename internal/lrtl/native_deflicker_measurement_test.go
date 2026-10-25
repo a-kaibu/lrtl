@@ -2,7 +2,9 @@ package lrtl
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -261,4 +263,143 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNativeDeflickerJPEGICCIgnoredByLRT(t *testing.T) {
+	var oracle struct {
+		File                 string
+		DecodedFile          string
+		ICCDescription       string
+		DirectEV             float64
+		TaggedJPEGHash       string
+		UntaggedJPEGHash     string
+		LRTDecodedRasterHash string
+	}
+	data, err := os.ReadFile("testdata/lrt-icc-jpeg-metering-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &oracle); err != nil {
+		t.Fatal(err)
+	}
+	tagged, err := os.ReadFile("testdata/" + oracle.File)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(tagged)); got != oracle.TaggedJPEGHash {
+		t.Fatalf("tagged JPEG SHA-256=%s, want %s", got, oracle.TaggedJPEGHash)
+	}
+	profile, err := readJPEGICC(bytes.NewReader(tagged))
+	if err != nil {
+		t.Fatalf("read embedded ICC profile: %v", err)
+	}
+	if got, err := iccDescription(profile); err != nil || got != oracle.ICCDescription {
+		t.Fatalf("embedded ICC description=%q, err=%v; want %q", got, err, oracle.ICCDescription)
+	}
+
+	untagged, err := stripJPEGICCForMeteringTest(tagged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(untagged)); got != oracle.UntaggedJPEGHash {
+		t.Fatalf("untagged JPEG SHA-256=%s, want %s", got, oracle.UntaggedJPEGHash)
+	}
+	withProfile, format, err := decodeLRTMeteringImage(tagged)
+	if err != nil || format != "jpeg" {
+		t.Fatalf("decode ICC-tagged JPEG: format=%q err=%v", format, err)
+	}
+	withoutProfile, format, err := decodeLRTMeteringImage(untagged)
+	if err != nil || format != "jpeg" {
+		t.Fatalf("decode ICC-free JPEG: format=%q err=%v", format, err)
+	}
+	if mean, max := lrtRGBDifference(withProfile, withoutProfile); mean != 0 || max != 0 {
+		t.Fatalf("ICC changed Go metering raster: mean RGB delta %.6f, max %d", mean, max)
+	}
+	withEV, err := framePreviewEVArea(withProfile, withProfile.Bounds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutEV, err := framePreviewEVArea(withoutProfile, withoutProfile.Bounds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withEV != withoutEV {
+		t.Fatalf("ICC changed Go metering EV: with profile %.17g, without %.17g", withEV, withoutEV)
+	}
+
+	file, err := os.Open("testdata/" + oracle.DecodedFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nativeRaster, err := png.Decode(file)
+	file.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rasterBytes, err := os.ReadFile("testdata/" + oracle.DecodedFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(rasterBytes)); got != oracle.LRTDecodedRasterHash {
+		t.Fatalf("LRT decoded raster SHA-256=%s, want %s", got, oracle.LRTDecodedRasterHash)
+	}
+	lrtEV, err := framePreviewEVArea(nativeRaster, nativeRaster.Bounds())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if delta := math.Abs(lrtEV - oracle.DirectEV); delta > 1e-10 {
+		t.Fatalf("LRT raster EV=%.17g, oracle EV=%.17g (delta %.3g)", lrtEV, oracle.DirectEV, delta)
+	}
+	if delta := math.Abs(withEV - oracle.DirectEV); delta > maxNativeJPEGDecodeEVDelta {
+		t.Fatalf("Go Preview EV=%.17g, LRT 7.5.5=%.17g (delta %.3g exceeds %.3g EV)", withEV, oracle.DirectEV, delta, maxNativeJPEGDecodeEVDelta)
+	}
+}
+
+func stripJPEGICCForMeteringTest(data []byte) ([]byte, error) {
+	if len(data) < 4 || data[0] != 0xff || data[1] != 0xd8 {
+		return nil, fmt.Errorf("invalid JPEG SOI")
+	}
+	output := bytes.NewBuffer(append([]byte(nil), data[:2]...))
+	found := false
+	for position := 2; position < len(data); {
+		if data[position] != 0xff {
+			return nil, fmt.Errorf("invalid JPEG marker at byte %d", position)
+		}
+		start := position
+		for position < len(data) && data[position] == 0xff {
+			position++
+		}
+		if position >= len(data) {
+			return nil, fmt.Errorf("truncated JPEG marker")
+		}
+		marker := data[position]
+		position++
+		if marker == 0xda {
+			output.Write(data[start:])
+			break
+		}
+		if marker == 0x01 || marker >= 0xd0 && marker <= 0xd9 {
+			output.Write(data[start:position])
+			continue
+		}
+		if position+2 > len(data) {
+			return nil, fmt.Errorf("truncated JPEG segment length")
+		}
+		length := int(data[position])<<8 | int(data[position+1])
+		end := position + length
+		if length < 2 || end > len(data) {
+			return nil, fmt.Errorf("invalid JPEG segment length")
+		}
+		payload := data[position+2 : end]
+		if marker == 0xe2 && bytes.HasPrefix(payload, []byte("ICC_PROFILE\x00")) {
+			found = true
+		} else {
+			output.Write(data[start:end])
+		}
+		position = end
+	}
+	if !found {
+		return nil, fmt.Errorf("JPEG has no ICC APP2 segment")
+	}
+	return output.Bytes(), nil
 }
