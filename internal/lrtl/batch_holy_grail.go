@@ -62,7 +62,14 @@ func runBatchHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 				if err != nil {
 					continue
 				}
-				result.plan, result.err = buildHolyGrailPlanWithCurveOptions(frames, *f.ignoreAperture, *f.reset, *f.forceMarkJumps, *f.noMarkJumps, curveOptions)
+				sequenceCurveOptions := curveOptions
+				if *f.lrtSettings {
+					frames, sequenceCurveOptions, result.err = applyLRTSequenceHolyGrailSettings(frames)
+					if result.err != nil {
+						continue
+					}
+				}
+				result.plan, result.err = buildHolyGrailPlanWithCurveOptions(frames, *f.ignoreAperture, *f.reset, *f.forceMarkJumps, *f.noMarkJumps, sequenceCurveOptions)
 				if result.err == nil {
 					result.err = applyHolyGrailPlan(result.plan.Changes)
 				}

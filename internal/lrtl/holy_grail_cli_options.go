@@ -10,6 +10,7 @@ type holyGrailCommandFlags struct {
 	write              *bool
 	noBackup           *bool
 	lrtInput           *bool
+	lrtSettings        *bool
 	lrtReduceDeflicker *float64
 	ignoreAperture     *bool
 	forceMarkJumps     *bool
@@ -25,6 +26,7 @@ func registerHolyGrailFlags(set *flag.FlagSet) *holyGrailCommandFlags {
 	f.write = set.Bool("write", false, "write exposure compensation and 2*/3* jump keyframes to XMP sidecars")
 	f.noBackup = set.Bool("no-backup", false, "do not create backups when writing")
 	f.lrtInput = set.Bool("lrt-input", false, "use existing lrt:ExternalExposureDefault values and 2*/3*/4* ratings as Holy Grail inputs")
+	f.lrtSettings = set.Bool("lrt-holy-grail-settings", false, "read LRT sequence order and Holy Grail controls from .lrt/lrtsequence.json")
 	f.lrtReduceDeflicker = set.Float64("lrt-reduce-deflicker", 0, "LRT Holy Grail smoothing control for --lrt-input (0 to 1; default 0)")
 	f.ignoreAperture = set.Bool("ignore-aperture", false, "ignore FNumber when aperture remained fixed")
 	f.forceMarkJumps = set.Bool("mark-jumps", false, "force 2*/3* marks when EXIF does not confirm Manual mode")
@@ -37,6 +39,22 @@ func registerHolyGrailFlags(set *flag.FlagSet) *holyGrailCommandFlags {
 }
 
 func validateHolyGrailFlags(set *flag.FlagSet, f *holyGrailCommandFlags) (*HolyGrailCurveOptions, error) {
+	if *f.lrtSettings {
+		if *f.autoShape {
+			return nil, fmt.Errorf("--lrt-holy-grail-settings cannot be combined with --auto-shape")
+		}
+		for _, name := range []string{"stretch", "rotate", "lrt-reduce-deflicker"} {
+			explicit := false
+			set.Visit(func(parsed *flag.Flag) { explicit = explicit || parsed.Name == name })
+			if explicit {
+				return nil, fmt.Errorf("--lrt-holy-grail-settings cannot be combined with --%s", name)
+			}
+		}
+		if *f.reset {
+			return nil, fmt.Errorf("--lrt-holy-grail-settings cannot be combined with --reset")
+		}
+		*f.lrtInput = true
+	}
 	if *f.forceMarkJumps && *f.noMarkJumps {
 		return nil, fmt.Errorf("--mark-jumps and --no-mark-jumps cannot be used together")
 	}

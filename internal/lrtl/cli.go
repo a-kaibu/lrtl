@@ -198,7 +198,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
-	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--write]          compensate camera exposure changes from EXIF")
+	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--lrt-holy-grail-settings] [--write] compensate camera exposure changes")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
 	fmt.Fprintln(writer, "  snapshot restore DIRECTORY FILE.zip [--write] [--no-backup] [--allow-moved]")
@@ -2019,6 +2019,12 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	frames, err := DiscoverSequence(directory)
 	if err != nil {
 		return reportError(stderr, err)
+	}
+	if *f.lrtSettings {
+		frames, curveOptions, err = applyLRTSequenceHolyGrailSettings(frames)
+		if err != nil {
+			return reportError(stderr, err)
+		}
 	}
 	plan, err := buildHolyGrailPlanWithCurveOptions(frames, *f.ignoreAperture, *f.reset, *f.forceMarkJumps, *f.noMarkJumps, curveOptions)
 	if err != nil {

@@ -148,6 +148,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - `batch-holy-grail ROOT`でHoly Grail露出補正を一括解析・保存できます。再帰探索・並列解析・EXIF/キャッシュ済みLRT入力・Stretch/Rotate・自動形状・2*/3*マーカー・リセットに対応し、全連番の内容検証後に保存します。個別実行とのXMP/AVI一致、LRT 7.5.5実測値との補正一致、再実行での重複防止、評価の復元、解析エラー時の全体保存中止をテストしています。
 
+- `holy-grail --lrt-holy-grail-settings`と`batch-holy-grail --lrt-holy-grail-settings`は、各連番の`.lrt/lrtsequence.json`から`filenameSort`、`holyGrailReduceDeflicker`、`holyGrailStretch`、`holyGrailRotate`を読みます。単独/バッチの保存結果を照合し、連番ごとに異なる設定、欠損・不正・範囲外設定、フラグ競合、バッチ全体の事前検証をテストしています。LRT本体が入力値を生成する画像処理は別途未対応です。
+
 - `batch-deflicker ROOT`で複数連番のDeflickerを一括解析・保存できます。既定は変更予定の表示で、再帰探索・並列解析・複数パス・Gaussian/LOWESS・参照領域・RAW現像・XMP基本現像・クロップ・リセットに対応します。全連番の解析と最終XMPの内容検証後に保存します。個別実行とXMP/AVIが一致すること、RAW、専用補正スロット、画像を復号しないリセット、エラー時に保存しないことをテストしています。
 
 - RAWプロファイルの`BaselineExposureOffset`を適用します。正負のSRATIONAL値をBaselineExposureへEVで加算し、Hue/Sat補正後・Look/トーンカーブ前の露出段階へ反映します。両バイト順の分数684ケース、露出の相殺で全65,536入力を保持すること、プロファイルとの適用順序、ルートIFDからの継承と主画像による上書き、合成RAW→XMP→TIFF→AVI、異常入力とファズテストで検証しています。
@@ -507,6 +509,7 @@ lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input
 lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --write
 # LRT WizardのReduce Deflickerスライダー値も指定する（0〜1）
 lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --lrt-reduce-deflicker 0.35
+lrtl holy-grail "D:\Timelapse\Sequence" --lrt-holy-grail-settings --write
 
 # 補正曲線の伸縮・回転を調整
 lrtl holy-grail "D:\Timelapse\Sequence" --stretch 0.4 --rotate -0.2
@@ -694,6 +697,8 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 `holy-grail`の既定はEXIFから露出設定値`log2(露出時間 × ISO / F値²)`を求め、先頭フレームとの差を打ち消す独自補正を計算します。対応形式はJPEG、TIFF、CR2、CR3、DNG、RW2です。全フレームに有効な露出時間とISOが必要です。FNumberがない場合はXMPの`lrt:Aperture`を参照します。マニュアルレンズは先に`lens-tag --aperture f/8 --write`で絞り値を登録してください。EXIF値とXMP値の両方が使えないときは、絞りが固定であることを確認して`--ignore-aperture`を指定します。`--stretch`は露出値を最小・最大で正規化した曲線のスケール（-1.5〜+1.5）、`--rotate`はシーケンスに加える直線傾き（-4〜+4）です。`--auto-shape`はLRTで確認したStretch/Rotateの探索刻み・L1評価を使って値を提案します。
 
 `--lrt-input`は、各フレームのXMPにある数値`lrt:ExternalExposureDefault`を読み、LRTのフレーム内部値と同じく4で割ります。LRTの処理順に沿って、2*/3*/4*評価が隣り合う場所で直近最大10件のフレーム差を重み付き平均で補正し、他のフレームにも直前の補正オフセットを引き継ぎます。その後に`--lrt-reduce-deflicker`（0〜1、既定0）のLOWESS近似、中央寄せ/範囲制限、隣接HGキーフレーム間のカメラ設定差、Stretch/Rotateを適用します。全フレームに同プロパティと有効なカメラ設定が必要です。`lrt:ShutterSpeed`・`lrt:Iso`・`lrt:Aperture`を優先し、不足項目はEXIFで補います。星評価は新規作成・変更しません。`preview-ev`は復元したRGBヒストグラム式を指定ラスター全体へ適用しますが、LRTのネイティブプレビュー生成・縮小・ROI選択は再現せず、平滑化単体の実測比較だけではLRT Wizard全体との数値一致は保証しません。`--auto-shape`はこのモデル上で探索します。
+
+`--lrt-holy-grail-settings`を指定すると、この入力モードに加えて、LRTが連番単位で保存する`.lrt/lrtsequence.json`の`filenameSort`による名前順/撮影日時順と、Holy GrailのReduce Deflicker/Stretch/Rotate値を読みます。設定値の補正・順序を含む単独実行と、設定の異なる連番を混ぜたバッチ実行をテストしています。この指定時は個別の曲線値、`--auto-shape`、`--reset`を併用できません。LRTのGUIで設定ファイルを保存した連番に使います。
 
 両モードともHG専用のCamera Raw `LocalExposure2012`スロットがXMPにあればそこへ書き、見つからなければ全体`crs:Exposure2012`を使います。既定はプレビューで、書き込み時は既存サイドカーをバックアップします。EXIFモードでは撮影モードがManualの場合に設定変更位置へ2*/3*評価を提案します。`--lrt-input`では既存のLRT評価をアンカーとして使うため、新しい評価を付けません。補正の再実行では前回分を置き換え、lrtl管理下の元評価も記録するため`--reset --write`で復元できます。
 
@@ -1305,6 +1310,9 @@ lrtl batch-holy-grail C:\photos\sequences
 # 既存のLRT入力を使い、各連番の曲線形状を自動計算して保存する
 lrtl batch-holy-grail C:\photos\sequences --recursive --workers 2 --lrt-input --auto-shape --lrt-reduce-deflicker 0.35 --write
 
+# 各連番の保存済み順序・Holy Grail設定を使って保存する
+lrtl batch-holy-grail C:\photos\sequences --recursive --workers 2 --lrt-holy-grail-settings --write
+
 # EXIFから露出補正だけを保存し、2*/3*評価を付けない
 lrtl batch-holy-grail C:\photos\sequences --recursive --no-mark-jumps --write
 
@@ -1312,7 +1320,7 @@ lrtl batch-holy-grail C:\photos\sequences --recursive --no-mark-jumps --write
 lrtl batch-holy-grail C:\photos\sequences --recursive --reset --write
 ```
 
-`holy-grail`と同じオプションと検証・計算・保存経路を使います。`--recursive`で全階層、`--workers`で同時解析数（既定1、1〜64）を指定し、結果表示と保存はフォルダー順です。EXIFモード、`--ignore-aperture`、ジャンプ評価の手動指定/無効化、`--lrt-input`、Stretch/Rotate、`--auto-shape`、`--lrt-reduce-deflicker`に対応します。自動形状は連番ごとに独立して計算します。LRT入力の生成条件・数値一致範囲は個別コマンドの説明と同じです。
+`holy-grail`と同じオプションと検証・計算・保存経路を使います。`--recursive`で全階層、`--workers`で同時解析数（既定1、1〜64）を指定し、結果表示と保存はフォルダー順です。EXIFモード、`--ignore-aperture`、ジャンプ評価の手動指定/無効化、`--lrt-input`、Stretch/Rotate、`--auto-shape`、`--lrt-reduce-deflicker`に対応します。`--lrt-holy-grail-settings`では連番ごとの`.lrt/lrtsequence.json`から順序と曲線設定を個別に読み込みます。設定の欠損や不正値があれば全連番の保存を始めません。自動形状は連番ごとに独立して計算します。LRT入力の生成条件・数値一致範囲は個別コマンドの説明と同じです。
 
 既定は変更予定の表示で、`--write`でバックアップ付き保存、`--no-backup`でバックアップを省略します。全連番の撮影値・XMP・補正記録・ジャンプ評価・最終パケットを検証し、どれかが不正なら全体を書き込まず終了コード1を返します。ジャンプ評価は既存の明示的な評価を上書きしません。衝突時の扱いも個別コマンドと同じです。保存中のOSエラーは保存済み枚数を報告して中断します。複数ファイルの一括ロールバックには対応しません。
 

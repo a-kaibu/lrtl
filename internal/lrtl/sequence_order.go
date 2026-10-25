@@ -2,9 +2,7 @@ package lrtl
 
 import (
 	"cmp"
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -88,30 +86,6 @@ func compareLRTFilenameKeys(left, right lrtFilenameKey) (int, error) {
 		}
 	}
 	return cmp.Compare(left.length, right.length), nil
-}
-
-func readLRTSequenceSortMode(frames []Frame) (string, error) {
-	if len(frames) == 0 {
-		return "", fmt.Errorf("--sort lrt-settings requires at least one selected frame")
-	}
-	path := filepath.Join(filepath.Dir(frames[0].Image), ".lrt", "lrtsequence.json")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read LRT sequence sorting setting %s: %w", path, err)
-	}
-	var settings struct {
-		FilenameSort *bool `json:"filenameSort"`
-	}
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return "", fmt.Errorf("read LRT sequence sorting setting %s: %w", path, err)
-	}
-	if settings.FilenameSort == nil {
-		return "", fmt.Errorf("read LRT sequence sorting setting %s: filenameSort is missing", path)
-	}
-	if *settings.FilenameSort {
-		return "lrt-name", nil
-	}
-	return "lrt-date", nil
 }
 
 // orderSequenceFrames preserves each source Index and never changes the input
