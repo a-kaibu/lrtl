@@ -260,13 +260,8 @@ func indexMaskTransitionNodes(packet *XMPPacket) (map[maskTransitionKey]maskTran
 				if err != nil {
 					return nil, fmt.Errorf("crs:%s[%d]/crs:CorrectionMasks[%d]: %w", collection, position, maskPosition, err)
 				}
-				maskRange, hasMaskRange, err := parseXMPRangeMaskLumRange(mask)
-				if err != nil {
-					return nil, fmt.Errorf("crs:%s[%d]/crs:CorrectionMasks[%d]: %w", collection, position, maskPosition, err)
-				}
 				indexed[maskKey] = maskTransitionNode{
-					values: maskValues, luminanceRange: maskRange,
-					hasLuminanceRange: hasMaskRange, correctionItem: item, maskItem: maskItem,
+					values: maskValues, correctionItem: item, maskItem: maskItem,
 				}
 			}
 		}
@@ -307,11 +302,7 @@ func indexMaskTransitionNodesByID(root *etree.Element, collection string, indexe
 			if err != nil {
 				return fmt.Errorf("mask %q: %w", maskID, err)
 			}
-			luminanceRange, hasLuminanceRange, err := parseXMPRangeMaskLumRange(element)
-			if err != nil {
-				return fmt.Errorf("mask %q: %w", maskID, err)
-			}
-			indexed[key] = maskTransitionNode{values: values, luminanceRange: luminanceRange, hasLuminanceRange: hasLuminanceRange}
+			indexed[key] = maskTransitionNode{values: values}
 		}
 		for _, token := range element.Child {
 			child, ok := token.(*etree.Element)
@@ -1023,10 +1014,7 @@ func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, 
 				values[name] = value
 			}
 			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
-			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
-			if key.maskIndex > 0 && (currentNode.maskItem == nil || correctionRangeMaskElement(unwrapRDFArrayItem(currentNode.maskItem)) == nil) {
-				hasLuminanceRangeChange = false
-			}
+			hasLuminanceRangeChange := key.maskIndex == 0 && hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
 			if keyframeSet[target] && !registeredRootRangeKey(key) && (!present || !maskTransitionNodeHasTemplate(currentNode, key)) {
 				hasLuminanceRangeChange = false
 			}

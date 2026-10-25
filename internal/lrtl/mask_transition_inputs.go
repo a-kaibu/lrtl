@@ -11,8 +11,8 @@ type maskTransitionInputs struct {
 }
 
 // Registered root columns and first selectors with an existing parent can
-// materialize missing resources on keyframes. Registered root range fields
-// can create their own struct; selector-level ranges remain separate.
+// materialize missing resources on keyframes. Registered numeric range fields
+// can create their struct; selector LumRange strings are not registered.
 func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionNode) maskTransitionInputs {
 	plan := maskTransitionInputs{Indexes: make([]map[maskTransitionKey]maskTransitionNode, len(indexes)), Missing: make([]map[maskTransitionKey]map[string]float64, len(indexes))}
 	properties := map[maskTransitionKey]map[string]bool{}
@@ -47,8 +47,8 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 			}
 		}
 	}
-	// Boolean and LumRange text columns can create a parent without numbers.
-	// Their actual values are still planned by the separate scalar workers.
+	// Boolean and root CorrectionRangeMask.LumRange columns can create a
+	// parent without numbers. Their values use separate scalar workers.
 	for key := range scalarParents {
 		for i := range plan.Indexes {
 			node := plan.Indexes[i][key]

@@ -42,6 +42,56 @@ func selectorRangeFixture(t *testing.T, amount string, ownSamples string) *XMPPa
 	return packet
 }
 
+func TestSelectorLumRangeNotRegisteredByLRT755(t *testing.T) {
+	registry, err := selectedColumnRegistry()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := make(map[string]selectedColumn, len(registry))
+	for _, column := range registry {
+		byPath[column.Property] = column
+	}
+	slots := map[string][]int{
+		"GradientBasedCorrections":         {1, 2, 3, 4},
+		"CircularGradientBasedCorrections": {1, 2},
+		"PaintBasedCorrections":            {1, 2},
+		"MaskGroupBasedCorrections":        {1, 2, 3, 4, 8, 9, 10, 11},
+	}
+	for collection, positions := range slots {
+		for _, slot := range positions {
+			rootPath := fmt.Sprintf("%s[%d]/crs:CorrectionRangeMask/crs:LumRange", collection, slot)
+			if column, ok := byPath[rootPath]; !ok || column.Kind != "String" {
+				t.Fatalf("root range column %q missing or not a string", rootPath)
+			}
+			selectorPath := fmt.Sprintf("%s[%d]/crs:CorrectionMasks[1]/crs:CorrectionRangeMask/crs:LumRange", collection, slot)
+			if _, ok := byPath[selectorPath]; ok {
+				t.Fatalf("selector range column %q unexpectedly registered", selectorPath)
+			}
+		}
+	}
+}
+
+func TestSelectorLumRangeIsNotInterpolated(t *testing.T) {
+	texts := []string{".1 .2 .3 .4", ".5 .6 .7 .8", ".3 .4 .5 .6"}
+	packets := make([]*XMPPacket, len(texts))
+	for i, text := range texts {
+		packets[i] = selectorRangeFixture(t, ".5", fmt.Sprintf("samples-%d", i))
+		rangeMask := selectorRangeElementAt(t, packets[i], "MaskGroupBasedCorrections", 1)
+		if err := setCRSElementValue(rangeMask, "LumRange", text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	changes, err := planMaskTransitions(packets, []int{0, 2}, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for frame, frameChanges := range changes {
+		if len(frameChanges) != 0 {
+			t.Fatalf("frame %d has transitions for an unregistered selector LumRange column: %+v", frame, frameChanges)
+		}
+	}
+}
+
 func selectorRangeValues(t *testing.T, packet *XMPPacket) (string, string, string) {
 	rangeMask := selectorRangeElementAt(t, packet, "MaskGroupBasedCorrections", 1)
 	if rangeMask == nil {
@@ -307,6 +357,12 @@ func TestMissingSelectorRangeCLIAndRepeat(t *testing.T) {
 				packets := make([]*XMPPacket, len(inputs))
 				for i, input := range inputs {
 					packet := selectorRangeColumnPacket(t, observation, input, i)
+					if i != 1 {
+						rangeMask := selectorRangeElementAt(t, packet, collection, slot)
+						if err := setCRSElementValue(rangeMask, "LumRange", fmt.Sprintf(".%d .%d .%d .%d", i, i+1, i+2, i+3)); err != nil {
+							t.Fatal(err)
+						}
+					}
 					packets[i] = packet
 					if err := packet.SetScalar("xmp:Rating", "4"); err != nil {
 						t.Fatal(err)
@@ -344,6 +400,9 @@ func TestMissingSelectorRangeCLIAndRepeat(t *testing.T) {
 				}
 				if _, found, _ := crsElementValue(rangeMask, "PointModels"); found {
 					t.Fatal("copied color samples from another frame")
+				}
+				if _, found, _ := crsElementValue(rangeMask, "LumRange"); found {
+					t.Fatal("copied an unregistered selector LumRange string")
 				}
 				backups, err := filepath.Glob(sequence[1].Sidecar + "*.bak")
 				if err != nil || len(backups) != 1 {

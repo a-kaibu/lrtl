@@ -22,9 +22,12 @@ The native helper forward-fills the middle value in all five columns. The
 writer serializes each value to the nested path, creating the middle frame's
 `CorrectionRangeMask` when it was absent. It leaves existing `PointModels`
 untouched and does not copy samples into a newly created resource. This
-establishes component behavior for numeric selector-range fields; it does not
-establish creation of a missing selector, creation of the `LumRange` string,
-or a complete native Auto-Transition/save workflow.
+establishes component behavior for numeric selector-range fields. The installed
+runtime property registry contains the correction-level `LumRange` string
+column but no nested `CorrectionMasks[1]/CorrectionRangeMask/LumRange` column,
+so selector-level strings are outside the registered transition path. The
+probe does not establish creation of a missing selector or a complete native
+Auto-Transition/save workflow.
 
 The writer's later history stamping reaches an uninitialized application
 singleton when called outside the GUI. The probe accepts only that specific
