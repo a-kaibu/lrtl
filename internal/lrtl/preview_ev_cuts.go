@@ -9,6 +9,9 @@ type previewHistogramOptions struct {
 	Enabled                    bool
 	IgnoreBlacks, IgnoreWhites int
 	HardCut                    bool
+	Explicit                   bool
+	ExplicitThresholds         bool
+	FromLRTPreferences         bool
 }
 
 func (options previewHistogramOptions) validate() error {

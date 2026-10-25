@@ -196,7 +196,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
 	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
-	fmt.Fprintln(writer, "  deflicker DIRECTORY [--write] [--smoother gaussian|lowess] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  deflicker DIRECTORY [DEFLICKER_OPTIONS...] [--lrt-deflicker-settings] [--lrt-preferences FILE] [--write]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--lrt-holy-grail-settings] [--write] compensate camera exposure changes")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
@@ -1579,7 +1579,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		"--reference": true, "-reference": true,
 		"--smooth": true, "-smooth": true,
 		"--smoother": true, "-smoother": true,
-		"--calculation": true, "-calculation": true, "--lrt-smoothing": true, "-lrt-smoothing": true, "--lrt-accuracy": true, "-lrt-accuracy": true, "--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true,
+		"--calculation": true, "-calculation": true, "--lrt-smoothing": true, "-lrt-smoothing": true, "--lrt-accuracy": true, "-lrt-accuracy": true, "--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true, "--lrt-preferences": true, "-lrt-preferences": true,
 		"--lrt-preview": true, "-lrt-preview": true,
 		"--passes": true, "-passes": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
@@ -1602,7 +1602,7 @@ func runDeflicker(arguments []string, stdout, stderr io.Writer) int {
 		analysisOption := false
 		set.Visit(func(parsed *flag.Flag) {
 			switch parsed.Name {
-			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview", "lrt-reference", "calculation", "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut", "lrt-deflicker-settings":
+			case "reference", "smooth", "smoother", "passes", "constant", "raw-preview", "raw-develop", "dnglab", "dng-converter", "apply-xmp-exposure", "apply-xmp-basic", "apply-xmp-crop", "lrt-preview", "lrt-reference", "calculation", "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut", "lrt-deflicker-settings", "lrt-preferences":
 				analysisOption = true
 			}
 		})

@@ -20,10 +20,14 @@ type lrtDeflickerSettings struct {
 	Ignore       *int     `json:"deflickerIgnoreBlacksWhites"`
 }
 
-func loadLRTDeflickerSettings(frames []Frame, histogram previewHistogramOptions) (nativeDeflickerOptions, int, bool, []int, error) {
+func loadLRTDeflickerSettings(frames []Frame, histogram *previewHistogramOptions) (nativeDeflickerOptions, int, bool, []int, error) {
 	fail := func(err error) (nativeDeflickerOptions, int, bool, []int, error) {
 		return nativeDeflickerOptions{}, 0, false, nil, fmt.Errorf("read LRT Deflicker settings: %w", err)
 	}
+	if histogram == nil {
+		return fail(fmt.Errorf("histogram options are required"))
+	}
+	resolvedHistogram := *histogram
 	if len(frames) < 2 {
 		return fail(fmt.Errorf("at least two frames are required"))
 	}
@@ -68,15 +72,17 @@ func loadLRTDeflickerSettings(frames []Frame, histogram previewHistogramOptions)
 	}
 	if saved.Ignore != nil {
 		switch *saved.Ignore {
-		case 0: // Global preference: use this command's explicit histogram options.
+		case 0: // Use the imported global preference or explicit CLI histogram options.
 		case 1:
-			if !histogram.Enabled {
-				return fail(fmt.Errorf("saved black/white exclusion requires explicit --ignore-blacks and/or --ignore-whites; thresholds are global LRT preferences"))
+			if !resolvedHistogram.ExplicitThresholds && !resolvedHistogram.FromLRTPreferences {
+				return fail(fmt.Errorf("saved black/white exclusion requires --lrt-preferences or explicit --ignore-blacks/--ignore-whites thresholds"))
 			}
+			resolvedHistogram.Enabled = true
 		case 2:
-			if histogram.Enabled {
+			if resolvedHistogram.Explicit {
 				return fail(fmt.Errorf("saved black/white exclusion is disabled; histogram flags conflict"))
 			}
+			resolvedHistogram.Enabled = false
 		default:
 			return fail(fmt.Errorf("unsupported deflickerIgnoreBlacksWhites value %d", *saved.Ignore))
 		}
@@ -91,5 +97,6 @@ func loadLRTDeflickerSettings(frames []Frame, histogram previewHistogramOptions)
 			return fail(err)
 		}
 	}
+	*histogram = resolvedHistogram
 	return options, passes, *saved.Constant, order, nil
 }

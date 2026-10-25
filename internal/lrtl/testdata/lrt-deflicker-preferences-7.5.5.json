@@ -1,0 +1,6 @@
+{
+  "defaultDeflickerIgnoreBlacksWhites": true,
+  "defaultDeflickerIgnoreBlacks": 10,
+  "defaultDeflickerIgnoreWhites": 15,
+  "deflickerIgnoreBlacksWhitesHardCut": true
+}

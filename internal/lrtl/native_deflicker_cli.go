@@ -25,6 +25,7 @@ func (o nativeDeflickerOptions) validate() error {
 type nativeDeflickerFlags struct {
 	saved                  *bool
 	calculation            *string
+	preferences            *string
 	smoothing              *float64
 	accuracy, black, white *int
 	hard                   *bool
@@ -34,6 +35,7 @@ func registerNativeDeflickerFlags(set *flag.FlagSet) nativeDeflickerFlags {
 	return nativeDeflickerFlags{
 		saved:       set.Bool("lrt-deflicker-settings", false, "read saved LRT Deflicker controls and sequence order"),
 		calculation: set.String("calculation", "lrtl", "Deflicker calculation: lrtl or lrt-7.5.5"),
+		preferences: set.String("lrt-preferences", "", "read LRT global Deflicker histogram preferences from a JSON file"),
 		smoothing:   set.Float64("lrt-smoothing", .5, "LRT bandwidth factor (0-2), with --calculation lrt-7.5.5"),
 		accuracy:    set.Int("lrt-accuracy", 0, "LRT accuracy: -1 low, 0 normal, 1 high"),
 		black:       set.Int("ignore-blacks", 0, "black histogram range percentage (0-100) in LRT calculation"),
@@ -48,7 +50,8 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 	}
 	native := *f.calculation == "lrt-7.5.5" || *f.saved
 	var problem error
-	histogram := false
+	explicitHistogram := false
+	explicitThresholds := false
 	set.Visit(func(flag *flag.Flag) {
 		if *f.saved {
 			switch flag.Name {
@@ -65,13 +68,20 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 			if !native {
 				problem = fmt.Errorf("--%s requires --calculation lrt-7.5.5", flag.Name)
 			}
+		case "lrt-preferences":
+			if !native {
+				problem = fmt.Errorf("--lrt-preferences requires --calculation lrt-7.5.5")
+			}
 		case "smooth", "smoother":
 			if native {
 				problem = fmt.Errorf("--%s is for lrtl calculation; use --lrt-smoothing with lrt-7.5.5", flag.Name)
 			}
 		}
 		if flag.Name == "ignore-blacks" || flag.Name == "ignore-whites" || flag.Name == "hard-cut" {
-			histogram = true
+			explicitHistogram = true
+		}
+		if flag.Name == "ignore-blacks" || flag.Name == "ignore-whites" {
+			explicitThresholds = true
 		}
 	})
 	if problem != nil {
@@ -79,6 +89,33 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 	}
 	input.NativeDeflicker = nativeDeflickerOptions{native, *f.smoothing, *f.accuracy}
 	input.LRTDeflickerSettings = *f.saved
-	input.PreviewHistogram = previewHistogramOptions{Enabled: histogram, IgnoreBlacks: *f.black, IgnoreWhites: *f.white, HardCut: *f.hard}
+	histogram := previewHistogramOptions{}
+	if *f.preferences != "" {
+		var err error
+		histogram, err = readLRTDeflickerPreferences(*f.preferences)
+		if err != nil {
+			return err
+		}
+	}
+	if explicitHistogram {
+		if !histogram.FromLRTPreferences {
+			histogram.IgnoreBlacks, histogram.IgnoreWhites, histogram.HardCut = *f.black, *f.white, *f.hard
+		} else {
+			set.Visit(func(parsed *flag.Flag) {
+				switch parsed.Name {
+				case "ignore-blacks":
+					histogram.IgnoreBlacks = *f.black
+				case "ignore-whites":
+					histogram.IgnoreWhites = *f.white
+				case "hard-cut":
+					histogram.HardCut = *f.hard
+				}
+			})
+		}
+		histogram.Enabled = true
+		histogram.Explicit = true
+		histogram.ExplicitThresholds = explicitThresholds
+	}
+	input.PreviewHistogram = histogram
 	return validateImageInputOptions(*input)
 }

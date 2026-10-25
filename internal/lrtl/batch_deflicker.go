@@ -42,7 +42,7 @@ func runBatchDeflicker(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--workers": true, "-workers": true, "--reference": true, "-reference": true,
 		"--lrt-preview": true, "-lrt-preview": true,
-		"--calculation": true, "-calculation": true, "--lrt-smoothing": true, "-lrt-smoothing": true, "--lrt-accuracy": true, "-lrt-accuracy": true, "--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true,
+		"--calculation": true, "-calculation": true, "--lrt-smoothing": true, "-lrt-smoothing": true, "--lrt-accuracy": true, "-lrt-accuracy": true, "--ignore-blacks": true, "-ignore-blacks": true, "--ignore-whites": true, "-ignore-whites": true, "--lrt-preferences": true, "-lrt-preferences": true,
 		"--smooth": true, "-smooth": true, "--smoother": true, "-smoother": true,
 		"--passes": true, "-passes": true, "--dnglab": true, "-dnglab": true,
 		"--dng-converter": true, "-dng-converter": true,

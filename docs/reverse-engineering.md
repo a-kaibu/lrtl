@@ -574,11 +574,19 @@ write. Settings and preview caches remain unchanged.
 
 `deflickerIgnoreBlacksWhites` chooses global preference (0), enabled (1), or
 disabled (2); percentages and hard-cut mode are global preferences outside this
-sequence file. Mode 1 therefore requires explicit histogram flags; mode 2
-rejects them. Mode 0/missing uses the CLI options or its normal measurement
-default. Installed global preferences are not imported. This is control-file
-interoperability; it does not establish native Camera Raw/multipass pixel
-equivalence.
+sequence file. Inspection of the installed user's JSON `LRTimelapse.config`
+confirmed the four global field names and their boolean/integer types; the
+committed preference fixture uses synthetic values and contains no user config.
+`--lrt-preferences FILE` reads those fields from the explicitly selected file.
+Mode 0 uses those defaults, mode 1
+forces exclusion on and uses the saved thresholds, and mode 2 disables exclusion
+even when the global preference enables it. Explicit histogram flags override
+the corresponding global fields; explicit flags conflict with mode 2. Without a
+preferences file, mode 1 still requires explicit thresholds. The input file is
+read-only and only these four fields are imported. Tests cover the preference
+schema, bounds, override precedence, and parallel batch output. This is
+control-file interoperability; it does not establish native Camera Raw or
+multipass pixel equivalence.
 
 ## Local installation observations
 
