@@ -524,8 +524,10 @@ parent IDs and exposure survive; source selector IDs and What are not copied.
 New nested arrays use Bag and existing Seq arrays retain their form. Root
 numeric/boolean availability is prepared before selector columns so one pass
 produces the final proposed structure. The new path is restricted to registered
-linear/radial coordinates and Flipped, excluding brush, selector-level ranges, SyncID fallback
-and later selector components. Tests also exercise repeated CLI runs, original
+linear/radial coordinates and Flipped, excluding brush, creation of selector-level
+range resources, SyncID fallback and later selector components. Existing selector
+range resources can receive missing registered numeric fields, as measured below.
+Tests also exercise repeated CLI runs, original
 backups, zero/boolean-only parents, and later structural failures without any
 earlier file writes. The same native-writer metadata-tail limitation applies.
 
@@ -541,7 +543,11 @@ observations do not establish a complete native Auto-Transition/save workflow.
 lrtl now fills missing selected root corrections as well as fields on existing
 resources. Filled numbers become anchors before interpolation. Missing selected
 first selectors now receive registered linear/radial fields and Flipped when
-their parent exists or can be prepared; missing selector-level range resources remain excluded; registered root ranges now materialize from scalar columns.
+their parent exists or can be prepared; absent selector-level range resources
+remain excluded, while registered numeric fields in existing resources are
+compared in `internal/lrtl/testdata/lrt-missing-selector-range-7.5.5.md`.
+Registered root ranges now
+materialize from scalar columns.
 Tests compare all sixteen observed property
 values and array sizes, check a CLI sequence against an independently prefilled
 keyframe, and verify dry runs, original backups, own IDs, unrelated metadata,
@@ -766,7 +772,7 @@ Regression tests cover mixed 2/3/4/5 ratings, a stale lrtl marker with a non-edi
 
 lrtl prepares separate copies of indexed numeric maps before local interpolation. Registered root correction numbers can fill absent resources (including selected keyframes); the first selector can also materialize when its parent exists or can be prepared from root scalar columns. Numeric fields can be supplied by non-keyframes; filled values then participate in the normal 4-star anchor selection, and missing scalar fields on existing selected keyframe resources are proposed for writing. The original index and RDF trees are not mutated during preparation. Known original values are compared against proposed values, preserving the packet's own IDs, active flags and unrelated data. LocalTemperature/LocalTint are ordinary local numeric columns; the global WB preflight exclusions do not apply to them.
 
-Missing root correction resources and empty root RDF items now materialize registered scalar values; missing selector-level ranges, unsupported selector fields, ID-fallback records, unregistered positions and selector components after index 1 retain their exclusions. Non-keyframe structure cloning remains a separate existing policy. Registered root RangeMask fields now materialize missing structs; selector-level ranges still require their existing resource. Malformed/non-finite/structured registered numbers fail instead of being silently treated as missing and overwritten by a neighbor. This validation is lrtl behavior; malformed product-input parity is not established. Filled radial angles receive the observed post-normalization once before serialization; explicit activity flags remain independent.
+Missing root correction resources and empty root RDF items now materialize registered scalar values; missing selector-level range resources, unsupported selector fields, ID-fallback records, unregistered positions and selector components after index 1 retain their exclusions. Non-keyframe structure cloning remains a separate existing policy. Registered root RangeMask fields now materialize missing structs. For an existing selector range resource, the installed 7.5.5 missing helper and XMP writer fill Type, ColorAmount, LumMin, LumMax and LumFeather from the previous value; Go compares all five columns against fixed observations. The selector range struct itself still must exist. Malformed/non-finite/structured registered numbers fail instead of being silently treated as missing and overwritten by a neighbor. This validation is lrtl behavior; malformed product-input parity is not established. Filled radial angles receive the observed post-normalization once before serialization; explicit activity flags remain independent.
 
 Eight regression tests include nine measured local-column cases, old/modern positional layouts, precise selected-keyframe writes, selector coordinates, own IDs and unrelated metadata, minimal selected root-resource creation without template cloning, ID/reserved/second-selector exclusions, malformed input without writes/backups, normalized radial angles with repeat idempotence, and absent RangeMask resources. A five-frame CLI integration previews, writes, verifies original-content backups/no-op repeats, and renders actual MJPEG AVI pixels against an independent sRGB exposure formula while preserving source images. It uses a uniform source to avoid confusing JPEG chroma artifacts with the exposure calculation. Complete local structural parity, unsupported mask types and Adobe pixel equivalence remain outside this measurement.
 

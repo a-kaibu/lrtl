@@ -2,8 +2,13 @@ package lrtl
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -51,6 +56,156 @@ func selectorRangeValues(t *testing.T, packet *XMPPacket) (string, string, strin
 	amount, _, _ := crsElementValue(rangeMask, "ColorAmount")
 	samples, _, _ := crsElementValue(rangeMask, "PointModels")
 	return typeValue, amount, samples
+}
+
+type selectorRangeObservation struct {
+	Property       string    `json:"property"`
+	Path           string    `json:"path"`
+	Changed        bool      `json:"changed"`
+	PostStoreError bool      `json:"post_store_error"`
+	Input          []*string `json:"input"`
+	Filled         []string  `json:"filled"`
+	Saved          []string  `json:"saved"`
+	PointModels    []string  `json:"point_models"`
+}
+
+func selectorRangeObservations(t *testing.T) []selectorRangeObservation {
+	t.Helper()
+	data, err := os.ReadFile("testdata/lrt-missing-selector-range-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var observations struct {
+		Cases []selectorRangeObservation
+	}
+	if err := json.Unmarshal(data, &observations); err != nil {
+		t.Fatal(err)
+	}
+	if len(observations.Cases) != 5 {
+		t.Fatalf("expected five installed LRT selector range observations, got %d", len(observations.Cases))
+	}
+	return observations.Cases
+}
+
+func selectorRangeColumnPacket(t *testing.T, property string, value *string, frame int) *XMPPacket {
+	t.Helper()
+	packet := localMissingPacket(t, "MaskGroupBasedCorrections", nil, nil)
+	correction := maskGroupCorrectionAt(packet, 1)
+	mask := unwrapRDFArrayItem(rdfArrayItems(directCRSProperty(correction, "CorrectionMasks").element)[0])
+	rangeMask := mask.CreateElement("crs:CorrectionRangeMask")
+	rangeMask.CreateAttr("rdf:parseType", "Resource")
+	defaultType := "1"
+	if property == "LumMin" || property == "LumMax" || property == "LumFeather" {
+		defaultType = "2"
+	}
+	defaults := map[string]string{
+		"Type": defaultType, "ColorAmount": ".5", "LumMin": ".1", "LumMax": ".9", "LumFeather": ".2",
+	}
+	for _, name := range []string{"Type", "ColorAmount", "LumMin", "LumMax", "LumFeather"} {
+		fieldValue := defaults[name]
+		if name == property {
+			if value == nil {
+				continue
+			}
+			fieldValue = *value
+		}
+		if err := setCRSElementValue(rangeMask, name, fieldValue); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := setCRSElementValue(rangeMask, "PointModels", fmt.Sprintf("target-samples-%d", frame)); err != nil {
+		t.Fatal(err)
+	}
+	return packet
+}
+
+func TestMissingSelectorRangeFieldsAgainstInstalled755(t *testing.T) {
+	for _, observation := range selectorRangeObservations(t) {
+		t.Run(observation.Property, func(t *testing.T) {
+			packets := make([]*XMPPacket, len(observation.Input))
+			indexes := make([]map[maskTransitionKey]maskTransitionNode, len(packets))
+			for i, input := range observation.Input {
+				packets[i] = selectorRangeColumnPacket(t, observation.Property, input, i)
+				var err error
+				indexes[i], err = indexMaskTransitionNodes(packets[i])
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			prepared := prepareMaskTransitionInputs(indexes)
+			key := maskTransitionKey{collection: "MaskGroupBasedCorrections", correctionIndex: 1, maskIndex: 1}
+			for i, expected := range observation.Filled {
+				value, found := prepared.Indexes[i][key].values["RangeMask"+observation.Property]
+				want, err := strconv.ParseFloat(expected, 64)
+				if err != nil || !found || value != want {
+					t.Fatalf("prefilled frame %d = %g, found %v; installed LRT expected %s", i, value, found, expected)
+				}
+			}
+			changes, err := planMaskTransitions(packets, []int{0, 1, 2}, 50)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for frame := range packets {
+				for _, change := range changes[frame] {
+					if err := applyMaskTransition(packets[frame], change); err != nil {
+						t.Fatal(err)
+					}
+				}
+				value, found, err := crsElementValue(correctionRangeMaskElement(unwrapRDFArrayItem(rdfArrayItems(directCRSProperty(maskGroupCorrectionAt(packets[frame], 1), "CorrectionMasks").element)[0])), observation.Property)
+				want, parseErr := strconv.ParseFloat(observation.Saved[frame], 64)
+				if err != nil || parseErr != nil || !found {
+					t.Fatalf("frame %d saved field missing: %v", frame, err)
+				}
+				got, parseGotErr := strconv.ParseFloat(value, 64)
+				if parseGotErr != nil || got != want {
+					t.Fatalf("frame %d saved %s = %q, installed LRT expected %s", frame, observation.Property, value, observation.Saved[frame])
+				}
+				samples, found, err := crsElementValue(correctionRangeMaskElement(unwrapRDFArrayItem(rdfArrayItems(directCRSProperty(maskGroupCorrectionAt(packets[frame], 1), "CorrectionMasks").element)[0])), "PointModels")
+				if err != nil || !found || samples != observation.PointModels[frame] {
+					t.Fatalf("frame %d PointModels = %q, want %q", frame, samples, observation.PointModels[frame])
+				}
+			}
+		})
+	}
+}
+
+func TestMissingSelectorRangeInstalledReplay(t *testing.T) {
+	jar := os.Getenv("LRTL_NATIVE_JAR")
+	if jar == "" {
+		t.Skip("set LRTL_NATIVE_JAR for installed selector range replay")
+	}
+	dir := t.TempDir()
+	probeRoot, err := filepath.Abs(filepath.Join("..", "..", "scripts", "probes"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	classes := []string{"MetadataPasteOracle.java", "SelectedColumnOracle.java", "RegisteredSaveOracle.java", "MissingSelectorRangeOracle.java"}
+	args := []string{"-encoding", "UTF-8", "-d", dir}
+	for _, class := range classes {
+		args = append(args, filepath.Join(probeRoot, class))
+	}
+	if output, err := exec.Command("javac", args...).CombinedOutput(); err != nil {
+		t.Fatalf("compile selector range observer: %v\n%s", err, output)
+	}
+	result := filepath.Join(dir, "observations.json")
+	classpath := dir + string(os.PathListSeparator) + jar
+	output, err := exec.Command("java", "--enable-native-access=ALL-UNNAMED", "-cp", classpath, "lrtlprobe.MissingSelectorRangeOracle", result).CombinedOutput()
+	if err != nil {
+		t.Fatalf("installed selector range observer: %v\n%s", err, output)
+	}
+	data, err := os.ReadFile(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var replay struct {
+		Cases []selectorRangeObservation
+	}
+	if err := json.Unmarshal(data, &replay); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(replay.Cases, selectorRangeObservations(t)) {
+		t.Fatal("installed selector range observations changed")
+	}
 }
 
 func TestMissingSelectorRangeFieldsArePrefilledOnExistingResource(t *testing.T) {
