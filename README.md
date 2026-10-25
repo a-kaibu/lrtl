@@ -14,6 +14,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 機能変更には回帰テストを追加し、可能な項目はLRT 7.5.5の保存済み観測値と照合します。2026-10-26にGo 1.27.0（Windows/amd64）で`go test ./... -count=1 -timeout 20m`が成功し、`internal/lrtl`は577.417秒、`internal/nativejpeg`は3.250秒でした。Stage 1 Warp 3種は独立座標式と画素値、色面別係数、DefaultScale、両TIFFバイト順、TrimBounds後の座標、恒等変換全65,536値を検査し、対象テストのrace検査も成功しました。Warpの15秒fuzzでは21 corpus casesから723,941回実行し、失敗はありません。Stage 1 TrimBoundsは両バイト順のRAW→画像画素、連続Trim、後続Opcode座標、ActiveArea/DefaultCrop、BlackLevelDelta切り出しを検査し、15秒fuzzでは14 corpus casesから813,095回実行しました。JPEG測光の14 fixtureはLRT復号ラスターとPreview EVを回帰比較し、固定小数点YCbCr→RGBの基準ベクトルと変更箇所のrace検査も通しました。`go vet ./...`と`go build ./...`も成功しました。外部DCPについてプロファイル名/カメラ一致、誤選択防止、埋め込み優先、破損・曖昧入力、RAW→TIFF経路をテストし、インストール済みAdobe DCP実ファイルの読込・検索も確認しました。構造XMPのnamespace alias・全9項目コピー・再実行時の冪等性と、ネスト値読み取り／マスク保護回帰テストのrace検査も成功しました。通常テストは記録済みfixtureを使い、FFmpegがある環境では実動画の生成・復号テストも実行します。
 
+2026-10-26の追加検証では、LRT 7.5.5の長期フィルターワーカーを呼ぶ168条件のfixtureを追加し、各段階の選択行と参照曲線を通常・race付きテストで照合しました。`go test ./... -count=1 -timeout 20m`を再実行して全パッケージが成功し、`internal/lrtl`は584.188秒、`internal/nativejpeg`は3.331秒でした。`go vet ./...`と`go build ./...`も再度成功しました。
+
 ### 今回の互換性改善
 
 - `preview-ev`でLRT 7.5.5のカメラプレビュー縮小を再現しました。画像幅が設定値を超える場合、既定の1024×682へ1パスbilinearで縮小してから測光します。LRT本体の合成画像3条件でPreview EVを1e-5以内に比較し、拡大・縮小を含む6条件の82画素（246色成分）も完全一致を確認しました。`--preview-width-camera N`でLRTの設定幅も指定できます。LRT/Camera Rawの元画像デコード・色管理は未対応です。[JAR解析・オラクル・制限](internal/lrtl/testdata/lrt-preview-resize-7.5.5.md)
@@ -101,7 +103,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - `copy-settings SOURCE_IMAGE_OR_XMP DIRECTORY`で、参照画像／XMPの設定を連番へコピーできるようにしました。対象のCamera Raw項目を置き換え、他の名前空間は既存値を優先して欠損項目・配列要素を追加します。欠けた撮影日時・評価もコピーされるため、現像設定だけを扱う操作ではありません。42種類の実機XML参照と再コピー結果、実機パーサへの読み戻し、選択・バックアップ・コピー元保護・AVI画素をテストしています。日時キャッシュ・HasSettingsの再読込に対応しましたが、フレーム再初期化全体は未対応です。列指定は別経路の`--properties`で対応します。[動作・互換性の範囲](internal/lrtl/testdata/lrt-metadata-paste-7.5.5.md)を参照してください。
 
-- `long-term --lrt-filter-preset FILE`で、LRTの長期撮影フィルターの保存プリセットを使えるようにしました。曜日・時刻→輝度→コントラスト→色相の順に、Constantまたは時間方向の基準曲線との差で選択します。924件の実機曲線ヘルパーと36件の実機時刻ワーカーを比較し、選択JSON→AVI、元ファイル保持、途中失敗もテストしました。`--lrt-filter-preset-name`で名前を選び、`--lrt-filter-color auto|on|off`で色系フィルターを制御できます。[計算・日時欠損時の動作・検証範囲](internal/lrtl/testdata/lrt-longterm-filter-7.5.5.md)を参照してください。
+- `long-term --lrt-filter-preset FILE`で、LRTの長期撮影フィルターの保存プリセットを使えます。曜日・時刻→輝度→コントラスト→色相の順に、Constantまたは時間方向の基準曲線との差で選択します。924件の実機曲線ヘルパー、36件の実機時刻ワーカー、168条件の実機フィルター各段階を比較し、各段階の選択行と参照値を回帰テストしています。選択JSON→AVI、元ファイル保持、途中失敗もテスト済みです。`--lrt-filter-preset-name`で名前を選び、`--lrt-filter-color auto|on|off`で色系フィルターを制御できます。実際の写真から作る測定値やキャッシュ順序は別途検証が必要です。[計算・日時欠損時の動作・検証範囲](internal/lrtl/testdata/lrt-longterm-filter-7.5.5.md)を参照してください。
 
 - 長期撮影フィルターの`--metric-profile lrt-7.5.5`で、輝度・コントラストの定義と縮小時の画素差を修正しました。元画像の整数平滑化RGBヒストグラム、単一パスのbilinear縮小、透過の丸め、Gaussian係数、JavaのHSB計算を合わせ、112条件の測定値と縮小／ぼかし後の全3,670,016成分を比較しました。選択JSON→AVIと失敗時の既存出力保持も検査済みです。過去の同プロファイルで生成したJSONは再解析すると判定が変わる場合があります。[定義・測定範囲・互換性](internal/lrtl/testdata/lrt-longterm-metrics-7.5.5.md)を参照してください。
 

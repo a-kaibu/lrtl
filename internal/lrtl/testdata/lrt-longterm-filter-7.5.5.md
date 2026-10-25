@@ -106,17 +106,21 @@ the native time worker and sequence availability/shortcut checks on isolated
 synthetic objects. Its table subclass suppresses only the final status-display
 callback. No windows are created and no license checks or results are changed.
 
-The metric-axis **helpers**, defaults and native caller arithmetic/order were
-examined separately. The complete native luminance/contrast/hue GUI worker was
-not used as an end-to-end oracle: its UI-enabling path depends on initialized
-application state. Do not interpret helper comparisons as proof that every
-application workflow has identical final selection. Native reference curves
-are combined with independently implemented threshold and sequencing logic.
-The inspected caller's threshold expressions also have 101 pairs of recorded
-JVM float32 bounds, compared bit for bit. These are arithmetic observations,
-not additional executions of the complete native metric worker. CLI discovery
-order is used; saved native UI sorting and preview-cache ordering are not
-automatically inferred from the global preset file.
+`lrt-longterm-worker-7.5.5.json` records **168 runs of the installed panel's
+native luminance, contrast and hue worker methods**, using synthetic frame
+metrics and the native stage order. It covers counts 1/2/5/7/8/12/33, six
+signal patterns and four control configurations, including inactive axes,
+threshold changes, Constant offsets and color filtering disabled. For each
+case it stores the selected rows after each stage and all three per-frame
+reference arrays. `LongTermWorkerOracle.java` constructs isolated model/panel
+state and invokes the original methods without showing a window, reading image
+files, changing preferences, or changing license/results state. The Go regression
+test compares all intermediate selections and available references within
+1e-10. The native metric helpers and the caller's 101 pairs of JVM float32
+threshold bounds are also independently checked. This closes the synthetic
+metric-axis selection gap; it does not establish equivalence for metrics built
+from actual photos, cache ordering, native preset discovery/sorting, or the
+complete application workflow.
 
 Tests also cover preset selection/defaults/clamping/malformed input, stage
 order, original selection density, static-range composition, inactive stages,
@@ -129,7 +133,10 @@ javac -d work/filter-classes scripts/probes/LongTermFilterOracle.java
 java -cp 'work/filter-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermFilterOracle work/curves.json
 javac -cp 'C:\Program Files\LRTimelapse 7\LRTimelapse.jar' -d work/filter-classes scripts/probes/LongTermTimeOracle.java
 java -cp 'work/filter-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermTimeOracle work/time.json
+javac -cp 'C:\Program Files\LRTimelapse 7\LRTimelapse.jar' -d work/filter-classes scripts/probes/LongTermWorkerOracle.java
+java -cp 'work/filter-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermWorkerOracle internal/lrtl/testdata/lrt-longterm-worker-7.5.5.json
 go test ./internal/lrtl -run '^TestLRTLongTerm|^TestLongTermNative' -count=1
+go test -race ./internal/lrtl -run '^TestLRTLongTermNativeWorkerSelections$' -count=1
 go test ./internal/lrtl -run '^$' -fuzz '^FuzzLRTLongTermFilter$' -fuzztime 10s -parallel 2
 ```
 
@@ -156,3 +163,11 @@ FFmpeg, native application-JAR and ExifTool reference checks enabled
 (685.905 seconds for the lrtl package). Implementation files stayed unchanged
 during that run; the later test-only assertions were also rerun in the
 focused ordinary/race/Go-1.23 checks above.
+
+On 2026-10-26, the 168-case native worker fixture was generated from the
+installed LRT 7.5.5 build 1059 JAR. The focused selection/reference regression
+and its race-detector run passed. `go test ./... -count=1 -timeout 20m` passed
+on Go 1.27.0/Windows amd64 (`internal/lrtl` 584.188 seconds,
+`internal/nativejpeg` 3.331 seconds); `go vet ./...` and `go build ./...` also
+passed. Regenerating the worker fixture produced the same SHA-256:
+`8c97a0a1eba1ca5bc7cb126cb2b6981ac096db3f5f89be443c903bd7ddc9cfe6`.
