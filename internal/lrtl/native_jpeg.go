@@ -10,20 +10,50 @@ import (
 	"github.com/a-kaibu/lrtl/internal/nativejpeg"
 )
 
-// decodeLRTMeteringImage reproduces the chroma reconstruction observed in
-// LRTimelapse's AWT JPEG decoder before native Preview EV metering. For 4:2:0
-// and 4:2:2 LRT interpolates between centered chroma samples; for 4:4:0,
-// 4:1:1, and 4:1:0 it selects the nearest sample, as Go's YCbCr.At does.
+// decodeLRTMeteringImage reproduces the JPEG decoding observed in LRTimelapse's
+// AWT cached-image path before Preview EV metering. It keeps the standard
+// decoder's pixel planes when available, and falls back to the pure-Go
+// nativejpeg decoder for JPEGs such as restart-marked progressive files that
+// the standard library rejects. For 4:2:0 and 4:2:2, LRT interpolates chroma
+// between centered sample sites; other supported ratios use nearest samples.
 func decodeLRTMeteringImage(data []byte) (image.Image, string, error) {
 	img, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil && isJPEGData(data) {
+		img, err = nativejpeg.Decode(bytes.NewReader(data))
+		if err != nil {
+			return nil, "jpeg", err
+		}
+		format = "jpeg"
+	}
+	return finishLRTJPEGDecode(img, format, err)
+}
+
+// decodeLRTLongTermImage uses the native-compatible pure-Go JPEG decoder for
+// the long-term metrics profile. The standard decoder's output remains used
+// for Preview EV, where it has tighter measured parity on ordinary JPEGs.
+func decodeLRTLongTermImage(data []byte) (image.Image, string, error) {
+	if isJPEGData(data) {
+		img, err := nativejpeg.Decode(bytes.NewReader(data))
+		if err != nil {
+			return nil, "jpeg", err
+		}
+		return finishLRTJPEGDecode(img, "jpeg", nil)
+	}
+	img, format, err := image.Decode(bytes.NewReader(data))
+	return img, format, err
+}
+
+func isJPEGData(data []byte) bool {
+	return len(data) >= 2 && data[0] == 0xff && data[1] == 0xd8
+}
+
+func finishLRTJPEGDecode(img image.Image, format string, err error) (image.Image, string, error) {
 	if err != nil || format != "jpeg" {
 		return img, format, err
 	}
-	ycbcr, ok := img.(*image.YCbCr)
-	if !ok {
-		return img, format, nil
+	if ycbcr, ok := img.(*image.YCbCr); ok {
+		img, err = upsampleLRTJPEGChroma(ycbcr)
 	}
-	img, err = upsampleLRTJPEGChroma(ycbcr)
 	return img, format, err
 }
 

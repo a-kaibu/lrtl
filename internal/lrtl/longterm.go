@@ -109,7 +109,12 @@ func analyzeLongTermSequence(frames []Frame, options imageInputOptions, ranges l
 		if err != nil {
 			return nil, fmt.Errorf("long-term analysis: %w", err)
 		}
-		img, _, err := image.Decode(bytes.NewReader(data))
+		var img image.Image
+		if profile == longTermMetricProfileLRT755 {
+			img, _, err = decodeLRTLongTermImage(data)
+		} else {
+			img, _, err = image.Decode(bytes.NewReader(data))
+		}
 		if err != nil {
 			return nil, fmt.Errorf("decode %s: %w", frame.Image, err)
 		}

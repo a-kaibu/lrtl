@@ -76,6 +76,32 @@ RAW/Camera Raw preview equivalence, selection-region UI, or the long-term
 temporal filter curves. The reference inputs are already normalized 8-bit
 RGB/ARGB images. The ordinary `lrtl` metric profile remains a separate model.
 
+## Encoded JPEG input and native decode path
+
+`lrt-longterm-jpeg-7.5.5.json` records **28 encoded RGB JPEG cases** measured
+through LRT 7.5.5's cached-image byte decoder (`tQa.A(byte[])`) and the same
+native metric helper. The files cover 17×13 and 64×32 inputs, three chroma
+subsampling modes, quality 30/75/95, baseline and progressive scans, and
+restart markers. The probe bypasses the GUI and cache generation, but uses the
+native decoder and metric helper rather than supplying an already-decoded
+`BufferedImage`.
+
+Long-term analysis in the `lrt-7.5.5` profile now uses the pure-Go
+`nativejpeg` decoder through `decodeLRTLongTermImage`, followed by the measured
+LRT chroma reconstruction. Preview EV keeps the standard decoder's existing
+pixel output when available and falls back to `nativejpeg` only if standard
+decoding fails. Go's standard JPEG decoder rejected two of the 28
+restart-marked progressive files and had up to 3.970° hue error on the cases it
+accepted. The LRT-compatible path decoded all 28; maximum metric deltas were
+0.003597 luminance, 0.001442 contrast, and 0.502° hue. The CLI regression test
+runs every encoded file and enforces limits of 0.004, 0.0016, and 0.55°.
+
+These are generated JPEG fixtures, not camera photographs. They do not verify
+camera-specific JPEG decoders, RAW preview creation, preview-width scaling,
+cache freshness/order, or the complete native sequence workflow. A grayscale
+JPEG passed directly to the metric helper also raised an internal exception;
+the current fixture covers RGB JPEGs only.
+
 ## Manifest compatibility
 
 New native-profile manifests include
@@ -91,9 +117,13 @@ native metrics and decisions from an older native-profile manifest.
 ```powershell
 javac -d work/longterm-classes scripts/probes/LongTermMetricOracle.java
 java -cp 'work/longterm-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermMetricOracle work/longterm-metrics.json
+javac -cp 'C:\Program Files\LRTimelapse 7\LRTimelapse.jar' -d work/longterm-classes scripts/probes/LongTermJPEGDecodeOracle.java
+java -cp 'work/longterm-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermJPEGDecodeOracle internal/nativejpeg/testdata internal/lrtl/testdata/lrt-longterm-jpeg-7.5.5.json
 javac -d work/longterm-classes scripts/probes/LongTermHueOracle.java
 java -cp work/longterm-classes lrtlprobe.LongTermHueOracle work/java-hue-rgb-25.json
 go test ./internal/lrtl -run '^TestLongTermNative' -count=1
+go test ./internal/lrtl -run '^TestLRTLongTermNativeJPEGDecodedMetrics$' -count=1
+go test -race ./internal/lrtl -run '^TestLRTLongTermNativeJPEGDecodedMetrics$' -count=1
 go test -race ./internal/lrtl -run '^TestLongTermNative' -count=1
 go test ./internal/lrtl -run '^$' -fuzz '^FuzzLongTermNativeMetrics$' -fuzztime 10s -parallel 2
 ```
@@ -115,8 +145,21 @@ detector (5.965 seconds) and on Go 1.23.0 (0.641 seconds). `go vet ./...`,
 the Windows pure-Go CLI build, and Linux amd64/arm64 cross-builds passed.
 Both probes reproduced the stored reference files' SHA-256 hashes.
 
+On 2026-10-26, the encoded-JPEG probe was run against the installed LRT 7.5.5
+build 1059 JAR. The stored fixture SHA-256 is
+`d4ff41c1edf3bf56e8581840a1383601e09791b8c9b5813c7489ff50335ae742`. The
+28-case direct metric/CLI regression passed after switching the native profile
+to the LRT-compatible JPEG decoder.
+
 An earlier full run stalled in an existing JPEG/H.265 video comparison and
 was interrupted by a failed debugger attachment. It is not counted as a pass.
 The complete rerun above passed that same condition in 0.33 seconds; the
 cause of the original external-encoder wait is not established or fixed by
 this measurement change.
+
+The final decoder split preserves the existing Preview EV raster on supported
+files while using the `nativejpeg` path for native-profile long-term analysis.
+The focused JPEG/Preview EV regressions and race run passed; the full
+`go test ./... -count=1 -timeout 20m` rerun also passed (`internal/lrtl`
+577.531 seconds, `internal/nativejpeg` 3.278 seconds). `go vet ./...` and
+`go build ./...` passed in the same revision.
