@@ -16,6 +16,13 @@ type dngBlackModel struct {
 }
 
 func newDNGBlackModel(fields *dngFields, active image.Rectangle, channels, depth int) (*dngBlackModel, error) {
+	return newDNGBlackModelForTrimmedArea(fields, active, active, 0, 0, channels, depth)
+}
+
+func newDNGBlackModelForTrimmedArea(fields *dngFields, active, originalActive image.Rectangle, deltaOffsetX, deltaOffsetY, channels, depth int) (*dngBlackModel, error) {
+	if active.Empty() || originalActive.Empty() || deltaOffsetX < 0 || deltaOffsetY < 0 || deltaOffsetX+active.Dx() > originalActive.Dx() || deltaOffsetY+active.Dy() > originalActive.Dy() {
+		return nil, fmt.Errorf("invalid Linear DNG ActiveArea after Stage 1 trimming")
+	}
 	model := &dngBlackModel{active: active, rows: 1, cols: 1, channels: channels}
 	if repeat := fields.values(50713); len(repeat) != 0 {
 		if len(repeat) != 2 || repeat[0] < 1 || repeat[1] < 1 || repeat[0] > 32768 || repeat[1] > 32768 || repeat[0] != math.Trunc(repeat[0]) || repeat[1] != math.Trunc(repeat[1]) {
@@ -44,8 +51,14 @@ func newDNGBlackModel(fields *dngFields, active image.Rectangle, channels, depth
 	if fields.err != nil {
 		return nil, fields.err
 	}
-	if (len(model.horizontal) != 0 && len(model.horizontal) != active.Dx()) || (len(model.vertical) != 0 && len(model.vertical) != active.Dy()) {
+	if (len(model.horizontal) != 0 && len(model.horizontal) != originalActive.Dx()) || (len(model.vertical) != 0 && len(model.vertical) != originalActive.Dy()) {
 		return nil, fmt.Errorf("invalid Linear DNG black delta dimensions for ActiveArea")
+	}
+	if len(model.horizontal) != 0 {
+		model.horizontal = model.horizontal[deltaOffsetX : deltaOffsetX+active.Dx()]
+	}
+	if len(model.vertical) != 0 {
+		model.vertical = model.vertical[deltaOffsetY : deltaOffsetY+active.Dy()]
 	}
 	// Maxima are grouped by pattern phase, so unrelated phases' maxima are
 	// never combined. As in Adobe's SDK, unused pattern phases retain a zero

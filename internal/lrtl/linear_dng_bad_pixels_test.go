@@ -264,18 +264,23 @@ func TestLinearDNGStage1BadPixelOpcodesRunOnRawSamplesBeforeLinearization(t *tes
 	}
 }
 
-func TestLinearDNGStage1RejectsRequiredUnsupportedOpcodeAndSkipsOptional(t *testing.T) {
+func TestLinearDNGStage1TrimBoundsIsSupportedAndMalformedPayloadRejected(t *testing.T) {
 	for _, flags := range []uint32{0, 1} {
-		opcode := testDNGOpcode{6, 0x01030000, flags, nil}
+		opcode := testDNGTrimBounds(0, 0, 2, 2)
+		opcode.flags = flags
 		fixture := linearDNGFixture(binary.LittleEndian, 2, 2, 1, []uint16{1000, 1000, 1000, 1000}, map[uint16]dngTestField{
 			51008: testDNGOpcodeList(opcode),
 		})
-		_, err := decodeLinearDNG(fixture)
-		if flags == 0 && err == nil {
-			t.Fatal("unsupported required Stage 1 opcode was accepted")
+		if _, err := decodeLinearDNG(fixture); err != nil {
+			t.Fatalf("supported optional=%v full-image TrimBounds rejected: %v", flags != 0, err)
 		}
-		if flags == 1 && err != nil {
-			t.Fatalf("unsupported optional Stage 1 opcode was not skipped: %v", err)
+
+		malformed := testDNGOpcode{6, 0x01030000, flags, nil}
+		fixture = linearDNGFixture(binary.LittleEndian, 2, 2, 1, []uint16{1000, 1000, 1000, 1000}, map[uint16]dngTestField{
+			51008: testDNGOpcodeList(malformed),
+		})
+		if _, err := decodeLinearDNG(fixture); err == nil {
+			t.Fatalf("malformed supported optional=%v TrimBounds was accepted", flags != 0)
 		}
 	}
 }

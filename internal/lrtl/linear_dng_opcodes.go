@@ -58,12 +58,19 @@ func dngOpcodeBytes(fields *dngFields, tag uint16) ([]byte, error) {
 }
 
 func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth, activeHeight, depth int) (dngImageOpcodeLists, error) {
+	return readDNGImageOpcodesForTags(fields, channels, width, height, activeWidth, activeHeight, depth, 51008, 51009, 51022)
+}
+
+func readDNGImageOpcodesForTags(fields *dngFields, channels, width, height, activeWidth, activeHeight, depth int, tags ...uint16) (dngImageOpcodeLists, error) {
 	if width < 1 || height < 1 || activeWidth < 1 || activeHeight < 1 {
 		return dngImageOpcodeLists{}, fmt.Errorf("invalid Linear DNG opcode image dimensions")
 	}
 	var opcodes dngImageOpcodeLists
-	imageBounds := image.Rect(0, 0, activeWidth, activeHeight)
-	for _, tag := range []uint16{51008, 51009, 51022} {
+	for _, tag := range tags {
+		imageBounds := image.Rect(0, 0, activeWidth, activeHeight)
+		if tag == 51008 {
+			imageBounds = image.Rect(0, 0, width, height)
+		}
 		data, err := dngOpcodeBytes(fields, tag)
 		if err != nil {
 			return dngImageOpcodeLists{}, err
@@ -99,7 +106,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 				}
 			}
 			stage1 := tag == 51008
-			unsupportedStage1 := stage1 && id != 3 && id != 4 && id != 5 && (id < 7 || id > 13)
+			unsupportedStage1 := stage1 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 13)
 			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 14)) || unsupportedStage1 || version > 0x01070100 || id == 5 && version < 0x01030000 {
 				if flags&1 != 0 {
 					continue
@@ -181,7 +188,13 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 				if !trim.In(imageBounds) {
 					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG TrimBounds in tag %d is outside the current image", tag)
 				}
-				imageBounds = trim
+				if stage1 {
+					// Stage 1 trimming creates a zero-based image for subsequent
+					// opcodes. Stage 2/3 keep the existing coordinate behavior.
+					imageBounds = image.Rect(0, 0, trim.Dx(), trim.Dy())
+				} else {
+					imageBounds = trim
+				}
 				appendOpcode(dngImageOpcode{trim: &trim})
 				continue
 			}
@@ -194,9 +207,6 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 			}
 			if opcode.area.Empty() {
 				coverageBounds := imageBounds
-				if stage1 {
-					coverageBounds = image.Rect(0, 0, width, height)
-				}
 				if (id == 10 || id == 12) && (opcode.area.Min.Y > coverageBounds.Min.Y || opcode.area.Max.Y < coverageBounds.Max.Y) {
 					return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG opcode %d in tag %d has an empty area whose row table does not cover the current image", id, tag)
 				}

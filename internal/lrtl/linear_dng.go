@@ -316,15 +316,53 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 		}
 		crop = image.Rect(int(active[1]), int(active[0]), int(active[3]), int(active[2]))
 	}
-	blackModel, err := newDNGBlackModel(fields, crop, channels, depth)
-	if err != nil {
-		return nil, err
-	}
 	activeArea := crop
-	imageOpcodes, err := readDNGImageOpcodes(fields, channels, width, height, activeArea.Dx(), activeArea.Dy(), depth)
+	originalActiveArea := activeArea
+	imageOpcodes, err := readDNGImageOpcodesForTags(fields, channels, width, height, activeArea.Dx(), activeArea.Dy(), depth, 51008)
 	if err != nil {
 		return nil, err
 	}
+	readRawSample := func(x, y, channel int) uint16 {
+		block := y/blockHeight*blocksAcross + x/blockWidth
+		start := int(offsets[block]) + ((y%blockHeight)*blockWidth+x%blockWidth)*channels*sampleBytes
+		position := start + channel*sampleBytes
+		if depth == 16 {
+			return fields.scanner.order.Uint16(data[position : position+2])
+		}
+		return uint16(data[position])
+	}
+	stage1Width, stage1Height := width, height
+	var stage1Pixels []uint16
+	blackDeltaOffsetX, blackDeltaOffsetY := 0, 0
+	if len(imageOpcodes.stage1) != 0 {
+		pixelCount := uint64(width) * uint64(height)
+		if channels < 1 || pixelCount > ^uint64(0)/uint64(channels) {
+			return nil, fmt.Errorf("DNG Stage 1 opcode image dimensions exceed development limits")
+		}
+		sampleCount := pixelCount * uint64(channels)
+		if sampleCount > uint64(maxDevelopedRAWBytes)/4 || sampleCount > uint64(math.MaxInt) {
+			return nil, fmt.Errorf("DNG Stage 1 opcode working buffers exceed development limits")
+		}
+		stage1Pixels = make([]uint16, int(sampleCount))
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				base := (y*width + x) * channels
+				for channel := 0; channel < channels; channel++ {
+					stage1Pixels[base+channel] = readRawSample(x, y, channel)
+				}
+			}
+		}
+		stage1Pixels, stage1Width, stage1Height, activeArea, blackDeltaOffsetX, blackDeltaOffsetY, err = applyDNGStage1Opcodes(imageOpcodes.stage1, stage1Pixels, width, height, channels, activeArea)
+		if err != nil {
+			return nil, err
+		}
+		crop = activeArea
+	}
+	stage2Opcodes, err := readDNGImageOpcodesForTags(fields, channels, width, height, activeArea.Dx(), activeArea.Dy(), depth, 51009, 51022)
+	if err != nil {
+		return nil, err
+	}
+	imageOpcodes.stage2 = stage2Opcodes.stage2
 	origin, size := fields.values(50719), fields.values(50720)
 	if len(origin) == 0 && len(size) == 2 {
 		origin = []float64{0, 0}
@@ -340,8 +378,12 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 		}
 		crop = cropped
 	}
-	if crop.Empty() || !crop.In(image.Rect(0, 0, width, height)) {
+	if crop.Empty() || !crop.In(image.Rect(0, 0, stage1Width, stage1Height)) {
 		return nil, fmt.Errorf("Linear DNG crop is outside the image")
+	}
+	blackModel, err := newDNGBlackModelForTrimmedArea(fields, activeArea, originalActiveArea, blackDeltaOffsetX, blackDeltaOffsetY, channels, depth)
+	if err != nil {
+		return nil, err
 	}
 	profileTone, err := readDNGProfileToneCurve(fields)
 	if err != nil {
@@ -421,60 +463,14 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 			pointOpcodes = append(pointOpcodes, *opcode.point)
 		}
 	}
-	readRawSample := func(x, y, channel int) uint16 {
-		block := y/blockHeight*blocksAcross + x/blockWidth
-		start := int(offsets[block]) + ((y%blockHeight)*blockWidth+x%blockWidth)*channels*sampleBytes
-		position := start + channel*sampleBytes
-		if depth == 16 {
-			return fields.scanner.order.Uint16(data[position : position+2])
-		}
-		return uint16(data[position])
-	}
-	var stage1Pixels []uint16
-	if len(imageOpcodes.stage1) != 0 {
-		pixelCount := uint64(width) * uint64(height)
-		if channels < 1 || pixelCount > ^uint64(0)/uint64(channels) {
-			return nil, fmt.Errorf("DNG Stage 1 opcode image dimensions exceed development limits")
-		}
-		sampleCount := pixelCount * uint64(channels)
-		if sampleCount > uint64(maxDevelopedRAWBytes)/4 || sampleCount > uint64(math.MaxInt) {
-			return nil, fmt.Errorf("DNG Stage 1 opcode working buffers exceed development limits")
-		}
-		stage1Pixels = make([]uint16, int(sampleCount))
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				base := (y*width + x) * channels
-				for channel := 0; channel < channels; channel++ {
-					stage1Pixels[base+channel] = readRawSample(x, y, channel)
-				}
-			}
-		}
-		destination := make([]uint16, len(stage1Pixels))
-		for _, opcode := range imageOpcodes.stage1 {
-			if opcode.badPixelConstant != nil {
-				err = applyDNGBadPixelConstantRaw(stage1Pixels, destination, width, height, *opcode.badPixelConstant)
-			} else if opcode.badPixelList != nil {
-				err = applyDNGBadPixelListRaw(stage1Pixels, destination, width, height, image.Rect(0, 0, width, height), *opcode.badPixelList)
-			} else if opcode.vignette != nil {
-				err = opcode.vignette.applyRaw(stage1Pixels, destination, width, height, channels)
-			} else if opcode.point != nil {
-				err = applyDNGPointOpcodeRaw(stage1Pixels, destination, width, height, channels, *opcode.point)
-			} else {
-				err = fmt.Errorf("unsupported Linear DNG Stage 1 opcode implementation")
-			}
-			if err != nil {
-				return nil, err
-			}
-			stage1Pixels, destination = destination, stage1Pixels
-		}
-	}
 	readCamera := func(x, y int) [3]float64 {
 		var camera [3]float64
 		for channel := 0; channel < channels; channel++ {
-			rawSample := readRawSample(x, y, channel)
-			raw := float64(rawSample)
+			var raw float64
 			if stage1Pixels != nil {
-				raw = float64(stage1Pixels[(y*width+x)*channels+channel])
+				raw = float64(stage1Pixels[(y*stage1Width+x)*channels+channel])
+			} else {
+				raw = float64(readRawSample(x, y, channel))
 			}
 			if len(linearization) != 0 {
 				raw = linearization[min(int(raw), len(linearization)-1)]
