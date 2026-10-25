@@ -122,6 +122,170 @@ func TestXMPGeometryReadValidationAndAnalysisCropOrder(t *testing.T) {
 	}
 }
 
+func TestXMPManualPerspectiveCoordinatesAndAspect(t *testing.T) {
+	bounds := image.Rect(0, 0, 81, 61)
+	img := geometryRamp(bounds)
+	focal := float64(max(bounds.Dx(), bounds.Dy())) / (2 * math.Tan(math.Pi/6))
+	cx, cy := float64(bounds.Min.X)+float64(bounds.Dx())/2, float64(bounds.Min.Y)+float64(bounds.Dy())/2
+
+	vertical := 10.0
+	got := applyXMPGeometry(img, xmpGeometry{scale: 100, vertical: vertical})
+	// At the image center, an inverse camera pitch maps y by f*tan(theta).
+	// The slider's 20-degree full-scale calibration is documented separately
+	// from Adobe's own transform, whose exact calibration is proprietary.
+	verticalY := cy + focal*math.Tan(vertical*math.Pi/180*.2)
+	verticalPixel := color.NRGBA64Model.Convert(got.At(40, 30)).(color.NRGBA64)
+	wantGreen := 17 + (verticalY-.5)*700
+	if math.Abs(float64(verticalPixel.G)-wantGreen) > 3 || verticalPixel.R != uint16(123+40*500) {
+		t.Fatalf("vertical perspective center got=%v want green=%g", verticalPixel, wantGreen)
+	}
+
+	horizontal := -12.0
+	got = applyXMPGeometry(img, xmpGeometry{scale: 100, horizontal: horizontal})
+	horizontalX := cx - focal*math.Tan(horizontal*math.Pi/180*.2)
+	horizontalPixel := color.NRGBA64Model.Convert(got.At(40, 30)).(color.NRGBA64)
+	wantRed := 123 + (horizontalX-.5)*500
+	if math.Abs(float64(horizontalPixel.R)-wantRed) > 3 || horizontalPixel.G != uint16(17+30*700) {
+		t.Fatalf("horizontal perspective center got=%v want red=%g", horizontalPixel, wantRed)
+	}
+
+	shiftedBounds := image.Rect(13, 17, 94, 78)
+	combined := xmpGeometry{vertical: -9, horizontal: 14, aspect: -30, rotate: 3, scale: 125}
+	got = applyXMPGeometry(geometryRamp(shiftedBounds), combined)
+	shiftedCX := float64(shiftedBounds.Min.X) + float64(shiftedBounds.Dx())/2
+	shiftedCY := float64(shiftedBounds.Min.Y) + float64(shiftedBounds.Dy())/2
+	h := combined.horizontal * math.Pi / 180 * .2
+	v := combined.vertical * math.Pi / 180 * .2
+	combinedX := shiftedCX - focal*math.Tan(h)/math.Cos(v)
+	combinedY := shiftedCY + focal*math.Tan(v)
+	combinedPixel := color.NRGBA64Model.Convert(got.At(53, 47)).(color.NRGBA64)
+	if math.Abs(float64(combinedPixel.R)-(123+(combinedX-.5-float64(shiftedBounds.Min.X))*500)) > 4 ||
+		math.Abs(float64(combinedPixel.G)-(17+(combinedY-.5-float64(shiftedBounds.Min.Y))*700)) > 4 {
+		t.Fatalf("combined perspective at non-zero origin got=%v source=(%g,%g)", combinedPixel, combinedX, combinedY)
+	}
+
+	aspect := 50.0
+	got = applyXMPGeometry(img, xmpGeometry{scale: 100, aspect: aspect})
+	aspectX := cx + (30.5-cx)/math.Exp2(aspect/100)
+	aspectPixel := color.NRGBA64Model.Convert(got.At(30, 30)).(color.NRGBA64)
+	wantAspectRed := 123 + (aspectX-.5)*500
+	if math.Abs(float64(aspectPixel.R)-wantAspectRed) > 3 {
+		t.Fatalf("aspect got=%v want red=%g", aspectPixel, wantAspectRed)
+	}
+	if applyXMPGeometry(img, xmpGeometry{scale: 100}) != img {
+		t.Fatal("default manual perspective resampled image")
+	}
+}
+
+func TestXMPManualPerspectiveParsingAndLimits(t *testing.T) {
+	for _, tc := range []struct{ name, value string }{
+		{"PerspectiveVertical", "-100"},
+		{"PerspectiveHorizontal", "100"},
+		{"PerspectiveAspect", "50"},
+	} {
+		packet := EmptyXMPPacket()
+		if err := packet.SetScalar("crs:"+tc.name, tc.value); err != nil {
+			t.Fatal(err)
+		}
+		basic, err := readXMPBasicPacket(packet)
+		if err != nil || !basic.geometry.active() || basic.globalActive() {
+			t.Fatalf("%s=%s: geometry=%+v global=%t error=%v", tc.name, tc.value, basic.geometry, basic.globalActive(), err)
+		}
+	}
+	for _, tc := range []struct{ name, value string }{
+		{"PerspectiveVertical", "-101"},
+		{"PerspectiveHorizontal", "101"},
+		{"PerspectiveAspect", "NaN"},
+	} {
+		packet := EmptyXMPPacket()
+		if err := packet.SetScalar("crs:"+tc.name, tc.value); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readXMPBasicPacket(packet); err == nil {
+			t.Fatalf("accepted %s=%s", tc.name, tc.value)
+		}
+	}
+}
+
+func TestXMPManualPerspectiveExtremeSlidersRemainBounded(t *testing.T) {
+	img := geometryRamp(image.Rect(0, 0, 64, 48))
+	for _, tc := range []struct{ vertical, horizontal, aspect float64 }{
+		{-100, -100, -100}, {-100, 100, 100}, {100, -100, 100}, {100, 100, -100},
+	} {
+		got := applyXMPGeometry(img, xmpGeometry{scale: 150, vertical: tc.vertical, horizontal: tc.horizontal, aspect: tc.aspect})
+		if got.Bounds() != img.Bounds() || !highPrecisionImage(got) {
+			t.Fatalf("extreme geometry %+v changed output shape or precision: %T %v", tc, got, got.Bounds())
+		}
+		for _, point := range []image.Point{{0, 0}, {32, 24}, {63, 47}} {
+			p := color.NRGBA64Model.Convert(got.At(point.X, point.Y)).(color.NRGBA64)
+			if p.A == 0 && (p.R != 0 || p.G != 0 || p.B != 0) {
+				t.Fatalf("transparent sample contains color for %+v at %v: %v", tc, point, p)
+			}
+		}
+	}
+}
+
+func TestXMPManualPerspectiveRenderAVIAndPreservesInputs(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "frame.png")
+	source := geometryRamp(image.Rect(0, 0, 81, 61))
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, encoded.Bytes(), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writeTestXMP(t, path, map[string]string{"crs:PerspectiveVertical": "10"})
+	imageBefore, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xmpBefore, err := os.ReadFile(path + ".xmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := filepath.Join(t.TempDir(), "perspective.avi")
+	var out, stderr bytes.Buffer
+	if code := Main([]string{"render", dir, "--output", output, "--quality", "100", "--apply-xmp-basic"}, &out, &stderr); code != 0 {
+		t.Fatalf("render: %s", &stderr)
+	}
+	video, err := os.ReadFile(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := bytes.Index(video, []byte{255, 216})
+	if start < 0 {
+		t.Fatal("missing AVI JPEG frame")
+	}
+	video = video[start:]
+	end := bytes.Index(video, []byte{255, 217})
+	if end < 0 {
+		t.Fatal("truncated AVI JPEG frame")
+	}
+	frame, err := jpeg.Decode(bytes.NewReader(video[:end+2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The odd-sized test image places a pixel center exactly at the canvas
+	// center, making the independent vertical-pitch expectation direct.
+	focal := float64(max(source.Bounds().Dx(), source.Bounds().Dy())) / (2 * math.Tan(math.Pi/6))
+	sy := float64(source.Bounds().Dy())/2 + focal*math.Tan(10*math.Pi/180*.2) - .5
+	want := (17 + sy*700) / 257
+	_, green, _, _ := frame.At(40, 30).RGBA()
+	if math.Abs(float64(green>>8)-want) > 3 {
+		t.Fatalf("rendered green=%d want %g", green>>8, want)
+	}
+	imageAfter, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(imageBefore, imageAfter) {
+		t.Fatal("render modified source image")
+	}
+	xmpAfter, err := os.ReadFile(path + ".xmp")
+	if err != nil || !bytes.Equal(xmpBefore, xmpAfter) {
+		t.Fatal("render modified source XMP")
+	}
+}
+
 func TestXMPGeometryCLIInterpolationAndAVIPixels(t *testing.T) {
 	frames := cropFixture(t, 3)
 	var source bytes.Buffer

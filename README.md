@@ -247,7 +247,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、`--lrt-preview camera|visual`既存キャッシュ、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量は、`set IMAGE PreviewEV VALUE`またはGUIで編集できるLRT値`lrt:ExternalExposureDefault / 4`が全フレームで有効なら使い、値が揃わない場合は画像輝度へフォールバックして、LRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式で算出。`--lrt-preview`を明示するとXMPの既存値より指定キャッシュの輝度を優先。候補位置も同版の整数間隔・端点選択ルールに対応。GUIでは候補一覧から保存対象を選べる。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。既存マーカーは既定で保持し、選択中の評価だけ数量推定から差し引く。`--replace-existing`では同じ評価を連番から削除し、他の2〜5つ星との衝突を前方9枚以内の空きフレームへ移す。`--evenly-spaced`は輝度解析なしで利用可能。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。`preview-ev --write`で復元したヒストグラム測光値をXMPへ生成できる。LRT本体のプレビュー縮小/ROIと同じ画像入力、および数量スライダーは未対応 | 一部 |
 | Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEGおよびTIFFベース画像/RAW（依存ライブラリの実RAWサンプルでNEF/ARWも確認）、CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`で参照する画像内XMPはJPEG/TIFF/DNG/CR2/RW2に加えてNEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRからもタグ700を読み、CR3はAdobe XMP UUID boxから読む。FNumberがない場合は`lrt:Aperture`を参照。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、LRT同様に最大10件のフレーム差平均と2*/3*/4*隣接ペア補正を適用する近似経路も選択可能。`--lrt-preview camera|visual`では既存LRTキャッシュからPreview EVを直接測定し、`--lrt-reference`で保存領域を使える。個別/一括実行、`--lrt-holy-grail-settings`との併用にも対応。`--lrt-reduce-deflicker`で0〜1の平滑化設定を指定できる。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の画像入力生成は未再現。LOWESS単体は実LRTの53ケースで比較済み。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
-| 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | `crop`で単一画像/XMPまたは連番全体の構図をCLIから確認・編集。矩形と角度、HasCropの有効化、解除、単一画像の5つ星crop markをバックアップ付きで保存できる。`interpolate`は数値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。GUIのドラッグ編集も既存機能として残る。手動PerspectiveRotate/Scaleも基本現像で適用。垂直/水平/Aspect/Uprightの遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
+| 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | `crop`で単一画像/XMPまたは連番全体の構図をCLIから確認・編集。矩形と角度、HasCropの有効化、解除、単一画像の5つ星crop markをバックアップ付きで保存できる。`interpolate`は数値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。GUIのドラッグ編集も既存機能として残る。手動PerspectiveRotate/Scale/Vertical/Horizontal/Aspectを基本現像で独自の投影モデルにより適用。Upright自動/Guided、Adobeの保存済みUpright変換、Constrain Crop、回転後の自動最大矩形計算は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。`select`でファイル名・XMP評価・既存選択JSONの積集合と反転選択を作成し、動画/TIFF/JPEG処理へ渡すJSONを保存できる。`copy-sequence`で選択画像と採用中XMPをファイル名・内容・更新日時を保って新規フォルダーへコピーできる。`--include-lrt-companions`で同名JPEGと画像別のLRTプレビュー／プロキシも追加できる。`rename-sequence`でフォルダー全体を同じ親の中で改名できる。`move-sequence`で画像・両候補XMP・同名JPEG・画像別キャッシュを新規フォルダーへ移動でき、共有XMP／キャッシュは元にも残す。`move-sequence --merge`で既存先に追記でき、`remove-sequence`で隣の`_REMOVED`へ除外できる。同名画像の上書き、完全削除、任意フォルダー作成、個々の画像名変更は未対応 | 一部 |
 | メタデータ管理 | EXIF再読込、メタデータの初期化/消去、連番全体のコピー/貼付、撮影日時シフト、レンズタグ付け | EXIF読込、JPEG画像内XMP（標準/拡張APP1形式）、TIFF/DNG/CR2/RW2/NEF/NRW/ARW/SR2/PEF/ERF/ORF/DCR画像内XMP（tag 700）、RAF内埋め込みJPEGのXMP、およびCR3画像内XMP（Adobe UUID box）の読込、XMP数値値の個別編集、`init`による不足マスク/内部補正スロットの初期化とQuality・WB・クロップ保存準備、対応画像の寸法・カメラ設定と撮影日時4項目の更新、`timeshift`によるXMP撮影日時の連番一括シフト、`lens-tag`による連番一括絞り設定に対応。通常の編集は外部サイドカー優先、`init`のJPEG/DNGは更新時刻で採用元を決める。編集結果はXMPサイドカーへ保存し画像本体は変更しない。`copy-settings`で参照画像/XMPの全Camera Raw項目の置換と、他の名前空間の欠損補完に対応（実機XML処理42例と比較）。選択・dry-run・バックアップ・コピー元保護を備える。`--properties`で登録861列の型変換付き指定コピーと欠損キャッシュ処理にも対応。既定で登録861列（数値755列）・WB/クロップ状態・内部補正露出・評価の保存準備に対応（実機864条件で初回/再保存を比較）。その他のRAWコンテナー内XMP、メタデータ全消去/リセット、フレーム再初期化全体、他の保存操作の日時副作用・履歴等は未対応 | 一部 |
@@ -696,7 +696,7 @@ lrtl render "D:\Timelapse\Studio" --output "D:\Timelapse\constant.avi" --constan
 
 `ol:HolyGrailCorrection2012`と`ol:HolyGrailXMPTarget`が示すlrtl管理下のHG補正は、`--apply-xmp-exposure`と`--apply-xmp-basic`で全画面の露出差として加えます。LRTの内部HGレイヤーは意図的に画面外のマスクを使うため、その補正をローカルマスクとして二重適用しません。lrtlの管理マーカーがないXMPは通常どおりCamera Rawのマスクを近似描画します。
 
-`--apply-xmp-crop`は各サイドカーの`crs:HasCrop`、`CropTop/Left/Bottom/Right`、`CropAngle`を読み、回転した矩形クロップを適用して入力と同じ解像度に再サンプルします。クロップのないフレームはそのままです。空または範囲外の矩形はエラーにします。Camera RawのGeometry/遠近補正は再現しません。Lightroom等でキーフレームのクロップ値を保存し、`interpolate --write`で間を埋めてからこのオプションでレンダーできます。
+`--apply-xmp-crop`は各サイドカーの`crs:HasCrop`、`CropTop/Left/Bottom/Right`、`CropAngle`を読み、回転した矩形クロップを適用して入力と同じ解像度に再サンプルします。クロップのないフレームはそのままです。空または範囲外の矩形はエラーにします。このオプションはクロップだけを適用します。手動のPerspectiveRotate/Scale/Vertical/Horizontal/Aspectは`--apply-xmp-basic`で別途近似適用できます。Upright自動/GuidedとAdobeの保存済み変換は再現しません。Lightroom等でキーフレームのクロップ値を保存し、`interpolate --write`で間を埋めてからこのオプションでレンダーできます。
 
 `--auto-orient`は入力画像、RAW内蔵プレビュー、またはDNGLab出力のEXIF Orientationを読み、回転と鏡像を画素へ適用してからXMPクロップ、色調補正、Deflicker、リサイズを行います。向き情報がないフレームはそのままです。向きを適用した後の全フレームは同じ幅と高さである必要があります。この処理は入力ファイルとメタデータを変更しません。
 
@@ -1062,7 +1062,7 @@ AVIヘッダー・JPEG画素データ・インデックス保持、バッチ転�
 |---|---|---|
 | 1 | XMPサイドカー、キーフレーム、数値設定の補間 | XMPの読み書き、4/5つ星キーフレーム操作、LRT 7.5.5由来の数量/配置規則、127個の全体数値項目と登録ローカル項目のスプライン補間、スナップショット、GUIのExposure2012グラフ、選択フレームのマスター/R/G/Bトーンカーブ点編集を実装。Lightroom/Camera Raw連携画面と連番全体でカーブを同時編集する機能は未実装 |
 | 2 | 画像連番から基本タイムラプス動画を生成 | **達成（現像済み画像・対応RAW）**。JPEG/PNG/TIFFからPure GoのMJPEG AVIを出力可能。FFmpegがあればH.264 MP4／H.265 MP4・MOV、ProRes/DNxHR MOVも出力でき、バッチレンダー、縮小、クロップ、日時表示、音声、Deflicker、モーションブラーに対応。RAWはAdobe DNG ConverterとGoによる実画素現像、内蔵プレビュー、明示したDNGLabから選択可能 |
-| 3 | 画像解析、プレビュー、Deflicker | 静的SVG輝度プレビュー、UIのXMP Exposure2012/解析画像輝度グラフ、選択フレームのRGBトーンカーブ編集、静止画プレビューと最大640 pxの連番ループ再生、長期撮影指標、XMP画素反映、回転クロップ、参照領域/全体露出Deflickerを実装。LRT Visual Previewと同等の再生速度/画素再現、Exposure2012の複数フレーム同時編集、フレーム間のトーンカーブ編集、XMPロスレス適用、垂直/水平・UprightのGeometry補正、未対応マスク形式の画素現像は未実装 |
+| 3 | 画像解析、プレビュー、Deflicker | 静的SVG輝度プレビュー、UIのXMP Exposure2012/解析画像輝度グラフ、選択フレームのRGBトーンカーブ編集、静止画プレビューと最大640 pxの連番ループ再生、長期撮影指標、XMP画素反映、回転クロップ、参照領域/全体露出Deflickerを実装。LRT Visual Previewと同等の再生速度/画素再現、Exposure2012の複数フレーム同時編集、フレーム間のトーンカーブ編集、XMPロスレス適用、手動Vertical/Horizontal/Aspectは独自投影モデルで近似実装。Upright自動/Guided、Adobeの保存済み変換、未対応マスク形式の画素現像は未実装 |
 | 4 | RAW現像、Holy Grail、XMP現像値の画素への反映 | EXIF推定と既存LRT XMP入力を使う近似Holy Grail補正、現像済みラスターへの対応XMP値適用、一部RAW内蔵プレビュー、Adobe DNG ConverterとGoによるRAW現像（DNGLabも任意選択）を実装。Camera Raw現像の完全再現と同等のRAW画素処理は未実装 |
 | 5 | 残りのCLIワークフローと取り込み機能 | Go標準`net/http`で動くループバック限定のローカルWeb UIで、サムネイル、キーフレーム、XMP補間、レンダー操作を実装。動画からのフレーム抽出、画像/XMP取り込み、lossless/uncompressed/lossy DNG変換・ロッシーDNG縮小、追加コーデックも実装。GUIの追加開発は対象外。LRTと同じ10-bit YUV画素処理・色管理は未対応（現状は16-bit RGBを経由） |
 
@@ -1619,20 +1619,23 @@ lrtl curve C:\photos\sequence\frame001.nef --linear
 
 シャッター・絞り・ISOが変わる17フレームの数値コントローラー比較では、通常タグの12ケースとAPEXだけの12ケースでCLI保存とAVI画素を検査しています。キャッシュ付きPNG、XMPバックアップ、評価・カメラ設定保持、元画像保持、異常なAPEXを含む連番の書き込み防止も検査します。測定対象外の文字列形式、Bulbやメーカー固有タグの選択、クリップを含むLRTの保存・表示ワークフロー、Camera Raw画素との完全一致は未検証です。
 
-## 手動の回転・拡大を動画へ反映
+## 手動Geometry補正を動画へ反映
 
 ```powershell
 lrtl set C:\photos\sequence\frame001.nef PerspectiveRotate 2.5
 lrtl set C:\photos\sequence\frame001.nef PerspectiveScale 110
+lrtl set C:\photos\sequence\frame001.nef PerspectiveVertical 25
+lrtl set C:\photos\sequence\frame001.nef PerspectiveHorizontal -10
+lrtl set C:\photos\sequence\frame001.nef PerspectiveAspect 15
 lrtl mark C:\photos\sequence\frame001.nef
 # 4つ星の現像キーフレーム間で補間してから動画へ適用
 lrtl interpolate C:\photos\sequence --write
 lrtl render C:\photos\sequence --raw-develop --apply-xmp-basic --output C:\photos\geometry.avi
 ```
 
-`--apply-xmp-basic`は`PerspectiveRotate`（−10〜10度）と`PerspectiveScale`（50〜150%、既定100）を読み、向き適用済みの画像の中心で回転・拡大縮小します。正の回転は画面上で時計回りです。ローカル補正→手動変形→XMPクロップ→全体トーンの順で処理します。出力キャンバスの大きさは変えず、はみ出した領域を切り、入力外は透明（動画では黒）にします。自動フィットやConstrain Cropは行いません。
+`--apply-xmp-basic`は`PerspectiveRotate`（−10〜10度）、`PerspectiveScale`（50〜150%、既定100）、`PerspectiveVertical/Horizontal/Aspect`（各−100〜100）を読みます。Rotate/Scale/Aspectは向き適用済み画像の中心基準で変換し、正の回転は画面上で時計回りです。Vertical/Horizontalは独立した逆ピンホールカメラモデルで適用します。ローカル補正→手動変形→XMPクロップ→全体トーンの順で処理します。出力キャンバスの大きさは変えず、はみ出した領域を切り、入力外は透明（動画では黒）にします。自動フィットやConstrain Cropは行いません。
 
-16-bit画素とアルファを保持して再サンプルし、解析・Deflickerの再測定・Motion Blur・動画の共通処理経路で適用します。既定値では再サンプルしません。`PerspectiveHorizontal/Vertical/Aspect`、Upright、レンズプロファイル歪曲はまだ画素へ反映しません。[AdobeのGeometry説明](https://helpx.adobe.com/lightroom/desktop/edit-photos/crop-rotate-geometry.html)にある手動回転と拡大に対応する独立したアフィン変換で、Camera Rawの座標演算・再サンプル結果との一致は未検証です。
+16-bit画素とアルファを保持し、解析・Deflickerの再測定・Motion Blur・動画の共通処理経路で適用します。`PerspectiveVertical/Horizontal`は60度の画角を持つ逆ピンホールカメラモデルで投影し、スライダー±100をピッチ/ヨー±20度として扱います。`PerspectiveAspect`は横倍率`2^(値/100)`、Rotate/Scaleは既存の中心基準変換です。独立実装で、Adobeは各スライダーの具体的な座標式を公開していないため、Camera Rawとの数値・画素一致は未検証です。出力キャンバスは同じ寸法で、外側は透明（動画では黒）。Upright自動/Guided・保存済みUpright変換、Distortion、Constrain Crop、自動フィットは未対応です。合成ランプの独立座標期待値、値域/異常入力、透明境界、16-bit/アルファ保持、XMPを変更しないAVIレンダーをテストします。[AdobeのGeometry説明](https://helpx.adobe.com/lightroom/desktop/edit-photos/crop-rotate-geometry.html)ではVertical/Horizontalが遠近、Aspectが画像全体の縦横比を調整する操作として説明されています。
 
 ## XMP現像の精度
 
