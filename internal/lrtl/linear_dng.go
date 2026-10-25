@@ -322,6 +322,17 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	if err != nil {
 		return nil, err
 	}
+	scale := fields.values(50718)
+	if fields.err != nil {
+		return nil, fields.err
+	}
+	if len(scale) != 0 && (len(scale) != 2 || scale[0] <= 0 || scale[1] <= 0 || scale[0] > 8 || scale[1] > 8) {
+		return nil, fmt.Errorf("invalid Linear DNG DefaultScale")
+	}
+	verticalScale := 1.0
+	if len(scale) == 2 {
+		verticalScale = scale[1] / scale[0]
+	}
 	readRawSample := func(x, y, channel int) uint16 {
 		block := y/blockHeight*blocksAcross + x/blockWidth
 		start := int(offsets[block]) + ((y%blockHeight)*blockWidth+x%blockWidth)*channels*sampleBytes
@@ -352,7 +363,7 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 				}
 			}
 		}
-		stage1Pixels, stage1Width, stage1Height, activeArea, blackDeltaOffsetX, blackDeltaOffsetY, err = applyDNGStage1Opcodes(imageOpcodes.stage1, stage1Pixels, width, height, channels, activeArea)
+		stage1Pixels, stage1Width, stage1Height, activeArea, blackDeltaOffsetX, blackDeltaOffsetY, err = applyDNGStage1Opcodes(imageOpcodes.stage1, stage1Pixels, width, height, channels, activeArea, verticalScale)
 		if err != nil {
 			return nil, err
 		}
@@ -443,15 +454,6 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	if err != nil {
 		return nil, err
 	}
-	scale := fields.values(50718)
-	if fields.err != nil {
-		return nil, fields.err
-	}
-	if len(scale) != 0 {
-		if len(scale) != 2 || scale[0] <= 0 || scale[1] <= 0 || scale[0] > 8 || scale[1] > 8 {
-			return nil, fmt.Errorf("invalid Linear DNG DefaultScale")
-		}
-	}
 	gain := math.Exp2(exposure)
 	var pointOpcodes []dngPointOpcode
 	needsOpcodeBuffer := false
@@ -494,10 +496,6 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 					cameraPixels[(y*activeArea.Dx()+x)*channels+channel] = float32(camera[channel])
 				}
 			}
-		}
-		verticalScale := 1.0
-		if len(scale) == 2 {
-			verticalScale = scale[1] / scale[0]
 		}
 		cameraPixels, processedBounds, err = applyDNGImageOpcodesWithBounds(imageOpcodes.stage2, cameraPixels, activeArea.Dx(), activeArea.Dy(), channels, verticalScale)
 		if err != nil {

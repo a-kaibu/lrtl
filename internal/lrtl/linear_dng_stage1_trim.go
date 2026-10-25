@@ -30,7 +30,7 @@ func trimDNGStage1Pixels(source []uint16, width, height, channels int, bounds im
 // applyDNGStage1Opcodes returns the Stage 1 sample buffer and its dimensions.
 // TrimBounds rebases the image origin, so later Stage 1 opcodes use coordinates
 // in the newly trimmed image, matching the SDK's image buffer behavior.
-func applyDNGStage1Opcodes(opcodes []dngImageOpcode, pixels []uint16, width, height, channels int, activeArea image.Rectangle) ([]uint16, int, int, image.Rectangle, int, int, error) {
+func applyDNGStage1Opcodes(opcodes []dngImageOpcode, pixels []uint16, width, height, channels int, activeArea image.Rectangle, verticalScale float64) ([]uint16, int, int, image.Rectangle, int, int, error) {
 	if width < 1 || height < 1 || channels < 1 || uint64(width)*uint64(height)*uint64(channels) != uint64(len(pixels)) {
 		return nil, 0, 0, image.Rectangle{}, 0, 0, fmt.Errorf("invalid DNG Stage 1 opcode image dimensions")
 	}
@@ -72,6 +72,8 @@ func applyDNGStage1Opcodes(opcodes []dngImageOpcode, pixels []uint16, width, hei
 			err = opcode.vignette.applyRaw(pixels, destination, currentWidth, currentHeight, channels)
 		case opcode.point != nil:
 			err = applyDNGPointOpcodeRaw(pixels, destination, currentWidth, currentHeight, channels, *opcode.point)
+		case opcode.warp != nil:
+			err = applyDNGWarpRaw(pixels, destination, currentWidth, currentHeight, channels, verticalScale, *opcode.warp)
 		default:
 			err = fmt.Errorf("unsupported Linear DNG Stage 1 opcode implementation")
 		}

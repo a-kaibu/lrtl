@@ -48,7 +48,7 @@ func TestDNGStage1TrimRebasesFollowingOpcodeCoordinates(t *testing.T) {
 	}
 	got, gotWidth, gotHeight, active, offsetX, offsetY, err := applyDNGStage1Opcodes([]dngImageOpcode{
 		{trim: &trim1}, {trim: &trim2}, {point: &point},
-	}, pixels, width, height, 1, image.Rect(1, 1, 5, 5))
+	}, pixels, width, height, 1, image.Rect(1, 1, 5, 5), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
