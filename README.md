@@ -12,6 +12,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
+- `preview-ev`でLRT 7.5.5のカメラプレビュー縮小を再現しました。画像幅が設定値を超える場合、既定の1024×682へ1パスbilinearで縮小してから測光します。LRT本体の合成画像3条件でPreview EVを1e-5以内に比較し、個別画素は最大8-bit 1コード差を確認しています。設定幅を変更した環境、LRT/Camera Rawの元画像デコード・色管理は未対応です。[JAR解析・オラクル・制限](internal/lrtl/testdata/lrt-preview-resize-7.5.5.md)
 - Linear DNGの`OpcodeList2/3`に、放射状ビネット補正`FixVignetteRadial`（ID 3）を追加しました。r²〜r¹⁰の5係数と正規化中心を読み、Opcodeの順序どおり線形カメラ値へ適用します。仕様式との独立計算、両バイト順、色面、クリップ、RAW→16-bit TIFF→AVIと失敗時の出力取消をテストしています。Camera Rawの画素一致を示すものではありません。
 - Linear DNGの`OpcodeList2/3`に`WarpRectilinear2`（ID 14）を追加しました。r⁰〜r¹⁴の係数、多項式の有効半径、逆数モード、色面別の中心を使い、オプションOpcode直後の旧式ワープを省く互換規則も処理します。独立座標式、破損データ、両バイト順、RAW→16-bit TIFF→AVIをテストしています。
 - Linear DNGの`OpcodeList2/3`に`WarpFisheye`（ID 2）を追加しました。DNG仕様のarctan写像、共有／色面別の係数、`DefaultScale`の画素比を使い、既存のバイキュービック再サンプルへ接続します。独立した座標計算、異常入力、fuzz、RAW→16-bit TIFF→AVIの画素までテストしています。欠陥画素補間などは引き続き未対応です。
@@ -1152,7 +1153,7 @@ lrtl preview-ev "D:\Timelapse\Developed"
 lrtl preview-ev "D:\Timelapse\Developed" --write
 ```
 
-この測光式は復元したものですが、LRTが利用するネイティブのプレビュー縮小・色処理と選択ROIは再現していません。lrtlは入力ラスター全体を測定します。そのため保存値はLRTの表示プレビューから得る値と異なることがあります。XMP値がない連番では、先に`preview-ev --write`を実行すると、`keyframes`の既定数量計算で使える値を生成できます。
+Preview EVのヒストグラム、既定の全画面ROI、および幅1024pxを超える画像を1024×682へ縮小する規則は、LRT 7.5.5の合成画像で照合済みです。縮小後の測定値は3条件で本体から1e-5以内、個別画素の補間は8-bit値で最大1コード差です。LRTと同じRAW/画像デコードや色管理は未再現のため、同じ画像ファイルでも入力画素が異なる場合があります。`--lrt-reference`では保存済みROIを全画面の代わりに使います。XMP値がない連番では、先に`preview-ev --write`を実行すると、`keyframes`の既定数量計算で使える値を生成できます。
 
 ## 連番の初期化
 
@@ -1431,7 +1432,7 @@ lrtl export C:\photos\sequence --output C:\photos\visual-tiff --lrt-preview visu
 
 キャッシュには処理が適用済みの場合があるため、`export`と`preview-images`では、この入力モードを選ぶと既定のEXIF向き・XMP基本現像・クロップ適用を無効にします。必要な場合はそれぞれのフラグを明示できますが、適用済みの処理を重ねることになります。無加工のMJPEG AVIはキャッシュJPEGを無再圧縮で格納し、TIFFはGoで復号したRGB画素を16-bitコンテナーに保持します。JPEG由来の階調が16-bit相当に増えるものではありません。
 
-通常の解析と同様に`preview-ev --write`は元画像のXMPへ`lrt:ExternalExposureDefault`を保存します。Deflickerは既定で独自測光・補正経路を使い、`--calculation lrt-7.5.5`で本体比較済みの数値計算を選べます。複数パスではキャッシュを基にしたGo側の補正を再測定します。Camera Rawを再実行する機能ではありません。キャッシュは変更しません。LRTの操作後やXMP編集後にキャッシュが古くなっていても日時等から自動判定しないため、必要なプレビューをLRTで生成してから明示的に選択してください。ROI・ICC色管理・Visual Deflickerの数値全体がLRTと一致することは未確認です。
+通常の解析と同様に`preview-ev --write`は元画像のXMPへ`lrt:ExternalExposureDefault`を保存します。Deflickerは既定で独自測光・補正経路を使い、`--calculation lrt-7.5.5`で本体比較済みの数値計算を選べます。複数パスではキャッシュを基にしたGo側の補正を再測定します。Camera Rawを再実行する機能ではありません。キャッシュは変更しません。LRTの操作後やXMP編集後にキャッシュが古くなっていても日時等から自動判定しないため、必要なプレビューをLRTで生成してから明示的に選択してください。ICC色管理とVisual Deflicker全体の数値一致は未確認です。
 
 ## LRTの保存済み参照領域を使う
 

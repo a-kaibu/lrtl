@@ -58,6 +58,10 @@ func analyzePreviewEVSequence(frames []Frame, options imageInputOptions) ([]floa
 			return nil, fmt.Errorf("inconsistent dimensions in %s", frame.Image)
 		}
 		img = adjustments.apply(index, img)
+		img, err = resizeLRTCameraPreview(img)
+		if err != nil {
+			return nil, fmt.Errorf("prepare LRT Preview EV image %s: %w", frame.Image, err)
+		}
 		area := img.Bounds()
 		if references != nil {
 			area, err = references[index].rectangle(img.Bounds())

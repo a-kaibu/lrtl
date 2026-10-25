@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -65,6 +66,130 @@ func TestLRTPreviewPathsAndNativeJPEG(t *testing.T) {
 	}
 	if _, _, _, err := readRenderInputWithOptions(frame, imageInputOptions{LRTPreview: "visual"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLRTCameraPreviewResizeMatchesNativeHistogram(t *testing.T) {
+	data, err := os.ReadFile("testdata/lrt-preview-resize-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		SourceWidth, SourceHeight   int
+		PreviewWidth, PreviewHeight int
+		Pattern                     int
+		PreviewEV, SourceEV         float64
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 3 {
+		t.Fatalf("got %d native resize cases, want 3", len(cases))
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%dx%d", tc.SourceWidth, tc.SourceHeight), func(t *testing.T) {
+			img := image.NewNRGBA(image.Rect(0, 0, tc.SourceWidth, tc.SourceHeight))
+			for y := 0; y < tc.SourceHeight; y++ {
+				for x := 0; x < tc.SourceWidth; x++ {
+					img.SetNRGBA(x, y, color.NRGBA{
+						R: uint8((x*37 + y*11 + tc.Pattern*17) & 255),
+						G: uint8((x*13 + y*41 + tc.Pattern*29) & 255),
+						B: uint8((x*23 + y*7 + tc.Pattern*43) & 255),
+						A: 255,
+					})
+				}
+			}
+			preview, err := resizeLRTCameraPreview(img)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := preview.Bounds().Size(); got != image.Pt(tc.PreviewWidth, tc.PreviewHeight) {
+				t.Fatalf("preview size=%v, want %dx%d", got, tc.PreviewWidth, tc.PreviewHeight)
+			}
+			got, err := framePreviewEV(preview)
+			if err != nil || math.Abs(got-tc.PreviewEV) > 1e-5 {
+				t.Fatalf("resized Preview EV=%.17g, native=%.17g, err=%v", got, tc.PreviewEV, err)
+			}
+			sourceEV, err := framePreviewEV(img)
+			if err != nil || sourceEV != tc.SourceEV {
+				t.Fatalf("source Preview EV=%.17g, native=%.17g, err=%v", sourceEV, tc.SourceEV, err)
+			}
+		})
+	}
+}
+
+func TestLRTCameraPreviewResizeOnlyUsesWidthThreshold(t *testing.T) {
+	for _, bounds := range []image.Rectangle{
+		image.Rect(0, 0, 1024, 1600),
+		image.Rect(0, 0, 800, 2000),
+	} {
+		img := image.NewNRGBA(bounds)
+		got, err := resizeLRTCameraPreview(img)
+		if err != nil || got != img {
+			t.Fatalf("image %v was unexpectedly resized: got=%v err=%v", bounds, got.Bounds(), err)
+		}
+	}
+	if _, err := resizeLRTCameraPreview(nil); err == nil {
+		t.Fatal("nil preview accepted")
+	}
+	if _, err := resizeLRTCameraPreview(image.NewNRGBA(image.Rectangle{})); err == nil {
+		t.Fatal("empty preview accepted")
+	}
+}
+
+func TestLRTPreviewBilinearPixelsMatchNative(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(7, 11, 12, 14))
+	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
+		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
+			sx, sy := x-img.Bounds().Min.X, y-img.Bounds().Min.Y
+			img.SetNRGBA(x, y, color.NRGBA{
+				R: uint8(sx*47 + sy*19),
+				G: uint8(sx*13 + sy*71),
+				B: uint8(sx*83 + sy*31),
+				A: 255,
+			})
+		}
+	}
+	got, err := resizeLRTPreviewTo(img, 3, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []color.NRGBA{
+		{R: 0x14, G: 0x16, B: 0x23, A: 255}, {R: 0x63, G: 0x2c, B: 0xad, A: 255}, {R: 0xb1, G: 0x41, B: 0x78, A: 255},
+		{R: 0x31, G: 0x81, B: 0x52, A: 255}, {R: 0x7f, G: 0x96, B: 0xdc, A: 255}, {R: 0xcd, G: 0xac, B: 0x66, A: 255},
+	}
+	for i, want := range want {
+		x, y := i%3, i/3
+		pixel := color.NRGBAModel.Convert(got.At(x, y)).(color.NRGBA)
+		if math.Abs(float64(int(pixel.R)-int(want.R))) > 1 ||
+			math.Abs(float64(int(pixel.G)-int(want.G))) > 1 ||
+			math.Abs(float64(int(pixel.B)-int(want.B))) > 1 || pixel.A != want.A {
+			t.Errorf("pixel (%d,%d)=%#v, native=%#v (tolerance: one 8-bit code)", x, y, pixel, want)
+		}
+	}
+}
+
+func TestPreviewEVSequenceMeasuresResizedLRTPreview(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 1300, 900))
+	for y := 0; y < img.Bounds().Dy(); y++ {
+		for x := 0; x < img.Bounds().Dx(); x++ {
+			img.SetNRGBA(x, y, color.NRGBA{
+				R: uint8((x*37 + y*11) & 255),
+				G: uint8((x*13 + y*41) & 255),
+				B: uint8((x*23 + y*7) & 255),
+				A: 255,
+			})
+		}
+	}
+	path := filepath.Join(t.TempDir(), "frame.png")
+	writePreviewEVFixture(t, path, img)
+	values, err := analyzePreviewEVSequence([]Frame{{Image: path}}, imageInputOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = 0.4970800189788378 // native 7.5.5 after 1024x682 resize
+	if len(values) != 1 || math.Abs(values[0]-want) > 1e-5 {
+		t.Fatalf("sequence Preview EV=%v, want native resized value %.17g", values, want)
 	}
 }
 
