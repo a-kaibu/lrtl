@@ -776,5 +776,9 @@
     {"name":"single_count_marks_first_selected_row","frames":20,"count":1,"targetRating":4,"rowIndices":[3,8,16],"initialRatings":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lrtRatings":[0,0,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]},
     {"name":"holy_grail_selected_endpoint_overwrites_rating","frames":20,"count":3,"targetRating":4,"rowIndices":[2,8,14,19],"initialRatings":[0,0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],"lrtRatings":[0,0,4,0,0,0,0,0,0,0,0,0,0,0,4,0,0,0,0,4]},
     {"name":"holy_grail_collision_shifts_before_selected_row","frames":20,"count":4,"targetRating":4,"rowIndices":[2,8,14,19],"initialRatings":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0],"lrtRatings":[0,0,4,0,0,0,0,0,4,0,0,0,0,4,3,0,0,0,0,4]}
+  ],
+  "replacementCases": [
+    {"name":"multiple_positions_preserve_non_candidates","frames":20,"count":3,"targetRating":4,"rowIndices":[2,8,14,19],"initialRatings":[4,0,0,0,0,5,0,0,4,0,0,0,0,0,3,0,0,0,0,5],"lrtRatings":[4,0,4,0,0,5,0,0,0,0,0,0,0,0,4,0,0,0,0,4]},
+    {"name":"single_position_clears_other_selected_rows","frames":20,"count":1,"targetRating":4,"rowIndices":[2,8,14,19],"initialRatings":[5,0,2,0,0,0,0,0,5,0,0,0,0,0,3,0,0,0,0,4],"lrtRatings":[5,0,4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
   ]
 }

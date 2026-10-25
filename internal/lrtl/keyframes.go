@@ -363,11 +363,25 @@ func placeLRTWizardKeyframeIndices(indices []int, packets []*XMPPacket, reserved
 }
 
 func placeLRTWizardKeyframeIndicesForRows(indices, rows []int, packets []*XMPPacket, reserved []bool, rating int) []int {
+	selected, _ := placeLRTWizardKeyframeIndicesForRowsWithReplacement(indices, rows, packets, reserved, rating, false)
+	return selected
+}
+
+// placeLRTWizardKeyframeIndicesForRowsWithReplacement mirrors the wizard's
+// replace flag. It clears existing marks on selected rows that are not proposed
+// positions, and overwrites conflicts at proposed rows. clearedRows lets the
+// caller preserve its own keyframe restore markers.
+func placeLRTWizardKeyframeIndicesForRowsWithReplacement(indices, rows []int, packets []*XMPPacket, reserved []bool, rating int, replace bool) ([]int, []int) {
 	if len(packets) == 0 || len(reserved) != len(packets) || (rating != 4 && rating != 5) {
-		return nil
+		return nil, nil
 	}
 	if len(rows) == 0 {
-		return nil
+		return nil, nil
+	}
+	for index, row := range rows {
+		if row < 0 || row >= len(packets) || (index > 0 && row <= rows[index-1]) {
+			return nil, nil
+		}
 	}
 
 	workingRatings := make([]int, len(packets))
@@ -380,6 +394,22 @@ func placeLRTWizardKeyframeIndicesForRows(indices, rows []int, packets []*XMPPac
 		}
 	}
 
+	var clearedRows []int
+	if replace {
+		proposed := make(map[int]struct{}, len(indices))
+		for _, index := range indices {
+			proposed[index] = struct{}{}
+		}
+		for _, row := range rows {
+			if _, isProposed := proposed[row]; isProposed || reserved[row] || packets[row] == nil {
+				continue
+			}
+			if _, found := packets[row].Rating(); found || packets[row].IsKeyframe() {
+				clearedRows = append(clearedRows, row)
+			}
+		}
+	}
+
 	selected := make([]int, 0, len(indices))
 	for _, index := range indices {
 		if index < 0 || index >= len(packets) || reserved[index] {
@@ -388,6 +418,11 @@ func placeLRTWizardKeyframeIndicesForRows(indices, rows []int, packets []*XMPPac
 		current := workingRatings[index]
 		rowIsSelectedEndpoint := index == rows[0] || index == rows[len(rows)-1]
 		if !rowIsSelectedEndpoint && current >= 2 && current <= 5 && current != rating {
+			if replace {
+				workingRatings[index] = rating
+				selected = append(selected, index)
+				continue
+			}
 			shifted := false
 			for distance := 1; distance < 10; distance++ {
 				previous := index - distance
@@ -413,7 +448,7 @@ func placeLRTWizardKeyframeIndicesForRows(indices, rows []int, packets []*XMPPac
 		selected = append(selected, index)
 	}
 	sort.Ints(selected)
-	return selected
+	return selected, clearedRows
 }
 
 func selectEvenlySpacedKeyframeIndices(frameCount, count int) ([]int, error) {

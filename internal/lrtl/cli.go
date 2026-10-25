@@ -1717,7 +1717,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	count := set.Int("count", 0, "number of new keyframe suggestions (default estimated from Preview EV; 5 for --evenly-spaced; maximum 20)")
 	ratingOption := set.Int("rating", 4, "keyframe star rating to mark: 4 (LRT default) or 5")
 	selectionManifest := set.String("selection", "", "use rows included in a selection manifest for LRT wizard placement")
-	replaceExisting := set.Bool("replace-existing", false, "clear existing keyframes of the selected rating and shift star conflicts backward where possible")
+	replaceExisting := set.Bool("replace-existing", false, "use LRT wizard replacement behavior on the placement rows")
 	smoothRadius := set.Int("smooth", 5, "luminance smoothing radius for --luminance-deviation")
 	evenlySpaced := set.Bool("evenly-spaced", false, "use the LRT helper's uniform frame positions without decoding images")
 	luminanceDeviation := set.Bool("luminance-deviation", false, "use lrtl's luminance-deviation frame selection instead of LRT spacing")
@@ -1907,6 +1907,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	var indices []int
+	var rowsToClear []int
 	if *luminanceDeviation {
 		indices, err = selectKeyframeIndicesWithAnchors(curve, suggestionCount, *smoothRadius, selectionAnchors)
 	} else {
@@ -1930,34 +1931,28 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	if *replaceExisting {
-		indices = placeLRTWizardKeyframeIndicesForRows(indices, placementRows, packets, reservedRows, *ratingOption)
+		indices, rowsToClear = placeLRTWizardKeyframeIndicesForRowsWithReplacement(indices, placementRows, packets, reservedRows, *ratingOption, true)
 	}
 	modifiedPackets := make(map[int]*XMPPacket)
 	if *write {
-		if *replaceExisting {
-			for index, packet := range packets {
-				currentRating, hasRating := packet.Rating()
-				if !hasRating || currentRating != *ratingOption {
-					continue
-				}
-				frame := frames[index]
+		for _, index := range rowsToClear {
+			packet := packets[index]
+			frame := frames[index]
+			if packet.IsKeyframe() {
 				if err := UnmarkKeyframe(packet, true); err != nil {
 					return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 				}
-				if restoredRating, found := packet.Rating(); found && restoredRating == *ratingOption {
-					if err := removeRootMetadataProperty(packet, "xmp:Rating"); err != nil {
-						return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
-					}
-				}
-				modifiedPackets[index] = packet
+			} else if err := removeRootMetadataProperty(packet, "xmp:Rating"); err != nil {
+				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 			}
+			modifiedPackets[index] = packet
 		}
 		for _, index := range indices {
 			frame := frames[index]
 			packet := packets[index]
 			mark := MarkKeyframeWithRating
 			selectedEndpoint := index == placementRows[0] || index == placementRows[len(placementRows)-1]
-			if *replaceExisting && (index == 0 || index == len(frames)-1 || selectedEndpoint) {
+			if *replaceExisting || index == 0 || index == len(frames)-1 || selectedEndpoint {
 				mark = markLRTWizardKeyframeWithRating
 			}
 			if _, err := mark(packet, "default", *ratingOption); err != nil {
@@ -1967,10 +1962,6 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		}
 	}
 	backups := make(map[int]string, len(modifiedPackets))
-	markedIndices := make(map[int]struct{}, len(indices))
-	for _, index := range indices {
-		markedIndices[index] = struct{}{}
-	}
 	if *write {
 		for index, frame := range frames {
 			packet, modified := modifiedPackets[index]
@@ -1987,7 +1978,7 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "Sequence: %s\n", directory)
 	fmt.Fprintf(stdout, "Frames: %d; existing keyframes: %d; new suggestions: %d\n", len(frames), len(existingKeyframes), len(indices))
 	if *replaceExisting {
-		fmt.Fprintf(stdout, "Selected rating: %d stars; existing marks to replace: %d\n", *ratingOption, existingTargetRating)
+		fmt.Fprintf(stdout, "Selected rating: %d stars; LRT wizard replacement mode enabled\n", *ratingOption)
 	}
 	for _, index := range indices {
 		frame := frames[index]
@@ -2005,24 +1996,9 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		}
 		fmt.Fprintf(stdout, "  Marked: %s (%d stars)\n", frame.OutputSidecar(), *ratingOption)
 	}
-	if *replaceExisting && *write {
-		for index, frame := range frames {
-			if _, marked := markedIndices[index]; marked {
-				continue
-			}
-			if _, changed := modifiedPackets[index]; !changed {
-				continue
-			}
-			backup := backups[index]
-			if backup != "" {
-				fmt.Fprintf(stdout, "  Backup: %s\n", backup)
-			}
-			fmt.Fprintf(stdout, "  Cleared: %s (%d-star marker replaced)\n", filepath.Base(frame.OutputSidecar()), *ratingOption)
-		}
-	}
 	if !*write {
 		if *replaceExisting {
-			fmt.Fprintf(stdout, "Preview only. Pass --write to replace %d existing %d-star marker(s) and mark these frames.\n", existingTargetRating, *ratingOption)
+			fmt.Fprintln(stdout, "Preview only. Pass --write to apply these marks using LRT wizard replacement behavior.")
 		} else {
 			fmt.Fprintln(stdout, "Preview only. Pass --write to mark these frames; other existing keyframes are left unchanged.")
 		}

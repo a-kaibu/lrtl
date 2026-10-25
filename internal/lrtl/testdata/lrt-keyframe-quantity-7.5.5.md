@@ -39,6 +39,14 @@ interior to the full sequence. A six-case fixture compares those placements
 and final ratings directly. The UI wrapper's selected-row retrieval and full
 wizard interaction are not exercised.
 
+The wizard's replacement flag was also measured with two cases. With multiple
+placements, it clears existing ratings on selected rows that are not proposed
+positions, overwrites conflicts at proposed positions, and leaves ratings on
+unselected rows untouched. With a single placement, it keeps the first
+selected row and clears the others. The Go oracle test compares final ratings
+for both cases. CLI tests also verify sidecar backups, restoration of overwritten
+Holy Grail and 5-star ratings, and preservation of unselected rows.
+
 The placement helper overwrites an endpoint 2-star/3-star Holy Grail rating
 when it places an ordinary keyframe there. `lrtl keyframes --replace-existing`
 now follows that behavior; the existing XMP is backed up, and lrtl's own

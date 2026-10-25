@@ -219,6 +219,41 @@ public final class LRTKeyframeQuantityOracle {
             System.out.printf("%s frames=%d count=%d selected=%d%n", test.name(), test.frames(),
                     test.count(), test.rowIndices().length);
         }
+        json.append("  ],\n  \"replacementCases\": [\n");
+        int[] multipleReplacementRatings = ratings(20);
+        multipleReplacementRatings[0] = 4;
+        multipleReplacementRatings[5] = 5;
+        multipleReplacementRatings[8] = 4;
+        multipleReplacementRatings[14] = 3;
+        multipleReplacementRatings[19] = 5;
+        int[] singleReplacementRatings = ratings(20);
+        singleReplacementRatings[0] = 5;
+        singleReplacementRatings[2] = 2;
+        singleReplacementRatings[8] = 5;
+        singleReplacementRatings[14] = 3;
+        singleReplacementRatings[19] = 4;
+        List<SelectedRowCase> replacementCases = List.of(
+                new SelectedRowCase("multiple_positions_preserve_non_candidates", 20, 3, 4,
+                        new int[]{2, 8, 14, 19}, multipleReplacementRatings),
+                new SelectedRowCase("single_position_clears_other_selected_rows", 20, 1, 4,
+                        new int[]{2, 8, 14, 19}, singleReplacementRatings));
+        for (int caseIndex = 0; caseIndex < replacementCases.size(); caseIndex++) {
+            SelectedRowCase test = replacementCases.get(caseIndex);
+            int[] lrtRatings = runWizard(controller, sequenceClass, frameClass, frameConstructor,
+                    setRating, applyWizardPositions, test.frames(), test.count(), test.rating(),
+                    test.initialRatings(), test.rowIndices(), true);
+            json.append("    {\"name\":\"").append(test.name()).append("\",\"frames\":")
+                    .append(test.frames()).append(",\"count\":").append(test.count())
+                    .append(",\"targetRating\":").append(test.rating()).append(",\"rowIndices\":[");
+            appendInts(json, test.rowIndices());
+            json.append("],\"initialRatings\":[");
+            appendInts(json, test.initialRatings());
+            json.append("],\"lrtRatings\":[");
+            appendInts(json, lrtRatings);
+            json.append("]}").append(caseIndex + 1 == replacementCases.size() ? "\n" : ",\n");
+            System.out.printf("%s frames=%d count=%d selected=%d replace=true%n", test.name(),
+                    test.frames(), test.count(), test.rowIndices().length);
+        }
         json.append("  ]\n}\n");
         Files.writeString(Path.of(args[0]), json.toString(), StandardCharsets.UTF_8);
     }
@@ -369,6 +404,15 @@ public final class LRTKeyframeQuantityOracle {
     private static int[] runWizard(Object controller, Class<?> sequenceClass, Class<?> frameClass,
             Constructor<?> frameConstructor, Method setRating, Method applyWizardPositions, int frameCount,
             int requestedCount, int requestedRating, int[] initialRatings, int[] requestedRows) throws Exception {
+        return runWizard(controller, sequenceClass, frameClass, frameConstructor, setRating,
+                applyWizardPositions, frameCount, requestedCount, requestedRating, initialRatings,
+                requestedRows, false);
+    }
+
+    private static int[] runWizard(Object controller, Class<?> sequenceClass, Class<?> frameClass,
+            Constructor<?> frameConstructor, Method setRating, Method applyWizardPositions, int frameCount,
+            int requestedCount, int requestedRating, int[] initialRatings, int[] requestedRows,
+            boolean replace) throws Exception {
         Object sequence = sequenceClass.getConstructor().newInstance();
         Method add = sequenceClass.getMethod("add", Object.class);
         Method getRating = Arrays.stream(frameClass.getMethods())
@@ -385,7 +429,7 @@ public final class LRTKeyframeQuantityOracle {
             add.invoke(sequence, frame);
         }
         int[] rows = requestedRows == null ? allIndices : requestedRows;
-        applyWizardPositions.invoke(controller, sequence, requestedCount, rows, requestedRating, false);
+        applyWizardPositions.invoke(controller, sequence, requestedCount, rows, requestedRating, replace);
         int[] result = new int[frameCount];
         for (int index = 0; index < frameCount; index++) {
             result[index] = ((Number) getRating.invoke(frames[index])).intValue();
