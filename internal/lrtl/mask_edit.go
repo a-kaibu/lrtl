@@ -64,7 +64,7 @@ func protectedMaskCorrection(packet *XMPPacket, collection string, index int, co
 		}
 	}
 	for _, property := range []string{holyGrailTargetProperty, deflickerTargetProperty} {
-		value, found, err := packet.GetScalar(property)
+		value, found, err := packet.GetRootScalar(property)
 		if err != nil {
 			return false, err
 		}

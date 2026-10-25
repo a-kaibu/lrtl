@@ -12,7 +12,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### テスト状況
 
-機能変更には回帰テストを追加し、可能な項目はLRT 7.5.5の保存済み観測値と照合します。2026-10-26にGo 1.27.0（Windows/amd64）で`go test ./... -count=1 -timeout 20m`が成功し、`internal/lrtl`は574.946秒、`internal/nativejpeg`は3.351秒でした。構造XMPのnamespace alias・全9項目コピー・再実行時の冪等性と、今回のネスト値読み取り回帰テストもrace検査で成功しました。Stage 1を含むFixBadPixelsのrace検査、75 seedから48,782実行のLinear DNG fuzz、`go vet ./...`、`go build ./...`も成功しました。通常テストは記録済みfixtureを使い、FFmpegがある環境では実動画の生成・復号テストも実行します。
+機能変更には回帰テストを追加し、可能な項目はLRT 7.5.5の保存済み観測値と照合します。2026-10-26にGo 1.27.0（Windows/amd64）で`go test ./... -count=1 -timeout 20m`が成功し、`internal/lrtl`は572.102秒、`internal/nativejpeg`は3.326秒でした。構造XMPのnamespace alias・全9項目コピー・再実行時の冪等性と、今回のネスト値読み取り／マスク保護回帰テストもrace検査で成功しました。Stage 1を含むFixBadPixelsのrace検査、75 seedから48,782実行のLinear DNG fuzz、`go vet ./...`、`go build ./...`も成功しました。通常テストは記録済みfixtureを使い、FFmpegがある環境では実動画の生成・復号テストも実行します。
 
 ### 今回の互換性改善
 
@@ -24,7 +24,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 - Linear DNGの`OpcodeList1`に`FixBadPixelsConstant`（ID 4）と`FixBadPixelsList`（ID 5）を追加しました。16-bit Bayerの生サンプルにLinearizationTable・黒レベル補正より前に適用し、ActiveArea切り出し前の座標を使います。両TIFFバイト順で、線形化後にはマーカー値が変わる合成画像を使って処理順を検査します。Stage 1のその他のOpcodeは未対応です。
 - Auto-Transitionの構造XMP比較をnamespace URI基準にし、prefix aliasやコピー後に移動した`xmlns`宣言を同じ内容として扱います。Look／Preset／PointColors／Tone Curve系9項目、先頭4つ星の参照選択、参照にない値の削除、ratingとvendor metadataの保持、保存・再読込後の再実行で不要なコピーが発生しないことを回帰テストしています。
 - Auto-Transitionの全体スカラー読み書きをXMPルート直下に限定しました。PointColors内の`crs:Saturation`のような同名のローカル値が、グローバルスライダーへ誤って昇格する回帰テストを追加しました。
-- CLIのCrop・Exposure・Holy Grail／Deflicker管理値・キーフレーム測光・Grayscaleなども、XMPルート直下の値だけを全体設定として読み取ります。ネストしたRDF Descriptionにだけある同名の不正値・有効値を無視する回帰テストを追加し、全体テスト、race検査、`go vet`、ビルドが成功しました。
+- CLIのCrop・Exposure・Holy Grail／Deflicker管理値・キーフレーム測光・Grayscaleなども、XMPルート直下の値だけを全体設定として読み取ります。`masks`編集の管理ターゲット保護もルート値に限定し、ネストした同名値で通常マスクが誤って保護されないことを回帰テストで確認しています。ルートにある正規ターゲットの保護は維持します。全体テストと両回帰テストのrace検査が成功しました。
 - Linear DNGの`OpcodeList2/3`に`WarpRectilinear2`（ID 14）を追加しました。r⁰〜r¹⁴の係数、多項式の有効半径、逆数モード、色面別の中心を使い、オプションOpcode直後の旧式ワープを省く互換規則も処理します。独立座標式、破損データ、両バイト順、RAW→16-bit TIFF→AVIをテストしています。
 - Linear DNGの`OpcodeList2/3`に`WarpFisheye`（ID 2）を追加しました。DNG仕様のarctan写像、共有／色面別の係数、`DefaultScale`の画素比を使い、既存のバイキュービック再サンプルへ接続します。独立した座標計算、異常入力、fuzz、RAW→16-bit TIFF→AVIの画素までテストしています。
 - Linear DNGの`OpcodeList2/3`に`TrimBounds`（ID 6）を追加しました。Opcode順に画像領域を切り詰め、後続補正とDefaultCropを反映します。ActiveArea／DefaultCropとの交差、切り詰め後の座標を使う補正、両バイト順、不正領域をテストしています。

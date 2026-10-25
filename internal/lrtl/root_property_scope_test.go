@@ -41,3 +41,13 @@ func TestCLIReadersIgnoreNestedRootNamedProperties(t *testing.T) {
 		t.Fatalf("nested value was used as keyframe measurement: values=%v available=%t err=%v", measurements, available, err)
 	}
 }
+
+func TestMaskEditProtectionIgnoresNestedManagedTargets(t *testing.T) {
+	packet, err := parseXMP([]byte(`<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" xmlns:ol="urn:open-lrtl:metadata:1.0"><crs:MaskGroupBasedCorrections><rdf:Seq><rdf:li rdf:parseType="Resource" crs:What="Correction" crs:CorrectionActive="True" crs:CorrectionAmount="1" crs:LocalExposure2012="0"/></rdf:Seq></crs:MaskGroupBasedCorrections><crs:Look><rdf:Description ol:HolyGrailXMPTarget="MaskGroupBasedCorrections:1"/></crs:Look></rdf:Description></rdf:RDF></x:xmpmeta>`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := setMaskProperty(packet, maskEditPath{"MaskGroupBasedCorrections", 1, 0, "LocalExposure2012"}, ".25"); err != nil {
+		t.Fatalf("nested tracking target incorrectly protected a user mask: %v", err)
+	}
+}
