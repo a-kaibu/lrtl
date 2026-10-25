@@ -3,7 +3,6 @@ package lrtl
 import (
 	"fmt"
 	"sort"
-	"strings"
 )
 
 type maskTransitionInputs struct {
@@ -83,11 +82,6 @@ func prepareMaskTransitionInputs(indexes []map[maskTransitionKey]maskTransitionN
 				}
 				if !found || !maskTransitionNodeHasTemplate(node, key) {
 					if key.maskIndex > 0 && !canFillMissingSelector(plan.Indexes[i], key, name) {
-						continue
-					}
-				}
-				if strings.HasPrefix(name, "RangeMask") && key.maskIndex > 0 {
-					if correctionRangeMaskElement(unwrapRDFArrayItem(node.maskItem)) == nil {
 						continue
 					}
 				}

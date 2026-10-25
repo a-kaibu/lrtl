@@ -1,12 +1,14 @@
-# LRT 7.5.5 missing selector-range field observations
+# LRT 7.5.5 missing selector-range observations
 
-Five synthetic numeric columns call the installed 7.5.5 build 1059 missing-value
-helper and frame-to-XMP writer. Each frame already has a first selector and a
-`CorrectionRangeMask` resource. Only the selected numeric property is absent in
-the middle frame; the containing range resource and its `PointModels` are kept.
-No application code, images or user metadata are included.
+The installed 7.5.5 build 1059 missing-value helper and frame-to-XMP writer
+were exercised on 80 synthetic columns: four correction collections
+(`GradientBasedCorrections`, `CircularGradientBasedCorrections`,
+`PaintBasedCorrections`, and `MaskGroupBasedCorrections`), correction positions
+1 and 2, five numeric properties, and a middle frame with the selector range
+resource either present or absent. Every case includes a first selector. No
+application code, images, or user metadata are included.
 
-The columns are:
+The properties and inputs are:
 
 | Property | Input |
 | --- | --- |
@@ -16,19 +18,22 @@ The columns are:
 | LumMax | `[.2, missing, .9]` |
 | LumFeather | `[.15, missing, .65]` |
 
-The native helper forward-fills the middle value in all five columns. The native
-writer serializes the values to the existing nested property path and leaves
-each frame's own `PointModels` untouched. This establishes component behavior
-for an existing selector range resource; it does not establish creation of a
-missing selector-level `CorrectionRangeMask` or a complete GUI save workflow.
+The native helper forward-fills the middle value in all five columns. The
+writer serializes each value to the nested path, creating the middle frame's
+`CorrectionRangeMask` when it was absent. It leaves existing `PointModels`
+untouched and does not copy samples into a newly created resource. This
+establishes component behavior for numeric selector-range fields; it does not
+establish creation of a missing selector, creation of the `LumRange` string,
+or a complete native Auto-Transition/save workflow.
 
 The writer's later history stamping reaches an uninitialized application
 singleton when called outside the GUI. The probe accepts only that specific
-post-write `NullPointerException`, then reads the in-memory XMP values. The
-fixture records the input, filled values, serialized values and retained sample
-payloads. Normal Go tests compare all five columns against this fixture, verify
-the CLI save/backup/no-op repeat, and ensure malformed structures fail before
-writing files.
+post-write `NullPointerException`, then reads the in-memory XMP values. The JSON
+fixture records collection, position, target resource state, inputs, filled and
+serialized values, and per-frame sample payloads. Normal Go tests compare all
+80 cases against this fixture, run the probe again when `LRTL_NATIVE_JAR` is
+set, and cover CLI dry-run/write/backup/no-op repeat, image preservation,
+sample behavior, and malformed input without partial writes.
 
 Re-run the installed probe with Java/Javac and the installed jar:
 

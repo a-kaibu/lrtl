@@ -11,27 +11,34 @@ import static lrtlprobe.MetadataPasteOracle.quote;
 // is used.
 public final class MissingSelectorRangeOracle {
     static final int COLUMN = 5;
-    static final String COLLECTION = "MaskGroupBasedCorrections";
-    static final String PREFIX = COLLECTION + "[1]/crs:CorrectionMasks[1]/crs:CorrectionRangeMask/crs:";
+    static String rangePath(String collection, int slot, String property) {
+        return collection + "[" + slot + "]/crs:CorrectionMasks[1]/crs:CorrectionRangeMask/crs:" + property;
+    }
 
-    static String body(String property, String value, int frame) {
+    static String body(String collection, int slot, String property, String value, int frame, boolean includeRange) {
         String type = property.equals("Type") ? value : property.startsWith("Lum") ? "2" : "1";
         String amount = property.equals("ColorAmount") ? value : ".5";
         String lumMin = property.equals("LumMin") ? value : ".1";
         String lumMax = property.equals("LumMax") ? value : ".9";
         String lumFeather = property.equals("LumFeather") ? value : ".2";
-        return "<crs:" + COLLECTION + "><rdf:Seq><rdf:li rdf:parseType=\"Resource\">"
-            + "<crs:CorrectionMasks><rdf:Seq><rdf:li rdf:parseType=\"Resource\">"
-            + "<crs:What>Mask/Aggregate</crs:What><crs:MaskSyncID>own-mask-" + frame + "</crs:MaskSyncID>"
-            + "<crs:CorrectionRangeMask rdf:parseType=\"Resource\">"
-            + (type == null ? "" : "<crs:Type>" + type + "</crs:Type>")
-            + (amount == null ? "" : "<crs:ColorAmount>" + amount + "</crs:ColorAmount>")
-            + (lumMin == null ? "" : "<crs:LumMin>" + lumMin + "</crs:LumMin>")
-            + (lumMax == null ? "" : "<crs:LumMax>" + lumMax + "</crs:LumMax>")
-            + (lumFeather == null ? "" : "<crs:LumFeather>" + lumFeather + "</crs:LumFeather>")
-            + "<crs:PointModels>target-samples-" + frame + "</crs:PointModels>"
-            + "</crs:CorrectionRangeMask></rdf:li></rdf:Seq></crs:CorrectionMasks>"
-            + "</rdf:li></rdf:Seq></crs:" + COLLECTION + ">";
+        String rangeOpen = includeRange ? "<crs:CorrectionRangeMask rdf:parseType=\"Resource\">" : "";
+        String rangeClose = includeRange ? "<crs:PointModels>target-samples-" + frame + "</crs:PointModels></crs:CorrectionRangeMask>" : "";
+        String values = includeRange
+            ? (type == null ? "" : "<crs:Type>" + type + "</crs:Type>")
+                + (amount == null ? "" : "<crs:ColorAmount>" + amount + "</crs:ColorAmount>")
+                + (lumMin == null ? "" : "<crs:LumMin>" + lumMin + "</crs:LumMin>")
+                + (lumMax == null ? "" : "<crs:LumMax>" + lumMax + "</crs:LumMax>")
+                + (lumFeather == null ? "" : "<crs:LumFeather>" + lumFeather + "</crs:LumFeather>")
+            : "";
+        StringBuilder corrections = new StringBuilder("<crs:" + collection + "><rdf:Seq>");
+        for (int i = 1; i < slot; i++) corrections.append("<rdf:li rdf:parseType=\"Resource\"/>");
+        corrections.append("<rdf:li rdf:parseType=\"Resource\"><crs:CorrectionSyncID>own-correction-" + frame + "</crs:CorrectionSyncID>")
+            .append("<crs:CorrectionMasks><rdf:Seq><rdf:li rdf:parseType=\"Resource\">")
+            .append("<crs:What>Mask/Aggregate</crs:What><crs:MaskSyncID>own-mask-" + frame + "</crs:MaskSyncID>")
+            .append(rangeOpen).append(values).append(rangeClose)
+            .append("</rdf:li></rdf:Seq></crs:CorrectionMasks></rdf:li></rdf:Seq></crs:")
+            .append(collection).append('>');
+        return corrections.toString();
     }
 
     static String property(Object frame, String path) throws Exception {
@@ -67,14 +74,18 @@ public final class MissingSelectorRangeOracle {
         cases.put("LumMin", new String[]{".1", null, ".8"});
         cases.put("LumMax", new String[]{".2", null, ".9"});
         cases.put("LumFeather", new String[]{".15", null, ".65"});
-        for (Map.Entry<String, String[]> test : cases.entrySet()) {
+        for (String collection : new String[]{"GradientBasedCorrections", "CircularGradientBasedCorrections", "PaintBasedCorrections", "MaskGroupBasedCorrections"})
+        for (int slot : new int[]{1, 2})
+        for (Map.Entry<String, String[]> test : cases.entrySet())
+        for (boolean targetRangePresent : new boolean[]{true, false}) {
             String property = test.getKey();
-            String path = PREFIX + property;
+            String path = rangePath(collection, slot, property);
             Object sequence = sequenceType.getConstructor(int.class).newInstance(-1);
-            MetadataPasteOracle.method(sequenceType, "d", void.class, int.class).invoke(sequence, 2);
+            MetadataPasteOracle.method(sequenceType, "d", void.class, int.class).invoke(sequence, collection.equals("MaskGroupBasedCorrections") ? 2 : 1);
             ArrayList<Object> frames = new ArrayList<>();
             for (int i = 0; i < test.getValue().length; i++) {
-                String packetText = RegisteredSaveOracle.packet("xmp:Rating=\"4\" lrt:Quality=\"RAW\"", body(property, test.getValue()[i], i));
+                boolean includeRange = targetRangePresent || i != 1;
+                String packetText = RegisteredSaveOracle.packet("xmp:Rating=\"4\" lrt:Quality=\"RAW\"", body(collection, slot, property, test.getValue()[i], i, includeRange));
                 Object packet = RegisteredSaveOracle.parse.invoke(null, packetText);
                 Object frame = RegisteredSaveOracle.frame(packet);
                 ((Object[]) rawField.get(frame))[COLUMN] = test.getValue()[i] == null ? null : Double.valueOf(test.getValue()[i]);
@@ -101,7 +112,9 @@ public final class MissingSelectorRangeOracle {
                 }
             }
             output.append(separator).append("{\"property\":").append(quote(property))
+                .append(",\"collection\":").append(quote(collection)).append(",\"slot\":").append(slot)
                 .append(",\"path\":").append(quote(path)).append(",\"changed\":").append(changed)
+                .append(",\"target_range_present\":").append(targetRangePresent)
                 .append(",\"post_store_error\":").append(storeError.contains("LRTimelapseMain.m()"))
                 .append(",\"input\":[");
             for (int i = 0; i < test.getValue().length; i++) {
@@ -124,7 +137,7 @@ public final class MissingSelectorRangeOracle {
             output.append("],\"point_models\":[");
             for (int i = 0; i < frames.size(); i++) {
                 if (i > 0) output.append(',');
-                String samples = property(frames.get(i), PREFIX + "PointModels");
+                String samples = property(frames.get(i), rangePath(collection, slot, "PointModels"));
                 output.append(samples == null ? "null" : quote(samples));
             }
             output.append("]}");

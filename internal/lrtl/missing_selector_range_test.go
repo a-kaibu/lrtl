@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/beevik/etree"
 )
 
 func selectorRangeFixture(t *testing.T, amount string, ownSamples string) *XMPPacket {
@@ -41,14 +43,7 @@ func selectorRangeFixture(t *testing.T, amount string, ownSamples string) *XMPPa
 }
 
 func selectorRangeValues(t *testing.T, packet *XMPPacket) (string, string, string) {
-	t.Helper()
-	correction := maskGroupCorrectionAt(packet, 1)
-	maskProperty := directCRSProperty(correction, "CorrectionMasks").element
-	masks := rdfArrayItems(maskProperty)
-	if len(masks) != 1 {
-		t.Fatal("expected one selector")
-	}
-	rangeMask := correctionRangeMaskElement(unwrapRDFArrayItem(masks[0]))
+	rangeMask := selectorRangeElementAt(t, packet, "MaskGroupBasedCorrections", 1)
 	if rangeMask == nil {
 		t.Fatal("selector range struct is missing")
 	}
@@ -58,15 +53,34 @@ func selectorRangeValues(t *testing.T, packet *XMPPacket) (string, string, strin
 	return typeValue, amount, samples
 }
 
+func selectorRangeElementAt(t *testing.T, packet *XMPPacket, collection string, slot int) *etree.Element {
+	t.Helper()
+	property := packet.findRootProperty(crsNamespace, collection)
+	roots := rdfArrayItems(property.element)
+	if slot < 1 || slot > len(roots) {
+		t.Fatalf("expected correction slot %d in crs:%s", slot, collection)
+	}
+	correction := unwrapRDFArrayItem(roots[slot-1])
+	maskProperty := directCRSProperty(correction, "CorrectionMasks").element
+	masks := rdfArrayItems(maskProperty)
+	if len(masks) != 1 {
+		t.Fatal("expected one selector")
+	}
+	return correctionRangeMaskElement(unwrapRDFArrayItem(masks[0]))
+}
+
 type selectorRangeObservation struct {
+	Collection     string    `json:"collection"`
+	Slot           int       `json:"slot"`
 	Property       string    `json:"property"`
 	Path           string    `json:"path"`
 	Changed        bool      `json:"changed"`
 	PostStoreError bool      `json:"post_store_error"`
+	TargetPresent  bool      `json:"target_range_present"`
 	Input          []*string `json:"input"`
 	Filled         []string  `json:"filled"`
 	Saved          []string  `json:"saved"`
-	PointModels    []string  `json:"point_models"`
+	PointModels    []*string `json:"point_models"`
 }
 
 func selectorRangeObservations(t *testing.T) []selectorRangeObservation {
@@ -81,21 +95,55 @@ func selectorRangeObservations(t *testing.T) []selectorRangeObservation {
 	if err := json.Unmarshal(data, &observations); err != nil {
 		t.Fatal(err)
 	}
-	if len(observations.Cases) != 5 {
-		t.Fatalf("expected five installed LRT selector range observations, got %d", len(observations.Cases))
+	if len(observations.Cases) != 80 {
+		t.Fatalf("expected eighty installed LRT selector range observations, got %d", len(observations.Cases))
 	}
 	return observations.Cases
 }
 
-func selectorRangeColumnPacket(t *testing.T, property string, value *string, frame int) *XMPPacket {
+func selectorRangeColumnPacket(t *testing.T, observation selectorRangeObservation, value *string, frame int) *XMPPacket {
 	t.Helper()
-	packet := localMissingPacket(t, "MaskGroupBasedCorrections", nil, nil)
-	correction := maskGroupCorrectionAt(packet, 1)
-	mask := unwrapRDFArrayItem(rdfArrayItems(directCRSProperty(correction, "CorrectionMasks").element)[0])
+	packet := EmptyXMPPacket()
+	_, corrections, err := ensurePacketCRSArray(packet, observation.Collection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	correctionItem, err := ensureRDFArrayPosition(corrections, observation.Slot, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	correction := unwrapRDFArrayItem(correctionItem)
+	for name, text := range map[string]string{"What": "Correction", "CorrectionSyncID": fmt.Sprintf("own-correction-%d-%d", observation.Slot, frame), "CorrectionActive": "True", "CorrectionAmount": "1"} {
+		if err := setCRSElementValue(correction, name, text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	maskProperty, err := ensureCRSArrayProperty(correction, "CorrectionMasks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	masks, err := ensureRDFArrayContainer(maskProperty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	maskItem, err := ensureRDFArrayPosition(masks, 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mask := unwrapRDFArrayItem(maskItem)
+	if err := setCRSElementValue(mask, "What", "Mask/Aggregate"); err != nil {
+		t.Fatal(err)
+	}
+	if err := setCRSElementValue(mask, "MaskSyncID", fmt.Sprintf("own-mask-%d", frame)); err != nil {
+		t.Fatal(err)
+	}
+	if !observation.TargetPresent && frame == 1 {
+		return packet
+	}
 	rangeMask := mask.CreateElement("crs:CorrectionRangeMask")
 	rangeMask.CreateAttr("rdf:parseType", "Resource")
 	defaultType := "1"
-	if property == "LumMin" || property == "LumMax" || property == "LumFeather" {
+	if observation.Property == "LumMin" || observation.Property == "LumMax" || observation.Property == "LumFeather" {
 		defaultType = "2"
 	}
 	defaults := map[string]string{
@@ -103,7 +151,7 @@ func selectorRangeColumnPacket(t *testing.T, property string, value *string, fra
 	}
 	for _, name := range []string{"Type", "ColorAmount", "LumMin", "LumMax", "LumFeather"} {
 		fieldValue := defaults[name]
-		if name == property {
+		if name == observation.Property {
 			if value == nil {
 				continue
 			}
@@ -121,11 +169,12 @@ func selectorRangeColumnPacket(t *testing.T, property string, value *string, fra
 
 func TestMissingSelectorRangeFieldsAgainstInstalled755(t *testing.T) {
 	for _, observation := range selectorRangeObservations(t) {
-		t.Run(observation.Property, func(t *testing.T) {
+		name := fmt.Sprintf("%s/%d/%s/range-present-%t", observation.Collection, observation.Slot, observation.Property, observation.TargetPresent)
+		t.Run(name, func(t *testing.T) {
 			packets := make([]*XMPPacket, len(observation.Input))
 			indexes := make([]map[maskTransitionKey]maskTransitionNode, len(packets))
 			for i, input := range observation.Input {
-				packets[i] = selectorRangeColumnPacket(t, observation.Property, input, i)
+				packets[i] = selectorRangeColumnPacket(t, observation, input, i)
 				var err error
 				indexes[i], err = indexMaskTransitionNodes(packets[i])
 				if err != nil {
@@ -133,7 +182,7 @@ func TestMissingSelectorRangeFieldsAgainstInstalled755(t *testing.T) {
 				}
 			}
 			prepared := prepareMaskTransitionInputs(indexes)
-			key := maskTransitionKey{collection: "MaskGroupBasedCorrections", correctionIndex: 1, maskIndex: 1}
+			key := maskTransitionKey{collection: observation.Collection, correctionIndex: observation.Slot, maskIndex: 1}
 			for i, expected := range observation.Filled {
 				value, found := prepared.Indexes[i][key].values["RangeMask"+observation.Property]
 				want, err := strconv.ParseFloat(expected, 64)
@@ -151,7 +200,11 @@ func TestMissingSelectorRangeFieldsAgainstInstalled755(t *testing.T) {
 						t.Fatal(err)
 					}
 				}
-				value, found, err := crsElementValue(correctionRangeMaskElement(unwrapRDFArrayItem(rdfArrayItems(directCRSProperty(maskGroupCorrectionAt(packets[frame], 1), "CorrectionMasks").element)[0])), observation.Property)
+				rangeMask := selectorRangeElementAt(t, packets[frame], observation.Collection, observation.Slot)
+				if rangeMask == nil {
+					t.Fatalf("frame %d selector range struct was not created", frame)
+				}
+				value, found, err := crsElementValue(rangeMask, observation.Property)
 				want, parseErr := strconv.ParseFloat(observation.Saved[frame], 64)
 				if err != nil || parseErr != nil || !found {
 					t.Fatalf("frame %d saved field missing: %v", frame, err)
@@ -160,9 +213,13 @@ func TestMissingSelectorRangeFieldsAgainstInstalled755(t *testing.T) {
 				if parseGotErr != nil || got != want {
 					t.Fatalf("frame %d saved %s = %q, installed LRT expected %s", frame, observation.Property, value, observation.Saved[frame])
 				}
-				samples, found, err := crsElementValue(correctionRangeMaskElement(unwrapRDFArrayItem(rdfArrayItems(directCRSProperty(maskGroupCorrectionAt(packets[frame], 1), "CorrectionMasks").element)[0])), "PointModels")
-				if err != nil || !found || samples != observation.PointModels[frame] {
-					t.Fatalf("frame %d PointModels = %q, want %q", frame, samples, observation.PointModels[frame])
+				samples, found, err := crsElementValue(rangeMask, "PointModels")
+				wantSamples := observation.PointModels[frame]
+				if err != nil || (wantSamples == nil && found) || (wantSamples != nil && (!found || samples != *wantSamples)) {
+					if wantSamples == nil {
+						t.Fatalf("frame %d PointModels = %q, unexpected value", frame, samples)
+					}
+					t.Fatalf("frame %d PointModels = %q, want %q", frame, samples, *wantSamples)
 				}
 			}
 		})
@@ -240,56 +297,71 @@ func TestMissingSelectorRangeFieldsArePrefilledOnExistingResource(t *testing.T) 
 }
 
 func TestMissingSelectorRangeCLIAndRepeat(t *testing.T) {
-	frames := cropFixture(t, 3)
-	packets := []*XMPPacket{
-		selectorRangeFixture(t, ".2", "left samples"),
-		selectorRangeFixture(t, "", "target samples"),
-		selectorRangeFixture(t, ".8", "right samples"),
-	}
-	for i, packet := range packets {
-		if err := packet.SetScalar("xmp:Rating", "4"); err != nil {
-			t.Fatal(err)
+	for _, collection := range []string{"GradientBasedCorrections", "CircularGradientBasedCorrections", "PaintBasedCorrections", "MaskGroupBasedCorrections"} {
+		for _, slot := range []int{1, 2} {
+			t.Run(fmt.Sprintf("%s/%d", collection, slot), func(t *testing.T) {
+				frames := cropFixture(t, 3)
+				left, right := ".2", ".8"
+				observation := selectorRangeObservation{Collection: collection, Slot: slot, Property: "ColorAmount", TargetPresent: false}
+				inputs := []*string{&left, nil, &right}
+				packets := make([]*XMPPacket, len(inputs))
+				for i, input := range inputs {
+					packet := selectorRangeColumnPacket(t, observation, input, i)
+					packets[i] = packet
+					if err := packet.SetScalar("xmp:Rating", "4"); err != nil {
+						t.Fatal(err)
+					}
+					persistExposurePacket(t, frames[i], packet)
+				}
+				root := filepath.Dir(frames[0].Image)
+				sequence, err := DiscoverSequence(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				before := batchFileSnapshot(t, root)
+				var out, stderr bytes.Buffer
+				if Main([]string{"interpolate", root}, &out, &stderr) != 0 {
+					t.Fatal(&stderr)
+				}
+				if !reflect.DeepEqual(before, batchFileSnapshot(t, root)) {
+					t.Fatal("dry run wrote files")
+				}
+				if Main([]string{"interpolate", root, "--write"}, &out, &stderr) != 0 {
+					t.Fatal(&stderr)
+				}
+				actual, err := PacketForFrame(sequence[1])
+				if err != nil {
+					t.Fatal(err)
+				}
+				rangeMask := selectorRangeElementAt(t, actual, collection, slot)
+				if rangeMask == nil {
+					t.Fatal("CLI did not create selector range resource")
+				}
+				typeValue, _, _ := crsElementValue(rangeMask, "Type")
+				amount, _, _ := crsElementValue(rangeMask, "ColorAmount")
+				if typeValue != "1" || amount != "0.2" {
+					t.Fatalf("saved selector range = Type %q, ColorAmount %q", typeValue, amount)
+				}
+				if _, found, _ := crsElementValue(rangeMask, "PointModels"); found {
+					t.Fatal("copied color samples from another frame")
+				}
+				backups, err := filepath.Glob(sequence[1].Sidecar + "*.bak")
+				if err != nil || len(backups) != 1 {
+					t.Fatalf("original backup missing: %v %v", backups, err)
+				}
+				assertPreviewEVFileBytes(t, backups[0], before[sequence[1].Sidecar])
+				for _, frame := range sequence {
+					assertPreviewEVFileBytes(t, frame.Image, before[frame.Image])
+				}
+				after := batchFileSnapshot(t, root)
+				if Main([]string{"interpolate", root, "--write"}, &out, &stderr) != 0 {
+					t.Fatal(&stderr)
+				}
+				if !reflect.DeepEqual(after, batchFileSnapshot(t, root)) {
+					t.Fatal("repeat changed XMP/backups")
+				}
+			})
 		}
-		persistExposurePacket(t, frames[i], packet)
-	}
-	root := filepath.Dir(frames[0].Image)
-	sequence, err := DiscoverSequence(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	before := batchFileSnapshot(t, root)
-	var out, stderr bytes.Buffer
-	if Main([]string{"interpolate", root}, &out, &stderr) != 0 {
-		t.Fatal(&stderr)
-	}
-	if !reflect.DeepEqual(before, batchFileSnapshot(t, root)) {
-		t.Fatal("dry run wrote files")
-	}
-	if Main([]string{"interpolate", root, "--write"}, &out, &stderr) != 0 {
-		t.Fatal(&stderr)
-	}
-	actual, err := PacketForFrame(sequence[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	typeValue, amount, samples := selectorRangeValues(t, actual)
-	if typeValue != "1" || amount != "0.2" || samples != "target samples" {
-		t.Fatalf("saved selector range = (%q, %q, %q)", typeValue, amount, samples)
-	}
-	backups, err := filepath.Glob(sequence[1].Sidecar + "*.bak")
-	if err != nil || len(backups) != 1 {
-		t.Fatalf("original backup missing: %v %v", backups, err)
-	}
-	assertPreviewEVFileBytes(t, backups[0], before[sequence[1].Sidecar])
-	for _, frame := range sequence {
-		assertPreviewEVFileBytes(t, frame.Image, before[frame.Image])
-	}
-	after := batchFileSnapshot(t, root)
-	if Main([]string{"interpolate", root, "--write"}, &out, &stderr) != 0 {
-		t.Fatal(&stderr)
-	}
-	if !reflect.DeepEqual(after, batchFileSnapshot(t, root)) {
-		t.Fatal("repeat changed XMP/backups")
 	}
 }
 

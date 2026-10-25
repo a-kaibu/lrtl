@@ -1024,6 +1024,9 @@ func planMaskTransitionsWithFormat(packets []*XMPPacket, keyframeIndices []int, 
 			}
 			luminanceRange, hasLuminanceRange := luminanceRangeByKey[key], hasLuminanceRangeByKey[key]
 			hasLuminanceRangeChange := hasLuminanceRange && (!currentNode.hasLuminanceRange || currentNode.luminanceRange != luminanceRange)
+			if key.maskIndex > 0 && (currentNode.maskItem == nil || correctionRangeMaskElement(unwrapRDFArrayItem(currentNode.maskItem)) == nil) {
+				hasLuminanceRangeChange = false
+			}
 			if keyframeSet[target] && !registeredRootRangeKey(key) && (!present || !maskTransitionNodeHasTemplate(currentNode, key)) {
 				hasLuminanceRangeChange = false
 			}
@@ -1243,13 +1246,18 @@ func registeredRootRangeKey(key maskTransitionKey) bool {
 	return registered && key.maskIndex == 0 && key.correctionID == ""
 }
 
+func registeredSelectorRangeKey(key maskTransitionKey) bool {
+	_, registered := maskTransitionCorrectionIndexes[key.collection][key.correctionIndex]
+	return registered && key.maskIndex == 1 && key.correctionID == "" && key.maskID == ""
+}
+
 func rangeTransitionElement(target *etree.Element, key maskTransitionKey) (*etree.Element, error) {
 	property := directCRSProperty(target, "CorrectionRangeMask")
 	if property.attribute != nil {
 		return nil, xmpError("crs:CorrectionRangeMask must be a resource, not an attribute")
 	}
 	if property.element == nil {
-		if !registeredRootRangeKey(key) {
+		if !registeredRootRangeKey(key) && !registeredSelectorRangeKey(key) {
 			return nil, xmpError("missing crs:CorrectionRangeMask for transition")
 		}
 		prefix := ensurePrefix(target, "crs", crsNamespace)
