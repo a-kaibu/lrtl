@@ -1,0 +1,4 @@
+[
+  {"file":"native-jpeg-subsampling-422.jpg","decodedFile":"native-jpeg-subsampling-422-lrt-decoded.png","subsampling":"4:2:2","directEV":0.49571749748815770,"staticEV":0.49571749748815770},
+  {"file":"native-jpeg-subsampling-444.jpg","decodedFile":"native-jpeg-subsampling-444-lrt-decoded.png","subsampling":"4:4:4","directEV":0.49321491040127800,"staticEV":0.49321491040127800}
+]

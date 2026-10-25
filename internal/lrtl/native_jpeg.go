@@ -10,12 +10,12 @@ import (
 	"github.com/a-kaibu/lrtl/internal/nativejpeg"
 )
 
-// decodeLRTMeteringImage reproduces the centered 4:2:0 chroma upsampling
-// observed in LRTimelapse's AWT JPEG decoder before native Preview EV
-// metering. Go's JPEG decoder exposes subsampled YCbCr and its At method
-// selects the nearest chroma sample; LRT interpolates between centered
-// chroma samples instead. Other sampling ratios use the same model but need
-// separate native measurements.
+// decodeLRTMeteringImage reproduces the centered 4:2:0 and 4:2:2 chroma
+// upsampling observed in LRTimelapse's AWT JPEG decoder before native Preview
+// EV metering. Go's JPEG decoder exposes subsampled YCbCr and its At method
+// selects the nearest chroma sample; LRT interpolates between centered chroma
+// samples instead. 4:4:4 needs no upsampling. Other sampling ratios use the
+// same model but need separate native measurements.
 func decodeLRTMeteringImage(data []byte) (image.Image, string, error) {
 	img, format, err := image.Decode(bytes.NewReader(data))
 	if err != nil || format != "jpeg" {

@@ -1,8 +1,10 @@
 package lrtl
 
 import (
+	"bytes"
 	"encoding/json"
 	"image"
+	"image/jpeg"
 	"image/png"
 	"math"
 	"os"
@@ -144,4 +146,74 @@ func lrtRGBDifference(a, b image.Image) (mean float64, max uint8) {
 		}
 	}
 	return float64(sum) / float64(count), max
+}
+
+func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
+	data, err := os.ReadFile("testdata/lrt-native-jpeg-subsampling-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		File, DecodedFile  string
+		Subsampling        string
+		DirectEV, StaticEV float64
+	}
+	if err := json.Unmarshal(data, &cases); err != nil || len(cases) != 2 {
+		t.Fatalf("invalid native JPEG subsampling oracle: cases=%d err=%v", len(cases), err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.File, func(t *testing.T) {
+			data, err := os.ReadFile("testdata/" + tc.File)
+			if err != nil {
+				t.Fatal(err)
+			}
+			standard, err := jpeg.Decode(bytes.NewReader(data))
+			if err != nil {
+				t.Fatal(err)
+			}
+			decodedYCbCr, ok := standard.(*image.YCbCr)
+			ratio := image.YCbCrSubsampleRatio(-1)
+			switch tc.Subsampling {
+			case "4:2:2":
+				ratio = image.YCbCrSubsampleRatio422
+			case "4:4:4":
+				ratio = image.YCbCrSubsampleRatio444
+			default:
+				t.Fatalf("unexpected native subsampling %q", tc.Subsampling)
+			}
+			if !ok {
+				t.Fatalf("JPEG decoder returned %T, want *image.YCbCr with subsampling=%v", standard, ratio)
+			}
+			if decodedYCbCr.SubsampleRatio != ratio {
+				t.Fatalf("JPEG subsampling=%v, want %v", decodedYCbCr.SubsampleRatio, ratio)
+			}
+			got, format, err := decodeLRTMeteringImage(data)
+			if err != nil || format != "jpeg" {
+				t.Fatalf("decode LRT metering JPEG: format=%q err=%v", format, err)
+			}
+			file, err := os.Open("testdata/" + tc.DecodedFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want, err := png.Decode(file)
+			file.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			meanDelta, maxDelta := lrtRGBDifference(got, want)
+			gotEV, err := framePreviewEVArea(got, got.Bounds())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if math.Abs(tc.DirectEV-tc.StaticEV) > 1e-12 {
+				t.Fatalf("LRT measurement paths disagree: cached %.17g, static %.17g", tc.DirectEV, tc.StaticEV)
+			}
+			if meanDelta > 0.35 || maxDelta > 3 {
+				t.Fatalf("decoded JPEG RGB delta: mean %.3f, max %d; want mean <= 0.35 and max <= 3", meanDelta, maxDelta)
+			}
+			if delta := math.Abs(gotEV - tc.DirectEV); delta > 1e-4 {
+				t.Fatalf("Preview EV %.17g differs from LRT 7.5.5 %.17g (delta %.3g)", gotEV, tc.DirectEV, delta)
+			}
+		})
+	}
 }
