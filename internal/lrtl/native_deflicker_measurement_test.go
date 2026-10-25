@@ -155,14 +155,24 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 	}
 	var cases []struct {
 		File, DecodedFile  string
+		Encoder            string
 		Subsampling        string
 		DirectEV, StaticEV float64
+		MaxRGBMeanDelta    float64
+		MaxRGBChannelDelta uint8
+		MaxEVDelta         float64
 	}
-	if err := json.Unmarshal(data, &cases); err != nil || len(cases) != 5 {
+	if err := json.Unmarshal(data, &cases); err != nil || len(cases) != 8 {
 		t.Fatalf("invalid native JPEG subsampling oracle: cases=%d err=%v", len(cases), err)
 	}
 	for _, tc := range cases {
-		t.Run(tc.File, func(t *testing.T) {
+		t.Run(tc.Encoder+"/"+tc.File, func(t *testing.T) {
+			// Keep fixture-specific oracle bounds explicit and capped. The
+			// ImageMagick samples expose small but real decoder differences that
+			// do not appear in the FFmpeg samples, especially in Preview EV.
+			if tc.Encoder == "" || tc.MaxRGBMeanDelta <= 0 || tc.MaxRGBMeanDelta > 0.5 || tc.MaxRGBChannelDelta == 0 || tc.MaxRGBChannelDelta > 4 || tc.MaxEVDelta <= 0 || tc.MaxEVDelta > 0.002 {
+				t.Fatalf("invalid JPEG oracle bounds: encoder=%q mean=%g channel=%d EV=%g", tc.Encoder, tc.MaxRGBMeanDelta, tc.MaxRGBChannelDelta, tc.MaxEVDelta)
+			}
 			data, err := os.ReadFile("testdata/" + tc.File)
 			if err != nil {
 				t.Fatal(err)
@@ -174,6 +184,8 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 			decodedYCbCr, ok := standard.(*image.YCbCr)
 			ratio := image.YCbCrSubsampleRatio(-1)
 			switch tc.Subsampling {
+			case "4:2:0":
+				ratio = image.YCbCrSubsampleRatio420
 			case "4:2:2":
 				ratio = image.YCbCrSubsampleRatio422
 			case "4:4:4":
@@ -206,6 +218,9 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if got.Bounds().Size() != want.Bounds().Size() {
+				t.Fatalf("decoded JPEG size=%v, LRT raster size=%v", got.Bounds().Size(), want.Bounds().Size())
+			}
 			meanDelta, maxDelta := lrtRGBDifference(got, want)
 			gotEV, err := framePreviewEVArea(got, got.Bounds())
 			if err != nil {
@@ -214,21 +229,24 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 			if math.Abs(tc.DirectEV-tc.StaticEV) > 1e-12 {
 				t.Fatalf("LRT measurement paths disagree: cached %.17g, static %.17g", tc.DirectEV, tc.StaticEV)
 			}
-			if meanDelta > 0.35 || maxDelta > 3 {
-				t.Fatalf("decoded JPEG RGB delta: mean %.3f, max %d; want mean <= 0.35 and max <= 3", meanDelta, maxDelta)
+			lrtRasterEV, err := framePreviewEVArea(want, want.Bounds())
+			if err != nil {
+				t.Fatal(err)
 			}
-			maxEVDelta := 1e-4
-			if tc.Subsampling == "4:4:0" || tc.Subsampling == "4:1:1" || tc.Subsampling == "4:1:0" {
-				maxEVDelta = 1e-3
+			if delta := math.Abs(lrtRasterEV - tc.DirectEV); delta > 1e-10 {
+				t.Fatalf("LRT decoded raster Preview EV=%.17g, LRT cached Preview EV=%.17g (delta %.3g)", lrtRasterEV, tc.DirectEV, delta)
 			}
-			if delta := math.Abs(gotEV - tc.DirectEV); delta > maxEVDelta {
-				t.Fatalf("Preview EV %.17g differs from LRT 7.5.5 %.17g (delta %.3g, limit %.3g)", gotEV, tc.DirectEV, delta, maxEVDelta)
+			if meanDelta > tc.MaxRGBMeanDelta || maxDelta > tc.MaxRGBChannelDelta {
+				t.Fatalf("decoded JPEG RGB delta: mean %.3f, max %d; want mean <= %.3f and max <= %d", meanDelta, maxDelta, tc.MaxRGBMeanDelta, tc.MaxRGBChannelDelta)
+			}
+			if delta := math.Abs(gotEV - tc.DirectEV); delta > tc.MaxEVDelta {
+				t.Fatalf("Preview EV %.17g differs from LRT 7.5.5 %.17g (delta %.3g, limit %.3g)", gotEV, tc.DirectEV, delta, tc.MaxEVDelta)
 			}
 
 			frame := Frame{Image: filepath.Join("testdata", tc.File)}
 			preview, err := analyzePreviewEVSequence([]Frame{frame}, imageInputOptions{})
-			if err != nil || len(preview) != 1 || math.Abs(preview[0]-tc.DirectEV) > maxEVDelta {
-				t.Fatalf("Preview EV pipeline=%v, LRT 7.5.5=%.17g, limit=%.3g, err=%v", preview, tc.DirectEV, maxEVDelta, err)
+			if err != nil || len(preview) != 1 || math.Abs(preview[0]-tc.DirectEV) > tc.MaxEVDelta {
+				t.Fatalf("Preview EV pipeline=%v, LRT 7.5.5=%.17g, limit=%.3g, err=%v", preview, tc.DirectEV, tc.MaxEVDelta, err)
 			}
 			packet, err := PacketForFrame(frame)
 			if err != nil {
@@ -238,8 +256,8 @@ func TestLRTJPEGChromaSubsamplingMatchesNativeRaster(t *testing.T) {
 			source := newFrameInputCache(options, false)
 			defer source.close()
 			measurements, err := measureDeflickerPackets([]Frame{frame}, image.Rectangle{}, options, []*XMPPacket{packet}, source, nil)
-			if err != nil || len(measurements) != 1 || math.Abs(measurements[0]-tc.DirectEV) > maxEVDelta {
-				t.Fatalf("Deflicker measurement pipeline=%v, LRT 7.5.5=%.17g, limit=%.3g, err=%v", measurements, tc.DirectEV, maxEVDelta, err)
+			if err != nil || len(measurements) != 1 || math.Abs(measurements[0]-tc.DirectEV) > tc.MaxEVDelta {
+				t.Fatalf("Deflicker measurement pipeline=%v, LRT 7.5.5=%.17g, limit=%.3g, err=%v", measurements, tc.DirectEV, tc.MaxEVDelta, err)
 			}
 		})
 	}
