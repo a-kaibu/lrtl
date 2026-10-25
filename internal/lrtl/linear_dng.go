@@ -15,9 +15,10 @@ import (
 )
 
 type dngFields struct {
-	scanner *tiffPreviewScanner
-	entries map[uint16]tiffPreviewEntry
-	err     error
+	scanner      *tiffPreviewScanner
+	entries      map[uint16]tiffPreviewEntry
+	semanticIFDs []map[uint16]tiffPreviewEntry
+	err          error
 }
 
 func (fields *dngFields) values(tag uint16) []float64 {
@@ -148,6 +149,7 @@ func findLinearDNGWithProfile(data []byte, cameraProfile string) (*dngFields, er
 	queue := []uint32{order.Uint32(data[4:8])}
 	visited := make(map[uint32]bool)
 	var root, selected map[uint16]tiffPreviewEntry
+	var semanticIFDs []map[uint16]tiffPreviewEntry
 	for len(queue) > 0 {
 		offset := queue[0]
 		queue = queue[1:]
@@ -185,14 +187,21 @@ func findLinearDNGWithProfile(data []byte, cameraProfile string) (*dngFields, er
 			root = mapping
 		}
 		fields := &dngFields{scanner: scanner, entries: mapping}
-		if fields.integer(262, 0) == 34892 && fields.integer(254, 0) == 0 {
+		isPrimaryLinear := fields.integer(262, 0) == 34892 && fields.integer(254, 0) == 0
+		if fields.err != nil {
+			return nil, fields.err
+		}
+		if fields.integer(254, 0) == 65540 {
+			semanticIFDs = append(semanticIFDs, mapping)
+		}
+		if fields.err != nil {
+			return nil, fields.err
+		}
+		if isPrimaryLinear {
 			if selected != nil {
 				return nil, fmt.Errorf("multiple primary Linear DNG images are unsupported")
 			}
 			selected = mapping
-		}
-		if fields.err != nil {
-			return nil, fields.err
 		}
 		queue = append(queue, next)
 	}
@@ -215,7 +224,7 @@ func findLinearDNGWithProfile(data []byte, cameraProfile string) (*dngFields, er
 			delete(merged, tag)
 		}
 	}
-	fields := &dngFields{scanner: scanner, entries: merged}
+	fields := &dngFields{scanner: scanner, entries: merged, semanticIFDs: semanticIFDs}
 	if err := selectDNGCameraProfile(fields, root, cameraProfile); err != nil {
 		return nil, err
 	}
@@ -334,7 +343,22 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 	if err != nil {
 		return nil, err
 	}
-	hasProfile := profileTone != nil || profileMaps.first != nil || profileMaps.look != nil || profileMaps.gainTable != nil
+	mainOrientation := fields.integer(274, 1)
+	if fields.err != nil {
+		return nil, fields.err
+	}
+	rgbTables, err := readDNGRGBTables(fields, activeArea.Dx(), activeArea.Dy(), mainOrientation)
+	if err != nil {
+		return nil, err
+	}
+	if rgbTables.hasSemanticMasks() {
+		for _, opcode := range imageOpcodes {
+			if opcode.warp != nil && !opcode.warp.identity() {
+				return nil, fmt.Errorf("DNG RGBTables semantic masks cannot yet be combined with geometric warp opcodes")
+			}
+		}
+	}
+	hasProfile := profileTone != nil || profileMaps.first != nil || profileMaps.look != nil || profileMaps.gainTable != nil || rgbTables != nil
 	profileWeights := [3]float64{1, 0, 0}
 	transform := dngIdentityMatrix
 	finalTransform := dngIdentityMatrix
@@ -353,6 +377,9 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 		}
 	} else if dngTripleProfilePresent(fields) {
 		return nil, fmt.Errorf("triple-illuminant DNG profiles require three color channels")
+	}
+	if rgbTables != nil && channels != 3 {
+		return nil, fmt.Errorf("DNG RGBTables require three color channels")
 	}
 	for _, row := range transform {
 		for _, coefficient := range row {
@@ -490,6 +517,15 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 				}
 				if profileTone != nil {
 					rgb = profileTone.apply(rgb)
+				}
+				if rgbTables != nil {
+					imageX := outputCrop.Min.X + outputX
+					imageY := outputCrop.Min.Y + outputY
+					if !needsOpcodeBuffer {
+						imageX -= activeArea.Min.X
+						imageY -= activeArea.Min.Y
+					}
+					rgb = rgbTables.apply(rgb, imageX, imageY, activeArea.Dx(), activeArea.Dy())
 				}
 				rgb = finalTransform.vector(rgb)
 			} else {

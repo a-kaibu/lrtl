@@ -36,6 +36,7 @@ var dngCameraProfileTags = map[uint16]struct{}{
 	52535: {}, // IlluminantData3
 	52537: {}, // ProfileHueSatMapData3
 	52538: {}, // ReductionMatrix3
+	52543: {}, // RGBTables
 	52544: {}, // ProfileGainTableMap2
 }
 

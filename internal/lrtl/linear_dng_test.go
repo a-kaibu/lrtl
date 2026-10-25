@@ -241,6 +241,13 @@ func FuzzLinearDNG(f *testing.F) {
 	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
 		f.Add(linearDNGFixture(order, 1, 1, 3, []uint16{16384, 0, 0}, tripleIlluminantDNGMetadata(order)))
 	}
+	maskOrder := binary.LittleEndian
+	maskRed := dngTestRGBTableData(maskOrder, 0, "subject", 2, 2, 0, 4, 0, func(_, _, _ int) [3]float64 { return [3]float64{1, 0, 0} })
+	maskBackground := dngTestRGBTableData(maskOrder, 0, "", 2, 2, 0, 4, 0, func(_, _, _ int) [3]float64 { return [3]float64{0, 0, 1} })
+	maskMetadata := dngRGBIdentityCameraMetadata(maskOrder, dngTestRGBTablesData(maskOrder, 0, maskRed, maskBackground))
+	maskFixture := linearDNGFixture(maskOrder, 2, 1, 3, []uint16{8192, 16384, 24576, 24576, 32768, 40960}, maskMetadata)
+	maskFixture = appendDNGSemanticMaskIFD(f, maskFixture, maskOrder, "subject", 2, 1, 8, 1, 1, 1, 0, 0, []byte{255, 0}, nil)
+	f.Add(maskFixture)
 	f.Add(profileToneDNGFixture(binary.LittleEndian, 0))
 	f.Add(profileToneDNGFixture(binary.BigEndian, 1))
 	profileIFD := linearDNGFixture(binary.LittleEndian, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
