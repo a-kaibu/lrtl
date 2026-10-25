@@ -32,6 +32,7 @@ type dngImageOpcode struct {
 	vignette         *dngVignetteRadial
 	trim             *image.Rectangle
 	badPixelConstant *dngBadPixelConstant
+	badPixelList     *dngBadPixelList
 }
 
 func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarp, error) {
@@ -310,6 +311,20 @@ func applyDNGImageOpcodesWithBounds(opcodes []dngImageOpcode, data []float32, wi
 			}
 			copy(scratch, data)
 			if err := applyDNGBadPixelConstant(scratch, data, width, height, bounds.Min.X, bounds.Min.Y, *badPixel); err != nil {
+				return nil, image.Rectangle{}, err
+			}
+			i++
+			continue
+		}
+		if badPixelList := opcodes[i].badPixelList; badPixelList != nil {
+			if channels != 1 {
+				return nil, image.Rectangle{}, fmt.Errorf("DNG FixBadPixelsList requires one image channel")
+			}
+			if scratch == nil || len(scratch) != len(data) {
+				scratch = make([]float32, len(data))
+			}
+			copy(scratch, data)
+			if err := applyDNGBadPixelList(scratch, data, width, height, bounds, *badPixelList); err != nil {
 				return nil, image.Rectangle{}, err
 			}
 			i++

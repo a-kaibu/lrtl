@@ -169,26 +169,43 @@ func TestLinearDNGFixBadPixelsConstantAcrossByteOrdersAndLists(t *testing.T) {
 		make([]uint16, 9*9*3), map[uint16]dngTestField{51009: testDNGOpcodeList(testDNGBadPixelConstant(0, 0))})); err == nil {
 		t.Fatal("multi-channel FixBadPixelsConstant accepted")
 	}
-	plain := linearDNGFixture(binary.LittleEndian, 1, 1, 1, []uint16{16384}, nil)
-	required := linearDNGFixture(binary.LittleEndian, 1, 1, 1, []uint16{16384}, map[uint16]dngTestField{
-		51009: testDNGOpcodeList(testDNGOpcode{5, 0x01030000, 0, nil}),
+	listPixels := make([]uint16, 5*5)
+	for i := range listPixels {
+		listPixels[i] = 10000
+	}
+	listPixels[2*5+2] = 65535
+	for _, flags := range []uint32{0, 1} {
+		opcode := testDNGBadPixelList(0, [][2]int32{{2, 2}}, nil)
+		opcode.flags = flags
+		fixture := linearDNGFixture(binary.LittleEndian, 5, 5, 1, listPixels, map[uint16]dngTestField{
+			50717: dngTestLong(binary.LittleEndian, 65535),
+			51009: testDNGOpcodeList(opcode),
+		})
+		got, err := decodeLinearDNG(fixture)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := testDNGLinearToSRGB16(10000)
+		if pixel := got.NRGBA64At(2, 2); pixel.R != want || pixel.G != want || pixel.B != want {
+			t.Fatalf("required/optional FixBadPixelsList flags=%d produced %v, want gray %d", flags, pixel, want)
+		}
+	}
+	oldVersion := testDNGBadPixelList(0, [][2]int32{{2, 2}}, nil)
+	oldVersion.version = 0x01020000
+	oldVersionFixture := linearDNGFixture(binary.LittleEndian, 5, 5, 1, listPixels, map[uint16]dngTestField{
+		50717: dngTestLong(binary.LittleEndian, 65535),
+		51009: testDNGOpcodeList(oldVersion),
 	})
-	if _, err := decodeLinearDNG(required); err == nil {
-		t.Fatal("required FixBadPixelsList accepted before implementation")
+	if _, err := decodeLinearDNG(oldVersionFixture); err == nil {
+		t.Fatal("required FixBadPixelsList with an unsupported version accepted")
 	}
-	optional := linearDNGFixture(binary.LittleEndian, 1, 1, 1, []uint16{16384}, map[uint16]dngTestField{
-		51009: testDNGOpcodeList(testDNGOpcode{5, 0x01030000, 1, nil}),
+	oldVersion.flags = 1
+	oldVersionFixture = linearDNGFixture(binary.LittleEndian, 5, 5, 1, listPixels, map[uint16]dngTestField{
+		50717: dngTestLong(binary.LittleEndian, 65535),
+		51009: testDNGOpcodeList(oldVersion),
 	})
-	got, err := decodeLinearDNG(optional)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want, err := decodeLinearDNG(plain)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.NRGBA64At(0, 0) != want.NRGBA64At(0, 0) {
-		t.Fatal("optional FixBadPixelsList changed the image")
+	if _, err := decodeLinearDNG(oldVersionFixture); err != nil {
+		t.Fatalf("optional FixBadPixelsList with an unsupported version was not skipped: %v", err)
 	}
 }
 

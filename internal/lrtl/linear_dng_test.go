@@ -271,6 +271,15 @@ func FuzzLinearDNG(f *testing.F) {
 			10000, 3000, 10000, 4000, 10000,
 			10000, 10000, 10000, 10000, 10000,
 		}, map[uint16]dngTestField{50717: dngTestLong(order, 65535), 51009: testDNGOpcodeList(testDNGBadPixelConstant(65535, 0))}))
+		listPixels := make([]uint16, 7*7)
+		for i := range listPixels {
+			listPixels[i] = 10000
+		}
+		listPixels[2*7+2], listPixels[3*7+2], listPixels[3*7+3] = 65535, 65535, 65535
+		f.Add(linearDNGFixture(order, 7, 7, 1, listPixels, map[uint16]dngTestField{
+			50717: dngTestLong(order, 65535),
+			51022: testDNGOpcodeList(testDNGBadPixelList(0, [][2]int32{{2, 2}}, [][4]int32{{3, 2, 4, 4}})),
+		}))
 	}
 	f.Add(blackPatternDNGFixture(f, binary.LittleEndian))
 	f.Add(blackPatternDNGFixture(f, binary.BigEndian))

@@ -100,7 +100,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 			}
 			// Stage 1 uses a different raw-value domain. Only normalized
 			// post-linearization and post-demosaic operations are supported.
-			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 6 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 {
+			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 14)) || tag == 51008 || version > 0x01070100 || id == 5 && version < 0x01030000 {
 				if flags&1 != 0 {
 					continue
 				}
@@ -115,6 +115,17 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height int) ([]dngI
 					return nil, fmt.Errorf("Linear DNG FixBadPixelsConstant in tag %d: %w", tag, err)
 				}
 				opcodes = append(opcodes, dngImageOpcode{badPixelConstant: &badPixel})
+				continue
+			}
+			if id == 5 {
+				if channels != 1 {
+					return nil, fmt.Errorf("Linear DNG FixBadPixelsList requires a single-channel Bayer image")
+				}
+				badPixels, err := parseDNGBadPixelList(payload)
+				if err != nil {
+					return nil, fmt.Errorf("Linear DNG FixBadPixelsList in tag %d: %w", tag, err)
+				}
+				opcodes = append(opcodes, dngImageOpcode{badPixelList: &badPixels})
 				continue
 			}
 			if id == 1 || id == 2 || id == 14 {
