@@ -130,6 +130,10 @@ func findLinearDNG(data []byte) (*dngFields, error) {
 }
 
 func findLinearDNGWithProfile(data []byte, cameraProfile string) (*dngFields, error) {
+	return findLinearDNGWithProfileAndDirs(data, cameraProfile, nil)
+}
+
+func findLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, externalProfileDirs []string) (*dngFields, error) {
 	if len(data) < 8 || len(data) > maxDevelopedRAWBytes {
 		return nil, fmt.Errorf("invalid Linear DNG file size")
 	}
@@ -225,7 +229,7 @@ func findLinearDNGWithProfile(data []byte, cameraProfile string) (*dngFields, er
 		}
 	}
 	fields := &dngFields{scanner: scanner, entries: merged, semanticIFDs: semanticIFDs}
-	if err := selectDNGCameraProfile(fields, root, cameraProfile); err != nil {
+	if err := selectDNGCameraProfileWithExternalDirs(fields, root, cameraProfile, externalProfileDirs); err != nil {
 		return nil, err
 	}
 	return fields, nil
@@ -239,7 +243,11 @@ func decodeLinearDNG(data []byte) (*image.NRGBA64, error) {
 }
 
 func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA64, error) {
-	fields, err := findLinearDNGWithProfile(data, cameraProfile)
+	return decodeLinearDNGWithProfileAndDirs(data, cameraProfile, nil)
+}
+
+func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, externalProfileDirs []string) (*image.NRGBA64, error) {
+	fields, err := findLinearDNGWithProfileAndDirs(data, cameraProfile, externalProfileDirs)
 	if err != nil {
 		return nil, err
 	}

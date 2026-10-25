@@ -3,11 +3,13 @@ package lrtl
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"image"
 	"math"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -176,6 +178,11 @@ func assertDNGCameraProfilePixel(t *testing.T, data []byte, gain float64, profil
 	if err != nil {
 		t.Fatal(err)
 	}
+	assertDNGCameraProfileImagePixel(t, img, gain)
+}
+
+func assertDNGCameraProfileImagePixel(t *testing.T, img *image.NRGBA64, gain float64) {
+	t.Helper()
 	linear := gain * 8192.0 / 65535
 	encoded := 12.92 * linear
 	if linear > .0031308 {
@@ -187,6 +194,183 @@ func assertDNGCameraProfilePixel(t *testing.T, data []byte, gain float64, profil
 		if math.Abs(float64(channel)-want) > 2 {
 			t.Fatalf("camera profile pixel=%v want neutral %g", pixel, want)
 		}
+	}
+}
+
+func TestLinearDNGLoadsMatchingExternalCameraProfile(t *testing.T) {
+	mainOrder := binary.LittleEndian
+	profileOrder := binary.BigEndian
+	model := "Fixture Camera"
+	profileFields := map[uint16]dngTestField{
+		50708: dngTestASCII(model),
+		52544: testProfileGainMap2(profileOrder, 2),
+	}
+	profileBytes := standaloneExternalDNGProfileFixture(t, mainOrder, profileOrder, "Night", profileFields)
+	directory := t.TempDir()
+	profilePath := filepath.Join(directory, "Camera Profiles", "Fixture Camera Night.dcp")
+	if err := os.MkdirAll(filepath.Dir(profilePath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(profilePath, profileBytes, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	input := linearDNGFixture(mainOrder, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
+		50708: dngTestASCII(model),
+		50936: dngTestASCII("Embedded"), 52544: testProfileGainMap2(mainOrder, 1),
+	})
+	img, err := decodeLinearDNGWithProfileAndDirs(input, "Night", []string{directory})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDNGCameraProfileImagePixel(t, img, 2)
+
+	asShotInput := linearDNGFixture(mainOrder, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
+		50708: dngTestASCII(model), 50934: dngTestASCII("Night"),
+		50936: dngTestASCII("Embedded"), 52544: testProfileGainMap2(mainOrder, 1),
+	})
+	asShot, err := decodeLinearDNGWithProfileAndDirs(asShotInput, "", []string{directory})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDNGCameraProfileImagePixel(t, asShot, 2)
+}
+
+func TestEmbeddedDNGCameraProfilePrecedesExternalMatch(t *testing.T) {
+	order := binary.LittleEndian
+	model := "Fixture Camera"
+	input := linearDNGFixture(order, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
+		50708: dngTestASCII(model), 50933: dngTestLong(order, 0),
+		50936: dngTestASCII("Embedded"), 52544: testProfileGainMap2(order, 1),
+	})
+	input = appendDNGCameraProfile(t, input, order, order, "Night", map[uint16]dngTestField{
+		52544: testProfileGainMap2(order, 3),
+	})
+	directory := t.TempDir()
+	profile := standaloneExternalDNGProfileFixture(t, order, order, "Night", map[uint16]dngTestField{
+		50708: dngTestASCII(model), 52544: testProfileGainMap2(order, 5),
+	})
+	if err := os.WriteFile(filepath.Join(directory, "Night.dcp"), profile, 0600); err != nil {
+		t.Fatal(err)
+	}
+	img, err := decodeLinearDNGWithProfileAndDirs(input, "Night", []string{directory})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDNGCameraProfileImagePixel(t, img, 3)
+}
+
+func TestLinearDNGExternalCameraProfileRequiresExactProfileAndMatchingCamera(t *testing.T) {
+	order := binary.LittleEndian
+	model := "Fixture Camera"
+	input := linearDNGFixture(order, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
+		50708: dngTestASCII(model),
+		50936: dngTestASCII("Embedded"), 52544: testProfileGainMap2(order, 1),
+	})
+	for _, test := range []struct {
+		name          string
+		requestedName string
+		profileName   string
+		profileModel  string
+	}{
+		{name: "different camera", requestedName: "Night", profileName: "Night", profileModel: "Other Camera"},
+		{name: "different profile", requestedName: "Night", profileName: "Day", profileModel: model},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			profileBytes := standaloneExternalDNGProfileFixture(t, order, order, test.profileName, map[uint16]dngTestField{
+				50708: dngTestASCII(test.profileModel),
+				52544: testProfileGainMap2(order, 3),
+			})
+			if err := os.WriteFile(filepath.Join(directory, "custom.dcp"), profileBytes, 0600); err != nil {
+				t.Fatal(err)
+			}
+			img, err := decodeLinearDNGWithProfileAndDirs(input, test.requestedName, []string{directory})
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertDNGCameraProfileImagePixel(t, img, 1)
+		})
+	}
+}
+
+func TestLinearDNGRejectsMalformedMatchingExternalCameraProfile(t *testing.T) {
+	order := binary.LittleEndian
+	model, name := "Fixture Camera", "Night"
+	profileBytes := standaloneExternalDNGProfileFixture(t, order, order, name, map[uint16]dngTestField{
+		50708: dngTestASCII(model), 52544: testProfileGainMap2(order, 2),
+	})
+	profileBytes[2] = 0 // Corrupt the CR magic.
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "Fixture Camera Night.dcp"), profileBytes, 0600); err != nil {
+		t.Fatal(err)
+	}
+	input := linearDNGFixture(order, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
+		50708: dngTestASCII(model),
+		50936: dngTestASCII("Embedded"), 52544: testProfileGainMap2(order, 1),
+	})
+	if _, err := decodeLinearDNGWithProfileAndDirs(input, name, []string{directory}); err == nil {
+		t.Fatal("malformed matching external DCP profile was silently ignored")
+	}
+}
+
+func TestExternalDNGCameraProfileRejectsAmbiguousMatches(t *testing.T) {
+	order := binary.LittleEndian
+	directory := t.TempDir()
+	for index := 0; index < 2; index++ {
+		data := standaloneExternalDNGProfileFixture(t, order, order, "Night", map[uint16]dngTestField{
+			50708: dngTestASCII("Fixture Camera"), 52544: testProfileGainMap2(order, float32(index+2)),
+		})
+		path := filepath.Join(directory, fmt.Sprintf("profile-%d.dcp", index))
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := findExternalDNGCameraProfile("Night", "Fixture Camera", []string{directory}); err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("ambiguous profile lookup error=%v", err)
+	}
+}
+
+func standaloneExternalDNGProfileFixture(t testing.TB, mainOrder, profileOrder binary.ByteOrder, name string, fields map[uint16]dngTestField) []byte {
+	t.Helper()
+	base := linearDNGFixture(mainOrder, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{
+		50933: dngTestLong(mainOrder, 0),
+	})
+	combined := appendDNGCameraProfile(t, base, mainOrder, profileOrder, name, fields)
+	return append([]byte(nil), combined[len(base):]...)
+}
+
+func FuzzReadDNGCameraProfile(f *testing.F) {
+	order := binary.LittleEndian
+	fixture := standaloneExternalDNGProfileFixture(f, order, order, "Fuzz Profile", map[uint16]dngTestField{
+		50708: dngTestASCII("Fuzz Camera"), 52544: testProfileGainMap2(order, 2),
+	})
+	f.Add(fixture)
+	f.Add([]byte("II CR"))
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > maxExternalDNGProfileBytes {
+			return
+		}
+		_, _, _, _ = readDNGCameraProfile(&tiffPreviewScanner{data: data}, 0)
+	})
+}
+
+func TestInstalledExternalDNGCameraProfile(t *testing.T) {
+	path := os.Getenv("LRTL_DCP_SAMPLE")
+	if path == "" {
+		t.Skip("set LRTL_DCP_SAMPLE to an installed Adobe DCP file to run this integration check")
+	}
+	data, err := readExternalDNGCameraProfileFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, model, _, err := readDNGCameraProfile(&tiffPreviewScanner{data: data}, 0)
+	if err != nil || name == "" || model == "" {
+		t.Fatalf("installed profile name=%q model=%q err=%v", name, model, err)
+	}
+	profile, err := findExternalDNGCameraProfileCached(name, model, []string{filepath.Dir(path)})
+	if err != nil || profile == nil {
+		t.Fatalf("installed profile %q for %q was not found: %v", name, model, err)
 	}
 }
 
@@ -235,6 +419,16 @@ func TestReadFrameCameraProfileSelection(t *testing.T) {
 	profile, err := readFrameCameraProfile(Frame{Image: imagePath, Sidecar: sidecar})
 	if err != nil || profile != "Camera Landscape" {
 		t.Fatalf("camera profile=%q err=%v", profile, err)
+	}
+}
+
+func TestCameraProfileDirectoriesHonorsOverrideAndDeduplicates(t *testing.T) {
+	first := t.TempDir()
+	second := t.TempDir()
+	t.Setenv("LRTL_CAMERA_PROFILE_DIR", strings.Join([]string{first, second, first}, string(filepath.ListSeparator)))
+	got := cameraProfileDirectories()
+	if len(got) != 2 || got[0] != filepath.Clean(first) || got[1] != filepath.Clean(second) {
+		t.Fatalf("profile directories=%q, want ordered unique paths [%q %q]", got, filepath.Clean(first), filepath.Clean(second))
 	}
 }
 
@@ -310,8 +504,9 @@ func dngTestSRationalMatrix(order binary.ByteOrder, values [9]int32) dngTestFiel
 func TestRawDevelopUsesSidecarCameraProfile(t *testing.T) {
 	converter, dir, _ := fakeDNGConverter(t)
 	order := binary.LittleEndian
+	model := "Fixture Camera"
 	metadata := map[uint16]dngTestField{
-		50933: dngTestLong(order, 0), 50936: dngTestASCII("Default"),
+		50708: dngTestASCII(model), 50936: dngTestASCII("Default"),
 		52544: testProfileGainMap2(order, 1),
 	}
 	pixels := make([]uint16, 16*16)
@@ -319,9 +514,17 @@ func TestRawDevelopUsesSidecarCameraProfile(t *testing.T) {
 		pixels[index] = 8192
 	}
 	fixture := linearDNGFixture(order, 16, 16, 1, pixels, metadata)
-	fixture = appendDNGCameraProfile(t, fixture, order, binary.BigEndian, "Camera Landscape", map[uint16]dngTestField{
-		52544: testProfileGainMap2(binary.BigEndian, 2),
+	profileDir := filepath.Join(dir, "camera-profiles")
+	if err := os.Mkdir(profileDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	profile := standaloneExternalDNGProfileFixture(t, order, binary.BigEndian, "Camera Landscape", map[uint16]dngTestField{
+		50708: dngTestASCII(model), 52544: testProfileGainMap2(binary.BigEndian, 2),
 	})
+	if err := os.WriteFile(filepath.Join(profileDir, "fixture.dcp"), profile, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("LRTL_CAMERA_PROFILE_DIR", profileDir)
 	fixturePath := filepath.Join(dir, "linear.dng")
 	if err := os.WriteFile(fixturePath, fixture, 0600); err != nil {
 		t.Fatal(err)

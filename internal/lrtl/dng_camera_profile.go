@@ -40,9 +40,9 @@ var dngCameraProfileTags = map[uint16]struct{}{
 	52544: {}, // ProfileGainTableMap2
 }
 
-func readDNGCameraProfile(scanner *tiffPreviewScanner, offset uint64) (string, map[uint16]tiffPreviewEntry, error) {
+func readDNGCameraProfile(scanner *tiffPreviewScanner, offset uint64) (string, string, map[uint16]tiffPreviewEntry, error) {
 	if !tiffRange(offset, 8, uint64(len(scanner.data))) {
-		return "", nil, fmt.Errorf("DNG camera profile header is outside the file")
+		return "", "", nil, fmt.Errorf("DNG camera profile header is outside the file")
 	}
 	profile := scanner.data[offset:]
 	var order binary.ByteOrder = scanner.order
@@ -52,31 +52,32 @@ func readDNGCameraProfile(scanner *tiffPreviewScanner, offset uint64) (string, m
 	case "MM":
 		order = binary.BigEndian
 	default:
-		return "", nil, fmt.Errorf("invalid DNG camera profile byte-order mark")
+		return "", "", nil, fmt.Errorf("invalid DNG camera profile byte-order mark")
 	}
 	if order.Uint16(profile[2:]) != 0x4352 {
-		return "", nil, fmt.Errorf("invalid DNG camera profile magic")
+		return "", "", nil, fmt.Errorf("invalid DNG camera profile magic")
 	}
 	ifdOffset := order.Uint32(profile[4:])
 	if ifdOffset < 8 || !tiffRange(uint64(ifdOffset), 2, uint64(len(profile))) {
-		return "", nil, fmt.Errorf("invalid DNG camera profile IFD offset")
+		return "", "", nil, fmt.Errorf("invalid DNG camera profile IFD offset")
 	}
 	profileScanner := &tiffPreviewScanner{data: profile, order: order}
 	entries, _, err := profileScanner.readDirectory(ifdOffset)
 	if err != nil {
-		return "", nil, fmt.Errorf("read DNG camera profile IFD: %w", err)
+		return "", "", nil, fmt.Errorf("read DNG camera profile IFD: %w", err)
 	}
 	mapping := make(map[uint16]tiffPreviewEntry, len(entries))
 	for _, entry := range entries {
 		if _, duplicate := mapping[entry.tag]; duplicate {
-			return "", nil, fmt.Errorf("duplicate DNG camera profile tag %d", entry.tag)
+			return "", "", nil, fmt.Errorf("duplicate DNG camera profile tag %d", entry.tag)
 		}
 		mapping[entry.tag] = entry
 	}
 	profileFields := &dngFields{scanner: profileScanner, entries: mapping}
 	name := profileFields.text(50936)
+	model := profileFields.text(50708) // UniqueCameraModel, present in camera-specific DCP files.
 	if profileFields.err != nil {
-		return "", nil, profileFields.err
+		return "", "", nil, profileFields.err
 	}
 	selected := make(map[uint16]tiffPreviewEntry)
 	for tag := range dngCameraProfileTags {
@@ -84,10 +85,14 @@ func readDNGCameraProfile(scanner *tiffPreviewScanner, offset uint64) (string, m
 			selected[tag] = entry
 		}
 	}
-	return name, selected, nil
+	return name, model, selected, nil
 }
 
 func selectDNGCameraProfile(fields *dngFields, root map[uint16]tiffPreviewEntry, requestedName string) error {
+	return selectDNGCameraProfileWithExternalDirs(fields, root, requestedName, nil)
+}
+
+func selectDNGCameraProfileWithExternalDirs(fields *dngFields, root map[uint16]tiffPreviewEntry, requestedName string, externalDirs []string) error {
 	rootFields := &dngFields{scanner: fields.scanner, entries: root}
 	name := strings.TrimSpace(requestedName)
 	if name == "" {
@@ -107,41 +112,62 @@ func selectDNGCameraProfile(fields *dngFields, root map[uint16]tiffPreviewEntry,
 		return nil
 	}
 	profiles, found := root[50933] // ExtraCameraProfiles
-	if !found {
+	var selected map[uint16]tiffPreviewEntry
+	if found {
+		if profiles.typeID != 4 || profiles.count > maxPreviewIFDs {
+			return fmt.Errorf("invalid DNG ExtraCameraProfiles list")
+		}
+		offsets := rootFields.values(50933)
+		if rootFields.err != nil {
+			return rootFields.err
+		}
+		visited := make(map[uint64]bool, len(offsets))
+		for _, value := range offsets {
+			if value < 8 || value > math.MaxUint32 || value != math.Trunc(value) {
+				return fmt.Errorf("invalid DNG camera profile offset")
+			}
+			offset := uint64(value)
+			if visited[offset] {
+				continue
+			}
+			visited[offset] = true
+			profileName, _, entries, err := readDNGCameraProfile(fields.scanner, offset)
+			if err != nil {
+				return err
+			}
+			if profileName != name {
+				continue
+			}
+			if selected != nil {
+				return fmt.Errorf("DNG camera profile %q is ambiguous", name)
+			}
+			selected = entries
+		}
+	}
+	if selected != nil {
+		for tag, entry := range selected {
+			fields.entries[tag] = entry
+		}
 		return nil
 	}
-	if profiles.typeID != 4 || profiles.count > maxPreviewIFDs {
-		return fmt.Errorf("invalid DNG ExtraCameraProfiles list")
+	if len(externalDirs) == 0 {
+		return nil
 	}
-	offsets := rootFields.values(50933)
+	model := rootFields.text(50708) // UniqueCameraModel
 	if rootFields.err != nil {
 		return rootFields.err
 	}
-	var selected map[uint16]tiffPreviewEntry
-	visited := make(map[uint64]bool, len(offsets))
-	for _, value := range offsets {
-		if value < 8 || value > math.MaxUint32 || value != math.Trunc(value) {
-			return fmt.Errorf("invalid DNG camera profile offset")
-		}
-		offset := uint64(value)
-		if visited[offset] {
-			continue
-		}
-		visited[offset] = true
-		profileName, entries, err := readDNGCameraProfile(fields.scanner, offset)
-		if err != nil {
-			return err
-		}
-		if profileName != name {
-			continue
-		}
-		if selected != nil {
-			return fmt.Errorf("DNG camera profile %q is ambiguous", name)
-		}
-		selected = entries
+	if model == "" {
+		return nil
 	}
-	for tag, entry := range selected {
-		fields.entries[tag] = entry
+	external, err := findExternalDNGCameraProfileCached(name, model, externalDirs)
+	if err != nil {
+		return err
+	}
+	if external != nil {
+		for tag, entry := range external.entries {
+			fields.entries[tag] = entry
+		}
 	}
 	return nil
 }

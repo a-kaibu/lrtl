@@ -111,7 +111,7 @@ func developRawWithDNGConverterProfile(source, executable, cameraProfile string)
 	if err != nil {
 		return nil, err
 	}
-	img, err := decodeLinearDNGWithProfile(data, cameraProfile)
+	img, err := decodeLinearDNGWithProfileAndDirs(data, cameraProfile, cameraProfileDirectories())
 	if err != nil {
 		return nil, fmt.Errorf("develop %s from Linear DNG: %w", filepath.Base(source), err)
 	}
