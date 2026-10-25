@@ -671,6 +671,25 @@ pixels are covered by the installed-app oracle described in
 `lrt-preview-resize-7.5.5.md`; native RAW preview generation and multipass
 Camera Raw feedback remain unverified.
 
+The installed worker's image fallback is now traced separately from its numeric
+correction calculation. `cTa` reads each frame's cached measurement through
+`tQa.a()` and, when it is absent and cached preview bytes exist, calls
+`tQa.A(Rsa)`. That method decodes the cached image, applies the frame's saved
+reference rectangle and sequence black/white-ignore setting, and delegates to
+the same JAI histogram method measured by the Preview EV oracle. The resulting
+histogram value is divided by 256 and stored on the frame. This confirms the
+worker's raster-to-measurement handoff; it does not establish that lrtl's source
+decoder, RAW development, ICC conversion, or later feedback pixels match the
+image bytes LRT caches.
+
+The regression coverage is deliberately layered: native Preview EV histogram
+fixtures check the measurement primitive, six resize cases compare all 246 RGB
+components exactly, the 108-case fixture checks the native numeric correction
+worker, and `TestNativeDeflickerUsesResizedPreviewForMeteringAndROI` checks that
+lrtl connects resize, fixed and saved ROI mapping, and measurement. Together
+these tests pin down the recovered pieces, but they are not an end-to-end LRT
+image-worker oracle.
+
 The earlier observed writer maps the internal Deflicker value to a correction named exactly `#LRT internal use (Deflicker)`, or the sixth legacy gradient after validating all three internal signatures at positions 5–7. lrtl now uses that existing storage slot as well. It does not create or copy proprietary mask templates. Packets without a recognized slot retain the global Exposure2012 fallback. `ol:DeflickerXMPTarget` records the destination separately from `ol:DeflickerCorrection2012`, preserving compatibility with earlier global-only lrtl corrections.
 
 Tests cover modern and legacy packets, incomplete legacy signatures, independent HG/Deflicker slots, repeated application, reset after later user edits, migration from global-only tracking, malformed/orphaned tracking, and CLI backups. Rendering includes the actual managed slot's existing exposure offset and active/amount controls exactly once. With XMP exposure/basic enabled during measurement, a new residual is added to the existing managed delta; measurements without XMP replace the previous delta. New deltas account for the target CorrectionAmount; an inactive/zero-amount target fails if correction is needed. The luminance statistic and 70% correction response remain lrtl approximations, and do not claim LRT's complete Visual Deflicker behavior.
