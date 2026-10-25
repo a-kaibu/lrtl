@@ -1,0 +1,12 @@
+{
+  "source": "solid red 192x96 JPEG",
+  "cameraCache": "solid blue 192x96 JPEG",
+  "visualCache": "solid green 192x96 JPEG",
+  "selectedCache": "camera",
+  "width": 192,
+  "height": 96,
+  "rgbSha256": "e3fb283269a762ab988d33f01cf16e95f1aba0e58f1df8e268a22830570fe615",
+  "luminance": 0.38418733377659575,
+  "contrast": 0.0000000000000000,
+  "hue": 240.00000715255737
+}

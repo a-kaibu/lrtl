@@ -56,9 +56,17 @@ CLI regression tests verify its decoded PNG path, default and custom widths,
 and all three metrics. Together with the separate resize-pixel oracle, this
 checks the operation order without running the GUI sequence workflow. A
 separate integration test distinguishes camera and visual cache inputs and
-checks cache-decode fallback. Camera RAW decoding, preview creation, cache
-freshness, and color management can still change source pixels before this
-scaling stage. lrtl uses 1024 by default and does not load the installed LRT
+checks cache-decode fallback. `LongTermCameraCacheOracle.java` also invokes the
+installed LRT frame worker directly without opening the UI. It supplies a red
+source JPEG, a blue `.lrt/previews` JPEG, and a green `.lrt/visual` JPEG; the
+worker returns the blue camera cache. The stored native-worker raster hash is
+`e3fb283269a762ab988d33f01cf16e95f1aba0e58f1df8e268a22830570fe615`. A Go test
+reproduces that decoded raster hash exactly and checks all three metrics against
+the worker. The corrupt-cache source fallback remains covered by Go integration
+tests and bytecode review; this direct worker oracle covers successful camera
+cache selection. Camera RAW decoding, preview creation, cache freshness, and
+color management can still change source pixels before this scaling stage.
+lrtl uses 1024 by default and does not load the installed LRT
 settings file; pass the configured value explicitly when it differs.
 
 The histogram integer division is observable even for tiny inputs. A single
@@ -151,6 +159,10 @@ native metrics and decisions from an older native-profile manifest.
 
 ```powershell
 New-Item -ItemType Directory -Force work/longterm-classes | Out-Null
+javac -d work/longterm-classes scripts/probes/UnsignedJarCopy.java scripts/probes/LongTermCameraCacheOracle.java
+$unsignedJar = Join-Path $env:TEMP ("LRTimelapse-unsigned-" + [guid]::NewGuid().ToString("N") + ".jar")
+java -cp work/longterm-classes lrtlprobe.UnsignedJarCopy "C:\Program Files\LRTimelapse 7\LRTimelapse.jar" $unsignedJar
+java -cp "work/longterm-classes;$unsignedJar" lrtlprobe.LongTermCameraCacheOracle internal/lrtl/testdata/lrt-longterm-camera-cache-7.5.5.jpg internal/lrtl/testdata/lrt-longterm-camera-cache-7.5.5.json
 javac -d work/longterm-classes scripts/probes/LongTermMetricOracle.java
 java -cp 'work/longterm-classes;C:\Program Files\LRTimelapse 7\LRTimelapse.jar' lrtlprobe.LongTermMetricOracle work/longterm-metrics.json
 javac -cp 'C:\Program Files\LRTimelapse 7\LRTimelapse.jar' -d work/longterm-classes scripts/probes/LongTermJPEGDecodeOracle.java
@@ -165,6 +177,12 @@ go test -race ./internal/lrtl -run '^TestLRTLongTermNativeJPEGDecodedMetrics$' -
 go test -race ./internal/lrtl -run '^TestLongTermNative' -count=1
 go test ./internal/lrtl -run '^$' -fuzz '^FuzzLongTermNativeMetrics$' -fuzztime 10s -parallel 2
 ```
+
+`UnsignedJarCopy` strips only signature block files from a new temporary copy
+because the full frame-worker reflection probe otherwise hits a signer mismatch
+between bundled packages. The installed application JAR is not modified or
+included in the repository. The camera-cache probe invokes the frame worker
+without launching the LRT UI.
 
 Normal Go tests read the synthetic references and need no Java or installed
 application. The additional code adds no module dependency or CGo use.
@@ -218,3 +236,10 @@ the cache, preview-width, native metric, and JPEG tests passed with the race
 detector in 12.127 seconds. The full suite passed (`internal/lrtl` 577.517
 seconds and `internal/nativejpeg` 3.291 seconds), and `go vet ./...` plus
 `go build ./...` passed.
+
+On 2026-10-26, `LongTermCameraCacheOracle.java` invoked the installed build
+1059 frame worker with distinct source, camera, and visual images. The worker
+selected the camera cache and produced a 192×96 raster; Go decoded the stored
+LRT-generated JPEG to the same RGB SHA-256 and stayed within the native
+worker's metric tolerances. The exact cache-selection and decoder-hash tests
+passed.

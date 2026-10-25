@@ -2,6 +2,8 @@ package lrtl
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"image"
 	"image/png"
@@ -10,6 +12,16 @@ import (
 	"path/filepath"
 	"testing"
 )
+
+type longTermCameraCacheOracle struct {
+	SelectedCache string  `json:"selectedCache"`
+	Width         int     `json:"width"`
+	Height        int     `json:"height"`
+	RGBSHA256     string  `json:"rgbSha256"`
+	Luminance     float64 `json:"luminance"`
+	Contrast      float64 `json:"contrast"`
+	Hue           float64 `json:"hue"`
+}
 
 type longTermJPEGDecodeCase struct {
 	File      string  `json:"file"`
@@ -94,6 +106,45 @@ func TestLRTLongTermNativeJPEGDecodedMetrics(t *testing.T) {
 		maxMeteringDelta[0], maxMeteringDelta[1], maxMeteringDelta[2])
 }
 
+func TestLRTLongTermCameraCacheMetricsMatchNativeWorker(t *testing.T) {
+	var oracle longTermCameraCacheOracle
+	if err := json.Unmarshal(denoiseRead(t, "testdata/lrt-longterm-camera-cache-7.5.5.json"), &oracle); err != nil {
+		t.Fatal(err)
+	}
+	if oracle.SelectedCache != "camera" || oracle.Width != 192 || oracle.Height != 96 || oracle.RGBSHA256 == "" {
+		t.Fatalf("invalid LRT camera-cache worker oracle: %+v", oracle)
+	}
+	data := denoiseRead(t, "testdata/lrt-longterm-camera-cache-7.5.5.jpg")
+	decoded, _, err := decodeLRTLongTermImage(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := longTermRGBSHA256(decoded); got != oracle.RGBSHA256 {
+		t.Fatalf("decoded camera-cache pixels differ from native worker: got %s want %s", got, oracle.RGBSHA256)
+	}
+	metrics := measureLRTLongTermFrame(decoded)
+	gotHue := math.NaN()
+	if metrics.HueMeanDegrees != nil {
+		gotHue = *metrics.HueMeanDegrees
+	}
+	if metrics.HueMeanDegrees == nil || math.Abs(metrics.LuminanceMean-oracle.Luminance) > 0.004 || math.Abs(metrics.ContrastStdDev-oracle.Contrast) > 0.0016 || math.Abs(gotHue-oracle.Hue) > 0.55 {
+		t.Fatalf("camera-cache metrics exceed native worker bounds: got=(%.12g,%.12g,%.12g) want=(%.12g,%.12g,%.12g)",
+			metrics.LuminanceMean, metrics.ContrastStdDev, gotHue, oracle.Luminance, oracle.Contrast, oracle.Hue)
+	}
+}
+
+func longTermRGBSHA256(img image.Image) string {
+	digest := sha256.New()
+	bounds := img.Bounds()
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			r, g, b, _ := img.At(x, y).RGBA()
+			_, _ = digest.Write([]byte{byte(r >> 8), byte(g >> 8), byte(b >> 8)})
+		}
+	}
+	return hex.EncodeToString(digest.Sum(nil))
+}
+
 func TestLRTLongTermAutomaticallyUsesCameraPreviewCache(t *testing.T) {
 	var fixture struct {
 		Cases []longTermJPEGDecodeCase `json:"cases"`
@@ -118,9 +169,9 @@ func TestLRTLongTermAutomaticallyUsesCameraPreviewCache(t *testing.T) {
 
 	cacheData := make([][]byte, 2)
 	cacheMetrics := make([]lrtLongTermMetrics, 2)
-	for index, caseIndex := range []int{0, 4} {
-		row := fixture.Cases[caseIndex]
-		cacheData[index] = denoiseRead(t, "../nativejpeg/testdata/"+row.File)
+	cacheData[0] = denoiseRead(t, "testdata/lrt-longterm-camera-cache-7.5.5.jpg")
+	cacheData[1] = denoiseRead(t, "../nativejpeg/testdata/"+fixture.Cases[4].File)
+	for index := range cacheData {
 		decoded, _, err := decodeLRTLongTermImage(cacheData[index])
 		if err != nil {
 			t.Fatal(err)
