@@ -1346,7 +1346,7 @@ lrtl preview-ev C:\photos\sequence --lrt-preview visual --lrt-reference --ignore
 
 ### 保存済みDeflicker設定
 
-`deflicker`と`batch-deflicker`の`--lrt-deflicker-settings`は、各連番の`.lrt/lrtsequence.json`から平滑化係数・精度・Constant・複数パスの有効状態・パス数・並び順を読み、本体方式の計算を選びます。`--lrt-preferences FILE`を追加すると、LRTの`LRTimelapse.config`から全体の黒白除外・閾値・Hard Cut設定を読み込みます。
+`deflicker`と`batch-deflicker`の`--lrt-deflicker-settings`は、各連番の`.lrt/lrtsequence.json`から平滑化係数・精度・Constant・複数パスの有効状態・パス数・並び順を読み、本体方式の計算を選びます。`--lrt-preferences FILE`を追加すると、LRTの`LRTimelapse.config`から全体の黒白除外・閾値・Hard Cut設定と、平滑化係数・精度・Constant・複数パスの既定値を読み込みます。
 
 ```powershell
 lrtl deflicker C:\photos\sequence --lrt-deflicker-settings --apply-xmp-basic
@@ -1354,9 +1354,9 @@ lrtl batch-deflicker C:\photos\sequences --lrt-deflicker-settings --lrt-referenc
 lrtl batch-deflicker C:\photos\sequences --lrt-deflicker-settings --lrt-preferences "$env:APPDATA\LRTimelapse\LRTimelapse.config" --write
 ```
 
-`--lrt-reference`を追加すると保存済み参照領域も使います。設定ファイルやキャッシュは変更しません。明示した`--passes`・`--constant`・`--lrt-smoothing`・`--lrt-accuracy`・`--smooth`・`--smoother`とは併用できません。設定が欠けている場合や画像枚数が一致しない場合は保存前にエラーにします。複数パスが無効なら1パス、有効なら保存された1〜8パスを使います。
+`--lrt-reference`を追加すると保存済み参照領域も使います。設定ファイルやキャッシュは変更しません。明示した`--passes`・`--constant`・`--lrt-smoothing`・`--lrt-accuracy`・`--smooth`・`--smoother`とは併用できません。保存値があればそれを使い、欠けた平滑化係数・精度・Constant・複数パス状態・有効時のパス数は`--lrt-preferences`から補います。`filenameSort`がなければLRTの初期値`false`に従って撮影日時順にします。必要な設定がシーケンスと全体設定の両方にない場合や画像枚数が一致しない場合は、保存前にエラーにします。複数パスが無効なら1パス、有効なら保存された1〜8パスを使います。
 
-黒白除外の`deflickerIgnoreBlacksWhites=1`は、`--lrt-preferences FILE`でLRTの`LRTimelapse.config`から黒白割合・ソフト/ハードカットを読み込むか、`--ignore-blacks`／`--ignore-whites`等を明示して使います。設定値はCLIフラグで個別に上書きできます。値0では全体設定を使い、値2は黒白除外を無効にして全体設定を上書きします（明示した除外フラグとの併用はエラー）。全体設定だけを使う場合も`--calculation lrt-7.5.5`が必要です。本体のJSONシリアライズ6ケース、個別指定とのXMP一致、連番ごとに異なる設定の並列一括処理、日時順・参照領域、異常時のファイル保持をテストしています。グローバル設定の解析とモード優先順位、並列バッチ結果もテストしています。Camera Rawや本体の全反復処理との画素一致を示すものではありません。
+黒白除外の`deflickerIgnoreBlacksWhites=1`は、`--lrt-preferences FILE`でLRTの`LRTimelapse.config`から黒白割合・ソフト/ハードカットを読み込むか、`--ignore-blacks`／`--ignore-whites`等を明示して使います。設定値はCLIフラグで個別に上書きできます。値0では全体設定を使い、値2は黒白除外を無効にして全体設定を上書きします（明示した除外フラグとの併用はエラー）。全体設定だけを使う場合も`--calculation lrt-7.5.5`が必要です。本体のJSONシリアライズ6ケース、保存値欠落時の全体設定フォールバックと日時順、個別指定とのXMP一致、連番ごとに異なる設定の並列一括処理、参照領域、異常時のファイル保持をテストしています。Camera Rawや本体の全反復処理との画素一致を示すものではありません。
 
 ### 計算値の個別指定
 

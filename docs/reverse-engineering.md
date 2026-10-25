@@ -562,8 +562,13 @@ sequence's `.lrt/lrtsequence.json`: `deflickerSmoothingFactor`,
 `deflickerAccuracy`, `deflickerConstant`, `deflickerMultipass`, and
 `deflickerPasses`, plus `filenameSort`. It selects the observed 7.5.5 correction
 profile. Multipass disabled means one pass; enabled counts must be in the CLI's
-supported 1–8 range. Complete input, matching positive imageCount, and explicit
-control fields are required. Old legacy smoothing/constant fields are ignored.
+supported 1–8 range. Complete input and matching positive `imageCount` are
+checked. Sequence fields override global defaults; missing smoothing, accuracy,
+constant, multipass, and enabled pass count come from the explicitly selected
+`--lrt-preferences FILE`. Missing `filenameSort` uses the observed
+`SequenceProperties` constructor default `false`, which sorts by `xmp:CreateDate`.
+If a needed workflow default is absent from both files, processing fails before
+writing. Old legacy smoothing/constant fields are ignored.
 
 Six synthetic runtime serialization observations are in
 `internal/lrtl/testdata/lrt-deflicker-settings-7.5.5.json`. Tests compare imported
@@ -574,19 +579,24 @@ write. Settings and preview caches remain unchanged.
 
 `deflickerIgnoreBlacksWhites` chooses global preference (0), enabled (1), or
 disabled (2); percentages and hard-cut mode are global preferences outside this
-sequence file. Inspection of the installed user's JSON `LRTimelapse.config`
-confirmed the four global field names and their boolean/integer types; the
-committed preference fixture uses synthetic values and contains no user config.
-`--lrt-preferences FILE` reads those fields from the explicitly selected file.
+sequence file. Inspection of the installed 7.5.5 `SequenceProperties`
+constructor showed that absent `filenameSort` initializes to `false`, absent
+histogram mode to `0`, and the five numerical/workflow controls initialize from
+`LRTSettings.defaultDeflicker*`. Inspection of the installed user's JSON
+`LRTimelapse.config` confirmed those five defaults and the four global histogram
+field names and types; the committed preference fixture uses synthetic values
+and contains no user config. `--lrt-preferences FILE` reads all nine supported
+fields from the explicitly selected file.
 Mode 0 uses those defaults, mode 1
 forces exclusion on and uses the saved thresholds, and mode 2 disables exclusion
 even when the global preference enables it. Explicit histogram flags override
 the corresponding global fields; explicit flags conflict with mode 2. Without a
 preferences file, mode 1 still requires explicit thresholds. The input file is
-read-only and only these four fields are imported. Tests cover the preference
-schema, bounds, override precedence, and parallel batch output. This is
-control-file interoperability; it does not establish native Camera Raw or
-multipass pixel equivalence.
+read-only. Tests cover sequence-key omissions, preference fallback, constructor-
+default date ordering, final XMP equality against explicit saved controls,
+preference schema and bounds, override precedence, and parallel batch output.
+This is control-file interoperability; it does not establish native Camera Raw
+or multipass pixel equivalence.
 
 ## Local installation observations
 

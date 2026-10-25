@@ -47,7 +47,7 @@ func TestLRTDeflickerSettingsNativeSerializationAndCLI(t *testing.T) {
 			copyBatchDeflickerTree(t, actual, explicit)
 			writeNativeSettings(t, actual, row)
 			histogram := previewHistogramOptions{}
-			options, passes, constant, order, err := loadLRTDeflickerSettings(frames, &histogram)
+			options, passes, constant, order, err := loadLRTDeflickerSettings(frames, &histogram, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -203,7 +203,7 @@ func TestLRTDeflickerSettingsValidationPreservesFiles(t *testing.T) {
 		{"deflickerSmoothingFactor", "NaN"}, {"deflickerAccuracy", nil}, {"deflickerAccuracy", 2},
 		{"deflickerAccuracy", .5}, {"deflickerConstant", nil}, {"deflickerConstant", "false"},
 		{"deflickerMultipass", nil}, {"deflickerPasses", nil}, {"deflickerPasses", 0}, {"deflickerPasses", 9},
-		{"filenameSort", nil}, {"imageCount", 6}, {"deflickerIgnoreBlacksWhites", 1}, {"deflickerIgnoreBlacksWhites", 3},
+		{"imageCount", 6}, {"deflickerIgnoreBlacksWhites", 1}, {"deflickerIgnoreBlacksWhites", 3},
 	}
 	for i, tc := range cases {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
@@ -311,7 +311,7 @@ func TestLRTDeflickerSettingsHistogramAndDisabledMultipass(t *testing.T) {
 		writeNativeSettings(t, root, data)
 		for _, enabled := range []bool{false, true} {
 			histogram := previewHistogramOptions{Enabled: enabled, IgnoreBlacks: 10, IgnoreWhites: 15, HardCut: true, Explicit: enabled, ExplicitThresholds: enabled}
-			opts, passes, _, _, err := loadLRTDeflickerSettings(frames, &histogram)
+			opts, passes, _, _, err := loadLRTDeflickerSettings(frames, &histogram, nil)
 			wantError := mode == 1 && !enabled || mode == 2 && enabled
 			if (err != nil) != wantError {
 				t.Fatalf("mode %d explicit %v: %v", mode, enabled, err)
@@ -328,16 +328,16 @@ func TestLRTDeflickerSettingsHistogramAndDisabledMultipass(t *testing.T) {
 	}
 	writeNativeSettings(t, root, data)
 	hardCutOnly := previewHistogramOptions{Enabled: true, HardCut: true, Explicit: true}
-	if _, _, _, _, err := loadLRTDeflickerSettings(frames, &hardCutOnly); err == nil {
+	if _, _, _, _, err := loadLRTDeflickerSettings(frames, &hardCutOnly, nil); err == nil {
 		t.Fatal("hard-cut flag without thresholds satisfied the saved enabled mode")
 	}
 	// The full sequence is required so saved sort/ROI indices cannot drift.
-	if _, _, _, _, err := loadLRTDeflickerSettings(frames[:2], &previewHistogramOptions{}); err == nil {
+	if _, _, _, _, err := loadLRTDeflickerSettings(frames[:2], &previewHistogramOptions{}, nil); err == nil {
 		t.Fatal("partial sequence accepted")
 	}
 	reversed := append([]Frame(nil), frames...)
 	reversed[0], reversed[1] = reversed[1], reversed[0]
-	if _, _, _, _, err := loadLRTDeflickerSettings(reversed, &previewHistogramOptions{}); err == nil {
+	if _, _, _, _, err := loadLRTDeflickerSettings(reversed, &previewHistogramOptions{}, nil); err == nil {
 		t.Fatal("preordered sequence accepted")
 	}
 }

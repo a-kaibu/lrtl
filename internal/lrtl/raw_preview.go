@@ -77,19 +77,20 @@ func readRenderInput(frame Frame, useRawPreview bool) ([]byte, image.Config, str
 }
 
 type imageInputOptions struct {
-	LRTDeflickerSettings bool
-	NativeDeflicker      nativeDeflickerOptions
-	PreviewHistogram     previewHistogramOptions
-	LRTReference         bool
-	lrtReferences        []lrtReferenceBox
-	LRTPreview           string
-	RawPreview           bool
-	RawDevelop           bool
-	DNGLabPath           string
-	DNGConverterPath     string
-	ApplyXMPExposure     bool
-	ApplyXMPBasic        bool
-	ApplyXMPCrop         bool
+	LRTDeflickerSettings    bool
+	LRTDeflickerPreferences *lrtDeflickerPreferences
+	NativeDeflicker         nativeDeflickerOptions
+	PreviewHistogram        previewHistogramOptions
+	LRTReference            bool
+	lrtReferences           []lrtReferenceBox
+	LRTPreview              string
+	RawPreview              bool
+	RawDevelop              bool
+	DNGLabPath              string
+	DNGConverterPath        string
+	ApplyXMPExposure        bool
+	ApplyXMPBasic           bool
+	ApplyXMPCrop            bool
 }
 
 func validateImageInputOptions(options imageInputOptions) error {

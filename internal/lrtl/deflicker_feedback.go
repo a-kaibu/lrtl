@@ -126,7 +126,7 @@ func planDeflickerSequence(frames []Frame, reference image.Rectangle, options im
 	if options.LRTDeflickerSettings {
 		var order []int
 		var err error
-		options.NativeDeflicker, passes, constant, order, err = loadLRTDeflickerSettings(frames, &options.PreviewHistogram)
+		options.NativeDeflicker, passes, constant, order, err = loadLRTDeflickerSettings(frames, &options.PreviewHistogram, options.LRTDeflickerPreferences)
 		if err != nil {
 			return nil, err
 		}

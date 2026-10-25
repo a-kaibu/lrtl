@@ -18,13 +18,18 @@ import (
 
 func TestReadLRTDeflickerPreferences(t *testing.T) {
 	path := "testdata/lrt-deflicker-preferences-7.5.5.json"
-	options, err := readLRTDeflickerPreferences(path)
+	preferences, err := readLRTDeflickerPreferences(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := previewHistogramOptions{Enabled: true, IgnoreBlacks: 10, IgnoreWhites: 15, HardCut: true, FromLRTPreferences: true}
-	if options != want {
-		t.Fatalf("loaded preferences %#v, want %#v", options, want)
+	if got := preferences.histogramOptions(); got != want {
+		t.Fatalf("loaded histogram preferences %#v, want %#v", got, want)
+	}
+	if preferences.Smoothing == nil || *preferences.Smoothing != .75 || preferences.Accuracy == nil || *preferences.Accuracy != 1 ||
+		preferences.Constant == nil || !*preferences.Constant || preferences.Multipass == nil || !*preferences.Multipass ||
+		preferences.Passes == nil || *preferences.Passes != 3 {
+		t.Fatalf("loaded global Deflicker defaults %#v", preferences)
 	}
 
 	for _, data := range []string{
@@ -39,6 +44,110 @@ func TestReadLRTDeflickerPreferences(t *testing.T) {
 		}
 		if _, err := readLRTDeflickerPreferences(invalid); err == nil {
 			t.Fatalf("accepted invalid global preferences: %s", data)
+		}
+	}
+	base, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		field string
+		value any
+	}{
+		{"defaultDeflickerSmoothingFactor", 2.1},
+		{"defaultDeflickerAccuracy", 2},
+		{"defaultDeflickerPasses", 0},
+	} {
+		var values map[string]any
+		if err := json.Unmarshal(base, &values); err != nil {
+			t.Fatal(err)
+		}
+		values[tc.field] = tc.value
+		data, err := json.Marshal(values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		invalid := filepath.Join(t.TempDir(), "LRTimelapse.config")
+		if err := os.WriteFile(invalid, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readLRTDeflickerPreferences(invalid); err == nil {
+			t.Fatalf("accepted invalid global default %s=%v", tc.field, tc.value)
+		}
+	}
+}
+
+func TestLRTDeflickerMissingSequenceControlsUseGlobalDefaults(t *testing.T) {
+	fallbackDir, explicitDir := filepath.Join(t.TempDir(), "fallback"), filepath.Join(t.TempDir(), "explicit")
+	frames, _, wantOrder := dateReferenceFixture(t, fallbackDir, t.TempDir())
+	settingsPath := filepath.Join(fallbackDir, ".lrt", "lrtsequence.json")
+	var saved map[string]any
+	if err := json.Unmarshal(nativeSavedSettings(t)[0], &saved); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{
+		"deflickerSmoothingFactor", "deflickerAccuracy", "deflickerConstant",
+		"deflickerMultipass", "deflickerPasses", "filenameSort", "deflickerIgnoreBlacksWhites",
+	} {
+		delete(saved, field)
+	}
+	data, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settingsPath, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	copyBatchDeflickerTree(t, fallbackDir, explicitDir)
+	var explicit map[string]any
+	if err := json.Unmarshal(data, &explicit); err != nil {
+		t.Fatal(err)
+	}
+	explicit["deflickerSmoothingFactor"] = .75
+	explicit["deflickerAccuracy"] = 1
+	explicit["deflickerConstant"] = true
+	explicit["deflickerMultipass"] = true
+	explicit["deflickerPasses"] = 3
+	explicit["filenameSort"] = false
+	explicit["deflickerIgnoreBlacksWhites"] = 0
+	data, err = json.Marshal(explicit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeNativeSettings(t, explicitDir, data)
+
+	preferences, err := readLRTDeflickerPreferences("testdata/lrt-deflicker-preferences-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	histogram := preferences.histogramOptions()
+	controls, passes, constant, order, err := loadLRTDeflickerSettings(frames, &histogram, &preferences)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if controls != (nativeDeflickerOptions{Enabled: true, Smoothing: .75, Accuracy: 1}) || passes != 3 || !constant || !reflect.DeepEqual(order, wantOrder) {
+		t.Fatalf("resolved controls/order: %#v passes=%d constant=%t order=%v, want preference values and date order %v", controls, passes, constant, order, wantOrder)
+	}
+
+	preferencesPath := "testdata/lrt-deflicker-preferences-7.5.5.json"
+	for _, dir := range []string{fallbackDir, explicitDir} {
+		var out, stderr bytes.Buffer
+		args := []string{"deflicker", dir, "--lrt-deflicker-settings", "--lrt-preferences", preferencesPath, "--write", "--no-backup"}
+		if Main(args, &out, &stderr) != 0 {
+			t.Fatalf("Deflicker %s: %s", dir, &stderr)
+		}
+	}
+	for _, frame := range mustDiscoverSequence(t, fallbackDir) {
+		got, err := os.ReadFile(frame.OutputSidecar())
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := os.ReadFile(filepath.Join(explicitDir, filepath.Base(frame.OutputSidecar())))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Fatalf("missing-field LRT fallback differs from explicit controls: %s", frame.Image)
 		}
 	}
 }
@@ -148,7 +257,7 @@ func TestLRTDeflickerSequenceHistogramModePrecedence(t *testing.T) {
 		writeNativeSettings(t, root, data)
 		for _, globalEnabled := range []bool{false, true} {
 			histogram := previewHistogramOptions{Enabled: globalEnabled, IgnoreBlacks: 10, IgnoreWhites: 15, HardCut: true, FromLRTPreferences: true}
-			_, _, _, _, err := loadLRTDeflickerSettings(frames, &histogram)
+			_, _, _, _, err := loadLRTDeflickerSettings(frames, &histogram, nil)
 			if err != nil {
 				t.Fatalf("mode %d with global preference enabled=%t: %v", mode, globalEnabled, err)
 			}

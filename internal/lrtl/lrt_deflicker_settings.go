@@ -8,7 +8,7 @@ import (
 )
 
 // Pointers distinguish saved zero/false values from controls absent in older
-// files. Missing values would require the user's separate LRT global defaults.
+// files. LRT fills these from global preferences when they are absent.
 type lrtDeflickerSettings struct {
 	Smoothing    *float64 `json:"deflickerSmoothingFactor"`
 	Accuracy     *int     `json:"deflickerAccuracy"`
@@ -20,7 +20,7 @@ type lrtDeflickerSettings struct {
 	Ignore       *int     `json:"deflickerIgnoreBlacksWhites"`
 }
 
-func loadLRTDeflickerSettings(frames []Frame, histogram *previewHistogramOptions) (nativeDeflickerOptions, int, bool, []int, error) {
+func loadLRTDeflickerSettings(frames []Frame, histogram *previewHistogramOptions, preferences *lrtDeflickerPreferences) (nativeDeflickerOptions, int, bool, []int, error) {
 	fail := func(err error) (nativeDeflickerOptions, int, bool, []int, error) {
 		return nativeDeflickerOptions{}, 0, false, nil, fmt.Errorf("read LRT Deflicker settings: %w", err)
 	}
@@ -53,19 +53,73 @@ func loadLRTDeflickerSettings(frames []Frame, histogram *previewHistogramOptions
 	if err := json.Unmarshal(data, &saved); err != nil {
 		return fail(fmt.Errorf("%s: %w", path, err))
 	}
-	if saved.Smoothing == nil || saved.Accuracy == nil || saved.Constant == nil || saved.Multipass == nil || saved.Passes == nil || saved.FilenameSort == nil {
-		return fail(fmt.Errorf("%s: smoothing, accuracy, constant, multipass, passes and filenameSort must all be saved", path))
-	}
 	if saved.ImageCount > 0 && saved.ImageCount != len(frames) {
 		return fail(fmt.Errorf("imageCount %d does not match %d frames", saved.ImageCount, len(frames)))
 	}
-	options := nativeDeflickerOptions{true, *saved.Smoothing, *saved.Accuracy}
+	resolveFloat := func(name string, sequenceValue, preferenceValue *float64) (float64, error) {
+		if sequenceValue != nil {
+			return *sequenceValue, nil
+		}
+		if preferenceValue != nil {
+			return *preferenceValue, nil
+		}
+		return 0, fmt.Errorf("%s: %s is absent from the sequence and LRT preferences", path, name)
+	}
+	resolveInt := func(name string, sequenceValue, preferenceValue *int) (int, error) {
+		if sequenceValue != nil {
+			return *sequenceValue, nil
+		}
+		if preferenceValue != nil {
+			return *preferenceValue, nil
+		}
+		return 0, fmt.Errorf("%s: %s is absent from the sequence and LRT preferences", path, name)
+	}
+	resolveBool := func(name string, sequenceValue, preferenceValue *bool) (bool, error) {
+		if sequenceValue != nil {
+			return *sequenceValue, nil
+		}
+		if preferenceValue != nil {
+			return *preferenceValue, nil
+		}
+		return false, fmt.Errorf("%s: %s is absent from the sequence and LRT preferences", path, name)
+	}
+	var preferenceSmoothing *float64
+	var preferenceAccuracy *int
+	var preferenceConstant, preferenceMultipass *bool
+	var preferencePasses *int
+	if preferences != nil {
+		preferenceSmoothing = preferences.Smoothing
+		preferenceAccuracy = preferences.Accuracy
+		preferenceConstant = preferences.Constant
+		preferenceMultipass = preferences.Multipass
+		preferencePasses = preferences.Passes
+	}
+	smoothing, err := resolveFloat("deflickerSmoothingFactor", saved.Smoothing, preferenceSmoothing)
+	if err != nil {
+		return fail(err)
+	}
+	accuracy, err := resolveInt("deflickerAccuracy", saved.Accuracy, preferenceAccuracy)
+	if err != nil {
+		return fail(err)
+	}
+	constant, err := resolveBool("deflickerConstant", saved.Constant, preferenceConstant)
+	if err != nil {
+		return fail(err)
+	}
+	multipass, err := resolveBool("deflickerMultipass", saved.Multipass, preferenceMultipass)
+	if err != nil {
+		return fail(err)
+	}
+	options := nativeDeflickerOptions{true, smoothing, accuracy}
 	if err := options.validate(); err != nil {
 		return fail(err)
 	}
 	passes := 1
-	if *saved.Multipass {
-		passes = *saved.Passes
+	if multipass {
+		passes, err = resolveInt("deflickerPasses", saved.Passes, preferencePasses)
+		if err != nil {
+			return fail(err)
+		}
 		if passes < 1 || passes > 8 {
 			return fail(fmt.Errorf("saved multipass count must be 1-8"))
 		}
@@ -91,12 +145,14 @@ func loadLRTDeflickerSettings(frames []Frame, histogram *previewHistogramOptions
 	for i := range order {
 		order[i] = i
 	}
-	if !*saved.FilenameSort {
+	// SequenceProperties initializes filenameSort=false; the native default is
+	// therefore date ordering when the field was never persisted.
+	if !valueOr(saved.FilenameSort, false) {
 		order, err = readLRTReferenceDateOrder(frames)
 		if err != nil {
 			return fail(err)
 		}
 	}
 	*histogram = resolvedHistogram
-	return options, passes, *saved.Constant, order, nil
+	return options, passes, constant, order, nil
 }

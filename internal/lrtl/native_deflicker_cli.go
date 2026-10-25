@@ -91,11 +91,12 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 	input.LRTDeflickerSettings = *f.saved
 	histogram := previewHistogramOptions{}
 	if *f.preferences != "" {
-		var err error
-		histogram, err = readLRTDeflickerPreferences(*f.preferences)
+		preferences, err := readLRTDeflickerPreferences(*f.preferences)
 		if err != nil {
 			return err
 		}
+		input.LRTDeflickerPreferences = &preferences
+		histogram = preferences.histogramOptions()
 	}
 	if explicitHistogram {
 		if !histogram.FromLRTPreferences {

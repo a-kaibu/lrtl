@@ -2,5 +2,10 @@
   "defaultDeflickerIgnoreBlacksWhites": true,
   "defaultDeflickerIgnoreBlacks": 10,
   "defaultDeflickerIgnoreWhites": 15,
-  "deflickerIgnoreBlacksWhitesHardCut": true
+  "deflickerIgnoreBlacksWhitesHardCut": true,
+  "defaultDeflickerSmoothingFactor": 0.75,
+  "defaultDeflickerAccuracy": 1,
+  "defaultDeflickerConstant": true,
+  "defaultDeflickerMultipass": true,
+  "defaultDeflickerPasses": 3
 }
