@@ -3,6 +3,7 @@ package lrtl
 import (
 	"encoding/binary"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"math"
 	"os"
@@ -241,6 +242,12 @@ func FuzzLinearDNG(f *testing.F) {
 		}))
 		f.Add(linearDNGFixture(order, 3, 3, 1, stage1Pixels, map[uint16]dngTestField{
 			51008: testDNGOpcodeList(testDNGBadPixelList(0, [][2]int32{{1, 1}}, nil)),
+		}))
+		f.Add(linearDNGFixture(order, 4, 1, 1, []uint16{0, 1, 2, 3}, map[uint16]dngTestField{
+			51008: testDNGOpcodeList(testDNGMapTable(testDNGArea(image.Rectangle{}, 0, 1, 1, 1), 3, 2, 1, 0)),
+		}))
+		f.Add(linearDNGFixture(order, 4, 1, 1, []uint16{0, 1, 2, 3}, map[uint16]dngTestField{
+			51008: testDNGOpcodeList(testDNGPolynomial(testDNGArea(image.Rectangle{}, 0, 1, 1, 1), 0, 0, 16000)),
 		}))
 	}
 	f.Add(profileMapDNGFixture(binary.LittleEndian))

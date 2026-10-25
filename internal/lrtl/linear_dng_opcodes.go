@@ -99,7 +99,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 				}
 			}
 			stage1 := tag == 51008
-			unsupportedStage1 := stage1 && id != 4 && id != 5
+			unsupportedStage1 := stage1 && id != 4 && id != 5 && id != 7 && id != 8
 			if (id != 1 && id != 2 && id != 3 && id != 4 && id != 5 && id != 6 && (id < 7 || id > 14)) || unsupportedStage1 || version > 0x01070100 || id == 5 && version < 0x01030000 {
 				if flags&1 != 0 {
 					continue
@@ -107,7 +107,7 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 				return dngImageOpcodeLists{}, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
 			}
 			if stage1 && depth != 16 {
-				return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG Stage 1 bad-pixel opcodes require 16-bit samples")
+				return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG Stage 1 opcodes require 16-bit samples")
 			}
 			appendOpcode := func(opcode dngImageOpcode) {
 				if stage1 {
@@ -188,6 +188,9 @@ func readDNGImageOpcodes(fields *dngFields, channels, width, height, activeWidth
 			opcode, err := parseDNGPointOpcode(id, payload)
 			if err != nil {
 				return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG opcode %d in tag %d: %w", id, tag, err)
+			}
+			if stage1 && (opcode.plane >= channels || opcode.planes > channels-opcode.plane) {
+				return dngImageOpcodeLists{}, fmt.Errorf("Linear DNG Stage 1 opcode %d plane range exceeds the image channels", id)
 			}
 			if opcode.area.Empty() {
 				if (id == 10 || id == 12) && (opcode.area.Min.Y > imageBounds.Min.Y || opcode.area.Max.Y < imageBounds.Max.Y) {
@@ -449,6 +452,80 @@ func applyDNGPointOpcodesAt(opcodes []dngPointOpcode, camera *[3]float64, x, y, 
 			camera[plane] = min(1, max(0, value))
 		}
 	}
+}
+
+// applyDNGPointOpcodeRaw applies a Stage 1 MapTable or MapPolynomial to
+// interleaved integer image samples. OpcodeList1 runs before linearization and
+// black subtraction, so its input and output domain is the stored 16-bit raw
+// value. Each opcode clips its output before a following opcode sees it.
+func applyDNGPointOpcodeRaw(source, destination []uint16, width, height, channels int, opcode dngPointOpcode) error {
+	if width < 1 || height < 1 || channels < 1 || uint64(width) > uint64(math.MaxInt)/uint64(height) {
+		return fmt.Errorf("invalid Stage 1 point opcode image dimensions")
+	}
+	pixelCount := uint64(width) * uint64(height)
+	if pixelCount > uint64(math.MaxInt)/uint64(channels) {
+		return fmt.Errorf("invalid Stage 1 point opcode image dimensions")
+	}
+	sampleCount := int(pixelCount * uint64(channels))
+	if len(source) != sampleCount || len(destination) != sampleCount {
+		return fmt.Errorf("invalid Stage 1 point opcode image buffer")
+	}
+	if opcode.plane < 0 || opcode.plane >= channels || opcode.planes < 1 || opcode.planes > channels-opcode.plane || opcode.rowPitch < 1 || opcode.colPitch < 1 {
+		return fmt.Errorf("invalid Stage 1 point opcode plane range or pitch")
+	}
+	if opcode.id == 7 {
+		if len(opcode.lookup) < 1 || len(opcode.lookup) > 65536 {
+			return fmt.Errorf("invalid Stage 1 MapTable size")
+		}
+	} else if opcode.id == 8 {
+		if len(opcode.coefficients) < 1 || len(opcode.coefficients) > 9 {
+			return fmt.Errorf("invalid Stage 1 MapPolynomial coefficients")
+		}
+	} else {
+		return fmt.Errorf("unsupported Stage 1 point opcode %d", opcode.id)
+	}
+
+	copy(destination, source)
+	area := opcode.area
+	if area.Empty() {
+		area = image.Rect(0, 0, width, height)
+	}
+	for y := max(0, area.Min.Y); y < min(height, area.Max.Y); y++ {
+		if (y-area.Min.Y)%opcode.rowPitch != 0 {
+			continue
+		}
+		for x := max(0, area.Min.X); x < min(width, area.Max.X); x++ {
+			if (x-area.Min.X)%opcode.colPitch != 0 {
+				continue
+			}
+			base := (y*width + x) * channels
+			for plane := opcode.plane; plane < opcode.plane+opcode.planes; plane++ {
+				index := base + plane
+				input := source[index]
+				var value float64
+				if opcode.id == 7 {
+					lookupIndex := min(int(input), len(opcode.lookup)-1)
+					value = float64(opcode.lookup[lookupIndex])
+				} else {
+					value = opcode.coefficients[len(opcode.coefficients)-1]
+					for coefficient := len(opcode.coefficients) - 2; coefficient >= 0; coefficient-- {
+						value = value*float64(input) + opcode.coefficients[coefficient]
+					}
+				}
+				if math.IsNaN(value) {
+					return fmt.Errorf("Stage 1 opcode %d produced a non-finite sample", opcode.id)
+				}
+				if value <= 0 {
+					destination[index] = 0
+				} else if value >= math.MaxUint16 {
+					destination[index] = math.MaxUint16
+				} else {
+					destination[index] = uint16(math.Round(value))
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func applyDNGBadPixelConstant(source, destination []float32, width, height int, originX, originY int, opcode dngBadPixelConstant) error {

@@ -433,13 +433,20 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	var stage1Pixels []uint16
 	if len(imageOpcodes.stage1) != 0 {
 		pixelCount := uint64(width) * uint64(height)
-		if pixelCount > uint64(maxDevelopedRAWBytes)/4 {
+		if channels < 1 || pixelCount > ^uint64(0)/uint64(channels) {
+			return nil, fmt.Errorf("DNG Stage 1 opcode image dimensions exceed development limits")
+		}
+		sampleCount := pixelCount * uint64(channels)
+		if sampleCount > uint64(maxDevelopedRAWBytes)/4 || sampleCount > uint64(math.MaxInt) {
 			return nil, fmt.Errorf("DNG Stage 1 opcode working buffers exceed development limits")
 		}
-		stage1Pixels = make([]uint16, int(pixelCount))
+		stage1Pixels = make([]uint16, int(sampleCount))
 		for y := 0; y < height; y++ {
 			for x := 0; x < width; x++ {
-				stage1Pixels[y*width+x] = readRawSample(x, y, 0)
+				base := (y*width + x) * channels
+				for channel := 0; channel < channels; channel++ {
+					stage1Pixels[base+channel] = readRawSample(x, y, channel)
+				}
 			}
 		}
 		destination := make([]uint16, len(stage1Pixels))
@@ -448,6 +455,8 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 				err = applyDNGBadPixelConstantRaw(stage1Pixels, destination, width, height, *opcode.badPixelConstant)
 			} else if opcode.badPixelList != nil {
 				err = applyDNGBadPixelListRaw(stage1Pixels, destination, width, height, image.Rect(0, 0, width, height), *opcode.badPixelList)
+			} else if opcode.point != nil {
+				err = applyDNGPointOpcodeRaw(stage1Pixels, destination, width, height, channels, *opcode.point)
 			} else {
 				err = fmt.Errorf("unsupported Linear DNG Stage 1 opcode implementation")
 			}
@@ -463,7 +472,7 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 			rawSample := readRawSample(x, y, channel)
 			raw := float64(rawSample)
 			if stage1Pixels != nil {
-				raw = float64(stage1Pixels[y*width+x])
+				raw = float64(stage1Pixels[(y*width+x)*channels+channel])
 			}
 			if len(linearization) != 0 {
 				raw = linearization[min(int(raw), len(linearization)-1)]
