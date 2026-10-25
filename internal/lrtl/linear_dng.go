@@ -335,7 +335,7 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 		return nil, err
 	}
 	hasProfile := profileTone != nil || profileMaps.first != nil || profileMaps.look != nil || profileMaps.gainTable != nil
-	profileWeight := 0.0
+	profileWeights := [3]float64{1, 0, 0}
 	transform := dngIdentityMatrix
 	finalTransform := dngIdentityMatrix
 	xyzToRGB := dngXYZD50ToSRGB
@@ -347,10 +347,12 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 		finalTransform = dngXYZD50ToSRGB.multiply(dngProPhotoToXYZ)
 	}
 	if channels == 3 {
-		transform, profileWeight, err = dngCameraToSpace(fields, xyzToRGB)
+		transform, profileWeights, err = dngCameraToSpaceWithWeights(fields, xyzToRGB)
 		if err != nil {
 			return nil, err
 		}
+	} else if dngTripleProfilePresent(fields) {
+		return nil, fmt.Errorf("triple-illuminant DNG profiles require three color channels")
 	}
 	for _, row := range transform {
 		for _, coefficient := range row {
@@ -359,13 +361,7 @@ func decodeLinearDNGWithProfile(data []byte, cameraProfile string) (*image.NRGBA
 			}
 		}
 	}
-	// Unknown or equal calibration temperatures use the first hue table.
-	t1 := dngIlluminantTemperature(fields.integer(50778, 0))
-	t2 := dngIlluminantTemperature(fields.integer(50779, 0))
-	if t1 <= 0 || t2 <= 0 || t1 == t2 {
-		profileWeight = 0
-	}
-	hueMap := profileMaps.hueMap(profileWeight)
+	hueMap := profileMaps.hueMapWeights(profileWeights)
 	exposure, err := readDNGBaselineExposure(fields)
 	if err != nil {
 		return nil, err

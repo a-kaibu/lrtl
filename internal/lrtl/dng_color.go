@@ -142,6 +142,28 @@ func dngChromaticAdaptation(source, destination [3]float64) (dngMatrix, error) {
 }
 
 func dngCameraToSpace(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, float64, error) {
+	transform, weights, err := dngCameraToSpaceWithWeights(fields, xyzToRGB)
+	return transform, weights[1], err
+}
+
+func dngCameraToSpaceWithWeights(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, [3]float64, error) {
+	if dngTripleProfilePresent(fields) {
+		return dngCameraToSpaceTriple(fields, xyzToRGB)
+	}
+	transform, weight, err := dngCameraToSpaceDual(fields, xyzToRGB)
+	weights := [3]float64{1 - weight, weight, 0}
+	firstTemperature := dngIlluminantTemperature(fields.integer(50778, 0))
+	secondTemperature := dngIlluminantTemperature(fields.integer(50779, 0))
+	if fields.err != nil {
+		return dngMatrix{}, [3]float64{}, fields.err
+	}
+	if firstTemperature <= 0 || secondTemperature <= 0 || firstTemperature == secondTemperature {
+		weights = [3]float64{1, 0, 0}
+	}
+	return transform, weights, err
+}
+
+func dngCameraToSpaceDual(fields *dngFields, xyzToRGB dngMatrix) (dngMatrix, float64, error) {
 	color1, hasColor1 := fields.matrix(50721, dngIdentityMatrix)
 	color2, hasColor2 := fields.matrix(50722, color1)
 	calibration1, _ := fields.matrix(50723, dngIdentityMatrix)

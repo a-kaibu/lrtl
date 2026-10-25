@@ -12,8 +12,8 @@ type dngProfileMap struct {
 }
 
 type dngProfileMaps struct {
-	first, second, look *dngProfileMap
-	gainTable           *dngProfileGainTableMap
+	first, second, third, look *dngProfileMap
+	gainTable                  *dngProfileGainTableMap
 }
 
 func readDNGProfileMap(fields *dngFields, dimsTag, dataTag, encodingTag uint16) (*dngProfileMap, error) {
@@ -92,9 +92,6 @@ func readDNGProfileMap(fields *dngFields, dimsTag, dataTag, encodingTag uint16) 
 
 func readDNGProfileMaps(fields *dngFields) (dngProfileMaps, error) {
 	var maps dngProfileMaps
-	if _, found := fields.entries[52537]; found {
-		return maps, fmt.Errorf("triple-illuminant DNG profile tables are unsupported")
-	}
 	var err error
 	if maps.first, err = readDNGProfileMap(fields, 50937, 50938, 51107); err != nil {
 		return maps, err
@@ -105,6 +102,13 @@ func readDNGProfileMaps(fields *dngFields) (dngProfileMaps, error) {
 	if maps.second != nil && maps.first == nil {
 		return maps, fmt.Errorf("DNG profile has second hue/saturation table without first")
 	}
+	maps.third, err = readDNGProfileMap(fields, 50937, 52537, 51107)
+	if err != nil {
+		return maps, err
+	}
+	if maps.third != nil && (maps.first == nil || maps.second == nil) {
+		return maps, fmt.Errorf("DNG profile with a third hue/saturation table requires all three tables")
+	}
 	maps.look, err = readDNGProfileMap(fields, 50981, 50982, 51108)
 	if err != nil {
 		return maps, err
@@ -114,17 +118,30 @@ func readDNGProfileMaps(fields *dngFields) (dngProfileMaps, error) {
 }
 
 func (maps dngProfileMaps) hueMap(weight float64) *dngProfileMap {
-	if maps.second == nil || weight <= 0 {
+	return maps.hueMapWeights([3]float64{1 - weight, weight, 0})
+}
+
+func (maps dngProfileMaps) hueMapWeights(weights [3]float64) *dngProfileMap {
+	if maps.first == nil || maps.second == nil {
 		return maps.first
 	}
-	if weight >= 1 {
-		return maps.second
+	if maps.third == nil {
+		weight := weights[1]
+		if weight <= 0 {
+			return maps.first
+		}
+		if weight >= 1 {
+			return maps.second
+		}
 	}
 	m := *maps.first
 	m.data = make([][3]float64, len(m.data))
 	for i := range m.data {
 		for c := 0; c < 3; c++ {
-			m.data[i][c] = (1-weight)*maps.first.data[i][c] + weight*maps.second.data[i][c]
+			m.data[i][c] = weights[0]*maps.first.data[i][c] + weights[1]*maps.second.data[i][c]
+			if maps.third != nil {
+				m.data[i][c] += weights[2] * maps.third.data[i][c]
+			}
 		}
 	}
 	return &m

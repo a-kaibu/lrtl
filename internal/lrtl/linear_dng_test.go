@@ -238,6 +238,9 @@ func FuzzLinearDNG(f *testing.F) {
 	}
 	f.Add(profileMapDNGFixture(binary.LittleEndian))
 	f.Add(profileMapDNGFixture(binary.BigEndian))
+	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		f.Add(linearDNGFixture(order, 1, 1, 3, []uint16{16384, 0, 0}, tripleIlluminantDNGMetadata(order)))
+	}
 	f.Add(profileToneDNGFixture(binary.LittleEndian, 0))
 	f.Add(profileToneDNGFixture(binary.BigEndian, 1))
 	profileIFD := linearDNGFixture(binary.LittleEndian, 1, 1, 1, []uint16{8192}, map[uint16]dngTestField{

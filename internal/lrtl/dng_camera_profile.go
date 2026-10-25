@@ -10,6 +10,10 @@ import (
 var dngCameraProfileTags = map[uint16]struct{}{
 	50721: {}, // ColorMatrix1
 	50722: {}, // ColorMatrix2
+	50725: {}, // ReductionMatrix1
+	50726: {}, // ReductionMatrix2
+	50778: {}, // CalibrationIlluminant1
+	50779: {}, // CalibrationIlluminant2
 	50932: {}, // ProfileCalibrationSignature
 	50936: {}, // ProfileName
 	50937: {}, // ProfileHueSatMapDims
@@ -24,6 +28,14 @@ var dngCameraProfileTags = map[uint16]struct{}{
 	51108: {}, // ProfileLookTableEncoding
 	51109: {}, // BaselineExposureOffset
 	52525: {}, // ProfileGainTableMap
+	52529: {}, // CalibrationIlluminant3
+	52531: {}, // ColorMatrix3
+	52532: {}, // ForwardMatrix3
+	52533: {}, // IlluminantData1
+	52534: {}, // IlluminantData2
+	52535: {}, // IlluminantData3
+	52537: {}, // ProfileHueSatMapData3
+	52538: {}, // ReductionMatrix3
 	52544: {}, // ProfileGainTableMap2
 }
 
