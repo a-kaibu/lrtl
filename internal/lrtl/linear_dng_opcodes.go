@@ -80,14 +80,20 @@ func readDNGImageOpcodes(fields *dngFields, channels int) ([]dngImageOpcode, err
 			data = data[size:]
 			// Stage 1 uses a different raw-value domain. Only normalized
 			// post-linearization and post-demosaic operations are supported.
-			if (id != 1 && (id < 7 || id > 13)) || tag == 51008 || version > 0x01070100 {
+			if (id != 1 && id != 2 && (id < 7 || id > 13)) || tag == 51008 || version > 0x01070100 {
 				if flags&1 != 0 {
 					continue
 				}
 				return nil, fmt.Errorf("unsupported required Linear DNG opcode %d in tag %d (version %08x)", id, tag, version)
 			}
-			if id == 1 {
-				warp, err := parseDNGWarpRectilinear(payload, channels)
+			if id == 1 || id == 2 {
+				var warp *dngWarp
+				var err error
+				if id == 1 {
+					warp, err = parseDNGWarpRectilinear(payload, channels)
+				} else {
+					warp, err = parseDNGWarpFisheye(payload, channels)
+				}
 				if err != nil {
 					return nil, fmt.Errorf("Linear DNG warp in tag %d: %w", tag, err)
 				}

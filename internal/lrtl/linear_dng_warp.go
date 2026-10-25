@@ -6,43 +6,58 @@ import (
 	"math"
 )
 
-type dngWarpRectilinear struct {
+type dngWarp struct {
 	coefficients     [][6]float64
 	centerX, centerY float64
+	fisheye          bool
 }
 
 type dngImageOpcode struct {
 	point *dngPointOpcode
-	warp  *dngWarpRectilinear
+	warp  *dngWarp
 }
 
-func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarpRectilinear, error) {
+func parseDNGWarpRectilinear(data []byte, channels int) (*dngWarp, error) {
+	return parseDNGWarp(data, channels, 6, false)
+}
+
+func parseDNGWarpFisheye(data []byte, channels int) (*dngWarp, error) {
+	return parseDNGWarp(data, channels, 4, true)
+}
+
+func parseDNGWarp(data []byte, channels, coefficientCount int, fisheye bool) (*dngWarp, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("truncated warp parameters")
 	}
 	count := uint64(binary.BigEndian.Uint32(data))
-	if (count != 1 && count != uint64(channels)) || uint64(len(data)) != 20+count*48 {
+	coefficientBytes := uint64(coefficientCount * 8)
+	if (count != 1 && count != uint64(channels)) || uint64(len(data)) != 20+count*coefficientBytes {
 		return nil, fmt.Errorf("invalid warp coefficient count")
 	}
-	warp := &dngWarpRectilinear{coefficients: make([][6]float64, int(count))}
+	warp := &dngWarp{coefficients: make([][6]float64, int(count)), fisheye: fisheye}
 	for i := range warp.coefficients {
-		for j := range warp.coefficients[i] {
-			value := math.Float64frombits(binary.BigEndian.Uint64(data[4+i*48+j*8:]))
+		for j := 0; j < coefficientCount; j++ {
+			value := math.Float64frombits(binary.BigEndian.Uint64(data[4+i*int(coefficientBytes)+j*8:]))
 			if math.IsNaN(value) || math.IsInf(value, 0) {
 				return nil, fmt.Errorf("non-finite warp coefficient")
 			}
 			warp.coefficients[i][j] = value
 		}
 	}
-	offset := 4 + int(count)*48
+	offset := 4 + int(count*coefficientBytes)
 	warp.centerX, warp.centerY = math.Float64frombits(binary.BigEndian.Uint64(data[offset:])), math.Float64frombits(binary.BigEndian.Uint64(data[offset+8:]))
-	if math.IsNaN(warp.centerX) || math.IsNaN(warp.centerY) || warp.centerX < 0 || warp.centerX > 1 || warp.centerY < 0 || warp.centerY > 1 {
+	if math.IsNaN(warp.centerX) || math.IsNaN(warp.centerY) || math.IsInf(warp.centerX, 0) || math.IsInf(warp.centerY, 0) || warp.centerX < 0 || warp.centerX > 1 || warp.centerY < 0 || warp.centerY > 1 {
 		return nil, fmt.Errorf("warp center must be within normalized image bounds")
 	}
 	return warp, nil
 }
 
-func (warp *dngWarpRectilinear) identity() bool {
+func (warp *dngWarp) identity() bool {
+	if warp.fisheye {
+		// A polynomial in atan(r) is not the identity mapping over the full
+		// image, so even a zero-order fisheye coefficient needs resampling.
+		return false
+	}
 	for _, c := range warp.coefficients {
 		if c != ([6]float64{1, 0, 0, 0, 0, 0}) {
 			return false
@@ -52,11 +67,11 @@ func (warp *dngWarpRectilinear) identity() bool {
 }
 
 type dngWarpGeometry struct {
-	warp                                    *dngWarpRectilinear
+	warp                                    *dngWarp
 	centerX, centerY, radius, verticalScale float64
 }
 
-func (warp *dngWarpRectilinear) geometry(width, height int, verticalScale float64) dngWarpGeometry {
+func (warp *dngWarp) geometry(width, height int, verticalScale float64) dngWarpGeometry {
 	// DefaultScale defines the physical pixel aspect. The SDK rounds the
 	// square-pixel height for its normalization radius, but keeps original
 	// image coordinates when locating the center and sampling pixels.
@@ -72,6 +87,16 @@ func (geometry dngWarpGeometry) source(x, y, plane int) (float64, float64) {
 	dx, dy := float64(x)-geometry.centerX, float64(y)-geometry.centerY
 	u, v := dx/geometry.radius, dy*geometry.verticalScale/geometry.radius
 	r2 := min(1, u*u+v*v)
+	if geometry.warp.fisheye {
+		r := math.Sqrt(r2)
+		factor := c[0]
+		if r > 0 {
+			theta := math.Atan(r)
+			theta2 := theta * theta
+			factor = theta * (c[0] + theta2*(c[1]+theta2*(c[2]+theta2*c[3]))) / r
+		}
+		return geometry.centerX + dx*factor, geometry.centerY + dy*factor
+	}
 	radial := c[0] + r2*(c[1]+r2*(c[2]+r2*c[3]))
 	tangentX := 2*c[4]*u*v + c[5]*(r2+2*u*u)
 	tangentY := 2*c[5]*u*v + c[4]*(r2+2*v*v)
