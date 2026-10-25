@@ -26,6 +26,7 @@ type nativeDeflickerFlags struct {
 	saved                  *bool
 	calculation            *string
 	preferences            *string
+	previewWidth           *int
 	smoothing              *float64
 	accuracy, black, white *int
 	hard                   *bool
@@ -33,14 +34,15 @@ type nativeDeflickerFlags struct {
 
 func registerNativeDeflickerFlags(set *flag.FlagSet) nativeDeflickerFlags {
 	return nativeDeflickerFlags{
-		saved:       set.Bool("lrt-deflicker-settings", false, "read saved LRT Deflicker controls and sequence order"),
-		calculation: set.String("calculation", "lrtl", "Deflicker calculation: lrtl or lrt-7.5.5"),
-		preferences: set.String("lrt-preferences", "", "read LRT global Deflicker histogram preferences from a JSON file"),
-		smoothing:   set.Float64("lrt-smoothing", .5, "LRT bandwidth factor (0-2), with --calculation lrt-7.5.5"),
-		accuracy:    set.Int("lrt-accuracy", 0, "LRT accuracy: -1 low, 0 normal, 1 high"),
-		black:       set.Int("ignore-blacks", 0, "black histogram range percentage (0-100) in LRT calculation"),
-		white:       set.Int("ignore-whites", 0, "white histogram range percentage (0-100) in LRT calculation"),
-		hard:        set.Bool("hard-cut", false, "use hard histogram cutoffs in LRT calculation"),
+		saved:        set.Bool("lrt-deflicker-settings", false, "read saved LRT Deflicker controls and sequence order"),
+		calculation:  set.String("calculation", "lrtl", "Deflicker calculation: lrtl or lrt-7.5.5"),
+		preferences:  set.String("lrt-preferences", "", "read LRT global Deflicker histogram preferences from a JSON file"),
+		previewWidth: set.Int("preview-width-camera", 0, "LRT camera-preview width for lrt-7.5.5 measurements"),
+		smoothing:    set.Float64("lrt-smoothing", .5, "LRT bandwidth factor (0-2), with --calculation lrt-7.5.5"),
+		accuracy:     set.Int("lrt-accuracy", 0, "LRT accuracy: -1 low, 0 normal, 1 high"),
+		black:        set.Int("ignore-blacks", 0, "black histogram range percentage (0-100) in LRT calculation"),
+		white:        set.Int("ignore-whites", 0, "white histogram range percentage (0-100) in LRT calculation"),
+		hard:         set.Bool("hard-cut", false, "use hard histogram cutoffs in LRT calculation"),
 	}
 }
 
@@ -64,7 +66,7 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 			}
 		}
 		switch flag.Name {
-		case "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut":
+		case "lrt-smoothing", "lrt-accuracy", "ignore-blacks", "ignore-whites", "hard-cut", "preview-width-camera":
 			if !native {
 				problem = fmt.Errorf("--%s requires --calculation lrt-7.5.5", flag.Name)
 			}
@@ -88,6 +90,7 @@ func (f nativeDeflickerFlags) apply(set *flag.FlagSet, input *imageInputOptions)
 		return problem
 	}
 	input.NativeDeflicker = nativeDeflickerOptions{native, *f.smoothing, *f.accuracy}
+	input.PreviewWidthCamera = *f.previewWidth
 	input.LRTDeflickerSettings = *f.saved
 	histogram := previewHistogramOptions{}
 	if *f.preferences != "" {

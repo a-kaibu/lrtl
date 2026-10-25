@@ -38,6 +38,23 @@ func resizeLRTCameraPreviewWidth(img image.Image, previewWidthCamera int) (image
 	return resizeLRTPreviewTo(img, width, height)
 }
 
+func scaleLRTPreviewArea(area, sourceBounds, previewBounds image.Rectangle) (image.Rectangle, error) {
+	if sourceBounds.Empty() || previewBounds.Empty() || area.Empty() || area.Intersect(sourceBounds) != area {
+		return image.Rectangle{}, fmt.Errorf("LRT preview reference area %v is outside source bounds %v", area, sourceBounds)
+	}
+	scaleFloor := func(offset, destinationSize, sourceSize int) int {
+		return int(math.Floor(float64(offset) * float64(destinationSize) / float64(sourceSize)))
+	}
+	scaleCeil := func(offset, destinationSize, sourceSize int) int {
+		return int(math.Ceil(float64(offset) * float64(destinationSize) / float64(sourceSize)))
+	}
+	minX := previewBounds.Min.X + scaleFloor(area.Min.X-sourceBounds.Min.X, previewBounds.Dx(), sourceBounds.Dx())
+	minY := previewBounds.Min.Y + scaleFloor(area.Min.Y-sourceBounds.Min.Y, previewBounds.Dy(), sourceBounds.Dy())
+	maxX := previewBounds.Min.X + scaleCeil(area.Max.X-sourceBounds.Min.X, previewBounds.Dx(), sourceBounds.Dx())
+	maxY := previewBounds.Min.Y + scaleCeil(area.Max.Y-sourceBounds.Min.Y, previewBounds.Dy(), sourceBounds.Dy())
+	return image.Rect(minX, minY, maxX, maxY), nil
+}
+
 func resizeLRTPreviewTo(img image.Image, width, height int) (image.Image, error) {
 	if img == nil || img.Bounds().Empty() || width <= 0 || height <= 0 {
 		return nil, fmt.Errorf("invalid image resize dimensions")

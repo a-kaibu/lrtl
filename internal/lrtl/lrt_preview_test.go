@@ -16,6 +16,33 @@ import (
 	"testing"
 )
 
+func TestScaleLRTPreviewArea(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		area, source image.Rectangle
+		preview      image.Rectangle
+		want         image.Rectangle
+		wantError    bool
+	}{
+		{"partial", image.Rect(6, 8, 9, 10), image.Rect(5, 7, 12, 12), image.Rect(0, 0, 6, 4), image.Rect(0, 0, 4, 3), false},
+		{"full", image.Rect(5, 7, 12, 12), image.Rect(5, 7, 12, 12), image.Rect(0, 0, 6, 4), image.Rect(0, 0, 6, 4), false},
+		{"outside", image.Rect(4, 8, 9, 10), image.Rect(5, 7, 12, 12), image.Rect(0, 0, 6, 4), image.Rectangle{}, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := scaleLRTPreviewArea(test.area, test.source, test.preview)
+			if test.wantError {
+				if err == nil {
+					t.Fatal("outside reference area was accepted")
+				}
+				return
+			}
+			if err != nil || got != test.want {
+				t.Fatalf("scaled reference area=%v err=%v, want %v", got, err, test.want)
+			}
+		})
+	}
+}
+
 func nativePreviewFixture(t *testing.T, root string) (Frame, []byte) {
 	t.Helper()
 	path := filepath.Join(root, "frame.001.NEF")

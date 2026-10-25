@@ -121,9 +121,10 @@ func TestNativeDeflickerFailurePreflight(t *testing.T) {
 			dir = root
 		}
 		for _, options := range [][]string{
-			{"--calculation", "unknown"}, {"--lrt-smoothing", ".5"}, {"--ignore-blacks", "10"},
+			{"--calculation", "unknown"}, {"--lrt-smoothing", ".5"}, {"--ignore-blacks", "10"}, {"--preview-width-camera", "6"},
 			{"--calculation", "lrt-7.5.5", "--lrt-smoothing", "NaN"},
 			{"--calculation", "lrt-7.5.5", "--lrt-accuracy", "2"},
+			{"--calculation", "lrt-7.5.5", "--preview-width-camera", "1"},
 			{"--calculation", "lrt-7.5.5", "--ignore-whites", "101"},
 			{"--calculation", "lrt-7.5.5", "--smooth", "5"},
 			{"--calculation", "lrt-7.5.5", "--smoother", "lowess"},
@@ -248,7 +249,8 @@ func TestNativeDeflickerCLIAndFeedback(t *testing.T) {
 	root := t.TempDir()
 	frames := nativeCLISequence(t, root)
 	before := batchFileSnapshot(t, root)
-	measurements, err := analyzePreviewEVSequence(frames, imageInputOptions{})
+	inputOptions := imageInputOptions{PreviewWidthCamera: 6}
+	measurements, err := analyzePreviewEVSequence(frames, inputOptions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +304,7 @@ func TestNativeDeflickerCLIAndFeedback(t *testing.T) {
 		return pixels.Bytes()
 	}
 	baselinePixels := renderPixels()
-	args := []string{"deflicker", root, "--calculation", "lrt-7.5.5"}
+	args := []string{"deflicker", root, "--calculation", "lrt-7.5.5", "--preview-width-camera", "6"}
 	if Main(args, &out, &stderr) != 0 {
 		t.Fatal(&stderr)
 	}
@@ -356,6 +358,68 @@ func TestNativeDeflickerCLIAndFeedback(t *testing.T) {
 	}
 }
 
+func TestNativeDeflickerUsesResizedPreviewForMeteringAndROI(t *testing.T) {
+	root := t.TempDir()
+	frames := movingReferenceFixture(t, root, false)
+	reference := image.Rect(8, 0, 40, 16)
+	options := imageInputOptions{NativeDeflicker: nativeDeflickerOptions{Enabled: true, Smoothing: .5}, PreviewWidthCamera: 6}
+	plan, err := planDeflickerSequence(frames, reference, options, 5, 1, false, "gaussian")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plainPlan, err := planDeflickerSequence(frames, reference, imageInputOptions{NativeDeflicker: nativeDeflickerOptions{Enabled: true, Smoothing: .5}}, 5, 1, false, "gaussian")
+	if err != nil {
+		t.Fatal(err)
+	}
+	changedByResize := false
+	for index, frame := range frames {
+		data, err := os.ReadFile(frame.Image)
+		if err != nil {
+			t.Fatal(err)
+		}
+		img, _, err := image.Decode(bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sourceBounds := img.Bounds()
+		area := reference.Add(sourceBounds.Min)
+		resized, err := resizeLRTCameraPreviewWidth(img, options.PreviewWidthCamera)
+		if err != nil {
+			t.Fatal(err)
+		}
+		area, err = scaleLRTPreviewArea(area, sourceBounds, resized.Bounds())
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := framePreviewEVAreaWithOptions(resized, area, options.PreviewHistogram)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if math.Abs(plan.Measurements[0][index]-want) > 1e-12 {
+			t.Fatalf("frame %d measured %.15g, want resized ROI Preview EV %.15g", index, plan.Measurements[0][index], want)
+		}
+		changedByResize = changedByResize || plan.Measurements[0][index] != plainPlan.Measurements[0][index]
+	}
+	if !changedByResize {
+		t.Fatal("fixture did not distinguish resized Preview EV from full-size measurement")
+	}
+	savedROIOptions := options
+	savedROIOptions.LRTReference = true
+	savedROIPlan, err := planDeflickerSequence(frames, image.Rectangle{}, savedROIOptions, 5, 1, false, "gaussian")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSavedROI, err := analyzePreviewEVSequence(frames, savedROIOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := range wantSavedROI {
+		if math.Abs(savedROIPlan.Measurements[0][index]-wantSavedROI[index]) > 1e-12 {
+			t.Fatalf("saved reference frame %d measured %.15g, want resized Preview EV %.15g", index, savedROIPlan.Measurements[0][index], wantSavedROI[index])
+		}
+	}
+}
+
 func TestNativeDeflickerBatchMatchesIndividual(t *testing.T) {
 	root, reference := t.TempDir(), t.TempDir()
 	for _, name := range []string{"a", "b"} {
@@ -363,7 +427,7 @@ func TestNativeDeflickerBatchMatchesIndividual(t *testing.T) {
 	}
 	before := batchFileSnapshot(t, root)
 	copyBatchDeflickerTree(t, root, reference)
-	options := []string{"--calculation", "lrt-7.5.5", "--lrt-smoothing", "0.6", "--lrt-accuracy", "1", "--passes", "3", "--constant", "--ignore-blacks", "10", "--ignore-whites", "15", "--hard-cut", "--write"}
+	options := []string{"--calculation", "lrt-7.5.5", "--lrt-smoothing", "0.6", "--lrt-accuracy", "1", "--passes", "3", "--constant", "--ignore-blacks", "10", "--ignore-whites", "15", "--hard-cut", "--preview-width-camera", "6", "--write"}
 	var out, stderr bytes.Buffer
 	if Main(append([]string{"batch-deflicker", root, "--workers", "2"}, options...), &out, &stderr) != 0 {
 		t.Fatal(&stderr)

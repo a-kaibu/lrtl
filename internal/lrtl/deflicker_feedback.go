@@ -93,6 +93,17 @@ func measureDeflickerPackets(frames []Frame, reference image.Rectangle, options 
 		if feedback != nil && feedback[i] != 1 {
 			img = applyExposureGainFrame(img, feedback[i])
 		}
+		sourceBounds := img.Bounds()
+		if options.NativeDeflicker.Enabled {
+			previewWidth := options.PreviewWidthCamera
+			if previewWidth == 0 {
+				previewWidth = lrtDefaultCameraPreviewWidth
+			}
+			img, err = resizeLRTCameraPreviewWidth(img, previewWidth)
+			if err != nil {
+				return nil, fmt.Errorf("prepare LRT Deflicker image %s: %w", frame.Image, err)
+			}
+		}
 		area := reference
 		if len(options.lrtReferences) > 0 {
 			area, err = options.lrtReferences[i].rectangle(img.Bounds())
@@ -102,7 +113,13 @@ func measureDeflickerPackets(frames []Frame, reference image.Rectangle, options 
 		} else if area.Empty() {
 			area = img.Bounds()
 		} else {
-			area = area.Add(img.Bounds().Min)
+			area = area.Add(sourceBounds.Min)
+			if options.NativeDeflicker.Enabled {
+				area, err = scaleLRTPreviewArea(area, sourceBounds, img.Bounds())
+				if err != nil {
+					return nil, fmt.Errorf("%s: %w", frame.Image, err)
+				}
+			}
 		}
 		if options.NativeDeflicker.Enabled {
 			values[i], err = framePreviewEVAreaWithOptions(img, area, options.PreviewHistogram)
