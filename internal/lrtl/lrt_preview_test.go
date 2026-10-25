@@ -138,33 +138,73 @@ func TestLRTCameraPreviewResizeOnlyUsesWidthThreshold(t *testing.T) {
 }
 
 func TestLRTPreviewBilinearPixelsMatchNative(t *testing.T) {
-	img := image.NewNRGBA(image.Rect(7, 11, 12, 14))
-	for y := img.Bounds().Min.Y; y < img.Bounds().Max.Y; y++ {
-		for x := img.Bounds().Min.X; x < img.Bounds().Max.X; x++ {
-			sx, sy := x-img.Bounds().Min.X, y-img.Bounds().Min.Y
-			img.SetNRGBA(x, y, color.NRGBA{
-				R: uint8(sx*47 + sy*19),
-				G: uint8(sx*13 + sy*71),
-				B: uint8(sx*83 + sy*31),
-				A: 255,
-			})
-		}
+	data, err := os.ReadFile("testdata/lrt-preview-resize-pixels-7.5.5.json")
+	if err != nil {
+		t.Fatal(err)
 	}
-	got, err := resizeLRTPreviewTo(img, 3, 2)
+	var cases []struct {
+		SourceWidth  int
+		SourceHeight int
+		Width        int
+		Height       int
+		Pattern      int
+		RGB          []string
+	}
+	if err := json.Unmarshal(data, &cases); err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 5 {
+		t.Fatalf("got %d native pixel cases, want 5", len(cases))
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%dx%d_to_%dx%d", tc.SourceWidth, tc.SourceHeight, tc.Width, tc.Height), func(t *testing.T) {
+			img := image.NewNRGBA(image.Rect(7, 11, 7+tc.SourceWidth, 11+tc.SourceHeight))
+			for y := 0; y < tc.SourceHeight; y++ {
+				for x := 0; x < tc.SourceWidth; x++ {
+					img.SetNRGBA(7+x, 11+y, color.NRGBA{
+						R: uint8((x*47 + y*19 + tc.Pattern*17) & 255),
+						G: uint8((x*13 + y*71 + tc.Pattern*29) & 255),
+						B: uint8((x*83 + y*31 + tc.Pattern*43) & 255),
+						A: 255,
+					})
+				}
+			}
+			got, err := resizeLRTPreviewTo(img, tc.Width, tc.Height)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(tc.RGB) != tc.Width*tc.Height {
+				t.Fatalf("oracle has %d pixels, want %d", len(tc.RGB), tc.Width*tc.Height)
+			}
+			for i, want := range tc.RGB {
+				x, y := i%tc.Width, i/tc.Width
+				pixel := color.NRGBAModel.Convert(got.At(x, y)).(color.NRGBA)
+				actual := fmt.Sprintf("%02x%02x%02x", pixel.R, pixel.G, pixel.B)
+				if actual != want || pixel.A != 255 {
+					t.Errorf("pixel (%d,%d)=%s alpha=%d, native=%s", x, y, actual, pixel.A, want)
+				}
+			}
+		})
+	}
+}
+
+func TestLRTPreviewBilinearKeepsTransparentColorsPremultiplied(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 2, 1))
+	img.SetNRGBA(0, 0, color.NRGBA{R: 255, A: 0})
+	img.SetNRGBA(1, 0, color.NRGBA{B: 255, A: 255})
+	got, err := resizeLRTPreviewTo(img, 3, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []color.NRGBA{
-		{R: 0x14, G: 0x16, B: 0x23, A: 255}, {R: 0x63, G: 0x2c, B: 0xad, A: 255}, {R: 0xb1, G: 0x41, B: 0x78, A: 255},
-		{R: 0x31, G: 0x81, B: 0x52, A: 255}, {R: 0x7f, G: 0x96, B: 0xdc, A: 255}, {R: 0xcd, G: 0xac, B: 0x66, A: 255},
+		{},
+		{B: 255, A: 127},
+		{B: 255, A: 255},
 	}
-	for i, want := range want {
-		x, y := i%3, i/3
-		pixel := color.NRGBAModel.Convert(got.At(x, y)).(color.NRGBA)
-		if math.Abs(float64(int(pixel.R)-int(want.R))) > 1 ||
-			math.Abs(float64(int(pixel.G)-int(want.G))) > 1 ||
-			math.Abs(float64(int(pixel.B)-int(want.B))) > 1 || pixel.A != want.A {
-			t.Errorf("pixel (%d,%d)=%#v, native=%#v (tolerance: one 8-bit code)", x, y, pixel, want)
+	for x, expected := range want {
+		actual := color.NRGBAModel.Convert(got.At(x, 0)).(color.NRGBA)
+		if actual != expected {
+			t.Errorf("pixel (%d,0)=%#v, want %#v", x, actual, expected)
 		}
 	}
 }
