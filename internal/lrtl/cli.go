@@ -198,7 +198,7 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [DEFLICKER_OPTIONS...] [--lrt-deflicker-settings] [--lrt-preferences FILE] [--write]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
-	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--lrt-holy-grail-settings] [--write] compensate camera exposure changes")
+	fmt.Fprintln(writer, "  holy-grail DIRECTORY [--lrt-input] [--lrt-preview camera|visual] [--lrt-reference] [--lrt-holy-grail-settings] [--write] compensate camera exposure changes")
 	fmt.Fprintln(writer, "  snapshot create DIRECTORY [--name NAME] save XMP sidecars to a ZIP snapshot")
 	fmt.Fprintln(writer, "  snapshot list DIRECTORY                list saved XMP snapshots")
 	fmt.Fprintln(writer, "  snapshot restore DIRECTORY FILE.zip [--write] [--no-backup] [--allow-moved]")
@@ -2008,6 +2008,7 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 		"--stretch": true, "-stretch": true,
 		"--rotate": true, "-rotate": true,
 		"--lrt-reduce-deflicker": true, "-lrt-reduce-deflicker": true,
+		"--lrt-preview": true, "-lrt-preview": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
@@ -2030,6 +2031,8 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return reportError(stderr, err)
 		}
+		curveOptions.LRTPreview = *f.lrtPreview
+		curveOptions.LRTReference = *f.lrtReference
 	}
 	plan, err := buildHolyGrailPlanWithCurveOptions(frames, *f.ignoreAperture, *f.reset, *f.forceMarkJumps, *f.noMarkJumps, curveOptions)
 	if err != nil {
@@ -2040,7 +2043,15 @@ func runHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if plan.CurveOptions != nil {
 		fmt.Fprintf(stdout, "Curve adjustments: stretch=%+.2f rotate=%+.2f\n", plan.CurveOptions.Stretch, plan.CurveOptions.Rotate)
 		if plan.CurveOptions.LRTInput {
-			fmt.Fprintf(stdout, "Curve input: lrt:ExternalExposureDefault / 4; reduce-deflicker=%0.2f\n", plan.CurveOptions.ReduceDeflicker)
+			if plan.CurveOptions.LRTPreview != "" {
+				fmt.Fprintf(stdout, "Curve input: LRT %s preview cache Preview EV", plan.CurveOptions.LRTPreview)
+				if plan.CurveOptions.LRTReference {
+					fmt.Fprint(stdout, " in saved reference boxes")
+				}
+				fmt.Fprintf(stdout, "; reduce-deflicker=%0.2f\n", plan.CurveOptions.ReduceDeflicker)
+			} else {
+				fmt.Fprintf(stdout, "Curve input: lrt:ExternalExposureDefault / 4; reduce-deflicker=%0.2f\n", plan.CurveOptions.ReduceDeflicker)
+			}
 			fmt.Fprintln(stdout, "Existing 2*/3*/4* ratings are used for HG correction transitions; no ratings will be changed.")
 		}
 		if plan.AutoCurve {

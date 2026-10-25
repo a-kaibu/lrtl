@@ -30,6 +30,8 @@ type HolyGrailCurveOptions struct {
 	ReduceDeflicker float64
 	Auto            bool
 	LRTInput        bool
+	LRTPreview      string
+	LRTReference    bool
 }
 
 type HolyGrailChange struct {
@@ -219,33 +221,96 @@ func normalizedCameraExposureCurve(cameras []CameraExposure) []float64 {
 	return values
 }
 
-func readHolyGrailLRTInputs(frames []Frame) ([]float64, []int, error) {
+func readHolyGrailLRTInputs(frames []Frame, preview string, reference bool) ([]float64, []int, error) {
 	inputs := make([]float64, len(frames))
 	ratings := make([]int, len(frames))
+	if preview != "" {
+		analysisFrames := frames
+		requestedIndexes := make(map[string]int, len(frames))
+		if reference {
+			if len(frames) == 0 {
+				return nil, nil, fmt.Errorf("Holy Grail preview input requires a complete sequence")
+			}
+			// Reference boxes are stored against filename order. LRT sequence
+			// settings can reorder the Holy Grail calculation by capture date,
+			// so measure in filename order and map the results back afterward.
+			var err error
+			analysisFrames, err = DiscoverSequence(filepath.Dir(frames[0].Image))
+			if err != nil {
+				return nil, nil, fmt.Errorf("Holy Grail preview input: %w", err)
+			}
+			if len(analysisFrames) != len(frames) {
+				return nil, nil, fmt.Errorf("LRT reference boxes require the complete Holy Grail sequence")
+			}
+			for index, frame := range frames {
+				key, err := holyGrailFramePathKey(frame.Image)
+				if err != nil {
+					return nil, nil, err
+				}
+				requestedIndexes[key] = index
+			}
+			for _, frame := range analysisFrames {
+				key, err := holyGrailFramePathKey(frame.Image)
+				if err != nil {
+					return nil, nil, err
+				}
+				if _, found := requestedIndexes[key]; !found {
+					return nil, nil, fmt.Errorf("LRT reference boxes require the complete Holy Grail sequence")
+				}
+			}
+		}
+		values, err := analyzePreviewEVSequence(analysisFrames, imageInputOptions{
+			LRTPreview: preview, LRTReference: reference,
+		})
+		if err != nil {
+			return nil, nil, fmt.Errorf("Holy Grail preview input: %w", err)
+		}
+		if reference {
+			for index, frame := range analysisFrames {
+				key, err := holyGrailFramePathKey(frame.Image)
+				if err != nil {
+					return nil, nil, err
+				}
+				inputs[requestedIndexes[key]] = values[index]
+			}
+		} else {
+			copy(inputs, values)
+		}
+	}
 	for index, frame := range frames {
 		packet, err := PacketForFrame(frame)
 		if err != nil {
 			return nil, nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
 		}
-		text, found, err := packet.GetScalar("lrt:ExternalExposureDefault")
-		if err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+		if preview == "" {
+			text, found, err := packet.GetScalar("lrt:ExternalExposureDefault")
+			if err != nil {
+				return nil, nil, fmt.Errorf("%s: %w", frame.OutputSidecar(), err)
+			}
+			if !found {
+				return nil, nil, fmt.Errorf("%s: missing scalar lrt:ExternalExposureDefault; run lrtl preview-ev DIRECTORY --write or supply existing LRT XMP values", frame.OutputSidecar())
+			}
+			value, valid := scalarNumber(text)
+			if !valid {
+				return nil, nil, fmt.Errorf("%s: lrt:ExternalExposureDefault is not a finite number", frame.OutputSidecar())
+			}
+			// LRT's frame model reads ExternalExposureDefault / 4 and negates it
+			// before building the Holy Grail curve.
+			inputs[index] = value / 4
 		}
-		if !found {
-			return nil, nil, fmt.Errorf("%s: missing scalar lrt:ExternalExposureDefault; run lrtl preview-ev DIRECTORY --write or supply existing LRT XMP values", frame.OutputSidecar())
-		}
-		value, valid := scalarNumber(text)
-		if !valid {
-			return nil, nil, fmt.Errorf("%s: lrt:ExternalExposureDefault is not a finite number", frame.OutputSidecar())
-		}
-		// LRT's frame model reads ExternalExposureDefault / 4 and negates it
-		// before building the Holy Grail curve.
-		inputs[index] = value / 4
 		if rating, found := packet.Rating(); found {
 			ratings[index] = rating
 		}
 	}
 	return inputs, ratings, nil
+}
+
+func holyGrailFramePathKey(path string) (string, error) {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(absolute), nil
 }
 
 func lrtHolyGrailPairEligible(rating int) bool {
@@ -551,7 +616,7 @@ func buildHolyGrailPlanWithCurveOptions(frames []Frame, ignoreAperture, reset, f
 			cameras[index] = camera
 		}
 		if lrtInputMode {
-			lrtInputs, lrtRatings, err = readHolyGrailLRTInputs(frames)
+			lrtInputs, lrtRatings, err = readHolyGrailLRTInputs(frames, curveOptions.LRTPreview, curveOptions.LRTReference)
 			if err != nil {
 				return nil, err
 			}

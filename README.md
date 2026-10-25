@@ -14,6 +14,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - 動画・TIFF・JPEGプレビュー・字幕で`--sort`の順序を選べます。`lrt-settings`は各連番に保存されたLRTの名前順／日時順を使います。本体方式の自然順・文字順を4,096組、日時順を8条件で比較しました。動画と字幕の選択・順序を合わせ、プレビューの元インデックスと測光保存先も保持します。[規則・時刻順との違い・テスト](docs/sequence-order.md)を参照してください。
 
+- `holy-grail --lrt-preview camera|visual`で既存のLRTプレビューキャッシュを測光し、XMPへPreview EVを書き込まずにLRT互換の補正計算へ渡せるようにしました。`--lrt-reference`で保存済み参照領域も適用できます。キャッシュと`preview-ev --write`経由の数値一致、保存済みXMP値との同等性、キャッシュ欠落時の非書込み、設定・バッチ経路をテストしています。キャッシュ生成とLRT本体のRAW現像は引き続き対象外です。
+
 - `remove-sequence`で選択画像を隣の`_REMOVED`フォルダーへ除外できます。既存先への追記・同内容XMP／キャッシュの再利用に対応し、`move-sequence --merge`でも同じ処理を使えます。追記途中の衝突・復元失敗・共有XMPの変更検出、繰り返し除外後のAVI画素をテストしています。[対象・衝突・本体との比較範囲](docs/remove-sequence.md)を参照してください。
 
 - `move-sequence`で選択画像・XMP・同名JPEG・画像別キャッシュを新規フォルダーへ移動できます。SHA-256検証、共有データの元への保持、失敗からの復元、読み取り専用ハードリンク、Windows／Linuxとファイルシステムをまたぐ移動、AVI画素一致をテストしています。[使用方法・復元と制限](docs/move-sequence.md)を参照してください。
@@ -134,7 +136,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 - `deflicker`と`batch-deflicker`に`--lrt-reference`を追加しました。`.lrt/lrtsequence.json`の参照領域を読み、LRT 7.5.5と同じ単精度の自然3次スプラインで移動・変形させながら測光します。本体64ケースとの座標一致、対象領域の独立した測光値、複数パス、切り出し画像との最終XMP一致、破損設定時の一括保存中止をテストしています。
 
-- `--lrt-preview camera|visual`で、既存のLRTプレビューキャッシュを画像入力として使えます。`render`、`export`、`preview-images`、`preview-ev`、`deflicker`、`batch-deflicker`に対応します。LRT 7.5.5のパス生成・JPEGエンコードを実行して形式を確認し、TIFF画素保持、AVIの無再圧縮、測光値の元XMP保存、個別/一括Deflickerの一致をテストしています。キャッシュの鮮度判定やAdobe現像の再生成は行いません。
+- `--lrt-preview camera|visual`で、既存のLRTプレビューキャッシュを画像入力として使えます。`render`、`export`、`preview-images`、`preview-ev`、`preview`、`keyframes`、`long-term`、`deflicker`、`batch-deflicker`、`holy-grail`、`batch-holy-grail`に対応します。LRT 7.5.5のパス生成・JPEGエンコードを実行して形式を確認し、TIFF画素保持、AVIの無再圧縮、測光値の元XMP保存、個別/一括Deflickerの一致をテストしています。キャッシュの鮮度判定やAdobe現像の再生成は行いません。
 
 - `--apply-xmp-basic`で`ConvertToGrayscale`と8色の`GrayMixer`を画像へ反映します。従来は保存・補間だけで、プレビュー・動画がカラーのままになる処理の抜けを修正しました。16-bit階調、色別調整、無彩色保持、露出/WBとの順序、後段のカラーグレーディング、出力TIFF/JPEG/AVIとエラー時の保持をテストしています。Adobe Monochromeプロファイルとの画素一致は未対応です。
 
@@ -238,7 +240,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 | シーケンス規模 | 評価版は400枚まで、Private/Proはサイズ制限なし | 画像列の枚数上限なし。AVIは約4 GBまで。MP4はFFmpeg対応 | 一部 |
 | ワークフロー | Basic、Visual、Long-Term、Lightroom/ACR連携、内部編集/Export | CLIで個別機能を実行。ワークフロー状態や内蔵現像画面なし | 一部 |
 | キーフレーム | 輝度推移からキーフレーム数の目安を提示し、スライダーで調整するWizard。4/5つ星を選択でき、手動設定と等間隔配置も可能 | 手動マーク、JPEG/PNG/TIFF、`--raw-preview`内蔵プレビュー、`--lrt-preview camera|visual`既存キャッシュ、または`--raw-develop`現像RAWを使う`keyframes`を実装。既定数量は、`set IMAGE PreviewEV VALUE`またはGUIで編集できるLRT値`lrt:ExternalExposureDefault / 4`が全フレームで有効なら使い、値が揃わない場合は画像輝度へフォールバックして、LRT 7.5.5から復元した輝度レンジ・連番長・2*/3*マーカーの式で算出。`--lrt-preview`を明示するとXMPの既存値より指定キャッシュの輝度を優先。候補位置も同版の整数間隔・端点選択ルールに対応。GUIでは候補一覧から保存対象を選べる。`--rating 4|5`でLRT Wizardと同じ評価を選び、既定は4つ星。既存マーカーは既定で保持し、選択中の評価だけ数量推定から差し引く。`--replace-existing`では同じ評価を連番から削除し、他の2〜5つ星との衝突を前方9枚以内の空きフレームへ移す。`--evenly-spaced`は輝度解析なしで利用可能。`--luminance-deviation`はlrtl独自配置法。`--apply-xmp-basic`（または`--apply-xmp-exposure`）と`--apply-xmp-crop`を解析に反映できる。`preview-ev --write`で復元したヒストグラム測光値をXMPへ生成できる。LRT本体のプレビュー縮小/ROIと同じ画像入力、および数量スライダーは未対応 | 一部 |
-| Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEGおよびTIFFベース画像/RAW（依存ライブラリの実RAWサンプルでNEF/ARWも確認）、CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`で参照する画像内XMPはJPEG/TIFF/DNG/CR2/RW2に加えてNEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRからもタグ700を読み、CR3はAdobe XMP UUID boxから読む。FNumberがない場合は`lrt:Aperture`を参照。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、LRT同様に最大10件のフレーム差平均と2*/3*/4*隣接ペア補正を適用する近似経路も選択可能。`--lrt-reduce-deflicker`で0〜1の平滑化設定を指定できる。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の画像入力生成は未再現。LOWESS単体は実LRTの53ケースで比較済み。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
+| Holy Grail | Mモードで変化させた露出やISOを補正して昼夜遷移をつなぐ | JPEGおよびTIFFベース画像/RAW（依存ライブラリの実RAWサンプルでNEF/ARWも確認）、CR2/CR3/DNG/RW2のEXIF露出設定から独自の補正を計算。`--lrt-input`で参照する画像内XMPはJPEG/TIFF/DNG/CR2/RW2に加えてNEF/NRW/ARW/SR2/PEF/ERF/ORF/DCRからもタグ700を読み、CR3はAdobe XMP UUID boxから読む。FNumberがない場合は`lrt:Aperture`を参照。`--lrt-input`では既存の`lrt:ExternalExposureDefault`を1/4して読み、LRT同様に最大10件のフレーム差平均と2*/3*/4*隣接ペア補正を適用する近似経路も選択可能。`--lrt-preview camera|visual`では既存LRTキャッシュからPreview EVを直接測定し、`--lrt-reference`で保存領域を使える。個別/一括実行、`--lrt-holy-grail-settings`との併用にも対応。`--lrt-reduce-deflicker`で0〜1の平滑化設定を指定できる。両経路で`--stretch`/`--rotate`とL1評価の`--auto-shape`に対応。LRT内部の画像入力生成は未再現。LOWESS単体は実LRTの53ケースで比較済み。HG専用LocalExposureスロットを優先し、識別できない場合は`crs:Exposure2012`へ書き込む | 一部 |
 | 構図・クロップ | Composition作成、キーフレーム間のクロップアニメーション | `crop`で単一画像/XMPまたは連番全体の構図をCLIから確認・編集。矩形と角度、HasCropの有効化、解除、単一画像の5つ星crop markをバックアップ付きで保存できる。`interpolate`は数値をキーフレーム間で補間し、`render --apply-xmp-crop`で回転矩形を適用して入力と同じ解像度へ再サンプル。GUIのドラッグ編集も既存機能として残る。手動PerspectiveRotate/Scaleも基本現像で適用。垂直/水平/Aspect/Uprightの遠近補正、回転後の自動最大矩形計算は未対応 | 一部 |
 | レンズ情報 | マニュアルレンズのLens Tagger | `lens-tag --aperture f/8`とGUIで連番全体へLRT名前空間の`lrt:Aperture`を設定。EXIFのFNumberが欠けている場合、`holy-grail`がこのXMP値を絞りとして使う。標準EXIFや画像内XMPは変更せず、外部XMPサイドカーのみ | 一部 |
 | 連番管理・選択 | ファイル名/キーフレーム/Visual Previewによる選択、フィルター、反転、連番内の移動・コピー・除去・削除、フォルダー作成とリネーム | `scan`と`gui`で自然順に連番を一覧表示。GUIはページ送りできる画像サムネイルを表示し、4/5つ星キーフレームの設定・解除と、輝度分析で候補一覧を表示し、選んだ候補だけ保存できる。`render --filename-contains TEXT`で名前の絞り込みに対応。`select`でファイル名・XMP評価・既存選択JSONの積集合と反転選択を作成し、動画/TIFF/JPEG処理へ渡すJSONを保存できる。`copy-sequence`で選択画像と採用中XMPをファイル名・内容・更新日時を保って新規フォルダーへコピーできる。`--include-lrt-companions`で同名JPEGと画像別のLRTプレビュー／プロキシも追加できる。`rename-sequence`でフォルダー全体を同じ親の中で改名できる。`move-sequence`で画像・両候補XMP・同名JPEG・画像別キャッシュを新規フォルダーへ移動でき、共有XMP／キャッシュは元にも残す。`move-sequence --merge`で既存先に追記でき、`remove-sequence`で隣の`_REMOVED`へ除外できる。同名画像の上書き、完全削除、任意フォルダー作成、個々の画像名変更は未対応 | 一部 |
@@ -510,6 +512,11 @@ lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --write
 # LRT WizardのReduce Deflickerスライダー値も指定する（0〜1）
 lrtl holy-grail "D:\Timelapse\Sequence" --lrt-input --lrt-reduce-deflicker 0.35
 lrtl holy-grail "D:\Timelapse\Sequence" --lrt-holy-grail-settings --write
+
+# XMPへPreview EVを書き込まず、既存のVisual Previewキャッシュから補正入力を測定
+lrtl holy-grail "D:\Timelapse\RAW" --lrt-preview visual
+# .lrt/lrtsequence.jsonの参照領域で測光し、補正を保存
+lrtl holy-grail "D:\Timelapse\RAW" --lrt-preview visual --lrt-reference --write
 
 # 補正曲線の伸縮・回転を調整
 lrtl holy-grail "D:\Timelapse\Sequence" --stretch 0.4 --rotate -0.2
@@ -1322,6 +1329,9 @@ lrtl batch-holy-grail C:\photos\sequences --recursive --workers 2 --lrt-input --
 # 各連番の保存済み順序・Holy Grail設定を使って保存する
 lrtl batch-holy-grail C:\photos\sequences --recursive --workers 2 --lrt-holy-grail-settings --write
 
+# 既存のVisual Previewキャッシュから各連番の補正入力を測定
+lrtl batch-holy-grail C:\photos\sequences --recursive --workers 2 --lrt-preview visual --write
+
 # EXIFから露出補正だけを保存し、2*/3*評価を付けない
 lrtl batch-holy-grail C:\photos\sequences --recursive --no-mark-jumps --write
 
@@ -1329,7 +1339,7 @@ lrtl batch-holy-grail C:\photos\sequences --recursive --no-mark-jumps --write
 lrtl batch-holy-grail C:\photos\sequences --recursive --reset --write
 ```
 
-`holy-grail`と同じオプションと検証・計算・保存経路を使います。`--recursive`で全階層、`--workers`で同時解析数（既定1、1〜64）を指定し、結果表示と保存はフォルダー順です。EXIFモード、`--ignore-aperture`、ジャンプ評価の手動指定/無効化、`--lrt-input`、Stretch/Rotate、`--auto-shape`、`--lrt-reduce-deflicker`に対応します。`--lrt-holy-grail-settings`では連番ごとの`.lrt/lrtsequence.json`から順序と曲線設定を個別に読み込みます。設定の欠損や不正値があれば全連番の保存を始めません。自動形状は連番ごとに独立して計算します。LRT入力の生成条件・数値一致範囲は個別コマンドの説明と同じです。
+`holy-grail`と同じオプションと検証・計算・保存経路を使います。`--recursive`で全階層、`--workers`で同時解析数（既定1、1〜64）を指定し、結果表示と保存はフォルダー順です。EXIFモード、`--ignore-aperture`、ジャンプ評価の手動指定/無効化、`--lrt-input`、`--lrt-preview camera|visual`と任意の`--lrt-reference`、Stretch/Rotate、`--auto-shape`、`--lrt-reduce-deflicker`に対応します。`--lrt-holy-grail-settings`では連番ごとの`.lrt/lrtsequence.json`から順序と曲線設定を個別に読み込みます。設定の欠損や不正値があれば全連番の保存を始めません。自動形状は連番ごとに独立して計算します。LRT入力の生成条件・数値一致範囲は個別コマンドの説明と同じです。
 
 既定は変更予定の表示で、`--write`でバックアップ付き保存、`--no-backup`でバックアップを省略します。全連番の撮影値・XMP・補正記録・ジャンプ評価・最終パケットを検証し、どれかが不正なら全体を書き込まず終了コード1を返します。ジャンプ評価は既存の明示的な評価を上書きしません。衝突時の扱いも個別コマンドと同じです。保存中のOSエラーは保存済み枚数を報告して中断します。複数ファイルの一括ロールバックには対応しません。
 
@@ -1406,7 +1416,7 @@ lrtl export C:\photos\sequence --output C:\photos\visual-tiff --lrt-preview visu
 
 `camera`は`画像フォルダー/.lrt/previews/拡張子を除いた名前.lrtpreview`、`visual`は`.lrt/visual/拡張子を除いた名前.lrtpreview`を使います。例えば`frame.001.NEF`は`frame.001.lrtpreview`になります。これはインストール済みLRT 7.5.5のパス生成メソッドを呼び出して確認した配置です。同版のプレビューエンコーダーが生成したファイルは通常のJPEGであり、本プロジェクトが用意したグラデーションを同エンコーダーで保存したテスト画像で読込を検査しています。
 
-元画像の連番順・選択・XMPとの対応を維持して、画素だけを選択したキャッシュから読みます。RAW本体のデコードや外部コンバーターは不要です。`render`、`export`、`preview-images`、`preview-ev`、`preview`、`keyframes`、`long-term`、`deflicker`、`batch-deflicker`で指定できます。`batch-render`と`batch-preview-images`は`--`以降に同じオプションを渡します。`--raw-preview`、`--raw-develop`との併用はエラーです。選択したキャッシュが欠けている場合や壊れている場合もエラーとし、元画像・別の種類のキャッシュへフォールバックしません。
+元画像の連番順・選択・XMPとの対応を維持して、画素だけを選択したキャッシュから読みます。RAW本体のデコードや外部コンバーターは不要です。`render`、`export`、`preview-images`、`preview-ev`、`preview`、`keyframes`、`long-term`、`holy-grail`、`batch-holy-grail`、`deflicker`、`batch-deflicker`で指定できます。`batch-render`と`batch-preview-images`は`--`以降に同じオプションを渡します。`--raw-preview`、`--raw-develop`との併用はエラーです。選択したキャッシュが欠けている場合や壊れている場合もエラーとし、元画像・別の種類のキャッシュへフォールバックしません。
 
 キャッシュには処理が適用済みの場合があるため、`export`と`preview-images`では、この入力モードを選ぶと既定のEXIF向き・XMP基本現像・クロップ適用を無効にします。必要な場合はそれぞれのフラグを明示できますが、適用済みの処理を重ねることになります。無加工のMJPEG AVIはキャッシュJPEGを無再圧縮で格納し、TIFFはGoで復号したRGB画素を16-bitコンテナーに保持します。JPEG由来の階調が16-bit相当に増えるものではありません。
 
@@ -1585,7 +1595,7 @@ lrtl curve C:\photos\sequence\frame001.nef --linear
 
 `--lrt-input --auto-shape`の探索は、実LRTの数値コントローラーを呼び出す独立した350候補のグリッド探索と、17/31/61フレーム・Reduce Deflicker 0/0.35の6ケースで比較しています。選ばれるStretch/Rotateは一致し、評価値と曲線は誤差2×10⁻⁸以下です。探索中はクリップをせず、確定した補正の保存計算ではクリップを適用します。LRTのUIワーカーを実行した比較ではありません。
 
-`holy-grail --lrt-input`は、実LRT 7.5.5の数値コントローラーが返す補正曲線と平滑化曲線を66ケースで比較しています。5/17/20/31フレーム、2/3/4つ星の混在、ISO 100/125の変化、Stretch/RotateとReduce Deflickerの組み合わせが対象です。シャッター速度は1秒、絞りはf/8の合成入力で、誤差は各点で2×10⁻⁸以下です。これらはクリップが不要な範囲を使った数値処理の比較であり、LRTの保存・RAW現像を含む全ワークフローの一致ではありません。
+`holy-grail --lrt-input`は、実LRT 7.5.5の数値コントローラーが返す補正曲線と平滑化曲線を66ケースで比較しています。5/17/20/31フレーム、2/3/4つ星の混在、ISO 100/125の変化、Stretch/RotateとReduce Deflickerの組み合わせが対象です。シャッター速度は1秒、絞りはf/8の合成入力で、誤差は各点で2×10⁻⁸以下です。既存LRTプレビューキャッシュからのPreview EV測定は、XMP保存値経由と同じ補正入力になることをGo側の統合テストで確認しています。これはLRT本体のキャッシュ生成や保存・RAW現像を含む全ワークフローの一致を示しません。
 
 この経路では、実LRTのフレーム間処理と同じISO前処理を行います。たとえば整数ラベル`100`は露出値用の数値変換表で約101.594へ変換され、整数化して101として計算されます。1〜99の整数、主要ISOラベル、端数・整数範囲端など140入力を比較しています。入力EXIFを書き換える機能ではありません。操作値はfloat32に揃え、Reduce Deflicker=0.35・20フレームでは6点の平滑化を使います。
 

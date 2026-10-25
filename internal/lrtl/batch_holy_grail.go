@@ -21,6 +21,7 @@ func runBatchHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 	if err := set.Parse(flagFirst(arguments, map[string]bool{
 		"--workers": true, "-workers": true, "--stretch": true, "-stretch": true,
 		"--rotate": true, "-rotate": true, "--lrt-reduce-deflicker": true, "-lrt-reduce-deflicker": true,
+		"--lrt-preview": true, "-lrt-preview": true,
 	})); err != nil {
 		if done, code := finishFlagParse(set, err); done {
 			return code
@@ -68,6 +69,8 @@ func runBatchHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 					if result.err != nil {
 						continue
 					}
+					sequenceCurveOptions.LRTPreview = *f.lrtPreview
+					sequenceCurveOptions.LRTReference = *f.lrtReference
 				}
 				result.plan, result.err = buildHolyGrailPlanWithCurveOptions(frames, *f.ignoreAperture, *f.reset, *f.forceMarkJumps, *f.noMarkJumps, sequenceCurveOptions)
 				if result.err == nil {
@@ -101,7 +104,7 @@ func runBatchHolyGrail(arguments []string, stdout, stderr io.Writer) int {
 		sidecarCount += len(result.plan.Changes)
 		fmt.Fprintf(stdout, "Frames: %d; proposed sidecars: %d; mark jumps: %t; reset: %t\n", result.frames, len(result.plan.Changes), result.plan.MarkJumps, *f.reset)
 		if curve := result.plan.CurveOptions; curve != nil {
-			fmt.Fprintf(stdout, "Curve: stretch=%+.4f rotate=%+.4f reduce-deflicker=%.4f; lrt-input: %t; automatic: %t\n", curve.Stretch, curve.Rotate, curve.ReduceDeflicker, curve.LRTInput, result.plan.AutoCurve)
+			fmt.Fprintf(stdout, "Curve: stretch=%+.4f rotate=%+.4f reduce-deflicker=%.4f; lrt-input: %t; lrt-preview: %s; reference: %t; automatic: %t\n", curve.Stretch, curve.Rotate, curve.ReduceDeflicker, curve.LRTInput, curve.LRTPreview, curve.LRTReference, result.plan.AutoCurve)
 		}
 		for _, change := range result.plan.Changes {
 			fmt.Fprintf(stdout, "  %s: %s %+.4f -> %+.4f EV; HG mark: %d; restore rating: %t\n", filepath.Base(change.Frame.Image), xmpExposureTargetLabel(change.Target), change.ExposureBefore, change.ExposureAfter, change.KeyframeRating, change.RestoreKeyframe)
