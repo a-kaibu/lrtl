@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -170,6 +171,78 @@ func TestLRTPreviewEVWritesOriginalXMP(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "frame.001.NEF") {
 		t.Fatal("measurement logs lost original source name")
+	}
+}
+
+func TestLRTPreviewFeedsPreviewAndLongTermCLIs(t *testing.T) {
+	root := t.TempDir()
+	cacheData, err := os.ReadFile("testdata/lrt-native-preview-7.5.5.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index := 1; index <= 3; index++ {
+		path := filepath.Join(root, fmt.Sprintf("frame%03d.NEF", index))
+		if err := os.WriteFile(path, []byte("not a decodable RAW; select the LRT preview cache"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		writeTestXMP(t, path, map[string]string{})
+		cache := lrtPreviewPath(path, "visual")
+		if err := os.MkdirAll(filepath.Dir(cache), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(cache, cacheData, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := batchFileSnapshot(t, root)
+	previewPath := filepath.Join(t.TempDir(), "preview.svg")
+	manifestPath := filepath.Join(t.TempDir(), "selection.json")
+	var out, stderr bytes.Buffer
+	if code := Main([]string{"preview", root, "--output", previewPath, "--lrt-preview", "visual"}, &out, &stderr); code != 0 {
+		t.Fatalf("cache-only preview exit=%d stderr=%s", code, stderr.String())
+	}
+	if data, err := os.ReadFile(previewPath); err != nil || !bytes.Contains(data, []byte("<svg")) {
+		t.Fatalf("cache-only preview output missing or invalid: %v", err)
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Main([]string{"long-term", root, "--output", manifestPath, "--metric-profile", "lrt-7.5.5", "--lrt-preview", "visual"}, &out, &stderr); code != 0 {
+		t.Fatalf("cache-only long-term analysis exit=%d stderr=%s", code, stderr.String())
+	}
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest sequenceSelectionManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Frames) != 3 || manifest.Frames[0].LRTMetrics == nil || manifest.Frames[0].LRTMetrics.LuminanceMean <= 0 {
+		t.Fatalf("cache-only long-term metrics missing or invalid: %#v", manifest.Frames)
+	}
+	if !reflect.DeepEqual(before, batchFileSnapshot(t, root)) {
+		t.Fatal("preview analysis changed RAW inputs, XMP or LRT cache")
+	}
+
+	if code := Main([]string{"preview", root, "--output", filepath.Join(t.TempDir(), "conflict.svg"), "--lrt-preview", "visual", "--raw-preview"}, &out, &stderr); code == 0 {
+		t.Fatal("preview accepted two mutually exclusive image input modes")
+	}
+	missingCache := lrtPreviewPath(filepath.Join(root, "frame003.NEF"), "visual")
+	if err := os.Remove(missingCache); err != nil {
+		t.Fatal(err)
+	}
+	beforeMissing := batchFileSnapshot(t, root)
+	missingManifest := filepath.Join(t.TempDir(), "must-not-exist.json")
+	out.Reset()
+	stderr.Reset()
+	if code := Main([]string{"long-term", root, "--output", missingManifest, "--lrt-preview", "visual"}, &out, &stderr); code == 0 {
+		t.Fatal("long-term silently fell back when selected preview cache was missing")
+	}
+	if _, err := os.Stat(missingManifest); !os.IsNotExist(err) {
+		t.Fatalf("failed cache analysis published a manifest: %v", err)
+	}
+	if !reflect.DeepEqual(beforeMissing, batchFileSnapshot(t, root)) {
+		t.Fatal("failed cache analysis changed source files")
 	}
 }
 

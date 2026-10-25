@@ -192,9 +192,9 @@ func printUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  batch-holy-grail ROOT [--recursive] [--workers N] [HOLY_GRAIL_OPTIONS...] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  export DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--apply-xmp-basic] [--apply-xmp-crop] [--long-edge N] export RGB16 TIFF frames")
 	fmt.Fprintln(writer, "  preview-images DIRECTORY --output NEW_DIRECTORY [--raw-develop] [--long-edge N] [--quality 1-100] [--write-preview-ev] [--no-backup]")
-	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  subtitles DIRECTORY --output FILE.srt export capture timestamps as timed subtitles")
-	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
+	fmt.Fprintln(writer, "  preview DIRECTORY --output FILE.svg [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
 	fmt.Fprintln(writer, "  preview-ev DIRECTORY [--lrt-reference] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop] [--write] [--no-backup]")
 	fmt.Fprintln(writer, "  deflicker DIRECTORY [DEFLICKER_OPTIONS...] [--lrt-deflicker-settings] [--lrt-preferences FILE] [--write]")
 	fmt.Fprintln(writer, "  keyframes DIRECTORY [--count N] [--rating 4|5] [--replace-existing] [--evenly-spaced] [--luminance-deviation] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-basic|--apply-xmp-exposure] [--apply-xmp-crop]")
@@ -1289,28 +1289,29 @@ func runPreview(arguments []string, stdout, stderr io.Writer) int {
 	output := set.String("output", "", "write an SVG brightness preview")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "apply crs:Exposure2012 from sidecar XMP during analysis")
 	applyXMPBasic := set.Bool("apply-xmp-basic", false, "apply supported global Camera Raw tone and color controls during analysis")
 	applyXMPCrop := set.Bool("apply-xmp-crop", false, "apply rotated crop rectangles from sidecar XMP during analysis")
 	overwrite := set.Bool("overwrite", false, "replace an existing SVG preview")
-	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
+	if err := set.Parse(flagFirst(arguments, map[string]bool{"--output": true, "-output": true, "--lrt-preview": true, "-lrt-preview": true, "--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true})); err != nil {
 		help, code := finishFlagParse(set, err)
 		if help {
-			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl preview DIRECTORY --output FILE.svg [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
 		}
 		return code
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl preview DIRECTORY --output FILE.svg [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--dng-converter PATH|--dnglab PATH] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
 	}
 	frames, err := DiscoverSequence(set.Arg(0))
 	if err != nil {
 		return reportError(stderr, err)
 	}
 	inputOptions := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+		LRTPreview: *lrtPreview, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	if err := writeSequencePreviewWithOptions(frames, *output, inputOptions, *overwrite); err != nil {
@@ -1443,6 +1444,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 	hueRange := set.String("hue-range", "", "keep frames with the selected profile's mean hue in MIN,MAX degrees; MIN>MAX wraps at 360")
 	rawPreview := set.Bool("raw-preview", false, "analyze embedded previews from supported RAW files")
 	rawDevelop := set.Bool("raw-develop", false, "analyze RAW developed by Adobe DNG Converter (or explicit DNGLab)")
+	lrtPreview := set.String("lrt-preview", "", "analyze existing LRT camera or visual preview cache")
 	dnglab := set.String("dnglab", "", "optional DNGLab executable for --raw-develop")
 	dngConverter := set.String("dng-converter", "", "Adobe DNG Converter executable; defaults to the installed application")
 	applyXMPExposure := set.Bool("apply-xmp-exposure", false, "include crs:Exposure2012 in image analysis")
@@ -1458,16 +1460,17 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 		"--luminance-range": true, "-luminance-range": true,
 		"--contrast-range": true, "-contrast-range": true,
 		"--hue-range": true, "-hue-range": true,
+		"--lrt-preview": true, "-lrt-preview": true,
 		"--dnglab": true, "-dnglab": true, "--dng-converter": true, "-dng-converter": true,
 	})
 	if err := set.Parse(parseArgs); err != nil {
 		if done, code := finishFlagParse(set, err); done {
-			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
+			fmt.Fprintln(stdout, "Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]")
 			return code
 		}
 	}
 	if set.NArg() != 1 || *output == "" {
-		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
+		return reportError(stderr, fmt.Errorf("Usage: lrtl long-term DIRECTORY --output FILTER.json [--metric-profile lrtl|lrt-7.5.5] [--lrt-filter-preset FILE] [--lrt-filter-preset-name NAME] [--lrt-filter-color auto|on|off] [--luminance-range MIN,MAX] [--contrast-range MIN,MAX] [--hue-range MIN,MAX] [--lrt-preview camera|visual] [--raw-preview|--raw-develop] [--apply-xmp-exposure|--apply-xmp-basic] [--apply-xmp-crop] [--overwrite]"))
 	}
 	profile := longTermMetricProfile(*metricProfileName)
 	var savedFilter *lrtLongTermSavedFilter
@@ -1529,7 +1532,7 @@ func runLongTerm(arguments []string, stdout, stderr io.Writer) int {
 		return reportError(stderr, err)
 	}
 	inputOptions := imageInputOptions{
-		RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
+		LRTPreview: *lrtPreview, RawPreview: *rawPreview, RawDevelop: *rawDevelop, DNGLabPath: *dnglab, DNGConverterPath: *dngConverter,
 		ApplyXMPExposure: *applyXMPExposure, ApplyXMPBasic: *applyXMPBasic, ApplyXMPCrop: *applyXMPCrop,
 	}
 	manifest, err := analyzeLongTermSequence(frames, inputOptions, ranges, profile)
