@@ -29,13 +29,15 @@ starts updating its minimum and maximum with frame 2. Frame 1 can still supply
 the previous value for an adjacent HG-pair correction. lrtl now follows that
 ordering before applying the count formula.
 
-One observed behavior is intentionally kept as a safety difference: LRT's
-placement helper overwrites an endpoint 2-star/3-star Holy Grail rating when it
-places an ordinary keyframe there. lrtl preserves the Holy Grail rating at that
-endpoint. The Go test asserts both the installed LRT output and this documented
-lrtl guard behavior. A separate CLI test writes a sequence with both kinds of
-ratings, verifies the replacement positions, backup creation, unchanged source
-images, and stable results on a repeated run.
+The placement helper overwrites an endpoint 2-star/3-star Holy Grail rating
+when it places an ordinary keyframe there. `lrtl keyframes --replace-existing`
+now follows that behavior; the existing XMP is backed up, and lrtl's own
+`ol:PreviousRating` marker restores the previous rating if the new keyframe is
+later removed. Interior 2-star/3-star collisions still shift to the nearest
+free preceding frame, searching up to nine rows. The Go tests compare all
+eight final rating arrays directly with the installed helper and exercise the
+CLI write, backup, source-image preservation, restoration and repeated-run
+paths.
 
 To regenerate the fixture on Windows with the same LRT installation:
 

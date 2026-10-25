@@ -352,11 +352,8 @@ func placeLRTWizardKeyframeIndices(indices []int, packets []*XMPPacket, reserved
 			}
 			continue
 		}
-		if current == 2 || current == 3 {
-			// MarkKeyframe protects Holy Grail ratings, including endpoint rows
-			// that the LRT helper itself would otherwise overwrite.
-			continue
-		}
+		// Interior 2/3-star ratings were shifted above. At an endpoint the
+		// installed LRT wizard overwrites the existing rating in place.
 		workingRatings[index] = rating
 		selected = append(selected, index)
 	}

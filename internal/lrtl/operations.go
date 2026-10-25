@@ -62,14 +62,26 @@ func MarkKeyframe(packet *XMPPacket, kind string) (int, error) {
 
 func MarkKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, error) {
 	working := &XMPPacket{Document: packet.Document.Copy()}
-	value, err := markKeyframeWithRating(working, kind, rating)
+	value, err := markKeyframeWithRatingCompatibility(working, kind, rating, false)
 	if err == nil {
 		packet.Document = working.Document
 	}
 	return value, err
 }
 
-func markKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, error) {
+// markLRTWizardKeyframeWithRating mirrors the installed wizard's endpoint
+// behavior. LRT may replace a 2/3-star Holy Grail rating with its selected
+// ordinary keyframe rating when the target row is a sequence endpoint.
+func markLRTWizardKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, error) {
+	working := &XMPPacket{Document: packet.Document.Copy()}
+	value, err := markKeyframeWithRatingCompatibility(working, kind, rating, true)
+	if err == nil {
+		packet.Document = working.Document
+	}
+	return value, err
+}
+
+func markKeyframeWithRatingCompatibility(packet *XMPPacket, kind string, rating int, replaceHolyGrailRating bool) (int, error) {
 	if kind != "default" && kind != "crop" {
 		return 0, fmt.Errorf("unsupported keyframe kind: %s", kind)
 	}
@@ -81,7 +93,7 @@ func markKeyframeWithRating(packet *XMPPacket, kind string, rating int) (int, er
 	} else if hgMarked {
 		return 0, fmt.Errorf("this image is an internal Holy Grail keyframe; reset Holy Grail marks before assigning a regular keyframe")
 	}
-	if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) {
+	if rating, valid := packet.Rating(); valid && (rating == 2 || rating == 3) && !replaceHolyGrailRating {
 		return 0, fmt.Errorf("this image has an LRTimelapse 2- or 3-star Holy Grail keyframe rating; reset Holy Grail marks before assigning a regular keyframe")
 	}
 	marked, err := hasRootMetadataProperty(packet, "ol:KeyframeKind")

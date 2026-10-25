@@ -242,7 +242,7 @@ func TestKeyframesCLIPreviewsThenMarksSuggestedFrames(t *testing.T) {
 	}
 }
 
-func TestKeyframesReplaceExistingPreservesHolyGrailRatings(t *testing.T) {
+func TestKeyframesReplaceExistingMatchesLRTEndpointOverwriteAndCanRestoreHG(t *testing.T) {
 	root := t.TempDir()
 	initialRatings := map[int]int{0: 2, 2: 4, 5: 3, 7: 5, 9: 5}
 	imageContents := make([][]byte, 10)
@@ -264,10 +264,10 @@ func TestKeyframesReplaceExistingPreservesHolyGrailRatings(t *testing.T) {
 	if code := Main(args, &stdout, &stderr); code != 0 {
 		t.Fatalf("keyframes replace exit=%d stderr=%s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "new suggestions: 2") {
+	if !strings.Contains(stdout.String(), "new suggestions: 3") {
 		t.Fatalf("unexpected replacement plan: %s", stdout.String())
 	}
-	wantRatings := map[int]int{0: 2, 4: 4, 5: 3, 7: 5, 9: 4}
+	wantRatings := map[int]int{0: 4, 4: 4, 5: 3, 7: 5, 9: 4}
 	frames, err := DiscoverSequence(root)
 	if err != nil {
 		t.Fatal(err)
@@ -277,9 +277,18 @@ func TestKeyframesReplaceExistingPreservesHolyGrailRatings(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wantBackup := index == 2 || index == 4 || index == 9
+		wantBackup := index == 0 || index == 2 || index == 4 || index == 9
 		if (len(backups) == 1) != wantBackup {
 			t.Fatalf("frame %d has %d backups, want backup=%v", index+1, len(backups), wantBackup)
+		}
+		if index == 0 {
+			backupPacket, err := PacketForSidecar(backups[0])
+			if err != nil {
+				t.Fatalf("reading original Holy Grail endpoint backup: %v", err)
+			}
+			if rating, found := backupPacket.Rating(); !found || rating != 2 {
+				t.Fatalf("endpoint backup rating=(%d,%v), want original 2-star rating", rating, found)
+			}
 		}
 	}
 	for index, frame := range frames {
@@ -292,9 +301,18 @@ func TestKeyframesReplaceExistingPreservesHolyGrailRatings(t *testing.T) {
 		if found != shouldHaveRating || (found && rating != want) {
 			t.Fatalf("frame %d rating=(%d,%v), want (%d,%v)", index+1, rating, found, want, shouldHaveRating)
 		}
-		if index == 4 || index == 9 {
+		if index == 0 || index == 4 || index == 9 {
 			if packet.KeyframeKind() != "default" {
 				t.Fatalf("frame %d should be marked as a default keyframe, got %q", index+1, packet.KeyframeKind())
+			}
+		}
+		if index == 0 {
+			restored := &XMPPacket{Document: packet.Document.Copy()}
+			if err := UnmarkKeyframe(restored, false); err != nil {
+				t.Fatalf("unmarking the overwritten Holy Grail endpoint: %v", err)
+			}
+			if rating, found := restored.Rating(); !found || rating != 2 {
+				t.Fatalf("unmarking did not restore the previous 2-star rating: (%d,%v)", rating, found)
 			}
 		}
 		imageData, err := os.ReadFile(frame.Image)
@@ -536,7 +554,6 @@ func TestLRTWizardCollisionHandlingMatchesOracle(t *testing.T) {
 			Count           int    `json:"count"`
 			TargetRating    int    `json:"targetRating"`
 			InitialRatings  []int  `json:"initialRatings"`
-			GuardDifference bool   `json:"guardDifference"`
 			LRTFinalRatings []int  `json:"lrtRatings"`
 		} `json:"placementCases"`
 	}
@@ -582,16 +599,6 @@ func TestLRTWizardCollisionHandlingMatchesOracle(t *testing.T) {
 			}
 			for _, index := range selected {
 				finalRatings[index] = test.TargetRating
-			}
-			if test.GuardDifference {
-				want := []int{2, 0, 0, 0, 0, 4, 0, 0, 0, 4}
-				if !reflect.DeepEqual(finalRatings, want) {
-					t.Fatalf("Holy Grail guard produced ratings %v, want %v", finalRatings, want)
-				}
-				if reflect.DeepEqual(finalRatings, test.LRTFinalRatings) {
-					t.Fatalf("fixture no longer records the known LRT endpoint overwrite: %v", test.LRTFinalRatings)
-				}
-				return
 			}
 			if !reflect.DeepEqual(finalRatings, test.LRTFinalRatings) {
 				t.Fatalf("final ratings=%v, installed LRT 7.5.5 returned %v", finalRatings, test.LRTFinalRatings)

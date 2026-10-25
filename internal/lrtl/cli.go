@@ -1946,7 +1946,11 @@ func runKeyframes(arguments []string, stdout, stderr io.Writer) int {
 		for _, index := range indices {
 			frame := frames[index]
 			packet := packets[index]
-			if _, err := MarkKeyframeWithRating(packet, "default", *ratingOption); err != nil {
+			mark := MarkKeyframeWithRating
+			if *replaceExisting && (index == 0 || index == len(frames)-1) {
+				mark = markLRTWizardKeyframeWithRating
+			}
+			if _, err := mark(packet, "default", *ratingOption); err != nil {
 				return reportError(stderr, fmt.Errorf("%s: %w", frame.OutputSidecar(), err))
 			}
 			modifiedPackets[index] = packet

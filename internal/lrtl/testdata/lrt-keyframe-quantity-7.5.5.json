@@ -760,13 +760,13 @@
     {"name":"single_five_star_does_not_raise_flat_quantity","frames":500,"offset":0.0000000000000000,"range":0.0000000000000000,"stepAt":-1,"ratingIndices":[250],"ratings":[5],"lrtRange":0.0000000000000000,"lrtCount":1,"lrtIndices":[0]}
   ],
   "placementCases": [
-    {"name":"interior_hg_collision_shifts_one_frame","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,2,0,0,0,0],"guardDifference":false,"lrtRatings":[4,0,0,0,4,2,0,0,0,4]},
-    {"name":"collision_search_accepts_ninth_preceding_frame","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,0,0,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"guardDifference":false,"lrtRatings":[4,0,0,0,0,0,4,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,4]},
-    {"name":"collision_with_no_empty_frame_in_nine","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,0,2,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"guardDifference":false,"lrtRatings":[4,0,0,0,0,0,2,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,4]},
-    {"name":"same_target_rating_is_replaced","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,4,0,0,0,0],"guardDifference":false,"lrtRatings":[4,0,0,0,0,4,0,0,0,4]},
-    {"name":"opposite_keyframe_rating_at_endpoint","count":3,"targetRating":4,"initialRatings":[5,0,0,0,0,0,0,0,0,0],"guardDifference":false,"lrtRatings":[4,0,0,0,0,4,0,0,0,4]},
-    {"name":"holy_grail_endpoint_is_overwritten_by_lrt","count":3,"targetRating":4,"initialRatings":[2,0,0,0,0,0,0,0,0,0],"guardDifference":true,"lrtRatings":[4,0,0,0,0,4,0,0,0,4]},
-    {"name":"crop_target_shifts_default_keyframe","count":3,"targetRating":5,"initialRatings":[0,0,0,0,0,4,0,0,0,0],"guardDifference":false,"lrtRatings":[5,0,0,0,5,4,0,0,0,5]},
-    {"name":"crop_target_replaces_default_at_endpoint","count":3,"targetRating":5,"initialRatings":[0,0,0,0,0,0,0,0,0,4],"guardDifference":false,"lrtRatings":[5,0,0,0,0,5,0,0,0,5]}
+    {"name":"interior_hg_collision_shifts_one_frame","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,2,0,0,0,0],"lrtRatings":[4,0,0,0,4,2,0,0,0,4]},
+    {"name":"collision_search_accepts_ninth_preceding_frame","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,0,0,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lrtRatings":[4,0,0,0,0,0,4,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,4]},
+    {"name":"collision_with_no_empty_frame_in_nine","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,0,2,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"lrtRatings":[4,0,0,0,0,0,2,5,3,2,5,3,2,5,3,2,0,0,0,0,0,0,0,0,0,0,0,0,0,4]},
+    {"name":"same_target_rating_is_replaced","count":3,"targetRating":4,"initialRatings":[0,0,0,0,0,4,0,0,0,0],"lrtRatings":[4,0,0,0,0,4,0,0,0,4]},
+    {"name":"opposite_keyframe_rating_at_endpoint","count":3,"targetRating":4,"initialRatings":[5,0,0,0,0,0,0,0,0,0],"lrtRatings":[4,0,0,0,0,4,0,0,0,4]},
+    {"name":"holy_grail_endpoint_is_overwritten_by_lrt","count":3,"targetRating":4,"initialRatings":[2,0,0,0,0,0,0,0,0,0],"lrtRatings":[4,0,0,0,0,4,0,0,0,4]},
+    {"name":"crop_target_shifts_default_keyframe","count":3,"targetRating":5,"initialRatings":[0,0,0,0,0,4,0,0,0,0],"lrtRatings":[5,0,0,0,5,4,0,0,0,5]},
+    {"name":"crop_target_replaces_default_at_endpoint","count":3,"targetRating":5,"initialRatings":[0,0,0,0,0,0,0,0,0,4],"lrtRatings":[5,0,0,0,0,5,0,0,0,5]}
   ]
 }

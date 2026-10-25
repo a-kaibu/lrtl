@@ -19,8 +19,7 @@ public final class LRTKeyframeQuantityOracle {
     private record Case(String name, double[] measurements, int[] ratings) {}
     private record QuantitySweepCase(String name, int frames, double offset, double range, int stepAt,
             int[] ratingIndices, int[] ratings) {}
-    private record PlacementCase(String name, int frames, int count, int rating, int[] initialRatings,
-            boolean guardDifference) {}
+    private record PlacementCase(String name, int frames, int count, int rating, int[] initialRatings) {}
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1 || args.length > 2) {
@@ -154,21 +153,21 @@ public final class LRTKeyframeQuantityOracle {
         json.append("  ],\n  \"placementCases\": [\n");
         List<PlacementCase> placementCases = List.of(
                 new PlacementCase("interior_hg_collision_shifts_one_frame", 10, 3, 4,
-                        singleRating(10, 5, 2), false),
+                        singleRating(10, 5, 2)),
                 new PlacementCase("collision_search_accepts_ninth_preceding_frame", 30, 3, 4,
-                        occupiedBefore(30, 15, 8), false),
+                        occupiedBefore(30, 15, 8)),
                 new PlacementCase("collision_with_no_empty_frame_in_nine", 30, 3, 4,
-                        occupiedBefore(30, 15, 9), false),
+                        occupiedBefore(30, 15, 9)),
                 new PlacementCase("same_target_rating_is_replaced", 10, 3, 4,
-                        singleRating(10, 5, 4), false),
+                        singleRating(10, 5, 4)),
                 new PlacementCase("opposite_keyframe_rating_at_endpoint", 10, 3, 4,
-                        singleRating(10, 0, 5), false),
+                        singleRating(10, 0, 5)),
                 new PlacementCase("holy_grail_endpoint_is_overwritten_by_lrt", 10, 3, 4,
-                        singleRating(10, 0, 2), true),
+                        singleRating(10, 0, 2)),
                 new PlacementCase("crop_target_shifts_default_keyframe", 10, 3, 5,
-                        singleRating(10, 5, 4), false),
+                        singleRating(10, 5, 4)),
                 new PlacementCase("crop_target_replaces_default_at_endpoint", 10, 3, 5,
-                        singleRating(10, 9, 4), false)
+                        singleRating(10, 9, 4))
         );
         for (int caseIndex = 0; caseIndex < placementCases.size(); caseIndex++) {
             PlacementCase test = placementCases.get(caseIndex);
@@ -178,8 +177,7 @@ public final class LRTKeyframeQuantityOracle {
                     .append(test.count()).append(",\"targetRating\":").append(test.rating())
                     .append(",\"initialRatings\":[");
             appendInts(json, test.initialRatings());
-            json.append("],\"guardDifference\":").append(test.guardDifference())
-                    .append(",\"lrtRatings\":[");
+            json.append("],\"lrtRatings\":[");
             appendInts(json, lrtRatings);
             json.append("]}").append(caseIndex + 1 == placementCases.size() ? "\n" : ",\n");
             System.out.printf("%s frames=%d count=%d rating=%d%n", test.name(), test.frames(), test.count(), test.rating());
