@@ -6,11 +6,13 @@ require (
 	github.com/beevik/etree v1.8.1
 	github.com/evanoberholster/imagemeta v0.3.1
 	github.com/icza/mjpeg v0.0.0-20230330134156-38318e5ab8f4
+	github.com/mandykoh/prism v0.35.3
 	golang.org/x/image v0.29.0
-	golang.org/x/sys v0.5.0
+	golang.org/x/sys v0.20.0
 )
 
 require (
+	github.com/mandykoh/go-parallel v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect

@@ -28,6 +28,7 @@ type RenderOptions struct {
 	VideoRange            string
 	OutputColor           string
 	InputColor            string
+	inputProfile          string
 	OutputGamut           string
 	DynamicRange          string
 	DetectDynamicRange    bool // Allow the native ICC PQ suffix to override a preset's dynamic range.
@@ -279,6 +280,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 	nativeTemporal := imageWriter == nil && outputColor == "lrt-7.5.5" &&
 		(speed != 1 || options.OutputDenoise > 0 || options.RemoveAirplanes > 0 || options.OutputDeflickerLuma || options.OutputDeflickerChroma || options.MotionBlurFrames > 0 || options.Interpolation > 0) &&
 		(!options.TimestampOverlay || nativeTimestamp) && (options.Watermark == "" || nativeWatermark)
+	if options.inputProfile != "" {
+		// Wide-gamut conversion must happen in RGB before native YUV decoding,
+		// filters, or temporal blending can reinterpret the source samples.
+		nativeSpatial = false
+		nativeTemporal = false
+	}
 	nativeWorkingDepth := 10
 	if options.Interpolation > 0 && speed < 1 {
 		nativeWorkingDepth = 8
@@ -577,6 +584,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 				if !supportedRasterFormat(format) {
 					return nil, fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 				}
+				if options.inputProfile != "" {
+					img, decodeErr = convertRenderInputProfile(img, options.inputProfile)
+					if decodeErr != nil {
+						return nil, fmt.Errorf("convert %s from %s: %w", frame.Image, options.inputProfile, decodeErr)
+					}
+				}
 				orientation := uint16(1)
 				if options.AutoOrient {
 					orientation, err = readEXIFOrientation(data)
@@ -756,6 +769,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			}
 			if !supportedRasterFormat(format) {
 				return nil, fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
+			}
+			if options.inputProfile != "" {
+				img, decodeErr = convertRenderInputProfile(img, options.inputProfile)
+				if decodeErr != nil {
+					return nil, fmt.Errorf("convert %s from %s: %w", frame.Image, options.inputProfile, decodeErr)
+				}
 			}
 			nativeSource := nativeTemporal && options.NativeGeometry && !options.ApplyXMPBasic && !options.ApplyXMPExposure && !options.ApplyXMPCrop && !options.Deflicker
 			if !nativeSource {
@@ -969,6 +988,12 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			if !supportedRasterFormat(format) {
 				return fmt.Errorf("render supports JPEG, PNG, and TIFF data only: %s", frame.Image)
 			}
+			if options.inputProfile != "" {
+				img, err = convertRenderInputProfile(img, options.inputProfile)
+				if err != nil {
+					return fmt.Errorf("convert %s from %s: %w", frame.Image, options.inputProfile, err)
+				}
+			}
 			nativeSource := nativeSpatial && options.NativeGeometry && !options.ApplyXMPBasic && !options.ApplyXMPExposure && !options.ApplyXMPCrop && !options.Deflicker
 			if !nativeSource {
 				img = applyEXIFOrientation(img, orientation)
@@ -1057,10 +1082,16 @@ func renderSequence(frames []Frame, output string, options RenderOptions, imageW
 			continue
 		}
 		jpegData := data
-		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || options.OutputSharpen || options.OutputCAS || format != "jpeg" || fade.gain(index, rate) < 1 {
+		if options.Deflicker || applyXMP || applyBasic || applyCrop || (options.AutoOrient && orientation != 1) || resizeFrames || overlayFace != nil || options.OutputSharpen || options.OutputCAS || format != "jpeg" || fade.gain(index, rate) < 1 || options.inputProfile != "" {
 			img, _, err := image.Decode(bytes.NewReader(data))
 			if err != nil {
 				return fmt.Errorf("decode %s: %w", frame.Image, err)
+			}
+			if options.inputProfile != "" {
+				img, err = convertRenderInputProfile(img, options.inputProfile)
+				if err != nil {
+					return fmt.Errorf("convert %s from %s: %w", frame.Image, options.inputProfile, err)
+				}
 			}
 			img = applyEXIFOrientation(img, orientation)
 			if xmpBasics != nil {

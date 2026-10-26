@@ -10,7 +10,7 @@ import (
 )
 
 func TestICCRenderResolution(t *testing.T) {
-	for _, label := range []string{"", "sRGB2014", "ITU-R BT.2020 Reference Display", "ITU-R BT.2020 PQ", "2020 pq", "2020 PQ\r\n"} {
+	for _, label := range []string{"", "sRGB2014", "Display P3", "ITU-R BT.2020 Reference Display", "ITU-R BT.2020 PQ", "2020 pq", "2020 PQ\r\n"} {
 		t.Run(label, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "first.png")
 			if err := os.WriteFile(path, testICCPNG(testICCProfile("mluc", label)), 0600); err != nil {

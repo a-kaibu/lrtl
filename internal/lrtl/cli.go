@@ -913,7 +913,7 @@ func runRender(arguments []string, stdout, stderr io.Writer) int {
 	interpolation := set.Int("interpolation", 0, "frame interpolation: 0 off, 1 blend, 2 motion compensated")
 	videoRange := set.String("video-range", "auto", "MP4/MOV output range: auto, limited or full (explicit range requires FFmpeg zscale)")
 	outputColor := set.String("output-color", "standard", "MP4/MOV color conversion: standard or lrt-7.5.5 (preset default)")
-	inputColor := set.String("input-color", "auto", "prepared image color interpretation: auto (first image ICC), bt709 or bt2020")
+	inputColor := set.String("input-color", "auto", "input color: auto (LRT ICC label), bt709, bt2020, adobe-rgb, display-p3, or prophoto-rgb")
 	outputGamut := set.String("output-gamut", "bt709", "native output gamut: bt709 or bt2020")
 	dynamicRange := set.String("dynamic-range", "sdr", "native output dynamic range: sdr or pq")
 	quality := set.Int("quality", 90, "JPEG quality for converted AVI frames (1-100)")
