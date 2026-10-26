@@ -32,6 +32,7 @@ const (
 type xmpLocalCorrection struct {
 	exposure, contrast, highlights, shadows float64
 	whites, blacks, saturation, texture     float64
+	hue                                     float64
 	clarity, dehaze                         float64
 	sharpness                               float64
 	toningHue, toningSaturation             float64
@@ -144,6 +145,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		{name: "LocalWhites2012", target: &correction.whites},
 		{name: "LocalBlacks2012", target: &correction.blacks},
 		{name: "LocalSaturation", target: &correction.saturation},
+		{name: "LocalHue", target: &correction.hue},
 		{name: "LocalTexture", target: &correction.texture},
 		{name: "LocalClarity2012", target: &correction.clarity},
 		{name: "LocalDehaze", target: &correction.dehaze},
@@ -801,6 +803,9 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 				if correction.toningSaturation > 0 {
 					red, green, blue = applyLocalToningColor(red, green, blue, correction.toningHue, correction.toningSaturation, weight)
 				}
+				if correction.hue != 0 {
+					red, green, blue = applyLocalHueShift(red, green, blue, correction.hue*weight)
+				}
 				red16, green16, blue16 := encodeLinearSRGB16(red), encodeLinearSRGB16(green), encodeLinearSRGB16(blue)
 				curveBlend := math.Max(0, math.Min(1, weight))
 				if correction.hasMainCurve {
@@ -831,7 +836,27 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 }
 
 func (correction xmpLocalCorrection) active() bool {
-	return correction.amount != 0 && (correction.exposure != 0 || correction.contrast != 0 || correction.highlights != 0 || correction.shadows != 0 || correction.whites != 0 || correction.blacks != 0 || correction.saturation != 0 || correction.texture != 0 || correction.clarity != 0 || correction.dehaze != 0 || correction.sharpness != 0 || correction.toningSaturation != 0 || correction.hasWhiteBalance || correction.colorGrading.active || correction.hasMainCurve || correction.hasChannelCurve[0] || correction.hasChannelCurve[1] || correction.hasChannelCurve[2])
+	return correction.amount != 0 && (correction.exposure != 0 || correction.contrast != 0 || correction.highlights != 0 || correction.shadows != 0 || correction.whites != 0 || correction.blacks != 0 || correction.saturation != 0 || correction.hue != 0 || correction.texture != 0 || correction.clarity != 0 || correction.dehaze != 0 || correction.sharpness != 0 || correction.toningSaturation != 0 || correction.hasWhiteBalance || correction.colorGrading.active || correction.hasMainCurve || correction.hasChannelCurve[0] || correction.hasChannelCurve[1] || correction.hasChannelCurve[2])
+}
+
+func applyLocalHueShift(red, green, blue, slider float64) (float64, float64, float64) {
+	// Camera Raw's local hue control is approximated as a rotation of up to
+	// half the color wheel at the slider limits. Convert through encoded sRGB
+	// because HSL hue is defined on gamma-encoded channel values.
+	red16, green16, blue16 := encodeLinearSRGB16(red), encodeLinearSRGB16(green), encodeLinearSRGB16(blue)
+	redSRGB, greenSRGB, blueSRGB := float64(red16)/65535, float64(green16)/65535, float64(blue16)/65535
+	hue, saturation, luminance := srgbToHSL(redSRGB, greenSRGB, blueSRGB)
+	if saturation == 0 {
+		return red, green, blue
+	}
+	hue = math.Mod(hue+slider*1.8, 360)
+	if hue < 0 {
+		hue += 360
+	}
+	redSRGB, greenSRGB, blueSRGB = hslToSRGB(hue, saturation, luminance)
+	return srgb16ToLinear[encodeSRGB16(redSRGB)],
+		srgb16ToLinear[encodeSRGB16(greenSRGB)],
+		srgb16ToLinear[encodeSRGB16(blueSRGB)]
 }
 
 func blendLocalCurve(input uint16, curve toneCurveTable, amount float64) uint16 {
