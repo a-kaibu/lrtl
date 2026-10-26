@@ -91,16 +91,58 @@ func TestXMPLocalBrushRendersDabsAndFlowForLegacyAndAggregateMasks(t *testing.T)
 	}
 }
 
-func TestXMPLocalBrushSupportsSubtractBlend(t *testing.T) {
+func TestXMPLocalBrushUsesCameraRawBlendModeValues(t *testing.T) {
 	dab := `<rdf:li>d 0.5 0.5</rdf:li>`
-	masks := localBrushMaskXML("0", "1", "0.25", "0.5", "1", dab) + localBrushMaskXML("2", "1", "0.25", "0.5", "1", dab)
-	packet := localBrushPacket(t, "MaskGroupBasedCorrections", true, masks, "")
+	for _, test := range []struct {
+		name string
+		mode string
+		want float64
+	}{
+		{name: "subtract is 1", mode: "1", want: .375},
+		{name: "intersect is 2", mode: "2", want: .125},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			masks := localBrushMaskXML("0", "1", "0.25", "0.5", "1", dab) + localBrushMaskXML(test.mode, "1", "0.25", "0.25", "1", dab)
+			packet := localBrushPacket(t, "MaskGroupBasedCorrections", true, masks, "")
+			corrections, err := readXMPLocalCorrections(packet)
+			if err != nil || len(corrections) != 1 {
+				t.Fatalf("corrections=%d err=%v", len(corrections), err)
+			}
+			if got := corrections[0].maskWeight(2, 2, 5, 5, .1, [3]float64{.2, .2, .2}); math.Abs(got-test.want) > 1e-12 {
+				t.Fatalf("blend mode %s weight = %.15f, want %.15f", test.mode, got, test.want)
+			}
+		})
+	}
+}
+
+func TestXMPLocalBrushMaskValueZeroErases(t *testing.T) {
+	dab := `<rdf:li>d 0.5 0.5</rdf:li>`
+	// Camera Raw writes eraser strokes with MaskValue=0 and leaves the blend
+	// mode as Add, so the renderer must interpret this as subtractive coverage.
+	masks := localBrushMaskXML("0", "1", "0.25", "0.5", "1", dab) + localBrushMaskXML("0", "0", "0.25", "0.25", "1", dab)
+	packet := localBrushPacket(t, "PaintBasedCorrections", false, masks, "")
 	corrections, err := readXMPLocalCorrections(packet)
 	if err != nil || len(corrections) != 1 {
 		t.Fatalf("corrections=%d err=%v", len(corrections), err)
 	}
-	if got := corrections[0].maskWeight(2, 2, 5, 5, .1, [3]float64{.2, .2, .2}); math.Abs(got-.25) > 1e-12 {
-		t.Fatalf("add then subtract weight = %.15f, want 0.25", got)
+	if got := corrections[0].maskWeight(2, 2, 5, 5, .1, [3]float64{.2, .2, .2}); math.Abs(got-.375) > 1e-12 {
+		t.Fatalf("paint then erase weight = %.15f, want 0.375", got)
+	}
+	img := image.NewNRGBA64(image.Rect(0, 0, 5, 5))
+	for y := 0; y < 5; y++ {
+		for x := 0; x < 5; x++ {
+			img.SetNRGBA64(x, y, color.NRGBA64{R: 16384, G: 16384, B: 16384, A: 45000})
+		}
+	}
+	raster := rasterizeXMPLocalCorrectionMask(img, corrections[0])
+	if got := float64(raster[2*5+2]); math.Abs(got-.375) > 1e-7 {
+		t.Fatalf("rasterized paint then erase weight = %.9f, want 0.375", got)
+	}
+	rendered := applyXMPLocalCorrections(img, corrections)
+	got := color.NRGBA64Model.Convert(rendered.At(2, 2)).(color.NRGBA64)
+	want := expectedLocalEVPixel(16384, 45000, .375)
+	if got != want {
+		t.Fatalf("rendered paint then erase pixel = %#v, want %#v", got, want)
 	}
 }
 

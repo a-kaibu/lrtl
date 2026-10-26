@@ -23,10 +23,10 @@ const (
 type localMaskBlendMode uint16
 
 const (
-	// Camera Raw serializes Add as 0 and Intersect as 1.
+	// Observed Camera Raw XMP serializes Add, Subtract, and Intersect as 0, 1, and 2.
 	localMaskBlendAdd localMaskBlendMode = iota
-	localMaskBlendIntersect
 	localMaskBlendSubtract
+	localMaskBlendIntersect
 )
 
 const maxLocalBrushDabs = 262144
@@ -326,7 +326,7 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 		return mask, false, err
 	}
 	if math.Trunc(blendMode) != blendMode {
-		return mask, false, fmt.Errorf("crs:MaskBlendMode must be 0 (add), 1 (intersect), or 2 (subtract)")
+		return mask, false, fmt.Errorf("crs:MaskBlendMode must be 0 (add), 1 (subtract), or 2 (intersect)")
 	}
 	mask.blendMode = localMaskBlendMode(blendMode)
 	if mask.kind == localMaskLuminanceRange {
@@ -679,16 +679,17 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminan
 	}
 	weight := 0.0
 	for index, mask := range correction.masks {
-		component := mask.maskWeight(x, y, width, height, luminance, rgb)
+		component := mask.correctionWeight(x, y, width, height, luminance, rgb)
+		blendMode := mask.correctionBlendMode()
 		if index == 0 {
-			if mask.blendMode == localMaskBlendSubtract {
+			if blendMode == localMaskBlendSubtract {
 				weight = 0
 			} else {
 				weight = component
 			}
 			continue
 		}
-		switch mask.blendMode {
+		switch blendMode {
 		case localMaskBlendAdd:
 			// Treat soft mask weights as independent alpha coverage when adding.
 			weight += component * (1 - weight)
@@ -697,6 +698,28 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminan
 		case localMaskBlendSubtract:
 			weight *= 1 - component
 		}
+	}
+	return math.Max(0, math.Min(1, weight))
+}
+
+func (mask xmpLocalMask) correctionBlendMode() localMaskBlendMode {
+	// Camera Raw records eraser brush strokes as Paint with MaskValue=0,
+	// even when MaskBlendMode remains Add.
+	if mask.kind == localMaskBrush && mask.maskValue == 0 {
+		return localMaskBlendSubtract
+	}
+	return mask.blendMode
+}
+
+func (mask xmpLocalMask) correctionWeight(x, y, width, height int, luminance float64, rgb [3]float64) float64 {
+	if mask.kind != localMaskBrush || mask.maskValue != 0 {
+		return mask.maskWeight(x, y, width, height, luminance, rgb)
+	}
+	nx := (float64(x) + 0.5) / float64(width)
+	ny := (float64(y) + 0.5) / float64(height)
+	weight := localBrushMaskWeight(mask.brush, nx, ny, width, height)
+	if mask.flipped != mask.maskInverted {
+		weight = 1 - weight
 	}
 	return math.Max(0, math.Min(1, weight))
 }
@@ -831,12 +854,16 @@ func rasterizeXMPLocalCorrectionMask(img image.Image, correction xmpLocalCorrect
 			}
 			for x := 0; x < width; x++ {
 				component := 0.0
+				blendMode := mask.correctionBlendMode()
 				if mask.kind == localMaskBrush {
 					component = float64(brushRow[x])
 					if mask.flipped != mask.maskInverted {
 						component = 1 - component
 					}
-					component = math.Max(0, math.Min(1, component*mask.maskValue))
+					if mask.maskValue != 0 {
+						component *= mask.maskValue
+					}
+					component = math.Max(0, math.Min(1, component))
 				} else {
 					pixel := color.NRGBA64Model.Convert(img.At(bounds.Min.X+x, bounds.Min.Y+y)).(color.NRGBA64)
 					luminance := 0.2126*srgb16ToLinear[pixel.R] + 0.7152*srgb16ToLinear[pixel.G] + 0.0722*srgb16ToLinear[pixel.B]
@@ -845,13 +872,13 @@ func rasterizeXMPLocalCorrectionMask(img image.Image, correction xmpLocalCorrect
 				}
 				index := y*width + x
 				if maskIndex == 0 {
-					if mask.blendMode != localMaskBlendSubtract {
+					if blendMode != localMaskBlendSubtract {
 						weights[index] = float32(component)
 					}
 					continue
 				}
 				weight := float64(weights[index])
-				switch mask.blendMode {
+				switch blendMode {
 				case localMaskBlendAdd:
 					weight += component * (1 - weight)
 				case localMaskBlendIntersect:
