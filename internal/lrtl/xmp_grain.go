@@ -6,7 +6,8 @@ import (
 	"math"
 )
 
-// xmpApplyGrain adds a coordinate-stable, monochrome grain approximation.
+// xmpApplyGrain adds coordinate-stable luminance grain and, at size 25 or
+// above, a smaller independent blue component.
 // Keeping the pattern tied to image coordinates avoids frame-to-frame random
 // changes when a timelapse uses the same framing. Adobe's exact grain kernel
 // and GrainFrequency transfer curve are not public, so this is not pixel
@@ -39,9 +40,17 @@ func xmpApplyGrainPixel(pixel color.NRGBA64, x, y int, amount, size, frequency f
 	coarse := xmpGrainValueNoise(x, y, coarseScale, 0x9e3779b97f4a7c15)
 	fine := xmpGrainValueNoise(x, y, fineScale, 0xd1b54a32d192ed03)
 	delta := (coarse*(1-roughness) + fine*roughness) * 0.045 * amount
+	blueDelta := 0.0
+	if size >= 25 {
+		blueCoarse := xmpGrainValueNoise(x, y, coarseScale, 0x94d049bb133111eb)
+		blueFine := xmpGrainValueNoise(x, y, fineScale, 0x8538ecb5bd456ea3)
+		blueNoise := blueCoarse*(1-roughness) + blueFine*roughness
+		blueWeight := 0.10 + (size-25)/75*0.25
+		blueDelta = blueNoise * 0.045 * amount * blueWeight
+	}
 	pixel.R = encodeLinearSRGB16(srgb16ToLinear[pixel.R] + delta)
 	pixel.G = encodeLinearSRGB16(srgb16ToLinear[pixel.G] + delta)
-	pixel.B = encodeLinearSRGB16(srgb16ToLinear[pixel.B] + delta)
+	pixel.B = encodeLinearSRGB16(srgb16ToLinear[pixel.B] + delta + blueDelta)
 	return pixel
 }
 

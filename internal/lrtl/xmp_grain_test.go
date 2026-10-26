@@ -129,3 +129,23 @@ func TestXMPGrainControlsChangePatternAndZeroIsNoOp(t *testing.T) {
 		t.Fatal("GrainFrequency did not change the grain pattern")
 	}
 }
+
+func TestXMPGrainAddsBlueComponentAtDocumentedSizeThreshold(t *testing.T) {
+	neutral := color.NRGBA64{R: 30000, G: 30000, B: 30000, A: 65535}
+	blueComponentPixels := 0
+	for y := 0; y < 16; y++ {
+		for x := 0; x < 16; x++ {
+			belowThreshold := xmpApplyGrainPixel(neutral, x, y, 100, 24, 50)
+			if belowThreshold.R != belowThreshold.G || belowThreshold.G != belowThreshold.B {
+				t.Fatalf("size 24 unexpectedly added chroma at (%d,%d): %#v", x, y, belowThreshold)
+			}
+			atThreshold := xmpApplyGrainPixel(neutral, x, y, 100, 25, 50)
+			if atThreshold.B != atThreshold.R || atThreshold.B != atThreshold.G {
+				blueComponentPixels++
+			}
+		}
+	}
+	if blueComponentPixels == 0 {
+		t.Fatal("size 25 did not add a blue grain component")
+	}
+}
