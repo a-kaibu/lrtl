@@ -16,6 +16,8 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 2026-10-26のLinear DNG JPEG追加では、両バイト順でCompression 7/34892を無圧縮参照画素と照合し、SOF3内部の6×2×1サンプルをTIFFの2×2×3へ読み替えるケースと総サンプル数不一致の拒否を確認しました。Adobe Converterを探索できない環境でCompression 1/7/8/34892を読み、TIFFとAVIの生成まで回帰確認しています。lossy JPEG decoderの5秒fuzzは約77,858回で成功しました。全パッケージテストも成功し、`internal/lrtl`は594.543秒、`internal/nativejpeg`は3.314秒でした。`go vet ./...`と`go build ./...`も成功しました。Adobeのlossy JPEG画素との数値一致は未確認です。
 
+インストール済みAdobe DNG Converterで合成Linear DNGからCompression 34892 DNGを生成して検証しました。生成物は16×16のJPEGタイル1枚で、Pure GoのJPEGサンプル値は標準JPEG decoderと一致し、DNG Converterがない状態で現像したTIFF・AVIの映像データも、Adobeの他のDNG metadataを保った無圧縮参照と一致しました。Converterがない環境では統合テストをskipします。`TestAdobeLossyLinearDNGDirectDecode`を含む`go test ./... -count=1 -timeout 20m`は全パッケージで成功し、`internal/lrtl`は607.250秒、`internal/nativejpeg`は4.028秒でした。`go vet ./...`と`go build ./...`も成功しました。
+
 2026-10-26のLinear DNG直接現像では、Converterを探索できないテスト環境で無圧縮16-bit Big-endianとDeflate＋Predictor 2の8-bit RGBを`--raw-develop`経由で読み、TIFFとAVIフレームをGoの直接参照画像と比較しました。明示Converterの優先も検査しています。`go test ./... -count=1 -timeout 20m`が全パッケージで成功し、`internal/lrtl`は591.395秒、`internal/nativejpeg`は3.408秒でした。
 
 2026-10-26の追加検証では、LRT 7.5.5の長期フィルターワーカーを呼ぶ168条件のfixtureを追加し、各段階の選択行と参照曲線を通常・race付きテストで照合しました。`go test ./... -count=1 -timeout 20m`を再実行して全パッケージが成功し、`internal/lrtl`は584.188秒、`internal/nativejpeg`は3.331秒でした。`go vet ./...`と`go build ./...`も再度成功しました。
@@ -26,7 +28,7 @@ LRTimelapseと同じ作業を段階的に実現することを目指す、独立
 
 ### 今回の互換性改善
 
-- `render --raw-develop`の直接対応をLinear DNGのTIFF Compression 34892（8-bit lossy DCT JPEG）まで広げました。Compression 7のLossless JPEG SOF3は[Adobe DNG 1.7.1仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)に従い、JPEG内部の形状やチャンネル数ではなく、TIFF画像と復号サンプル数が一致することを検証します。1/3チャンネル・両バイト順の復号に加え、Converterのない環境で無圧縮／Deflate／Lossless JPEG／Lossy JPEGからTIFFとAVIまで作るテストを追加しました。lossy画素はGo標準JPEG decoderを参照にしており、Adobe現像画素との一致は未検証です。モザイクRAW・未対応DNGはAdobe DNG Converterへ回し、`--dng-converter`を明示した場合は選択されたConverterを使います。
+- `render --raw-develop`の直接対応をLinear DNGのTIFF Compression 34892（8-bit lossy DCT JPEG）まで広げました。Compression 7のLossless JPEG SOF3は[Adobe DNG 1.7.1仕様](https://helpx.adobe.com/content/dam/help/en/camera-raw/digital-negative/jcr_content/root/content/flex/items/position/position-par/download_section_733958301/download-1/DNG_Spec_1_7_1_0.pdf)に従い、JPEG内部の形状やチャンネル数ではなく、TIFF画像と復号サンプル数が一致することを検証します。1/3チャンネル・両バイト順の復号に加え、Adobe DNG Converterが実際に出力したJPEGタイルをConverterなしで読み、TIFFとAVIまで作る統合テストを追加しました。lossy画素はGo標準JPEG decoderと照合しており、Adobe現像画素との一致は未検証です。モザイクRAW・未対応DNGはAdobe DNG Converterへ回し、`--dng-converter`を明示した場合は選択されたConverterを使います。
 
 - `preview-ev`でLRT 7.5.5のカメラプレビュー縮小を再現しました。画像幅が設定値を超える場合、既定の1024×682へ1パスbilinearで縮小してから測光します。LRT本体の合成画像3条件でPreview EVを1e-5以内に比較し、拡大・縮小を含む6条件の82画素（246色成分）も完全一致を確認しました。`--preview-width-camera N`でLRTの設定幅も指定できます。LRT/Camera Rawの元画像デコード・色管理は未対応です。[JAR解析・オラクル・制限](internal/lrtl/testdata/lrt-preview-resize-7.5.5.md)
 - `keyframes`の自動数量・候補位置・既存評価との衝突処理を、インストール済みLRT 7.5.5の内部ヘルパーへ合成フレームを渡して照合しました。数量8件に加え、23種類の長さ・50/250枚境界・浮動小数切り捨て前後を含む747条件で測定レンジ、数量、配置を比較します。先頭フレームはLRTの数量測定レンジには含めず、HGペア補正の直前値として使う挙動も再現しました。評価衝突8件と選択行配置6件に加えて置換モード2件も比較し、選択行の候補外評価は解除、選択外評価は保持、候補位置のHG評価は上書きする挙動をCLIテストで確認しています。置換時はXMPバックアップを作り、lrtlのマーカー解除で候補位置の元評価を復元します。LRTの元画像生成・ウィザードUI全体との一致は示しません。[オラクルと再生成手順](internal/lrtl/testdata/lrt-keyframe-quantity-7.5.5.md)
