@@ -41,6 +41,9 @@ type xmpBasicAdjustments struct {
 	vignetteRoundness    float64
 	vignetteFeather      float64
 	vignetteHighlights   float64
+	grainAmount          float64
+	grainSize            float64
+	grainFrequency       float64
 	parametric           xmpParametricCurve
 	vibrance             float64
 	saturation           float64
@@ -120,6 +123,8 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 	adjustments.colorNoiseSmoothness = 50
 	adjustments.vignetteMidpoint = 50
 	adjustments.vignetteFeather = 50
+	adjustments.grainSize = 25
+	adjustments.grainFrequency = 50
 	adjustments.geometry.scale = 100
 	properties := []struct {
 		name   string
@@ -154,6 +159,9 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 		{"PostCropVignetteRoundness", &adjustments.vignetteRoundness, -100, 100},
 		{"PostCropVignetteFeather", &adjustments.vignetteFeather, 0, 100},
 		{"PostCropVignetteHighlightContrast", &adjustments.vignetteHighlights, 0, 100},
+		{"GrainAmount", &adjustments.grainAmount, 0, 100},
+		{"GrainSize", &adjustments.grainSize, 0, 100},
+		{"GrainFrequency", &adjustments.grainFrequency, 0, 100},
 		{"ParametricShadows", &adjustments.parametric.shadows, -100, 100},
 		{"ParametricDarks", &adjustments.parametric.darks, -100, 100},
 		{"ParametricLights", &adjustments.parametric.lights, -100, 100},
@@ -786,6 +794,7 @@ func (adjustments xmpBasicAdjustments) globalActive() bool {
 		adjustments.shadows != 0 || adjustments.whites != 0 || adjustments.blacks != 0 ||
 		adjustments.texture != 0 || adjustments.clarity != 0 || adjustments.dehaze != 0 || adjustments.sharpness != 0 || adjustments.parametric.active() || adjustments.vibrance != 0 || adjustments.saturation != 0 || adjustments.hasMaster ||
 		adjustments.luminanceNoise != 0 || adjustments.colorNoise != 0 || adjustments.vignetteAmount != 0 ||
+		adjustments.grainAmount != 0 ||
 		adjustments.hasChannel[0] || adjustments.hasChannel[1] || adjustments.hasChannel[2] || adjustments.hasColorMix || adjustments.colorGrading.active || adjustments.grayscale
 }
 
@@ -962,6 +971,9 @@ func applyXMPBasic(img image.Image, adjustments xmpBasicAdjustments) *image.NRGB
 		result = xmpApplyPostCropVignette(result,
 			adjustments.vignetteAmount, adjustments.vignetteMidpoint, adjustments.vignetteRoundness,
 			adjustments.vignetteFeather, adjustments.vignetteHighlights)
+	}
+	if adjustments.grainAmount != 0 {
+		result = xmpApplyGrain(result, adjustments.grainAmount, adjustments.grainSize, adjustments.grainFrequency)
 	}
 	return result
 }
