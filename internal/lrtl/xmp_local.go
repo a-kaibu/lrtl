@@ -38,7 +38,7 @@ type xmpLocalCorrection struct {
 	whites, blacks, saturation, texture     float64
 	hue                                     float64
 	clarity, dehaze                         float64
-	sharpness                               float64
+	sharpness, luminanceNoise               float64
 	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
@@ -165,6 +165,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		{name: "LocalClarity2012", target: &correction.clarity},
 		{name: "LocalDehaze", target: &correction.dehaze},
 		{name: "LocalSharpness", target: &correction.sharpness},
+		{name: "LocalLuminanceNoise", target: &correction.luminanceNoise},
 	} {
 		*property.target, _, err = xmpLocalSlider(element, property.name)
 		if err != nil {
@@ -980,6 +981,22 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 			continue
 		}
 		var textureDetail, clarityDetail, dehazeDetail, sharpnessDetail []float32
+		var noiseReduced *image.NRGBA64
+		if correction.luminanceNoise != 0 {
+			noiseInput, ok := current.(*image.NRGBA64)
+			if !ok {
+				noiseInput = image.NewNRGBA64(bounds)
+				for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+					for x := bounds.Min.X; x < bounds.Max.X; x++ {
+						noiseInput.SetNRGBA64(x, y, color.NRGBA64Model.Convert(current.At(x, y)).(color.NRGBA64))
+					}
+				}
+			}
+			// A full-strength candidate is blended through the local mask below.
+			// Negative serialized values extrapolate away from that candidate to
+			// approximate sharpening the luminance detail in the selected area.
+			noiseReduced = xmpApplyNoiseReduction(noiseInput, 100, 50, 0, 0, 50, 50)
+		}
 		if correction.dehaze != 0 {
 			dehazeDetail = xmpLuminanceDetail(current, xmpDehazeRadius(width, height))
 		}
@@ -1007,6 +1024,10 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 					maskWeight = correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance, pixelRGB)
 				}
 				weight := maskWeight * correction.amount
+				if noiseReduced != nil {
+					strength := math.Max(-1, math.Min(1, correction.luminanceNoise/100*weight))
+					pixel = blendLocalNoisePixel(pixel, noiseReduced.NRGBA64At(x, y), strength)
+				}
 				redGain, greenGain, blueGain := 1.0, 1.0, 1.0
 				if correction.hasWhiteBalance {
 					blend := math.Max(-1, math.Min(1, weight))
@@ -1120,7 +1141,19 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 }
 
 func (correction xmpLocalCorrection) active() bool {
-	return correction.amount != 0 && (correction.exposure != 0 || correction.contrast != 0 || correction.highlights != 0 || correction.shadows != 0 || correction.whites != 0 || correction.blacks != 0 || correction.saturation != 0 || correction.hue != 0 || correction.texture != 0 || correction.clarity != 0 || correction.dehaze != 0 || correction.sharpness != 0 || correction.toningSaturation != 0 || correction.hasWhiteBalance || correction.colorGrading.active || correction.hasMainCurve || correction.hasChannelCurve[0] || correction.hasChannelCurve[1] || correction.hasChannelCurve[2])
+	return correction.amount != 0 && (correction.exposure != 0 || correction.contrast != 0 || correction.highlights != 0 || correction.shadows != 0 || correction.whites != 0 || correction.blacks != 0 || correction.saturation != 0 || correction.hue != 0 || correction.texture != 0 || correction.clarity != 0 || correction.dehaze != 0 || correction.sharpness != 0 || correction.luminanceNoise != 0 || correction.toningSaturation != 0 || correction.hasWhiteBalance || correction.colorGrading.active || correction.hasMainCurve || correction.hasChannelCurve[0] || correction.hasChannelCurve[1] || correction.hasChannelCurve[2])
+}
+
+func blendLocalNoisePixel(original, filtered color.NRGBA64, strength float64) color.NRGBA64 {
+	originalLuma, blueDifference, redDifference := xmpLinearLumaChroma(original)
+	filteredLuma, _, _ := xmpLinearLumaChroma(filtered)
+	adjustedLuma := math.Max(0, math.Min(1, originalLuma+(filteredLuma-originalLuma)*strength))
+	red := adjustedLuma + redDifference
+	blue := adjustedLuma + blueDifference
+	green := (adjustedLuma - 0.2126*red - 0.0722*blue) / 0.7152
+	return color.NRGBA64{
+		R: encodeLinearSRGB16(red), G: encodeLinearSRGB16(green), B: encodeLinearSRGB16(blue), A: original.A,
+	}
 }
 
 func applyLocalHueShift(red, green, blue, slider float64) (float64, float64, float64) {
