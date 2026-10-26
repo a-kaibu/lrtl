@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"math/rand"
 	"testing"
 )
@@ -384,5 +386,22 @@ func FuzzDNGLosslessJPEG(f *testing.F) {
 			t.Skip()
 		}
 		_, _ = decodeDNGLosslessJPEG(data, nil, 2, 1, 8, binary.LittleEndian)
+	})
+}
+
+func FuzzDNGLossyJPEG(f *testing.F) {
+	gray := image.NewGray(image.Rect(0, 0, 2, 2))
+	copy(gray.Pix, []byte{0, 96, 160, 255})
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, gray, &jpeg.Options{Quality: 85}); err != nil {
+		f.Fatal(err)
+	}
+	f.Add(encoded.Bytes())
+	f.Add([]byte{})
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 1<<20 {
+			t.Skip()
+		}
+		_, _ = decodeDNGJPEGBlock(data, nil, 2, 2, 1, 8, binary.LittleEndian)
 	})
 }

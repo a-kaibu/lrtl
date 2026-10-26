@@ -258,7 +258,7 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	if fields.integer(284, 1) != 1 {
 		return nil, fmt.Errorf("Linear DNG requires chunky samples")
 	}
-	if compression != 1 && compression != 7 && compression != 8 {
+	if compression != 1 && compression != 7 && compression != 8 && compression != 34892 {
 		return nil, fmt.Errorf("unsupported Linear DNG compression %d", compression)
 	}
 	if width < 1 || height < 1 || width > 32768 || height > 32768 || uint64(width)*uint64(height)*8 > maxDevelopedRAWBytes {
@@ -285,8 +285,11 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	if predictor != 1 && predictor != 2 {
 		return nil, fmt.Errorf("unsupported Linear DNG predictor %d", predictor)
 	}
-	if compression == 7 && predictor != 1 {
-		return nil, fmt.Errorf("lossless JPEG Linear DNG cannot use a TIFF predictor")
+	if (compression == 7 || compression == 34892) && predictor != 1 {
+		return nil, fmt.Errorf("JPEG Linear DNG cannot use a TIFF predictor")
+	}
+	if compression == 34892 && depth != 8 {
+		return nil, fmt.Errorf("lossy JPEG Linear DNG requires 8-bit samples")
 	}
 	linearization := fields.values(50712)
 	blockWidth, blockHeight := width, fields.integer(278, height)
@@ -305,7 +308,7 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	}
 	sampleBytes := depth / 8
 	var jpegTables []byte
-	if compression == 7 {
+	if compression == 7 || compression == 34892 {
 		jpegTables, err = dngRawTag(fields, 347)
 		if err != nil {
 			return nil, err
@@ -332,10 +335,10 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 			if err != nil {
 				return nil, fmt.Errorf("inflate Linear DNG block %d: %w", index, err)
 			}
-		case 7:
-			block, err = decodeDNGJPEGLossless(encoded, jpegTables, blockWidth, rows, channels, depth, fields.scanner.order)
+		case 7, 34892:
+			block, err = decodeDNGJPEGBlock(encoded, jpegTables, blockWidth, rows, channels, depth, fields.scanner.order)
 			if err != nil {
-				return nil, fmt.Errorf("decode lossless JPEG Linear DNG block %d: %w", index, err)
+				return nil, fmt.Errorf("decode JPEG Linear DNG block %d: %w", index, err)
 			}
 		}
 		if uint64(len(block)) < required {

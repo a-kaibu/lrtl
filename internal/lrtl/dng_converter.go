@@ -143,7 +143,7 @@ func developLinearDNGFile(source, cameraProfile string) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 	compression := fields.integer(259, 1)
-	if compression != 1 && compression != 7 && compression != 8 {
+	if compression != 1 && compression != 7 && compression != 8 && compression != 34892 {
 		return nil, false, nil
 	}
 	developed, err := developLinearDNG(data, cameraProfile)

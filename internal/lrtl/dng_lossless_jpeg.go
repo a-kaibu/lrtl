@@ -1,9 +1,119 @@
 package lrtl
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"image/jpeg"
 )
+
+func decodeDNGJPEGBlock(encoded, tables []byte, width, height, components, depth int, order binary.ByteOrder) ([]byte, error) {
+	if width < 1 || height < 1 || (components != 1 && components != 3) || (depth != 8 && depth != 16) || uint64(width)*uint64(height)*uint64(components) > maxDevelopedRAWBytes {
+		return nil, fmt.Errorf("DNG JPEG image dimensions or channel count exceed limits")
+	}
+	expectedSamples := uint64(width) * uint64(height) * uint64(components)
+	stream, err := joinDNGJPEGTables(encoded, tables)
+	if err != nil {
+		return nil, err
+	}
+	marker, precision, frameWidth, frameHeight, frameComponents, err := inspectDNGJPEGFrame(stream)
+	if err != nil {
+		return nil, err
+	}
+	if marker == 0xc3 {
+		frameSamples := uint64(frameWidth) * uint64(frameHeight) * uint64(frameComponents)
+		if precision != depth || frameSamples != expectedSamples {
+			return nil, fmt.Errorf("lossless JPEG frame %dx%d %d-bit/%d-channel does not contain the TIFF image's %d samples", frameWidth, frameHeight, precision, frameComponents, expectedSamples)
+		}
+		if frameSamples > uint64(maxDevelopedRAWBytes)/uint64(depth/8) || frameSamples > uint64(^uint(0)>>1)/uint64(depth/8) {
+			return nil, fmt.Errorf("lossless JPEG frame output exceeds limits")
+		}
+		decoder := dngLosslessJPEGDecoder{data: stream}
+		raw, err := decoder.decodeWithOutputLimit(frameWidth, frameHeight, frameComponents, depth, order, maxDevelopedRAWBytes)
+		if err != nil {
+			return nil, err
+		}
+		if uint64(len(raw)) != expectedSamples*uint64(depth/8) {
+			return nil, fmt.Errorf("lossless JPEG decoded sample count does not match the TIFF image")
+		}
+		return raw, nil
+	}
+	if frameWidth != width || frameHeight != height || frameComponents != components || precision != depth {
+		return nil, fmt.Errorf("JPEG frame %dx%d %d-bit/%d-channel does not match TIFF image %dx%d %d-bit/%d-channel", frameWidth, frameHeight, precision, frameComponents, width, height, depth, components)
+	}
+	if marker != 0xc0 && marker != 0xc1 && marker != 0xc2 {
+		return nil, fmt.Errorf("unsupported DNG JPEG frame marker 0x%02x", marker)
+	}
+	if depth != 8 {
+		return nil, fmt.Errorf("lossy DNG JPEG requires 8-bit samples")
+	}
+	config, err := jpeg.DecodeConfig(bytes.NewReader(stream))
+	if err != nil {
+		return nil, fmt.Errorf("read lossy DNG JPEG header: %w", err)
+	}
+	if config.Width != width || config.Height != height {
+		return nil, fmt.Errorf("lossy DNG JPEG dimensions do not match the TIFF image")
+	}
+	decoded, err := jpeg.Decode(bytes.NewReader(stream))
+	if err != nil {
+		return nil, fmt.Errorf("decode lossy DNG JPEG: %w", err)
+	}
+	if decoded.Bounds().Dx() != width || decoded.Bounds().Dy() != height {
+		return nil, fmt.Errorf("decoded lossy DNG JPEG dimensions do not match the TIFF image")
+	}
+	raw := make([]byte, width*height*components)
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			red, green, blue, _ := decoded.At(decoded.Bounds().Min.X+x, decoded.Bounds().Min.Y+y).RGBA()
+			position := (y*width + x) * components
+			raw[position] = byte(red >> 8)
+			if components == 3 {
+				raw[position+1], raw[position+2] = byte(green>>8), byte(blue>>8)
+			}
+		}
+	}
+	return raw, nil
+}
+
+func inspectDNGJPEGFrame(data []byte) (marker byte, precision, width, height, components int, err error) {
+	if len(data) < 4 || data[0] != 0xff || data[1] != 0xd8 {
+		return 0, 0, 0, 0, 0, fmt.Errorf("invalid DNG JPEG SOI")
+	}
+	decoder := dngLosslessJPEGDecoder{data: data, position: 2}
+	for decoder.position < len(decoder.data) {
+		marker, err = decoder.nextMarker()
+		if err != nil {
+			return 0, 0, 0, 0, 0, err
+		}
+		switch marker {
+		case 0xc0, 0xc1, 0xc2, 0xc3:
+			segment, segmentErr := decoder.segment()
+			if segmentErr != nil {
+				return 0, 0, 0, 0, 0, segmentErr
+			}
+			if len(segment) < 6 {
+				return 0, 0, 0, 0, 0, fmt.Errorf("truncated DNG JPEG frame header")
+			}
+			precision = int(segment[0])
+			height = int(segment[1])<<8 | int(segment[2])
+			width = int(segment[3])<<8 | int(segment[4])
+			components = int(segment[5])
+			if width < 1 || height < 1 || components < 1 || components > 4 || len(segment) != 6+3*components {
+				return 0, 0, 0, 0, 0, fmt.Errorf("invalid DNG JPEG frame parameters")
+			}
+			return marker, precision, width, height, components, nil
+		case 0xda, 0xd9:
+			return 0, 0, 0, 0, 0, fmt.Errorf("DNG JPEG frame header is missing")
+		case 0xd8, 0x01, 0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7:
+			return 0, 0, 0, 0, 0, fmt.Errorf("unexpected DNG JPEG marker 0x%02x", marker)
+		default:
+			if _, err := decoder.segment(); err != nil {
+				return 0, 0, 0, 0, 0, err
+			}
+		}
+	}
+	return 0, 0, 0, 0, 0, fmt.Errorf("DNG JPEG frame header is missing")
+}
 
 // decodeDNGLosslessJPEG decodes the single-component Huffman lossless JPEG
 // variant used by DNG semantic masks. The output uses the TIFF byte order.
@@ -168,6 +278,10 @@ type dngLosslessJPEGDecoder struct {
 }
 
 func (decoder *dngLosslessJPEGDecoder) decode(expectedWidth, expectedHeight, expectedComponents, expectedDepth int, order binary.ByteOrder) ([]byte, error) {
+	return decoder.decodeWithOutputLimit(expectedWidth, expectedHeight, expectedComponents, expectedDepth, order, maxDNGSemanticMaskBytes)
+}
+
+func (decoder *dngLosslessJPEGDecoder) decodeWithOutputLimit(expectedWidth, expectedHeight, expectedComponents, expectedDepth int, order binary.ByteOrder, maxOutputBytes int) ([]byte, error) {
 	if len(decoder.data) < 4 || decoder.data[0] != 0xff || decoder.data[1] != 0xd8 {
 		return nil, fmt.Errorf("invalid lossless JPEG SOI")
 	}
@@ -195,7 +309,7 @@ func (decoder *dngLosslessJPEGDecoder) decode(expectedWidth, expectedHeight, exp
 			if width != expectedWidth || height != expectedHeight || decoder.components != expectedComponents || decoder.precision != expectedDepth {
 				return nil, fmt.Errorf("lossless JPEG frame %dx%d %d-bit/%d-channel does not match TIFF image %dx%d %d-bit/%d-channel", width, height, decoder.precision, decoder.components, expectedWidth, expectedHeight, expectedDepth, expectedComponents)
 			}
-			return decoder.decodeScan(expectedWidth, expectedHeight, expectedComponents, expectedDepth, order)
+			return decoder.decodeScan(expectedWidth, expectedHeight, expectedComponents, expectedDepth, order, maxOutputBytes)
 		case 0xd9:
 			return nil, fmt.Errorf("lossless JPEG ended before scan data")
 		default:
@@ -327,7 +441,7 @@ func (decoder *dngLosslessJPEGDecoder) parseRestartInterval() error {
 	return nil
 }
 
-func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, components, depth int, order binary.ByteOrder) ([]byte, error) {
+func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, components, depth int, order binary.ByteOrder, maxOutputBytes int) ([]byte, error) {
 	segment, err := decoder.segment()
 	if err != nil {
 		return nil, err
@@ -366,7 +480,7 @@ func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, components, dep
 			return nil, fmt.Errorf("lossless JPEG DC Huffman table %d is missing", tableID)
 		}
 	}
-	if uint64(width)*uint64(height)*uint64(components)*uint64(depth/8) > maxDNGSemanticMaskBytes {
+	if uint64(width)*uint64(height)*uint64(components)*uint64(depth/8) > uint64(maxOutputBytes) {
 		return nil, fmt.Errorf("lossless JPEG image output exceeds limits")
 	}
 	if decoder.restart != 0 && decoder.restart%width != 0 {

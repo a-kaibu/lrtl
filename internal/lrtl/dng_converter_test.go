@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -160,6 +161,27 @@ func TestLinearDNGRawDevelopUsesPureGoDecoder(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("ProgramFiles", t.TempDir())
 	t.Setenv("ProgramFiles(x86)", t.TempDir())
+	lossySource := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+	for index, pixel := range []color.NRGBA{{R: 252, G: 12, B: 60, A: 255}, {R: 20, G: 200, B: 96, A: 255}, {R: 80, G: 40, B: 244, A: 255}, {R: 200, G: 108, B: 24, A: 255}} {
+		lossySource.SetNRGBA(index%2, index/2, pixel)
+	}
+	var lossyJPEG bytes.Buffer
+	if err := jpeg.Encode(&lossyJPEG, lossySource, &jpeg.Options{Quality: 92}); err != nil {
+		t.Fatal(err)
+	}
+	lossyDecoded, err := jpeg.Decode(bytes.NewReader(lossyJPEG.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lossyPixels := make([]uint16, 0, 12)
+	for y := 0; y < 2; y++ {
+		for x := 0; x < 2; x++ {
+			red, green, blue, _ := lossyDecoded.At(x, y).RGBA()
+			lossyPixels = append(lossyPixels, uint16(red>>8), uint16(green>>8), uint16(blue>>8))
+		}
+	}
+	losslessGeometryPixels := []uint16{0, 20, 40, 64, 80, 100, 128, 150, 170, 255, 240, 220}
+	losslessGeometryJPEG, _, _ := dngTestLosslessJPEG(t, 6, 2, 8, 1, 1, 0, losslessGeometryPixels)
 
 	for _, test := range []struct {
 		name                   string
@@ -167,9 +189,12 @@ func TestLinearDNGRawDevelopUsesPureGoDecoder(t *testing.T) {
 		channels, depth        int
 		compression, predictor int
 		pixels                 []uint16
+		jpegData               []byte
 	}{
-		{"uncompressed-16bit-big-endian", binary.BigEndian, 1, 16, 1, 1, []uint16{1000, 12000, 35000, 65535}},
-		{"deflate-rgb-8bit-little-endian", binary.LittleEndian, 3, 8, 8, 2, []uint16{0, 20, 40, 64, 80, 100, 128, 150, 170, 255, 240, 220}},
+		{"uncompressed-16bit-big-endian", binary.BigEndian, 1, 16, 1, 1, []uint16{1000, 12000, 35000, 65535}, nil},
+		{"deflate-rgb-8bit-little-endian", binary.LittleEndian, 3, 8, 8, 2, []uint16{0, 20, 40, 64, 80, 100, 128, 150, 170, 255, 240, 220}, nil},
+		{"lossless-jpeg-shared-sample-count-8bit-big-endian", binary.BigEndian, 3, 8, 7, 1, losslessGeometryPixels, losslessGeometryJPEG},
+		{"lossy-jpeg-rgb-8bit-big-endian", binary.BigEndian, 3, 8, 34892, 1, lossyPixels, lossyJPEG.Bytes()},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			metadata := map[uint16]dngTestField{274: dngTestShort(test.order, 6)}
@@ -187,7 +212,7 @@ func TestLinearDNGRawDevelopUsesPureGoDecoder(t *testing.T) {
 			if test.compression == 1 {
 				sourceData = linearDNGFixture(test.order, 2, 2, test.channels, test.pixels, metadata)
 			} else {
-				sourceData = linearDNGCompressedFixture(t, test.order, 2, 2, test.channels, test.depth, test.compression, test.predictor, test.pixels, nil, metadata)
+				sourceData = linearDNGCompressedFixture(t, test.order, 2, 2, test.channels, test.depth, test.compression, test.predictor, test.pixels, test.jpegData, metadata)
 			}
 			root := t.TempDir()
 			source := filepath.Join(root, "frame.DNG")

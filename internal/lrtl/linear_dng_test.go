@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"math"
 	"os"
@@ -142,7 +143,7 @@ func linearDNGCompressedFixture(t *testing.T, order binary.ByteOrder, width, hei
 	metadata[317] = dngTestShort(order, uint16(predictor))
 	fixture := linearDNGFixture(order, width, height, channels, pixels, metadata)
 	var encoded []byte
-	if compression == 7 {
+	if compression == 7 || compression == 34892 {
 		encoded = jpegData
 	} else {
 		raw := make([]byte, len(pixels)*(depth/8))
@@ -284,12 +285,104 @@ func TestLinearDNGCompressedBlocks(t *testing.T) {
 		assertLinearDNGImagesEqual(t, compressed, baseline)
 	})
 
-	t.Run("lossless-jpeg-rejects-tiff-predictor", func(t *testing.T) {
+	t.Run("lossless-jpeg-geometry-differs-from-tiff", func(t *testing.T) {
+		order := binary.LittleEndian
+		pixels := []uint16{0, 20, 40, 64, 80, 100, 128, 150, 170, 255, 240, 220}
+		jpegData, _, _ := dngTestLosslessJPEG(t, 6, 2, 8, 1, 0, 0, pixels)
+		metadata := map[uint16]dngTestField{
+			258:   dngTestShort(order, 8, 8, 8),
+			50717: dngTestLong(order, 255),
+			50721: dngTestDouble(order, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+			50728: dngTestDouble(order, 1, 1, 1),
+		}
+		baseline, err := decodeLinearDNG(linearDNGFixture(order, 2, 2, 3, pixels, metadata))
+		if err != nil {
+			t.Fatalf("decode uncompressed TIFF geometry baseline: %v", err)
+		}
+		compressedData := linearDNGCompressedFixture(t, order, 2, 2, 3, 8, 7, 1, pixels, jpegData, metadata)
+		compressed, err := decodeLinearDNG(compressedData)
+		if err != nil {
+			t.Fatalf("decode JPEG geometry differing from TIFF: %v", err)
+		}
+		assertLinearDNGImagesEqual(t, compressed, baseline)
+		if _, err := decodeDNGJPEGBlock(jpegData, nil, 3, 2, 3, 8, order); err == nil {
+			t.Fatal("lossless JPEG with a different total sample count was accepted")
+		}
+	})
+
+	t.Run("lossy-jpeg-rgb", func(t *testing.T) {
+		pixels := []uint16{245, 12, 55, 34, 220, 90, 80, 42, 240, 190, 110, 20, 16, 200, 140, 250, 60, 35}
+		source := image.NewNRGBA(image.Rect(0, 0, 3, 2))
+		for index := range 6 {
+			source.SetNRGBA(index%3, index/3, color.NRGBA{R: uint8(pixels[index*3]), G: uint8(pixels[index*3+1]), B: uint8(pixels[index*3+2]), A: 255})
+		}
+		var jpegBytes bytes.Buffer
+		if err := jpeg.Encode(&jpegBytes, source, &jpeg.Options{Quality: 92}); err != nil {
+			t.Fatal(err)
+		}
+		decodedJPEG, err := jpeg.Decode(bytes.NewReader(jpegBytes.Bytes()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		jpegPixels := make([]uint16, 0, 18)
+		wantRaw := make([]byte, 0, 18)
+		for y := 0; y < 2; y++ {
+			for x := 0; x < 3; x++ {
+				red, green, blue, _ := decodedJPEG.At(x, y).RGBA()
+				for _, component := range []uint16{uint16(red >> 8), uint16(green >> 8), uint16(blue >> 8)} {
+					jpegPixels = append(jpegPixels, component)
+					wantRaw = append(wantRaw, byte(component))
+				}
+			}
+		}
+		metadataFor := func(order binary.ByteOrder) map[uint16]dngTestField {
+			return map[uint16]dngTestField{
+				50717: dngTestLong(order, 255),
+				50721: dngTestDouble(order, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+				50728: dngTestDouble(order, 1, 1, 1),
+			}
+		}
+		for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+			metadata := metadataFor(order)
+			baselineMetadata := make(map[uint16]dngTestField, len(metadata)+1)
+			for tag, field := range metadata {
+				baselineMetadata[tag] = field
+			}
+			baselineMetadata[258] = dngTestShort(order, 8, 8, 8)
+			baseline, err := decodeLinearDNG(linearDNGFixture(order, 3, 2, 3, jpegPixels, baselineMetadata))
+			if err != nil {
+				t.Fatalf("decode lossy JPEG sample reference (%s): %v", orderName(order), err)
+			}
+			compressedData := linearDNGCompressedFixture(t, order, 3, 2, 3, 8, 34892, 1, jpegPixels, jpegBytes.Bytes(), metadata)
+			compressed, err := decodeLinearDNG(compressedData)
+			if err != nil {
+				t.Fatalf("decode lossy JPEG Linear DNG (%s): %v", orderName(order), err)
+			}
+			assertLinearDNGImagesEqual(t, compressed, baseline)
+			raw, err := decodeDNGJPEGBlock(jpegBytes.Bytes(), nil, 3, 2, 3, 8, order)
+			if err != nil {
+				t.Fatalf("decode lossy JPEG samples (%s): %v", orderName(order), err)
+			}
+			if !bytes.Equal(raw, wantRaw) {
+				t.Fatalf("lossy JPEG samples (%s)=%v, want %v", orderName(order), raw, wantRaw)
+			}
+		}
+		if _, err := decodeDNGJPEGBlock(jpegBytes.Bytes(), nil, 2, 2, 3, 8, binary.LittleEndian); err == nil {
+			t.Fatal("lossy JPEG with mismatched dimensions was accepted")
+		}
+		if _, err := decodeDNGJPEGBlock(jpegBytes.Bytes(), nil, 3, 2, 3, 16, binary.LittleEndian); err == nil {
+			t.Fatal("8-bit lossy JPEG was accepted as a 16-bit image")
+		}
+	})
+
+	t.Run("jpeg-rejects-tiff-predictor", func(t *testing.T) {
 		order := binary.LittleEndian
 		jpegData := []byte{0xff, 0xd8, 0xff, 0xd9}
-		data := linearDNGCompressedFixture(t, order, 1, 1, 1, 8, 7, 2, []uint16{1}, jpegData, nil)
-		if _, err := decodeLinearDNG(data); err == nil {
-			t.Fatal("Lossless JPEG combined with TIFF Predictor 2 was accepted")
+		for _, compression := range []int{7, 34892} {
+			data := linearDNGCompressedFixture(t, order, 1, 1, 1, 8, compression, 2, []uint16{1}, jpegData, nil)
+			if _, err := decodeLinearDNG(data); err == nil {
+				t.Fatalf("JPEG compression %d combined with TIFF Predictor 2 was accepted", compression)
+			}
 		}
 	})
 }
