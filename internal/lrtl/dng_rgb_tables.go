@@ -464,6 +464,9 @@ func readDNGSemanticMask(fields *dngFields, activeWidth, activeHeight, mainOrien
 	if predictor != 1 && !(predictor == 2 && sampleFormat == 1) {
 		return nil, fmt.Errorf("unsupported semantic mask predictor %d", predictor)
 	}
+	if compression == 7 && (sampleFormat != 1 || (depth != 8 && depth != 16) || predictor != 1) {
+		return nil, fmt.Errorf("lossless JPEG semantic masks require 8- or 16-bit integer samples without a TIFF predictor")
+	}
 	left, top, fullWidth, fullHeight := 0, 0, width, height
 	if _, found := fields.entries[dngMaskSubAreaTag]; found {
 		area := fields.values(dngMaskSubAreaTag)
@@ -512,6 +515,14 @@ func readDNGSemanticMaskSamples(fields *dngFields, width, height, depth, sampleF
 	bytesPerSample := depth / 8
 	values := make([]float32, width*height)
 	order := fields.scanner.order
+	var jpegTables []byte
+	if compression == 7 {
+		var err error
+		jpegTables, err = dngRawTag(fields, 347)
+		if err != nil {
+			return nil, err
+		}
+	}
 	for block := range offsets {
 		blockX, blockY := block%across, block/across
 		actualWidth, actualHeight := min(blockWidth, width-blockX*blockWidth), min(blockHeight, height-blockY*blockHeight)
@@ -557,7 +568,11 @@ func readDNGSemanticMaskSamples(fields *dngFields, width, height, depth, sampleF
 				}
 			}
 		case 7:
-			return nil, fmt.Errorf("lossless JPEG semantic masks are not supported by this Go decoder")
+			var err error
+			raw, err = decodeDNGLosslessJPEG(encoded, jpegTables, storedWidth, storedHeight, depth, order)
+			if err != nil {
+				return nil, fmt.Errorf("decode lossless JPEG semantic mask block %d: %w", block, err)
+			}
 		default:
 			return nil, fmt.Errorf("unsupported semantic mask compression %d", compression)
 		}

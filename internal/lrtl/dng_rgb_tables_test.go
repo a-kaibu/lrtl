@@ -279,7 +279,7 @@ func TestDNGRGBTablesMaskedWeightedAndSequential(t *testing.T) {
 	}
 }
 
-func appendDNGSemanticMaskIFD(t testing.TB, data []byte, order binary.ByteOrder, name string, width, height int, bits, compression, sampleFormat, predictor, tileWidth, tileHeight uint16, samples []byte, subArea []uint32) []byte {
+func appendDNGSemanticMaskIFD(t testing.TB, data []byte, order binary.ByteOrder, name string, width, height int, bits, compression, sampleFormat, predictor, tileWidth, tileHeight uint16, samples []byte, subArea []uint32, jpegTables ...[]byte) []byte {
 	t.Helper()
 	rootEntries := int(order.Uint16(data[8:10]))
 	rootNext := 10 + rootEntries*12
@@ -293,6 +293,9 @@ func appendDNGSemanticMaskIFD(t testing.TB, data []byte, order binary.ByteOrder,
 		258: dngTestShort(order, bits), 259: dngTestShort(order, compression), 262: dngTestShort(order, 52527),
 		277: dngTestShort(order, 1), 284: dngTestShort(order, 1), 339: dngTestShort(order, sampleFormat),
 		52526: {typeID: 2, count: uint32(len(name) + 1), data: append([]byte(name), 0)},
+	}
+	if len(jpegTables) != 0 && len(jpegTables[0]) != 0 {
+		fields[347] = dngTestField{typeID: 7, count: uint32(len(jpegTables[0])), data: jpegTables[0]}
 	}
 	offsetTag := uint16(273)
 	if tileWidth != 0 && tileHeight != 0 {
@@ -390,10 +393,10 @@ func TestDNGSemanticMaskBilinearAndInvalidSubArea(t *testing.T) {
 	}
 }
 
-func dngTestSemanticMask(t *testing.T, order binary.ByteOrder, width, height int, bits, compression, sampleFormat, predictor, tileWidth, tileHeight uint16, samples []byte, subArea []uint32) (*dngSemanticMask, error) {
+func dngTestSemanticMask(t *testing.T, order binary.ByteOrder, width, height int, bits, compression, sampleFormat, predictor, tileWidth, tileHeight uint16, samples []byte, subArea []uint32, jpegTables ...[]byte) (*dngSemanticMask, error) {
 	t.Helper()
 	fixture := linearDNGFixture(order, max(1, width), max(1, height), 3, make([]uint16, max(1, width*height*3)), nil)
-	fixture = appendDNGSemanticMaskIFD(t, fixture, order, "test", width, height, bits, compression, sampleFormat, predictor, tileWidth, tileHeight, samples, subArea)
+	fixture = appendDNGSemanticMaskIFD(t, fixture, order, "test", width, height, bits, compression, sampleFormat, predictor, tileWidth, tileHeight, samples, subArea, jpegTables...)
 	fields, err := findLinearDNG(fixture)
 	if err != nil {
 		return nil, err
@@ -433,6 +436,7 @@ func TestDNGSemanticMaskSampleDecoding(t *testing.T) {
 			if err := jpeg.Encode(&jpegSamples, gray, &jpeg.Options{Quality: 100}); err != nil {
 				t.Fatal(err)
 			}
+			losslessJPEG, _, _ := dngTestLosslessJPEG(t, 2, 1, 8, 1, 0, 0, []uint16{0, 255})
 			cases := []struct {
 				name                                                        string
 				bits, compression, format, predictor, tileWidth, tileHeight uint16
@@ -447,6 +451,7 @@ func TestDNGSemanticMaskSampleDecoding(t *testing.T) {
 				{name: "deflate", bits: 8, compression: 8, format: 1, predictor: 1, samples: compressed.Bytes(), want: []float32{0, 1}},
 				{name: "padded tile", bits: 8, compression: 1, format: 1, predictor: 1, tileWidth: 2, tileHeight: 2, samples: []byte{0, 255, 17, 23}, want: []float32{0, 1}},
 				{name: "lossy JPEG", bits: 8, compression: 34892, format: 1, predictor: 1, samples: jpegSamples.Bytes(), want: []float32{0, 1}, tolerance: .03},
+				{name: "lossless JPEG", bits: 8, compression: 7, format: 1, predictor: 1, samples: losslessJPEG, want: []float32{0, 1}},
 			}
 			for _, test := range cases {
 				t.Run(test.name, func(t *testing.T) {
@@ -462,10 +467,6 @@ func TestDNGSemanticMaskSampleDecoding(t *testing.T) {
 				})
 			}
 		})
-	}
-	_, err := dngTestSemanticMask(t, binary.LittleEndian, 2, 1, 8, 7, 1, 1, 0, 0, []byte{0, 255}, nil)
-	if err == nil {
-		t.Fatal("lossless JPEG semantic mask was accepted")
 	}
 }
 
