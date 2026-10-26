@@ -139,7 +139,11 @@ func developLinearDNGFile(source, cameraProfile string) ([]byte, bool, error) {
 		return nil, false, nil
 	}
 	fields, err := findLinearDNG(data)
-	if err != nil || fields.integer(262, 0) != 34892 || fields.err != nil {
+	if err != nil {
+		return nil, false, nil
+	}
+	photometric := fields.integer(262, 0)
+	if fields.err != nil || (photometric != 34892 && photometric != 32803) {
 		return nil, false, nil
 	}
 	compression := fields.integer(259, 1)

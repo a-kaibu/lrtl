@@ -8,7 +8,7 @@ import (
 )
 
 func decodeDNGJPEGBlock(encoded, tables []byte, width, height, components, depth int, order binary.ByteOrder) ([]byte, error) {
-	if width < 1 || height < 1 || (components != 1 && components != 3) || (depth != 8 && depth != 16) || uint64(width)*uint64(height)*uint64(components) > maxDevelopedRAWBytes {
+	if _, ok := dngLosslessJPEGOutputSize(width, height, components, depth, maxDevelopedRAWBytes); !ok || (components != 1 && components != 3) {
 		return nil, fmt.Errorf("DNG JPEG image dimensions or channel count exceed limits")
 	}
 	expectedSamples := uint64(width) * uint64(height) * uint64(components)
@@ -25,7 +25,8 @@ func decodeDNGJPEGBlock(encoded, tables []byte, width, height, components, depth
 		if precision != depth || frameSamples != expectedSamples {
 			return nil, fmt.Errorf("lossless JPEG frame %dx%d %d-bit/%d-channel does not contain the TIFF image's %d samples", frameWidth, frameHeight, precision, frameComponents, expectedSamples)
 		}
-		if frameSamples > uint64(maxDevelopedRAWBytes)/uint64(depth/8) || frameSamples > uint64(^uint(0)>>1)/uint64(depth/8) {
+		outputBytes, ok := dngLosslessJPEGOutputSize(frameWidth, frameHeight, frameComponents, depth, maxDevelopedRAWBytes)
+		if !ok {
 			return nil, fmt.Errorf("lossless JPEG frame output exceeds limits")
 		}
 		decoder := dngLosslessJPEGDecoder{data: stream}
@@ -33,7 +34,7 @@ func decodeDNGJPEGBlock(encoded, tables []byte, width, height, components, depth
 		if err != nil {
 			return nil, err
 		}
-		if uint64(len(raw)) != expectedSamples*uint64(depth/8) {
+		if len(raw) != outputBytes {
 			return nil, fmt.Errorf("lossless JPEG decoded sample count does not match the TIFF image")
 		}
 		return raw, nil

@@ -191,7 +191,8 @@ func findLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, external
 			root = mapping
 		}
 		fields := &dngFields{scanner: scanner, entries: mapping}
-		isPrimaryLinear := fields.integer(262, 0) == 34892 && fields.integer(254, 0) == 0
+		photometric := fields.integer(262, 0)
+		isPrimaryLinear := (photometric == 34892 || photometric == 32803) && fields.integer(254, 0) == 0
 		if fields.err != nil {
 			return nil, fields.err
 		}
@@ -210,7 +211,7 @@ func findLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, external
 		queue = append(queue, next)
 	}
 	if root == nil || selected == nil {
-		return nil, fmt.Errorf("no primary LinearRaw image found; converter must use -l -u")
+		return nil, fmt.Errorf("no primary LinearRaw or CFA image found; converter must use -l -u")
 	}
 	if version, found := root[50706]; !found || version.typeID != 1 || version.count != 4 || version.value[0] != 1 {
 		return nil, fmt.Errorf("missing or invalid DNGVersion")
@@ -250,6 +251,12 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	fields, err := findLinearDNGWithProfileAndDirs(data, cameraProfile, externalProfileDirs)
 	if err != nil {
 		return nil, err
+	}
+	if fields.integer(262, 0) == 32803 {
+		if fields.err != nil {
+			return nil, fields.err
+		}
+		return decodeCFADNG(fields)
 	}
 	width, height := fields.integer(256, 0), fields.integer(257, 0)
 	channels := fields.integer(277, 1)
