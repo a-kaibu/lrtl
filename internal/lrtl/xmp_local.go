@@ -17,6 +17,7 @@ const (
 	localMaskCircularGradient
 	localMaskLuminanceRange
 	localMaskColorRange
+	localMaskBrush
 )
 
 type localMaskBlendMode uint16
@@ -25,7 +26,10 @@ const (
 	// Camera Raw serializes Add as 0 and Intersect as 1.
 	localMaskBlendAdd localMaskBlendMode = iota
 	localMaskBlendIntersect
+	localMaskBlendSubtract
 )
+
+const maxLocalBrushDabs = 262144
 
 // xmpLocalCorrection is the renderable subset of a Camera Raw local correction.
 // The geometry is evaluated in normalized, oriented image coordinates.
@@ -70,6 +74,17 @@ type xmpLocalMask struct {
 	flipped, maskInverted bool
 	luminanceRange        *xmpLocalLuminanceRange
 	colorRange            *xmpLocalColorRange
+	brush                 *xmpLocalBrush
+}
+
+type xmpLocalBrush struct {
+	centerWeight float64
+	dabs         []xmpLocalBrushDab
+}
+
+type xmpLocalBrushDab struct {
+	x, y, radius float64
+	flow         float64
 }
 
 func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
@@ -82,7 +97,7 @@ func readXMPLocalCorrections(packet *XMPPacket) ([]xmpLocalCorrection, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, collection := range []string{"MaskGroupBasedCorrections", "GradientBasedCorrections", "CircularGradientBasedCorrections"} {
+	for _, collection := range []string{"MaskGroupBasedCorrections", "GradientBasedCorrections", "CircularGradientBasedCorrections", "PaintBasedCorrections"} {
 		property := packet.findRootProperty(crsNamespace, collection)
 		if property.element == nil {
 			continue
@@ -203,9 +218,23 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		if !ok || selector.NamespaceURI() != crsNamespace {
 			continue
 		}
-		if selector.Tag == "CorrectionRangeMask" || selector.Tag == "CorrectionSubject" {
-			// Do not render only the spatial base while silently dropping its selector.
+		if selector.Tag == "CorrectionSubject" {
+			// Do not render only the spatial base while silently dropping an AI selector.
 			return correction, false, nil
+		}
+		if selector.Tag == "CorrectionRangeMask" {
+			// Older brush XMP commonly writes a neutral Type=0 range structure.
+			// Spatial-only brushes remain renderable; non-neutral selectors do not.
+			typeValue, found, err := xmpLocalNumber(selector, "Type", 0, 0, 5)
+			if err != nil {
+				return correction, false, err
+			}
+			if found && math.Trunc(typeValue) != typeValue {
+				return correction, false, fmt.Errorf("crs:CorrectionRangeMask Type must be an integer")
+			}
+			if found && typeValue != 0 {
+				return correction, false, nil
+			}
 		}
 	}
 	if !correction.active() {
@@ -287,15 +316,17 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 		mask.kind = localMaskCircularGradient
 	case "Mask/RangeMask":
 		mask.kind = localMaskLuminanceRange
+	case "Mask/Paint":
+		mask.kind = localMaskBrush
 	default:
 		return mask, false, nil
 	}
-	blendMode, _, err := xmpLocalNumber(element, "MaskBlendMode", float64(localMaskBlendAdd), 0, 1)
+	blendMode, _, err := xmpLocalNumber(element, "MaskBlendMode", float64(localMaskBlendAdd), 0, 2)
 	if err != nil {
 		return mask, false, err
 	}
 	if math.Trunc(blendMode) != blendMode {
-		return mask, false, fmt.Errorf("crs:MaskBlendMode must be 0 (add) or 1 (intersect)")
+		return mask, false, fmt.Errorf("crs:MaskBlendMode must be 0 (add), 1 (intersect), or 2 (subtract)")
 	}
 	mask.blendMode = localMaskBlendMode(blendMode)
 	if mask.kind == localMaskLuminanceRange {
@@ -337,6 +368,14 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 		return mask, false, err
 	}
 	if mask.kind == localMaskLuminanceRange || mask.kind == localMaskColorRange {
+		return mask, true, nil
+	}
+	if mask.kind == localMaskBrush {
+		brush, supported, brushErr := parseXMPLocalBrush(element)
+		if brushErr != nil || !supported {
+			return mask, false, brushErr
+		}
+		mask.brush = brush
 		return mask, true, nil
 	}
 	if mask.kind == localMaskGradient {
@@ -392,6 +431,86 @@ func parseXMPLocalMask(element *etree.Element) (xmpLocalMask, bool, error) {
 		return mask, false, err
 	}
 	return mask, true, nil
+}
+
+func parseXMPLocalBrush(element *etree.Element) (*xmpLocalBrush, bool, error) {
+	radius, foundRadius, err := xmpLocalNumber(element, "Radius", 0, 0, 2)
+	if err != nil {
+		return nil, false, err
+	}
+	if !foundRadius || radius <= 0 {
+		return nil, false, nil
+	}
+	flow, _, err := xmpLocalNumber(element, "Flow", 1, 0, 1)
+	if err != nil {
+		return nil, false, err
+	}
+	centerWeight, _, err := xmpLocalNumber(element, "CenterWeight", 0, 0, 1)
+	if err != nil {
+		return nil, false, err
+	}
+	dabsProperty := directCRSProperty(element, "Dabs")
+	items := rdfArrayItems(dabsProperty.element)
+	if len(items) == 0 || len(items) > maxLocalBrushDabs {
+		return nil, false, nil
+	}
+	brush := &xmpLocalBrush{centerWeight: centerWeight, dabs: make([]xmpLocalBrushDab, 0, len(items))}
+	for index, item := range items {
+		text, scalar := scalarElementText(unwrapRDFArrayItem(item))
+		if !scalar {
+			return nil, false, fmt.Errorf("crs:Dabs[%d] must be a text command", index+1)
+		}
+		command := strings.Fields(strings.TrimSpace(text))
+		if len(command) == 0 {
+			return nil, false, fmt.Errorf("crs:Dabs[%d] is empty", index+1)
+		}
+		switch command[0] {
+		case "r":
+			if len(command) != 2 {
+				return nil, false, fmt.Errorf("crs:Dabs[%d] radius command must contain one value", index+1)
+			}
+			radius, err = localBrushNumber(command[1], 0, 2)
+			if err != nil || radius <= 0 {
+				return nil, false, fmt.Errorf("crs:Dabs[%d] radius must be between 0 and 2", index+1)
+			}
+		case "f":
+			if len(command) != 2 {
+				return nil, false, fmt.Errorf("crs:Dabs[%d] flow command must contain one value", index+1)
+			}
+			flow, err = localBrushNumber(command[1], 0, 1)
+			if err != nil {
+				return nil, false, fmt.Errorf("crs:Dabs[%d] flow must be between 0 and 1", index+1)
+			}
+		case "d":
+			if len(command) != 3 {
+				return nil, false, fmt.Errorf("crs:Dabs[%d] dab command must contain x and y", index+1)
+			}
+			x, parseErr := localBrushNumber(command[1], -2, 3)
+			if parseErr != nil {
+				return nil, false, fmt.Errorf("crs:Dabs[%d] x coordinate is invalid", index+1)
+			}
+			y, parseErr := localBrushNumber(command[2], -2, 3)
+			if parseErr != nil {
+				return nil, false, fmt.Errorf("crs:Dabs[%d] y coordinate is invalid", index+1)
+			}
+			brush.dabs = append(brush.dabs, xmpLocalBrushDab{x: x, y: y, radius: radius, flow: flow})
+		default:
+			// Do not partially render brush paths with an unknown command.
+			return nil, false, nil
+		}
+	}
+	if len(brush.dabs) == 0 {
+		return nil, false, nil
+	}
+	return brush, true, nil
+}
+
+func localBrushNumber(text string, minimum, maximum float64) (float64, error) {
+	value, valid := scalarNumber(text)
+	if !valid || value < minimum || value > maximum {
+		return 0, fmt.Errorf("number must be between %g and %g", minimum, maximum)
+	}
+	return value, nil
 }
 
 func parseXMPLuminanceRange(element *etree.Element) (*xmpLocalLuminanceRange, bool, error) {
@@ -562,7 +681,11 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminan
 	for index, mask := range correction.masks {
 		component := mask.maskWeight(x, y, width, height, luminance, rgb)
 		if index == 0 {
-			weight = component
+			if mask.blendMode == localMaskBlendSubtract {
+				weight = 0
+			} else {
+				weight = component
+			}
 			continue
 		}
 		switch mask.blendMode {
@@ -571,6 +694,8 @@ func (correction xmpLocalCorrection) maskWeight(x, y, width, height int, luminan
 			weight += component * (1 - weight)
 		case localMaskBlendIntersect:
 			weight *= component
+		case localMaskBlendSubtract:
+			weight *= 1 - component
 		}
 	}
 	return math.Max(0, math.Min(1, weight))
@@ -610,11 +735,135 @@ func (mask xmpLocalMask) maskWeight(x, y, width, height int, luminance float64, 
 		weight = luminanceRangeWeight(*mask.luminanceRange, luminance)
 	case localMaskColorRange:
 		weight = colorRangeWeight(*mask.colorRange, rgb)
+	case localMaskBrush:
+		weight = localBrushMaskWeight(mask.brush, nx, ny, width, height)
 	}
 	if mask.flipped != mask.maskInverted {
 		weight = 1 - weight
 	}
 	return math.Max(0, math.Min(1, weight*mask.maskValue))
+}
+
+func localBrushMaskWeight(brush *xmpLocalBrush, nx, ny float64, width, height int) float64 {
+	if brush == nil || len(brush.dabs) == 0 || width <= 0 || height <= 0 {
+		return 0
+	}
+	weight := 0.0
+	for _, dab := range brush.dabs {
+		coverage := localBrushDabWeight(brush, dab, nx, ny, width, height)
+		weight += coverage * (1 - weight)
+	}
+	return math.Max(0, math.Min(1, weight))
+}
+
+func localBrushDabWeight(brush *xmpLocalBrush, dab xmpLocalBrushDab, nx, ny float64, width, height int) float64 {
+	radius := dab.radius * float64(width)
+	if radius <= 0 {
+		return 0
+	}
+	dx := (nx - dab.x) * float64(width)
+	dy := (ny - dab.y) * float64(height)
+	distance := math.Hypot(dx, dy) / radius
+	if distance >= 1 {
+		return 0
+	}
+	coverage := 1.0
+	if brush.centerWeight < 1 && distance > brush.centerWeight {
+		coverage = 1 - smoothstep((distance-brush.centerWeight)/(1-brush.centerWeight))
+	}
+	return coverage * dab.flow
+}
+
+func rasterizeLocalBrushMaskRow(brush *xmpLocalBrush, width, height, y int, weights []float32) {
+	clear(weights)
+	if brush == nil || width <= 0 || height <= 0 || y < 0 || y >= height || len(weights) < width {
+		return
+	}
+	for _, dab := range brush.dabs {
+		radius := dab.radius * float64(width)
+		if radius <= 0 {
+			continue
+		}
+		centerX, centerY := dab.x*float64(width)-0.5, dab.y*float64(height)-0.5
+		dy := float64(y) - centerY
+		if math.Abs(dy) >= radius {
+			continue
+		}
+		left := max(0, int(math.Ceil(centerX-radius)))
+		right := min(width-1, int(math.Floor(centerX+radius)))
+		ny := (float64(y) + 0.5) / float64(height)
+		for x := left; x <= right; x++ {
+			nx := (float64(x) + 0.5) / float64(width)
+			coverage := localBrushDabWeight(brush, dab, nx, ny, width, height)
+			if coverage > 0 {
+				previous := float64(weights[x])
+				weights[x] = float32(previous + coverage*(1-previous))
+			}
+		}
+	}
+}
+
+func rasterizeXMPLocalCorrectionMask(img image.Image, correction xmpLocalCorrection) []float32 {
+	if len(correction.masks) == 0 {
+		return nil
+	}
+	hasBrush := false
+	for _, mask := range correction.masks {
+		if mask.kind == localMaskBrush {
+			hasBrush = true
+			break
+		}
+	}
+	if !hasBrush {
+		return nil
+	}
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= 0 || height <= 0 || uint64(width)*uint64(height) > uint64(maxDevelopedRAWBytes)/4 {
+		return nil
+	}
+	weights := make([]float32, width*height)
+	brushRow := make([]float32, width)
+	for maskIndex, mask := range correction.masks {
+		for y := 0; y < height; y++ {
+			if mask.kind == localMaskBrush {
+				rasterizeLocalBrushMaskRow(mask.brush, width, height, y, brushRow)
+			}
+			for x := 0; x < width; x++ {
+				component := 0.0
+				if mask.kind == localMaskBrush {
+					component = float64(brushRow[x])
+					if mask.flipped != mask.maskInverted {
+						component = 1 - component
+					}
+					component = math.Max(0, math.Min(1, component*mask.maskValue))
+				} else {
+					pixel := color.NRGBA64Model.Convert(img.At(bounds.Min.X+x, bounds.Min.Y+y)).(color.NRGBA64)
+					luminance := 0.2126*srgb16ToLinear[pixel.R] + 0.7152*srgb16ToLinear[pixel.G] + 0.0722*srgb16ToLinear[pixel.B]
+					rgb := [3]float64{float64(pixel.R) / 65535, float64(pixel.G) / 65535, float64(pixel.B) / 65535}
+					component = mask.maskWeight(x, y, width, height, luminance, rgb)
+				}
+				index := y*width + x
+				if maskIndex == 0 {
+					if mask.blendMode != localMaskBlendSubtract {
+						weights[index] = float32(component)
+					}
+					continue
+				}
+				weight := float64(weights[index])
+				switch mask.blendMode {
+				case localMaskBlendAdd:
+					weight += component * (1 - weight)
+				case localMaskBlendIntersect:
+					weight *= component
+				case localMaskBlendSubtract:
+					weight *= 1 - component
+				}
+				weights[index] = float32(math.Max(0, math.Min(1, weight)))
+			}
+		}
+	}
+	return weights
 }
 
 func luminanceRangeWeight(luminanceRange xmpLocalLuminanceRange, luminance float64) float64 {
@@ -716,13 +965,21 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 		if correction.sharpness != 0 {
 			sharpnessDetail = xmpLuminanceDetail(current, xmpSharpenRadius(width, height, 1))
 		}
+		maskWeights := rasterizeXMPLocalCorrectionMask(current, correction)
 		result := image.NewNRGBA64(bounds)
 		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
 			for x := bounds.Min.X; x < bounds.Max.X; x++ {
 				pixel := color.NRGBA64Model.Convert(current.At(x, y)).(color.NRGBA64)
-				maskLuminance := 0.2126*srgb16ToLinear[pixel.R] + 0.7152*srgb16ToLinear[pixel.G] + 0.0722*srgb16ToLinear[pixel.B]
-				pixelRGB := [3]float64{float64(pixel.R) / 65535, float64(pixel.G) / 65535, float64(pixel.B) / 65535}
-				weight := correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance, pixelRGB) * correction.amount
+				weightIndex := (y-bounds.Min.Y)*width + x - bounds.Min.X
+				maskWeight := 0.0
+				if weightIndex < len(maskWeights) {
+					maskWeight = float64(maskWeights[weightIndex])
+				} else {
+					maskLuminance := 0.2126*srgb16ToLinear[pixel.R] + 0.7152*srgb16ToLinear[pixel.G] + 0.0722*srgb16ToLinear[pixel.B]
+					pixelRGB := [3]float64{float64(pixel.R) / 65535, float64(pixel.G) / 65535, float64(pixel.B) / 65535}
+					maskWeight = correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance, pixelRGB)
+				}
+				weight := maskWeight * correction.amount
 				redGain, greenGain, blueGain := 1.0, 1.0, 1.0
 				if correction.hasWhiteBalance {
 					blend := math.Max(-1, math.Min(1, weight))
