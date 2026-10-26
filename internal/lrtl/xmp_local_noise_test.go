@@ -8,12 +8,16 @@ import (
 )
 
 func localNoisePacket(t *testing.T, value string) *XMPPacket {
+	return localAdjustmentPacket(t, "LocalLuminanceNoise", value)
+}
+
+func localAdjustmentPacket(t *testing.T, property, value string) *XMPPacket {
 	t.Helper()
 	packet, err := parseXMP([]byte(`<x:xmpmeta xmlns:x="adobe:ns:meta/">
 		<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
 			<rdf:Description xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/">
 				<crs:MaskGroupBasedCorrections><rdf:Seq><rdf:li>
-					<rdf:Description crs:What="Correction" crs:LocalLuminanceNoise="` + value + `">
+					<rdf:Description crs:What="Correction" crs:` + property + `="` + value + `">
 						<crs:CorrectionMasks><rdf:Seq><rdf:li>
 							<rdf:Description crs:What="Mask/Gradient" crs:ZeroX="1" crs:ZeroY="0.5" crs:FullX="0" crs:FullY="0.5"/>
 						</rdf:li></rdf:Seq></crs:CorrectionMasks>
@@ -72,7 +76,7 @@ func TestXMPLocalLuminanceNoiseBlendsOnlyInsideMask(t *testing.T) {
 		amount:         1,
 		luminanceNoise: 50,
 		masks: []xmpLocalMask{{
-			kind: localMaskGradient, maskValue: 1, zeroX: 1, zeroY: 0.5, fullX: 0, fullY: 0.5,
+			kind: localMaskGradient, maskValue: 1, zeroX: 0.5, zeroY: 0.5, fullX: 0, fullY: 0.5,
 		}},
 	}
 	actual := applyXMPLocalCorrections(input, []xmpLocalCorrection{correction})
@@ -83,7 +87,7 @@ func TestXMPLocalLuminanceNoiseBlendsOnlyInsideMask(t *testing.T) {
 			original := input.NRGBA64At(x, y)
 			denoised := filtered.NRGBA64At(x, y)
 			normalizedX := (float64(x-bounds.Min.X) + 0.5) / float64(bounds.Dx())
-			maskWeight := 1 - normalizedX
+			maskWeight := math.Max(0, math.Min(1, 1-normalizedX/0.5))
 			blend := 0.5 * maskWeight
 			want := blendLocalNoisePixel(original, denoised, blend)
 			got := color.NRGBA64Model.Convert(actual.At(x, y)).(color.NRGBA64)
@@ -104,6 +108,9 @@ func TestXMPLocalLuminanceNoiseBlendsOnlyInsideMask(t *testing.T) {
 				if got.R == original.R {
 					t.Fatal("positive LocalLuminanceNoise had no effect inside the mask")
 				}
+			}
+			if maskWeight == 0 && got != original {
+				t.Errorf("pixel (%d,%d) outside the mask = %#v, want unchanged %#v", x, y, got, original)
 			}
 		}
 	}

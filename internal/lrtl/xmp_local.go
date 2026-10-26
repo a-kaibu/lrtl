@@ -38,7 +38,7 @@ type xmpLocalCorrection struct {
 	whites, blacks, saturation, texture     float64
 	hue                                     float64
 	clarity, dehaze                         float64
-	sharpness, luminanceNoise               float64
+	sharpness, luminanceNoise, moire        float64
 	toningHue, toningSaturation             float64
 	whiteBalance                            [3]float64
 	hasWhiteBalance                         bool
@@ -166,6 +166,7 @@ func parseXMPLocalCorrection(element *etree.Element) (xmpLocalCorrection, bool, 
 		{name: "LocalDehaze", target: &correction.dehaze},
 		{name: "LocalSharpness", target: &correction.sharpness},
 		{name: "LocalLuminanceNoise", target: &correction.luminanceNoise},
+		{name: "LocalMoire", target: &correction.moire},
 	} {
 		*property.target, _, err = xmpLocalSlider(element, property.name)
 		if err != nil {
@@ -981,8 +982,8 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 			continue
 		}
 		var textureDetail, clarityDetail, dehazeDetail, sharpnessDetail []float32
-		var noiseReduced *image.NRGBA64
-		if correction.luminanceNoise != 0 {
+		var noiseReduced, moireReduced *image.NRGBA64
+		if correction.luminanceNoise != 0 || correction.moire != 0 {
 			noiseInput, ok := current.(*image.NRGBA64)
 			if !ok {
 				noiseInput = image.NewNRGBA64(bounds)
@@ -992,10 +993,15 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 					}
 				}
 			}
-			// A full-strength candidate is blended through the local mask below.
+			// Full-strength candidates are blended through the local mask below.
 			// Negative serialized values extrapolate away from that candidate to
-			// approximate sharpening the luminance detail in the selected area.
-			noiseReduced = xmpApplyNoiseReduction(noiseInput, 100, 50, 0, 0, 50, 50)
+			// approximate sharpening or increasing color aliasing in the selected area.
+			if correction.luminanceNoise != 0 {
+				noiseReduced = xmpApplyNoiseReduction(noiseInput, 100, 50, 0, 0, 50, 100)
+			}
+			if correction.moire != 0 {
+				moireReduced = xmpApplyNoiseReduction(noiseInput, 0, 50, 0, 100, 50, 100)
+			}
 		}
 		if correction.dehaze != 0 {
 			dehazeDetail = xmpLuminanceDetail(current, xmpDehazeRadius(width, height))
@@ -1024,9 +1030,13 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 					maskWeight = correction.maskWeight(x-bounds.Min.X, y-bounds.Min.Y, width, height, maskLuminance, pixelRGB)
 				}
 				weight := maskWeight * correction.amount
-				if noiseReduced != nil {
+				if correction.luminanceNoise != 0 {
 					strength := math.Max(-1, math.Min(1, correction.luminanceNoise/100*weight))
 					pixel = blendLocalNoisePixel(pixel, noiseReduced.NRGBA64At(x, y), strength)
+				}
+				if correction.moire != 0 {
+					strength := math.Max(-1, math.Min(1, correction.moire/100*weight))
+					pixel = blendLocalMoirePixel(pixel, moireReduced.NRGBA64At(x, y), strength)
 				}
 				redGain, greenGain, blueGain := 1.0, 1.0, 1.0
 				if correction.hasWhiteBalance {
@@ -1141,7 +1151,7 @@ func applyXMPLocalCorrections(img image.Image, corrections []xmpLocalCorrection)
 }
 
 func (correction xmpLocalCorrection) active() bool {
-	return correction.amount != 0 && (correction.exposure != 0 || correction.contrast != 0 || correction.highlights != 0 || correction.shadows != 0 || correction.whites != 0 || correction.blacks != 0 || correction.saturation != 0 || correction.hue != 0 || correction.texture != 0 || correction.clarity != 0 || correction.dehaze != 0 || correction.sharpness != 0 || correction.luminanceNoise != 0 || correction.toningSaturation != 0 || correction.hasWhiteBalance || correction.colorGrading.active || correction.hasMainCurve || correction.hasChannelCurve[0] || correction.hasChannelCurve[1] || correction.hasChannelCurve[2])
+	return correction.amount != 0 && (correction.exposure != 0 || correction.contrast != 0 || correction.highlights != 0 || correction.shadows != 0 || correction.whites != 0 || correction.blacks != 0 || correction.saturation != 0 || correction.hue != 0 || correction.texture != 0 || correction.clarity != 0 || correction.dehaze != 0 || correction.sharpness != 0 || correction.luminanceNoise != 0 || correction.moire != 0 || correction.toningSaturation != 0 || correction.hasWhiteBalance || correction.colorGrading.active || correction.hasMainCurve || correction.hasChannelCurve[0] || correction.hasChannelCurve[1] || correction.hasChannelCurve[2])
 }
 
 func blendLocalNoisePixel(original, filtered color.NRGBA64, strength float64) color.NRGBA64 {
@@ -1151,6 +1161,19 @@ func blendLocalNoisePixel(original, filtered color.NRGBA64, strength float64) co
 	red := adjustedLuma + redDifference
 	blue := adjustedLuma + blueDifference
 	green := (adjustedLuma - 0.2126*red - 0.0722*blue) / 0.7152
+	return color.NRGBA64{
+		R: encodeLinearSRGB16(red), G: encodeLinearSRGB16(green), B: encodeLinearSRGB16(blue), A: original.A,
+	}
+}
+
+func blendLocalMoirePixel(original, filtered color.NRGBA64, strength float64) color.NRGBA64 {
+	luminance, originalU, originalV := xmpLinearLumaChroma(original)
+	_, filteredU, filteredV := xmpLinearLumaChroma(filtered)
+	blueDifference := originalU + (filteredU-originalU)*strength
+	redDifference := originalV + (filteredV-originalV)*strength
+	red := luminance + redDifference
+	blue := luminance + blueDifference
+	green := (luminance - 0.2126*red - 0.0722*blue) / 0.7152
 	return color.NRGBA64{
 		R: encodeLinearSRGB16(red), G: encodeLinearSRGB16(green), B: encodeLinearSRGB16(blue), A: original.A,
 	}
