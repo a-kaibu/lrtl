@@ -254,8 +254,12 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	width, height := fields.integer(256, 0), fields.integer(257, 0)
 	channels := fields.integer(277, 1)
 	bits := fields.values(258)
-	if fields.integer(259, 1) != 1 || fields.integer(284, 1) != 1 || fields.integer(317, 1) != 1 {
-		return nil, fmt.Errorf("Linear DNG requires uncompressed chunky unsigned samples without a predictor")
+	compression, predictor := fields.integer(259, 1), fields.integer(317, 1)
+	if fields.integer(284, 1) != 1 {
+		return nil, fmt.Errorf("Linear DNG requires chunky samples")
+	}
+	if compression != 1 && compression != 7 && compression != 8 {
+		return nil, fmt.Errorf("unsupported Linear DNG compression %d", compression)
 	}
 	if width < 1 || height < 1 || width > 32768 || height > 32768 || uint64(width)*uint64(height)*8 > maxDevelopedRAWBytes {
 		return nil, fmt.Errorf("Linear DNG dimensions exceed development limits")
@@ -278,6 +282,12 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 			return nil, fmt.Errorf("Linear DNG requires 8-bit or 16-bit integer samples")
 		}
 	}
+	if predictor != 1 && predictor != 2 {
+		return nil, fmt.Errorf("unsupported Linear DNG predictor %d", predictor)
+	}
+	if compression == 7 && predictor != 1 {
+		return nil, fmt.Errorf("lossless JPEG Linear DNG cannot use a TIFF predictor")
+	}
 	linearization := fields.values(50712)
 	blockWidth, blockHeight := width, fields.integer(278, height)
 	offsets, lengths := fields.values(273), fields.values(279)
@@ -294,15 +304,48 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 		return nil, fmt.Errorf("Linear DNG strip/tile count does not cover the image")
 	}
 	sampleBytes := depth / 8
+	var jpegTables []byte
+	if compression == 7 {
+		jpegTables, err = dngRawTag(fields, 347)
+		if err != nil {
+			return nil, err
+		}
+	}
+	rawBlocks := make([][]byte, len(offsets))
+	var decodedBlockBytes uint64
 	for index, offset := range offsets {
 		rows := blockHeight
 		if _, tiled := fields.entries[324]; !tiled {
 			rows = min(blockHeight, height-index*blockHeight)
 		}
 		required := uint64(blockWidth) * uint64(rows) * uint64(channels*sampleBytes)
-		if offset < 0 || offset > float64(len(data)) || lengths[index] < 0 || lengths[index] > float64(len(data)) || offset != math.Trunc(offset) || lengths[index] != math.Trunc(lengths[index]) || lengths[index] < float64(required) || !tiffRange(uint64(offset), uint64(lengths[index]), uint64(len(data))) {
+		if required > maxDevelopedRAWBytes || decodedBlockBytes > maxDevelopedRAWBytes-required || offset < 0 || offset > float64(len(data)) || lengths[index] <= 0 || lengths[index] > float64(len(data)) || offset != math.Trunc(offset) || lengths[index] != math.Trunc(lengths[index]) || !tiffRange(uint64(offset), uint64(lengths[index]), uint64(len(data))) || (compression == 1 && lengths[index] < float64(required)) {
 			return nil, fmt.Errorf("Linear DNG strip/tile %d is truncated or outside the file", index)
 		}
+		encoded := data[int(offset):int(offset+lengths[index])]
+		var block []byte
+		switch compression {
+		case 1:
+			block = encoded[:int(required)]
+		case 8:
+			block, err = inflateDNGMaskBlock(encoded, int(required))
+			if err != nil {
+				return nil, fmt.Errorf("inflate Linear DNG block %d: %w", index, err)
+			}
+		case 7:
+			block, err = decodeDNGJPEGLossless(encoded, jpegTables, blockWidth, rows, channels, depth, fields.scanner.order)
+			if err != nil {
+				return nil, fmt.Errorf("decode lossless JPEG Linear DNG block %d: %w", index, err)
+			}
+		}
+		if uint64(len(block)) < required {
+			return nil, fmt.Errorf("Linear DNG block %d decoded to too few bytes", index)
+		}
+		if predictor == 2 {
+			undoDNGLinearHorizontalPredictor(block, blockWidth, rows, channels, depth, fields.scanner.order)
+		}
+		rawBlocks[index] = block[:required]
+		decodedBlockBytes += required
 	}
 	crop := image.Rect(0, 0, width, height)
 	if active := fields.values(50829); len(active) != 0 {
@@ -335,12 +378,12 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 	}
 	readRawSample := func(x, y, channel int) uint16 {
 		block := y/blockHeight*blocksAcross + x/blockWidth
-		start := int(offsets[block]) + ((y%blockHeight)*blockWidth+x%blockWidth)*channels*sampleBytes
+		start := ((y%blockHeight)*blockWidth + x%blockWidth) * channels * sampleBytes
 		position := start + channel*sampleBytes
 		if depth == 16 {
-			return fields.scanner.order.Uint16(data[position : position+2])
+			return fields.scanner.order.Uint16(rawBlocks[block][position : position+2])
 		}
-		return uint16(data[position])
+		return uint16(rawBlocks[block][position])
 	}
 	stage1Width, stage1Height := width, height
 	var stage1Pixels []uint16
@@ -591,6 +634,28 @@ func decodeLinearDNGWithProfileAndDirs(data []byte, cameraProfile string, extern
 		img = resized
 	}
 	return img, nil
+}
+
+func undoDNGLinearHorizontalPredictor(raw []byte, width, height, channels, depth int, order binary.ByteOrder) {
+	bytesPerSample := depth / 8
+	pixelStride := channels * bytesPerSample
+	rowStride := width * pixelStride
+	for row := 0; row < height; row++ {
+		rowStart := row * rowStride
+		for x := 1; x < width; x++ {
+			pixelStart := rowStart + x*pixelStride
+			previousPixel := pixelStart - pixelStride
+			for channel := 0; channel < channels; channel++ {
+				position := pixelStart + channel*bytesPerSample
+				previous := previousPixel + channel*bytesPerSample
+				if depth == 8 {
+					raw[position] += raw[previous]
+				} else {
+					order.PutUint16(raw[position:], order.Uint16(raw[position:])+order.Uint16(raw[previous:]))
+				}
+			}
+		}
+	}
 }
 
 func encodeDNGSRGB(value float64) uint16 {

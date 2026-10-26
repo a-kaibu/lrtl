@@ -360,6 +360,19 @@ func TestDNGLosslessJPEGReferenceFixture(t *testing.T) {
 	if want := []byte{0, 64, 128, 192, 255}; !bytes.Equal(got, want) {
 		t.Fatalf("decoded reference fixture %v, want %v", got, want)
 	}
+
+	// Independently encoded interleaved SOF3 frame with three components.
+	rgb, err := hex.DecodeString("ffd8ffe000104a46494600010100000100010000ffc30011080002000203011100021100031100ffc4001800000301010000000000000000000000000607080405ffda000c030100020003000400009fd26a7601e1e501415047fdecbfffd9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = decodeDNGJPEGLossless(rgb, nil, 2, 2, 3, 8, binary.LittleEndian)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []byte{0, 20, 40, 64, 80, 100, 128, 150, 170, 255, 240, 220}; !bytes.Equal(got, want) {
+		t.Fatalf("decoded interleaved RGB reference fixture %v, want %v", got, want)
+	}
 }
 
 func FuzzDNGLosslessJPEG(f *testing.F) {

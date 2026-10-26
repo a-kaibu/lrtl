@@ -1,7 +1,10 @@
 package lrtl
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -62,6 +65,14 @@ func linearDNGFixture(order binary.ByteOrder, width, height, channels int, pixel
 			fields[tag] = field
 		}
 	}
+	sampleDepth := uint16(16)
+	if len(fields[258].data) >= 2 {
+		sampleDepth = order.Uint16(fields[258].data)
+	}
+	sampleBytes := int(sampleDepth / 8)
+	if _, supplied := extra[279]; !supplied {
+		fields[279] = dngTestLong(order, uint32(len(pixels)*sampleBytes))
+	}
 	tags := make([]int, 0, len(fields))
 	for tag := range fields {
 		tags = append(tags, int(tag))
@@ -105,11 +116,77 @@ func linearDNGFixture(order binary.ByteOrder, width, height, channels int, pixel
 		}
 	}
 	for _, pixel := range pixels {
+		if sampleDepth == 8 {
+			data = append(data, byte(pixel))
+			continue
+		}
 		var encoded [2]byte
 		order.PutUint16(encoded[:], pixel)
 		data = append(data, encoded[:]...)
 	}
 	return data
+}
+
+func linearDNGCompressedFixture(t *testing.T, order binary.ByteOrder, width, height, channels, depth, compression, predictor int, pixels []uint16, jpegData []byte, extra map[uint16]dngTestField) []byte {
+	t.Helper()
+	metadata := make(map[uint16]dngTestField, len(extra)+3)
+	for tag, field := range extra {
+		metadata[tag] = field
+	}
+	depths := make([]uint16, channels)
+	for index := range depths {
+		depths[index] = uint16(depth)
+	}
+	metadata[258] = dngTestShort(order, depths...)
+	metadata[259] = dngTestShort(order, uint16(compression))
+	metadata[317] = dngTestShort(order, uint16(predictor))
+	fixture := linearDNGFixture(order, width, height, channels, pixels, metadata)
+	var encoded []byte
+	if compression == 7 {
+		encoded = jpegData
+	} else {
+		raw := make([]byte, len(pixels)*(depth/8))
+		for index, sample := range pixels {
+			value := sample
+			pixel := index / channels
+			x := pixel % width
+			if predictor == 2 && x > 0 {
+				value -= pixels[index-channels]
+			}
+			if depth == 8 {
+				raw[index] = byte(value)
+			} else {
+				order.PutUint16(raw[index*2:], value)
+			}
+		}
+		if compression == 8 {
+			var compressed bytes.Buffer
+			writer := zlib.NewWriter(&compressed)
+			if _, err := writer.Write(raw); err != nil {
+				t.Fatal(err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			encoded = compressed.Bytes()
+		} else {
+			encoded = raw
+		}
+	}
+	blockOffset := len(fixture)
+	fixture = append(fixture, encoded...)
+	entries := int(order.Uint16(fixture[8:10]))
+	for index := 0; index < entries; index++ {
+		entry := 10 + index*12
+		tag := order.Uint16(fixture[entry:])
+		switch tag {
+		case 273:
+			order.PutUint32(fixture[entry+8:], uint32(blockOffset))
+		case 279:
+			order.PutUint32(fixture[entry+8:], uint32(len(encoded)))
+		}
+	}
+	return fixture
 }
 
 func TestLinearDNGBlackWhiteNormalizationAndGamma(t *testing.T) {
@@ -129,6 +206,105 @@ func TestLinearDNGBlackWhiteNormalizationAndGamma(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestLinearDNGCompressedBlocks(t *testing.T) {
+	rgbMetadata := func(order binary.ByteOrder) map[uint16]dngTestField {
+		return map[uint16]dngTestField{
+			50721: dngTestDouble(order, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+			50728: dngTestDouble(order, 1, 1, 1),
+		}
+	}
+	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		t.Run(orderName(order), func(t *testing.T) {
+			for _, test := range []struct {
+				name      string
+				width     int
+				height    int
+				channels  int
+				depth     int
+				predictor int
+				pixels    []uint16
+				metadata  map[uint16]dngTestField
+			}{
+				{"16-bit-gray-predictor-1", 3, 2, 1, 16, 1, []uint16{100, 8000, 30000, 65535, 24000, 10}, nil},
+				{"16-bit-rgb-predictor-2", 2, 2, 3, 16, 2, []uint16{1000, 2000, 3000, 16000, 8000, 4000, 50000, 22000, 12000, 65535, 32768, 8192}, rgbMetadata(order)},
+				{"8-bit-rgb-predictor-2", 2, 2, 3, 8, 2, []uint16{0, 32, 255, 64, 128, 16, 200, 220, 240, 255, 1, 100}, rgbMetadata(order)},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					baselineMetadata := make(map[uint16]dngTestField, len(test.metadata)+1)
+					for tag, field := range test.metadata {
+						baselineMetadata[tag] = field
+					}
+					depths := make([]uint16, test.channels)
+					for channel := range depths {
+						depths[channel] = uint16(test.depth)
+					}
+					baselineMetadata[258] = dngTestShort(order, depths...)
+					baselineData := linearDNGFixture(order, test.width, test.height, test.channels, test.pixels, baselineMetadata)
+					compressedData := linearDNGCompressedFixture(t, order, test.width, test.height, test.channels, test.depth, 8, test.predictor, test.pixels, nil, test.metadata)
+					baseline, err := decodeLinearDNG(baselineData)
+					if err != nil {
+						t.Fatalf("decode uncompressed baseline: %v", err)
+					}
+					compressed, err := decodeLinearDNG(compressedData)
+					if err != nil {
+						t.Fatalf("decode Deflate + Predictor %d: %v", test.predictor, err)
+					}
+					assertLinearDNGImagesEqual(t, compressed, baseline)
+				})
+			}
+		})
+	}
+
+	t.Run("lossless-jpeg-rgb", func(t *testing.T) {
+		order := binary.LittleEndian
+		jpegData, err := hex.DecodeString("ffd8ffe000104a46494600010100000100010000ffc30011080002000203011100021100031100ffc4001800000301010000000000000000000000000607080405ffda000c030100020003000400009fd26a7601e1e501415047fdecbfffd9")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pixels := []uint16{0, 20, 40, 64, 80, 100, 128, 150, 170, 255, 240, 220}
+		metadata := map[uint16]dngTestField{
+			258:   dngTestShort(order, 8, 8, 8),
+			50717: dngTestLong(order, 255),
+			50721: dngTestDouble(order, 1, 0, 0, 0, 1, 0, 0, 0, 1),
+			50728: dngTestDouble(order, 1, 1, 1),
+		}
+		baselineData := linearDNGFixture(order, 2, 2, 3, pixels, metadata)
+		jpegDNG := linearDNGCompressedFixture(t, order, 2, 2, 3, 8, 7, 1, pixels, jpegData, metadata)
+		baseline, err := decodeLinearDNG(baselineData)
+		if err != nil {
+			t.Fatalf("decode uncompressed RGB baseline: %v", err)
+		}
+		compressed, err := decodeLinearDNG(jpegDNG)
+		if err != nil {
+			t.Fatalf("decode Lossless JPEG RGB DNG: %v", err)
+		}
+		assertLinearDNGImagesEqual(t, compressed, baseline)
+	})
+
+	t.Run("lossless-jpeg-rejects-tiff-predictor", func(t *testing.T) {
+		order := binary.LittleEndian
+		jpegData := []byte{0xff, 0xd8, 0xff, 0xd9}
+		data := linearDNGCompressedFixture(t, order, 1, 1, 1, 8, 7, 2, []uint16{1}, jpegData, nil)
+		if _, err := decodeLinearDNG(data); err == nil {
+			t.Fatal("Lossless JPEG combined with TIFF Predictor 2 was accepted")
+		}
+	})
+}
+
+func assertLinearDNGImagesEqual(t *testing.T, got, want *image.NRGBA64) {
+	t.Helper()
+	if got.Bounds() != want.Bounds() {
+		t.Fatalf("bounds %v, want %v", got.Bounds(), want.Bounds())
+	}
+	for y := got.Bounds().Min.Y; y < got.Bounds().Max.Y; y++ {
+		for x := got.Bounds().Min.X; x < got.Bounds().Max.X; x++ {
+			if actual, expected := got.NRGBA64At(x, y), want.NRGBA64At(x, y); actual != expected {
+				t.Errorf("pixel (%d,%d)=%v, want %v", x, y, actual, expected)
+			}
+		}
 	}
 }
 

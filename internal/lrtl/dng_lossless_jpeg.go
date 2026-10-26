@@ -8,15 +8,19 @@ import (
 // decodeDNGLosslessJPEG decodes the single-component Huffman lossless JPEG
 // variant used by DNG semantic masks. The output uses the TIFF byte order.
 func decodeDNGLosslessJPEG(encoded, tables []byte, width, height, depth int, order binary.ByteOrder) ([]byte, error) {
-	if width < 1 || height < 1 || (depth != 8 && depth != 16) || uint64(width)*uint64(height)*uint64(depth/8) > maxDNGSemanticMaskBytes {
-		return nil, fmt.Errorf("invalid lossless JPEG mask dimensions or precision")
+	return decodeDNGJPEGLossless(encoded, tables, width, height, 1, depth, order)
+}
+
+func decodeDNGJPEGLossless(encoded, tables []byte, width, height, components, depth int, order binary.ByteOrder) ([]byte, error) {
+	if width < 1 || height < 1 || (components != 1 && components != 3) || (depth != 8 && depth != 16) || uint64(width)*uint64(height)*uint64(components)*uint64(depth/8) > maxDNGSemanticMaskBytes {
+		return nil, fmt.Errorf("invalid lossless JPEG image dimensions, channels, or precision")
 	}
 	stream, err := joinDNGJPEGTables(encoded, tables)
 	if err != nil {
 		return nil, err
 	}
 	decoder := dngLosslessJPEGDecoder{data: stream}
-	return decoder.decode(width, height, depth, order)
+	return decoder.decode(width, height, components, depth, order)
 }
 
 // TIFF/EP stores JPEG tables separately from tile/strip data. Normalize the
@@ -154,15 +158,16 @@ func (reader *dngLosslessEntropy) marker() (byte, error) {
 }
 
 type dngLosslessJPEGDecoder struct {
-	data      []byte
-	position  int
-	precision int
-	component byte
-	tables    [4]*dngLosslessHuffman
-	restart   int
+	data         []byte
+	position     int
+	precision    int
+	components   int
+	componentIDs [4]byte
+	tables       [4]*dngLosslessHuffman
+	restart      int
 }
 
-func (decoder *dngLosslessJPEGDecoder) decode(expectedWidth, expectedHeight, expectedDepth int, order binary.ByteOrder) ([]byte, error) {
+func (decoder *dngLosslessJPEGDecoder) decode(expectedWidth, expectedHeight, expectedComponents, expectedDepth int, order binary.ByteOrder) ([]byte, error) {
 	if len(decoder.data) < 4 || decoder.data[0] != 0xff || decoder.data[1] != 0xd8 {
 		return nil, fmt.Errorf("invalid lossless JPEG SOI")
 	}
@@ -187,10 +192,10 @@ func (decoder *dngLosslessJPEGDecoder) decode(expectedWidth, expectedHeight, exp
 			if width == 0 {
 				return nil, fmt.Errorf("lossless JPEG scan precedes frame header")
 			}
-			if width != expectedWidth || height != expectedHeight || decoder.precision != expectedDepth {
-				return nil, fmt.Errorf("lossless JPEG frame %dx%d %d-bit does not match TIFF mask %dx%d %d-bit", width, height, decoder.precision, expectedWidth, expectedHeight, expectedDepth)
+			if width != expectedWidth || height != expectedHeight || decoder.components != expectedComponents || decoder.precision != expectedDepth {
+				return nil, fmt.Errorf("lossless JPEG frame %dx%d %d-bit/%d-channel does not match TIFF image %dx%d %d-bit/%d-channel", width, height, decoder.precision, decoder.components, expectedWidth, expectedHeight, expectedDepth, expectedComponents)
 			}
-			return decoder.decodeScan(expectedWidth, expectedHeight, expectedDepth, order)
+			return decoder.decodeScan(expectedWidth, expectedHeight, expectedComponents, expectedDepth, order)
 		case 0xd9:
 			return nil, fmt.Errorf("lossless JPEG ended before scan data")
 		default:
@@ -243,16 +248,30 @@ func (decoder *dngLosslessJPEGDecoder) parseFrame() (int, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	if len(segment) != 9 || segment[5] != 1 {
-		return 0, 0, fmt.Errorf("lossless JPEG masks require one component")
+	if len(segment) < 9 {
+		return 0, 0, fmt.Errorf("truncated lossless JPEG frame header")
 	}
 	precision := int(segment[0])
 	height := int(segment[1])<<8 | int(segment[2])
 	width := int(segment[3])<<8 | int(segment[4])
-	if precision < 2 || precision > 16 || width == 0 || height == 0 || segment[7] != 0x11 {
+	components := int(segment[5])
+	if precision < 2 || precision > 16 || width == 0 || height == 0 || components < 1 || components > 4 || len(segment) != 6+3*components {
 		return 0, 0, fmt.Errorf("unsupported lossless JPEG frame parameters")
 	}
-	decoder.precision, decoder.component = precision, segment[6]
+	for index := 0; index < components; index++ {
+		componentOffset := 6 + 3*index
+		componentID := segment[componentOffset]
+		if segment[componentOffset+1] != 0x11 || segment[componentOffset+2] != 0 {
+			return 0, 0, fmt.Errorf("lossless JPEG requires unsampled components without quantization tables")
+		}
+		for earlier := 0; earlier < index; earlier++ {
+			if decoder.componentIDs[earlier] == componentID {
+				return 0, 0, fmt.Errorf("duplicate lossless JPEG component identifier")
+			}
+		}
+		decoder.componentIDs[index] = componentID
+	}
+	decoder.precision, decoder.components = precision, components
 	return width, height, nil
 }
 
@@ -308,31 +327,53 @@ func (decoder *dngLosslessJPEGDecoder) parseRestartInterval() error {
 	return nil
 }
 
-func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, depth int, order binary.ByteOrder) ([]byte, error) {
+func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, components, depth int, order binary.ByteOrder) ([]byte, error) {
 	segment, err := decoder.segment()
 	if err != nil {
 		return nil, err
 	}
-	if len(segment) != 6 || segment[0] != 1 || segment[1] != decoder.component || segment[2]>>4 >= 4 || segment[2]&0x0f != 0 || segment[4] != 0 {
+	if len(segment) != 1+2*components+3 || int(segment[0]) != components {
 		return nil, fmt.Errorf("unsupported lossless JPEG scan parameters")
 	}
-	predictor := int(segment[3])
-	pointTransform := int(segment[5] & 0x0f)
-	if predictor < 1 || predictor > 7 || segment[5]>>4 != 0 || pointTransform >= decoder.precision {
+	componentIndexes := make([]int, components)
+	tableIDs := make([]int, components)
+	seenComponents := make([]bool, components)
+	for scanIndex := 0; scanIndex < components; scanIndex++ {
+		componentID := segment[1+2*scanIndex]
+		componentIndex := -1
+		for frameIndex := 0; frameIndex < components; frameIndex++ {
+			if decoder.componentIDs[frameIndex] == componentID {
+				componentIndex = frameIndex
+				break
+			}
+		}
+		selector := segment[2+2*scanIndex]
+		if componentIndex < 0 || seenComponents[componentIndex] || selector>>4 >= 4 || selector&0x0f != 0 {
+			return nil, fmt.Errorf("invalid lossless JPEG scan component or table selector")
+		}
+		componentIndexes[scanIndex] = componentIndex
+		tableIDs[scanIndex] = int(selector >> 4)
+		seenComponents[componentIndex] = true
+	}
+	predictor := int(segment[1+2*components])
+	pointTransformInfo := segment[3+2*components]
+	pointTransform := int(pointTransformInfo & 0x0f)
+	if predictor < 1 || predictor > 7 || segment[2+2*components] != 0 || pointTransformInfo>>4 != 0 || pointTransform >= decoder.precision {
 		return nil, fmt.Errorf("invalid lossless JPEG predictor or point transform")
 	}
-	table := decoder.tables[segment[2]>>4]
-	if table == nil {
-		return nil, fmt.Errorf("lossless JPEG DC Huffman table %d is missing", segment[2]>>4)
+	for _, tableID := range tableIDs {
+		if decoder.tables[tableID] == nil {
+			return nil, fmt.Errorf("lossless JPEG DC Huffman table %d is missing", tableID)
+		}
 	}
-	if uint64(width)*uint64(height)*uint64(depth/8) > maxDNGSemanticMaskBytes {
-		return nil, fmt.Errorf("lossless JPEG mask output exceeds limits")
+	if uint64(width)*uint64(height)*uint64(components)*uint64(depth/8) > maxDNGSemanticMaskBytes {
+		return nil, fmt.Errorf("lossless JPEG image output exceeds limits")
 	}
 	if decoder.restart != 0 && decoder.restart%width != 0 {
-		return nil, fmt.Errorf("lossless JPEG restart interval must align to mask rows")
+		return nil, fmt.Errorf("lossless JPEG restart interval must align to image rows")
 	}
 	sampleCount := width * height
-	samples := make([]uint32, sampleCount)
+	samples := make([]uint32, sampleCount*components)
 	entropy := dngLosslessEntropy{data: decoder.data, position: decoder.position}
 	restartSequence, sinceRestart := byte(0), 0
 	firstAfterRestart := false
@@ -353,52 +394,56 @@ func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, depth int, orde
 			firstAfterRestart = true
 			restartFirstRowEnd = index + width
 		}
-		category, err := table.decode(&entropy)
-		if err != nil {
-			return nil, fmt.Errorf("decode lossless JPEG difference: %w", err)
-		}
-		if int(category) > decoder.precision-pointTransform {
-			return nil, fmt.Errorf("invalid lossless JPEG difference category %d", category)
-		}
-		difference := 0
-		if category == 16 {
-			difference = -32768
-		} else if category != 0 {
-			bits, err := entropy.readBits(int(category))
-			if err != nil {
-				return nil, err
-			}
-			difference = bits
-			if bits < 1<<uint(category-1) {
-				difference -= (1 << uint(category)) - 1
-			}
-		}
 		x, y := index%width, index/width
-		prediction := initial
-		if index != 0 && !firstAfterRestart {
-			ra, rb, rc := initial, initial, initial
-			if x > 0 {
-				ra = int(samples[index-1] >> uint(pointTransform))
+		for scanIndex, componentIndex := range componentIndexes {
+			table := decoder.tables[tableIDs[scanIndex]]
+			category, err := table.decode(&entropy)
+			if err != nil {
+				return nil, fmt.Errorf("decode lossless JPEG difference: %w", err)
 			}
-			if y > 0 {
-				rb = int(samples[index-width] >> uint(pointTransform))
+			if int(category) > decoder.precision-pointTransform {
+				return nil, fmt.Errorf("invalid lossless JPEG difference category %d", category)
 			}
-			if x > 0 && y > 0 {
-				rc = int(samples[index-width-1] >> uint(pointTransform))
+			difference := 0
+			if category == 16 {
+				difference = -32768
+			} else if category != 0 {
+				bits, err := entropy.readBits(int(category))
+				if err != nil {
+					return nil, err
+				}
+				difference = bits
+				if bits < 1<<uint(category-1) {
+					difference -= (1 << uint(category)) - 1
+				}
 			}
-			if index < restartFirstRowEnd || y == 0 {
-				prediction = ra
-			} else if x == 0 {
-				prediction = rb
-			} else {
-				prediction = dngLosslessPredictor(predictor, ra, rb, rc)
+			sampleIndex := index*components + componentIndex
+			prediction := initial
+			if index != 0 && !firstAfterRestart {
+				ra, rb, rc := initial, initial, initial
+				if x > 0 {
+					ra = int(samples[sampleIndex-components] >> uint(pointTransform))
+				}
+				if y > 0 {
+					rb = int(samples[sampleIndex-width*components] >> uint(pointTransform))
+				}
+				if x > 0 && y > 0 {
+					rc = int(samples[sampleIndex-(width+1)*components] >> uint(pointTransform))
+				}
+				if index < restartFirstRowEnd || y == 0 {
+					prediction = ra
+				} else if x == 0 {
+					prediction = rb
+				} else {
+					prediction = dngLosslessPredictor(predictor, ra, rb, rc)
+				}
 			}
+			reconstructed := (prediction + difference) % modulus
+			if reconstructed < 0 {
+				reconstructed += modulus
+			}
+			samples[sampleIndex] = uint32(reconstructed << uint(pointTransform))
 		}
-		reconstructed := (prediction + difference) % modulus
-		if reconstructed < 0 {
-			reconstructed += modulus
-		}
-		samples[index] = uint32(reconstructed << uint(pointTransform))
 		sinceRestart++
 		firstAfterRestart = false
 	}
@@ -410,7 +455,7 @@ func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, depth int, orde
 		return nil, fmt.Errorf("lossless JPEG ended with marker 0x%02x, want EOI", marker)
 	}
 	bytesPerSample := depth / 8
-	raw := make([]byte, sampleCount*bytesPerSample)
+	raw := make([]byte, sampleCount*components*bytesPerSample)
 	for index, sample := range samples {
 		if depth == 8 {
 			raw[index] = byte(sample)
