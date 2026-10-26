@@ -3,13 +3,14 @@ package lrtl
 import (
 	"bytes"
 	"encoding/binary"
+	"image"
 	"image/jpeg"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestAdobeLossyLinearDNGDirectDecode(t *testing.T) {
+func TestAdobeCompressedLinearDNGDirectDecode(t *testing.T) {
 	converter, err := resolveDNGConverter("")
 	if err != nil {
 		t.Skip("Adobe DNG Converter is not installed")
@@ -31,6 +32,36 @@ func TestAdobeLossyLinearDNGDirectDecode(t *testing.T) {
 	if err := os.WriteFile(source, sourceData, 0600); err != nil {
 		t.Fatal(err)
 	}
+	losslessOutput := filepath.Join(root, "lossless")
+	if err := os.Mkdir(losslessOutput, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := runDNGConverter(converter, source, losslessOutput, "lossless.dng", false, "lossless", 0); err != nil {
+		t.Fatalf("convert synthetic Linear DNG to Adobe lossless DNG: %v", err)
+	}
+	losslessData, err := os.ReadFile(filepath.Join(losslessOutput, "lossless.dng"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	losslessFields, err := findLinearDNG(losslessData)
+	if err != nil {
+		t.Fatalf("read Adobe lossless DNG: %v", err)
+	}
+	losslessCompression := losslessFields.integer(259, 0)
+	t.Logf("Adobe DNG Converter emitted lossless DNG compression=%d photometric=%d", losslessCompression, losslessFields.integer(262, 0))
+	if losslessCompression != 7 {
+		t.Fatalf("expected Adobe lossless output to use JPEG SOF3 compression 7, got %d", losslessCompression)
+	}
+	losslessImage, err := decodeLinearDNG(losslessData)
+	if err != nil {
+		t.Fatalf("directly decode Adobe lossless Linear DNG: %v", err)
+	}
+	inputImage, err := decodeLinearDNG(sourceData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertLinearDNGImagesEqual(t, losslessImage, inputImage)
+
 	output := filepath.Join(root, "out")
 	if err := os.Mkdir(output, 0700); err != nil {
 		t.Fatal(err)
@@ -126,31 +157,38 @@ func TestAdobeLossyLinearDNGDirectDecode(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("ProgramFiles", t.TempDir())
 	t.Setenv("ProgramFiles(x86)", t.TempDir())
-	generatedSource := filepath.Join(root, "lossy-generated.dng")
-	if err := os.WriteFile(generatedSource, data, 0600); err != nil {
+	assertAdobeDNGDirectRender(t, root, "lossless-generated.dng", losslessData, inputImage, 16, 16, uint16(losslessFields.integer(274, 1)))
+	assertAdobeDNGDirectRender(t, root, "lossy-generated.dng", data, wantImage, width, height, uint16(fields.integer(274, 1)))
+}
+
+func assertAdobeDNGDirectRender(t *testing.T, root, name string, dng []byte, wantImage *image.NRGBA64, width, height int, orientation uint16) {
+	t.Helper()
+	generatedSource := filepath.Join(root, name)
+	if err := os.WriteFile(generatedSource, dng, 0600); err != nil {
 		t.Fatal(err)
 	}
 	gotTIFF, config, format, err := readRenderInputWithOptions(Frame{Image: generatedSource}, imageInputOptions{RawDevelop: true})
 	if err != nil {
-		t.Fatalf("read Adobe-generated DNG with external converter unavailable: %v", err)
+		t.Fatalf("read Adobe-generated %s with external converter unavailable: %v", name, err)
 	}
-	wantTIFF, err := encodeDevelopedDNGTIFF(wantImage, uint16(fields.integer(274, 1)))
+	wantTIFF, err := encodeDevelopedDNGTIFF(wantImage, orientation)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if format != "tiff" || config.Width != width || config.Height != height || !bytes.Equal(gotTIFF, wantTIFF) {
-		t.Fatalf("Adobe DNG raw-develop result format=%s config=%+v matches uncompressed reference=%t", format, config, bytes.Equal(gotTIFF, wantTIFF))
+		t.Fatalf("Adobe %s raw-develop result format=%s config=%+v matches reference=%t", name, format, config, bytes.Equal(gotTIFF, wantTIFF))
 	}
-	referenceTIFF := filepath.Join(root, "reference.tif")
+	stem := filepath.Join(root, name[:len(name)-len(filepath.Ext(name))])
+	referenceTIFF := stem + ".reference.tif"
 	if err := os.WriteFile(referenceTIFF, wantTIFF, 0600); err != nil {
 		t.Fatal(err)
 	}
-	rawAVI, referenceAVI := filepath.Join(root, "raw.avi"), filepath.Join(root, "reference.avi")
+	rawAVI, referenceAVI := stem+".avi", stem+".reference.avi"
 	if err := RenderSequence([]Frame{{Image: generatedSource}}, rawAVI, RenderOptions{FPS: 24, Quality: 95, RawDevelop: true}); err != nil {
-		t.Fatalf("render Adobe-generated lossy DNG without external converter: %v", err)
+		t.Fatalf("render Adobe-generated %s without external converter: %v", name, err)
 	}
 	if err := RenderSequence([]Frame{{Image: referenceTIFF}}, referenceAVI, RenderOptions{FPS: 24, Quality: 95}); err != nil {
-		t.Fatalf("render uncompressed Adobe-metadata TIFF reference: %v", err)
+		t.Fatalf("render reference TIFF for Adobe-generated %s: %v", name, err)
 	}
 	rawVideo, err := os.ReadFile(rawAVI)
 	if err != nil {
@@ -162,7 +200,7 @@ func TestAdobeLossyLinearDNGDirectDecode(t *testing.T) {
 	}
 	rawMovie, referenceMovie := bytes.Index(rawVideo, []byte("movi")), bytes.Index(referenceVideo, []byte("movi"))
 	if rawMovie < 0 || referenceMovie < 0 || !bytes.Equal(rawVideo[rawMovie:], referenceVideo[referenceMovie:]) {
-		t.Fatal("Adobe-generated lossy DNG render differs from its uncompressed Adobe-metadata reference")
+		t.Fatalf("Adobe-generated %s AVI differs from its uncompressed metadata-preserving reference", name)
 	}
 }
 
