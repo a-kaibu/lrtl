@@ -154,6 +154,127 @@ func TestDNGConverterFailureAndInvalidOutput(t *testing.T) {
 	}
 }
 
+func TestLinearDNGRawDevelopUsesPureGoDecoder(t *testing.T) {
+	// Keep this test independent of any Adobe installation. A supported Linear
+	// DNG should take the direct decoder path before backend discovery.
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("ProgramFiles", t.TempDir())
+	t.Setenv("ProgramFiles(x86)", t.TempDir())
+
+	for _, test := range []struct {
+		name                   string
+		order                  binary.ByteOrder
+		channels, depth        int
+		compression, predictor int
+		pixels                 []uint16
+	}{
+		{"uncompressed-16bit-big-endian", binary.BigEndian, 1, 16, 1, 1, []uint16{1000, 12000, 35000, 65535}},
+		{"deflate-rgb-8bit-little-endian", binary.LittleEndian, 3, 8, 8, 2, []uint16{0, 20, 40, 64, 80, 100, 128, 150, 170, 255, 240, 220}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			metadata := map[uint16]dngTestField{274: dngTestShort(test.order, 6)}
+			depths := make([]uint16, test.channels)
+			for channel := range depths {
+				depths[channel] = uint16(test.depth)
+			}
+			metadata[258] = dngTestShort(test.order, depths...)
+			if test.channels == 3 {
+				metadata[50717] = dngTestLong(test.order, 255)
+				metadata[50721] = dngTestDouble(test.order, 1, 0, 0, 0, 1, 0, 0, 0, 1)
+				metadata[50728] = dngTestDouble(test.order, 1, 1, 1)
+			}
+			var sourceData []byte
+			if test.compression == 1 {
+				sourceData = linearDNGFixture(test.order, 2, 2, test.channels, test.pixels, metadata)
+			} else {
+				sourceData = linearDNGCompressedFixture(t, test.order, 2, 2, test.channels, test.depth, test.compression, test.predictor, test.pixels, nil, metadata)
+			}
+			root := t.TempDir()
+			source := filepath.Join(root, "frame.DNG")
+			if err := os.WriteFile(source, sourceData, 0600); err != nil {
+				t.Fatal(err)
+			}
+			wantImage, err := decodeLinearDNG(sourceData)
+			if err != nil {
+				t.Fatalf("decode reference Linear DNG: %v", err)
+			}
+			want, err := encodeDevelopedDNGTIFF(wantImage, 6)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, config, format, err := readRenderInputWithOptions(Frame{Image: source}, imageInputOptions{RawDevelop: true})
+			if err != nil {
+				t.Fatalf("read Linear DNG without external converter: %v", err)
+			}
+			if format != "tiff" || config.Width != 2 || config.Height != 2 || !bytes.Equal(got, want) {
+				t.Fatalf("direct Linear DNG result format=%s config=%+v matches reference=%t", format, config, bytes.Equal(got, want))
+			}
+
+			// Follow the decoded pixels through the actual movie writer too.
+			reference := filepath.Join(root, "reference.tif")
+			if err := os.WriteFile(reference, want, 0600); err != nil {
+				t.Fatal(err)
+			}
+			rawAVI, referenceAVI := filepath.Join(root, "raw.avi"), filepath.Join(root, "reference.avi")
+			if err := RenderSequence([]Frame{{Image: source}}, rawAVI, RenderOptions{FPS: 24, Quality: 95, RawDevelop: true}); err != nil {
+				t.Fatalf("render direct Linear DNG: %v", err)
+			}
+			if err := RenderSequence([]Frame{{Image: reference}}, referenceAVI, RenderOptions{FPS: 24, Quality: 95}); err != nil {
+				t.Fatalf("render reference TIFF: %v", err)
+			}
+			rawVideo, err := os.ReadFile(rawAVI)
+			if err != nil {
+				t.Fatal(err)
+			}
+			referenceVideo, err := os.ReadFile(referenceAVI)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rawMovie, referenceMovie := bytes.Index(rawVideo, []byte("movi")), bytes.Index(referenceVideo, []byte("movi"))
+			if rawMovie < 0 || referenceMovie < 0 || !bytes.Equal(rawVideo[rawMovie:], referenceVideo[referenceMovie:]) {
+				t.Fatal("direct Linear DNG render differs from its decoded TIFF reference")
+			}
+		})
+	}
+}
+
+func TestExplicitDNGConverterOverridesDirectLinearDNG(t *testing.T) {
+	executable, directory, convertedDNG := fakeDNGConverter(t)
+	order := binary.LittleEndian
+	source := filepath.Join(directory, "already-linear.dng")
+	sourceDNG := linearDNGFixture(order, 2, 2, 1, []uint16{1, 2, 3, 4}, nil)
+	if err := os.WriteFile(source, sourceDNG, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := developRawWithDNGConverter(source, executable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	convertedImage, err := decodeLinearDNG(convertedDNG)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := encodeDevelopedDNGTIFF(convertedImage, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatal("explicit converter did not supply the Linear DNG development result")
+	}
+	argumentsJSON, err := os.ReadFile(os.Getenv("LRTL_TEST_CONVERTER_LOG"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var arguments []string
+	if err := json.Unmarshal(argumentsJSON, &arguments); err != nil {
+		t.Fatal(err)
+	}
+	if len(arguments) == 0 || arguments[len(arguments)-1] != source {
+		t.Fatalf("explicit converter did not receive source DNG: %q", arguments)
+	}
+}
+
 func TestDNGConverterPreservesOrientationForRendering(t *testing.T) {
 	executable, dir, _ := fakeDNGConverter(t)
 	pixels := make([]uint16, 16*32)

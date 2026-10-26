@@ -99,21 +99,61 @@ func developRawWithDNGConverter(source, executable string) ([]byte, error) {
 }
 
 func developRawWithDNGConverterProfile(source, executable, cameraProfile string) ([]byte, error) {
+	var directError error
+	if strings.TrimSpace(executable) == "" && strings.EqualFold(filepath.Ext(source), ".dng") {
+		if data, ok, err := developLinearDNGFile(source, cameraProfile); ok {
+			if err == nil {
+				return data, nil
+			}
+			directError = err
+		}
+	}
 	directory, err := os.MkdirTemp("", "lrtl-linear-dng-*")
 	if err != nil {
 		return nil, fmt.Errorf("create RAW development directory: %w", err)
 	}
 	defer os.RemoveAll(directory)
 	if err := runDNGConverter(executable, source, directory, "linear.dng", true, "uncompressed", 0); err != nil {
+		if directError != nil {
+			return nil, fmt.Errorf("direct Linear DNG development failed (%v); Adobe fallback failed: %w", directError, err)
+		}
 		return nil, err
 	}
 	data, err := os.ReadFile(filepath.Join(directory, "linear.dng"))
 	if err != nil {
 		return nil, err
 	}
+	return developLinearDNG(data, cameraProfile)
+}
+
+// A Linear DNG already contains demosaiced pixels. When the caller has not
+// selected an external backend, decode supported DNG compression directly.
+// Camera RAW and unsupported DNG variants continue through Adobe DNG Converter.
+func developLinearDNGFile(source, cameraProfile string) ([]byte, bool, error) {
+	info, err := os.Stat(source)
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 || info.Size() > maxDevelopedRAWBytes {
+		return nil, false, nil
+	}
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return nil, false, nil
+	}
+	fields, err := findLinearDNG(data)
+	if err != nil || fields.integer(262, 0) != 34892 || fields.err != nil {
+		return nil, false, nil
+	}
+	compression := fields.integer(259, 1)
+	if compression != 1 && compression != 7 && compression != 8 {
+		return nil, false, nil
+	}
+	developed, err := developLinearDNG(data, cameraProfile)
+	return developed, true, err
+}
+
+func developLinearDNG(data []byte, cameraProfile string) ([]byte, error) {
 	img, err := decodeLinearDNGWithProfileAndDirs(data, cameraProfile, cameraProfileDirectories())
 	if err != nil {
-		return nil, fmt.Errorf("develop %s from Linear DNG: %w", filepath.Base(source), err)
+		return nil, fmt.Errorf("decode Linear DNG pixels: %w", err)
 	}
 	fields, err := findLinearDNG(data)
 	if err != nil {
