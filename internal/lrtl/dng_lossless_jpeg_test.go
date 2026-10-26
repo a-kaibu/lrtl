@@ -40,7 +40,6 @@ func dngTestLosslessJPEG(t testing.TB, width, height, precision, predictor, poin
 	scan := dngTestJPEGSegment(0xda, []byte{1, 1, 0, byte(predictor), 0, byte(pointTransform)})
 	var writer dngTestJPEGBitWriter
 	initial := 1 << uint(precision-pointTransform-1)
-	modulus := 1 << uint(precision-pointTransform)
 	restartSequence := 0
 	for index, original := range samples {
 		afterRestart := restart != 0 && index != 0 && index%restart == 0
@@ -69,12 +68,15 @@ func dngTestLosslessJPEG(t testing.TB, width, height, precision, predictor, poin
 		}
 		sample := int(original >> uint(pointTransform))
 		difference := sample - prediction
-		if difference < -32768 {
-			difference += 1 << 16
-		} else if difference > 32767 {
-			difference -= 1 << 16
+		differencePrecision := precision - pointTransform
+		differenceModulus := 1 << uint(differencePrecision)
+		differenceLimit := differenceModulus / 2
+		if difference < -differenceLimit {
+			difference += differenceModulus
+		} else if difference >= differenceLimit {
+			difference -= differenceModulus
 		}
-		if difference < -modulus || difference >= modulus {
+		if difference < -differenceLimit || difference >= differenceLimit {
 			t.Fatalf("test difference %d exceeds coding precision", difference)
 		}
 		category, amplitude := 0, 0
@@ -255,6 +257,69 @@ func TestDNGLosslessJPEGAllPredictorsAndTables(t *testing.T) {
 			t.Fatalf("padded tile samples=%v, want [0 1]", mask.values)
 		}
 	})
+}
+
+func TestDNGLosslessJPEGIntermediatePrecisions(t *testing.T) {
+	for _, depth := range []int{10, 12, 14} {
+		t.Run(fmt.Sprintf("%d-bit", depth), func(t *testing.T) {
+			maximum := uint16((1 << uint(depth)) - 1)
+			values := []uint16{0, maximum, maximum - 1, 1, maximum / 2, 7, maximum - 8, 513, 1022, 31, maximum - 255, 128, maximum - 1, 2, maximum}
+			encoded, _, _ := dngTestLosslessJPEG(t, 5, 3, depth, 6, 0, 0, values)
+			for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+				got, err := decodeDNGJPEGLossless(encoded, nil, 5, 3, 1, depth, order)
+				if err != nil {
+					t.Fatalf("%s-endian decode: %v", orderName(order), err)
+				}
+				if len(got) != len(values)*2 {
+					t.Fatalf("%s-endian output has %d bytes, want %d", orderName(order), len(got), len(values)*2)
+				}
+				for index, want := range values {
+					if sample := order.Uint16(got[index*2:]); sample != want {
+						t.Fatalf("%s-endian sample %d=%d, want %d", orderName(order), index, sample, want)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDNGLosslessJPEGRejectsInvalidPrecisionAndOutputSizes(t *testing.T) {
+	for _, depth := range []int{1, 17, 32} {
+		t.Run(fmt.Sprintf("precision-%d", depth), func(t *testing.T) {
+			if _, err := decodeDNGJPEGLossless(nil, nil, 1, 1, 1, depth, binary.LittleEndian); err == nil {
+				t.Fatalf("precision %d was accepted", depth)
+			}
+		})
+	}
+	t.Run("invalid-channel-count", func(t *testing.T) {
+		if _, err := decodeDNGJPEGLossless(nil, nil, 1, 1, 0, 8, binary.LittleEndian); err == nil {
+			t.Fatal("zero channel count was accepted")
+		}
+		if _, err := decodeDNGJPEGLossless(nil, nil, 1, 1, 2, 8, binary.LittleEndian); err == nil {
+			t.Fatal("unsupported channel count was accepted")
+		}
+	})
+	t.Run("output-limit", func(t *testing.T) {
+		if _, err := decodeDNGJPEGLossless(nil, nil, int(^uint(0)>>1), int(^uint(0)>>1), 3, 16, binary.LittleEndian); err == nil {
+			t.Fatal("dimensions exceeding the output limit were accepted")
+		}
+	})
+}
+
+func TestDNGLosslessJPEGIntermediatePrecisionPointTransform(t *testing.T) {
+	values := []uint16{0, 4, 256, 1024, 2048, 3072, 4092, 2044, 3000, 12, 4092, 128}
+	encoded, _, _ := dngTestLosslessJPEG(t, 4, 3, 12, 5, 2, 4, values)
+	for _, order := range []binary.ByteOrder{binary.LittleEndian, binary.BigEndian} {
+		got, err := decodeDNGJPEGLossless(encoded, nil, 4, 3, 1, 12, order)
+		if err != nil {
+			t.Fatalf("%s-endian decode: %v", orderName(order), err)
+		}
+		for index, want := range values {
+			if sample := order.Uint16(got[index*2:]); sample != want {
+				t.Fatalf("%s-endian sample %d=%d, want %d", orderName(order), index, sample, want)
+			}
+		}
+	}
 }
 
 func orderName(order binary.ByteOrder) string {

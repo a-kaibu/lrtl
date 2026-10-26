@@ -116,13 +116,14 @@ func inspectDNGJPEGFrame(data []byte) (marker byte, precision, width, height, co
 }
 
 // decodeDNGLosslessJPEG decodes the single-component Huffman lossless JPEG
-// variant used by DNG semantic masks. The output uses the TIFF byte order.
+// variant used by DNG semantic masks. The output uses the TIFF byte order;
+// samples above 8-bit precision are stored in 16-bit containers.
 func decodeDNGLosslessJPEG(encoded, tables []byte, width, height, depth int, order binary.ByteOrder) ([]byte, error) {
 	return decodeDNGJPEGLossless(encoded, tables, width, height, 1, depth, order)
 }
 
 func decodeDNGJPEGLossless(encoded, tables []byte, width, height, components, depth int, order binary.ByteOrder) ([]byte, error) {
-	if width < 1 || height < 1 || (components != 1 && components != 3) || (depth != 8 && depth != 16) || uint64(width)*uint64(height)*uint64(components)*uint64(depth/8) > maxDNGSemanticMaskBytes {
+	if _, ok := dngLosslessJPEGOutputSize(width, height, components, depth, maxDNGSemanticMaskBytes); !ok || (components != 1 && components != 3) {
 		return nil, fmt.Errorf("invalid lossless JPEG image dimensions, channels, or precision")
 	}
 	stream, err := joinDNGJPEGTables(encoded, tables)
@@ -131,6 +132,26 @@ func decodeDNGJPEGLossless(encoded, tables []byte, width, height, components, de
 	}
 	decoder := dngLosslessJPEGDecoder{data: stream}
 	return decoder.decode(width, height, components, depth, order)
+}
+
+func dngLosslessJPEGOutputSize(width, height, components, depth, maxOutputBytes int) (int, bool) {
+	if width < 1 || height < 1 || components < 1 || depth < 2 || depth > 16 || maxOutputBytes < 0 {
+		return 0, false
+	}
+	bytesPerSample := 1
+	if depth > 8 {
+		bytesPerSample = 2
+	}
+	maxSamples := uint64(maxOutputBytes) / uint64(bytesPerSample)
+	if uint64(width) > maxSamples/uint64(height)/uint64(components) {
+		return 0, false
+	}
+	sampleCount := uint64(width) * uint64(height) * uint64(components)
+	outputBytes := sampleCount * uint64(bytesPerSample)
+	if outputBytes > uint64(^uint(0)>>1) {
+		return 0, false
+	}
+	return int(outputBytes), true
 }
 
 // TIFF/EP stores JPEG tables separately from tile/strip data. Normalize the
@@ -480,7 +501,8 @@ func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, components, dep
 			return nil, fmt.Errorf("lossless JPEG DC Huffman table %d is missing", tableID)
 		}
 	}
-	if uint64(width)*uint64(height)*uint64(components)*uint64(depth/8) > uint64(maxOutputBytes) {
+	outputBytes, ok := dngLosslessJPEGOutputSize(width, height, components, depth, maxOutputBytes)
+	if !ok {
 		return nil, fmt.Errorf("lossless JPEG image output exceeds limits")
 	}
 	if decoder.restart != 0 && decoder.restart%width != 0 {
@@ -568,8 +590,7 @@ func (decoder *dngLosslessJPEGDecoder) decodeScan(width, height, components, dep
 	if marker != 0xd9 {
 		return nil, fmt.Errorf("lossless JPEG ended with marker 0x%02x, want EOI", marker)
 	}
-	bytesPerSample := depth / 8
-	raw := make([]byte, sampleCount*components*bytesPerSample)
+	raw := make([]byte, outputBytes)
 	for index, sample := range samples {
 		if depth == 8 {
 			raw[index] = byte(sample)
