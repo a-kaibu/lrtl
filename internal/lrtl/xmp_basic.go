@@ -328,6 +328,10 @@ func readXMPBasicPacket(packet *XMPPacket) (xmpBasicAdjustments, error) {
 	if err != nil {
 		return xmpBasicAdjustments{}, err
 	}
+	for index := range adjustments.local {
+		adjustments.local[index].grainSize = adjustments.grainSize
+		adjustments.local[index].grainFrequency = adjustments.grainFrequency
+	}
 	return adjustments, nil
 }
 

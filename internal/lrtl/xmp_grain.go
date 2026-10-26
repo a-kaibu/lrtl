@@ -2,6 +2,7 @@ package lrtl
 
 import (
 	"image"
+	"image/color"
 	"math"
 )
 
@@ -14,38 +15,34 @@ func xmpApplyGrain(img *image.NRGBA64, amount, size, frequency float64) *image.N
 	if img == nil || amount <= 0 || math.IsNaN(amount) {
 		return img
 	}
-	amount = math.Min(100, amount) / 100
+	amount = math.Min(100, amount)
+
+	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
+		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
+			pixel := img.NRGBA64At(x, y)
+			img.SetNRGBA64(x, y, xmpApplyGrainPixel(pixel, x, y, amount, size, frequency))
+		}
+	}
+	return img
+}
+
+func xmpApplyGrainPixel(pixel color.NRGBA64, x, y int, amount, size, frequency float64) color.NRGBA64 {
+	if pixel.A == 0 || amount == 0 || math.IsNaN(amount) {
+		return pixel
+	}
+	amount = math.Max(-100, math.Min(100, amount)) / 100
 	size = math.Max(0, math.Min(100, size))
 	frequency = math.Max(0, math.Min(100, frequency))
 	coarseScale := 0.7 + size/100*1.8
 	fineScale := math.Max(0.4, coarseScale*0.38)
 	roughness := frequency / 100
-	amplitude := amount * 0.045
-
-	for y := img.Rect.Min.Y; y < img.Rect.Max.Y; y++ {
-		for x := img.Rect.Min.X; x < img.Rect.Max.X; x++ {
-			index := img.PixOffset(x, y)
-			alpha := uint16(img.Pix[index+6])<<8 | uint16(img.Pix[index+7])
-			if alpha == 0 {
-				continue
-			}
-			coarse := xmpGrainValueNoise(x, y, coarseScale, 0x9e3779b97f4a7c15)
-			fine := xmpGrainValueNoise(x, y, fineScale, 0xd1b54a32d192ed03)
-			noise := coarse*(1-roughness) + fine*roughness
-			delta := noise * amplitude
-
-			red := uint16(img.Pix[index])<<8 | uint16(img.Pix[index+1])
-			green := uint16(img.Pix[index+2])<<8 | uint16(img.Pix[index+3])
-			blue := uint16(img.Pix[index+4])<<8 | uint16(img.Pix[index+5])
-			red = encodeLinearSRGB16(srgb16ToLinear[red] + delta)
-			green = encodeLinearSRGB16(srgb16ToLinear[green] + delta)
-			blue = encodeLinearSRGB16(srgb16ToLinear[blue] + delta)
-			img.Pix[index], img.Pix[index+1] = byte(red>>8), byte(red)
-			img.Pix[index+2], img.Pix[index+3] = byte(green>>8), byte(green)
-			img.Pix[index+4], img.Pix[index+5] = byte(blue>>8), byte(blue)
-		}
-	}
-	return img
+	coarse := xmpGrainValueNoise(x, y, coarseScale, 0x9e3779b97f4a7c15)
+	fine := xmpGrainValueNoise(x, y, fineScale, 0xd1b54a32d192ed03)
+	delta := (coarse*(1-roughness) + fine*roughness) * 0.045 * amount
+	pixel.R = encodeLinearSRGB16(srgb16ToLinear[pixel.R] + delta)
+	pixel.G = encodeLinearSRGB16(srgb16ToLinear[pixel.G] + delta)
+	pixel.B = encodeLinearSRGB16(srgb16ToLinear[pixel.B] + delta)
+	return pixel
 }
 
 func xmpGrainValueNoise(x, y int, scale float64, seed uint64) float64 {
